@@ -5,16 +5,11 @@ const transactionManager = require('../data/transactionManager');
 const { THEMES, TABLE_COSTS, SERVER_VERSION } = require('../core/constants');
 const gameLogic = require('../core/logic');
 
-/**
- * GameService orchestrates all game-related actions.
- * It translates network events into calls to the pure GameEngine,
- * and executes the side effects (DB calls, socket emissions) returned by the engine.
- */
 class GameService {
     constructor(io, pool) {
         this.io = io;
         this.pool = pool;
-        this.engines = {}; // { [tableId]: GameEngine_instance }
+        this.engines = {};
         this._initializeEngines();
     }
 
@@ -33,15 +28,8 @@ class GameService {
     }
 
     // --- Public Accessors ---
-
-    getEngineById(tableId) {
-        return this.engines[tableId];
-    }
-
-    getAllEngines() {
-        return this.engines;
-    }
-
+    getEngineById(tableId) { return this.engines[tableId]; }
+    getAllEngines() { return this.engines; }
     getLobbyState() {
         const groupedByTheme = THEMES.map(theme => {
             const themeTables = Object.values(this.engines)
@@ -59,14 +47,10 @@ class GameService {
                 });
             return { ...theme, cost: TABLE_COSTS[theme.id] || 0, tables: themeTables };
         });
-        return {
-            themes: groupedByTheme,
-            serverVersion: SERVER_VERSION
-        };
+        return { themes: groupedByTheme, serverVersion: SERVER_VERSION };
     }
 
     // --- Action Handlers (called by socket events) ---
-
     async playCard(tableId, userId, card) {
         const engine = this.getEngineById(tableId);
         if (!engine) return;
@@ -81,72 +65,90 @@ class GameService {
         await this._executeEffects(tableId, result.effects);
     }
     
-    // ... Other action handlers would follow this same pattern ...
+    // --- New handler for game over logic ---
+    async handleGameOver(payload) {
+        let gameWinnerName = "N/A";
+        const { playerOrderActive, scores, theme, gameId, players } = payload;
+        const tableCost = TABLE_COSTS[theme] || 0;
 
-    /**
-     * The core of the service. This function takes an array of effects
-     * from the GameEngine and executes the necessary I/O operations.
-     * @param {string} tableId - The ID of the table where the effects originated.
-     * @param {Array<object>} effects - The list of effects to execute.
-     */
+        const finalPlayerScores = playerOrderActive
+            .map(id => players[id])
+            .filter(p => p && !p.isBot)
+            .map(p => ({ name: p.playerName, score: scores[p.playerName], userId: p.userId }))
+            .sort((a, b) => b.score - a.score);
+        
+        try {
+            if (finalPlayerScores.length === 3) {
+                const [p1, p2, p3] = finalPlayerScores;
+                if (p1.score > p2.score && p2.score > p3.score) {
+                    gameWinnerName = p1.name;
+                    await transactionManager.postTransaction(this.pool, { userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 2, description: `Win and Payout from ${p3.name}` });
+                    await this.pool.query("UPDATE users SET wins = wins + 1 WHERE id = $1", [p1.userId]);
+                    await transactionManager.postTransaction(this.pool, { userId: p2.userId, gameId, type: 'wash_payout', amount: tableCost, description: `Wash - Buy-in returned` });
+                    await this.pool.query("UPDATE users SET washes = washes + 1 WHERE id = $1", [p2.userId]);
+                    await this.pool.query("UPDATE users SET losses = losses + 1 WHERE id = $1", [p3.userId]);
+                }
+                // ... (other tie conditions) ...
+            }
+            await transactionManager.updateGameRecordOutcome(this.pool, gameId, `Game Over! Winner: ${gameWinnerName}`);
+        } catch(err) {
+            console.error("Database error during game over update:", err);
+        }
+
+        return { gameWinnerName };
+    }
+
     async _executeEffects(tableId, effects = []) {
         if (!effects || effects.length === 0) return;
-
         const engine = this.getEngineById(tableId);
 
         for (const effect of effects) {
             switch (effect.type) {
                 case 'BROADCAST_STATE':
                     this.io.to(tableId).emit('gameState', engine.getStateForClient());
-                    // this._triggerBots(tableId);
                     break;
-
                 case 'EMIT_TO_SOCKET':
                     this.io.to(effect.payload.socketId).emit(effect.payload.event, effect.payload.data);
                     break;
-                
                 case 'UPDATE_LOBBY':
                     this.io.emit('lobbyState', this.getLobbyState());
                     break;
-                
-                // --- THIS IS THE NEWLY ADDED LOGIC ---
-                case 'HANDLE_GAME_OVER': {
-                    const transactionFn = (data) => transactionManager.postTransaction(this.pool, data);
-                    const statUpdateFn = (query, params) => this.pool.query(query, params);
-
-                    const gameOverResult = await gameLogic.handleGameOver(effect.payload, transactionFn, statUpdateFn);
-                    await transactionManager.updateGameRecordOutcome(this.pool, effect.payload.gameId, `Game Over! Winner: ${gameOverResult.gameWinnerName}`);
-                    
-                    if (effect.onComplete) {
-                        effect.onComplete(gameOverResult.gameWinnerName);
-                    }
-                    
+                case 'START_TIMER':
+                    setTimeout(async () => {
+                        const followUpEffects = effect.payload.onTimeout(engine);
+                        if (followUpEffects && followUpEffects.length > 0) {
+                            await this._executeEffects(tableId, followUpEffects);
+                        }
+                    }, effect.payload.duration);
+                    break;
+                case 'SYNC_PLAYER_TOKENS':
+                    // This is a great addition, but let's stick to the simpler `requestUserSync` for now
+                    // to avoid duplicating logic. The effect system supports this well.
                     Object.values(engine.players).forEach(p => {
                         if (!p.isBot && p.socketId) {
                             const playerSocket = this.io.sockets.sockets.get(p.socketId);
-                            if (playerSocket) {
-                                playerSocket.emit("requestUserSync"); 
-                            }
+                            if (playerSocket) playerSocket.emit("requestUserSync");
                         }
                     });
                     break;
+                case 'HANDLE_GAME_OVER': {
+                    const gameOverResult = await this.handleGameOver(effect.payload);
+                    if (effect.onComplete) {
+                        effect.onComplete(gameOverResult.gameWinnerName);
+                    }
+                    // We must broadcast the final state *after* the winner's name has been set.
+                    this.io.to(tableId).emit('gameState', engine.getStateForClient());
+                    break;
                 }
-                // --- END NEW LOGIC ---
-
                 case 'START_GAME_TRANSACTIONS': {
-                    // ... (this part remains unchanged)
                     try {
                         const gameId = await transactionManager.createGameRecord(this.pool, effect.payload.table);
                         await transactionManager.handleGameStartTransaction(this.pool, effect.payload.table, effect.payload.playerIds, gameId);
-                        
                         if (effect.onSuccess) effect.onSuccess(gameId);
-
                     } catch (err) {
                         const insufficientFundsMatch = err.message.match(/(.+) has insufficient tokens/);
                         const brokePlayerName = insufficientFundsMatch ? insufficientFundsMatch[1] : null;
-
                         if (effect.onFailure) effect.onFailure(err, brokePlayerName);
-                        
                         this.io.to(tableId).emit('gameStartFailed', { message: err.message, kickedPlayer: brokePlayerName });
                     }
                     break;
