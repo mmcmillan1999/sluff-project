@@ -1,8 +1,6 @@
 // backend/src/core/logic.js
-// This file contains core game logic functions, including card manipulation and scoring calculations
 
 const { RANKS_ORDER, BID_MULTIPLIERS, PLACEHOLDER_ID, CARD_POINT_VALUES, TABLE_COSTS } = require('./constants');
-// --- THIS IS THE LINE TO FIX ---
 const transactionManager = require('../data/transactionManager');
 
 // =================================================================
@@ -38,7 +36,7 @@ function determineTrickWinner(trickCards, leadSuit, trumpSuit) {
 
 
 // =================================================================
-// PURE CALCULATION FUNCTIONS (Called by Table Class)
+// PURE CALCULATION FUNCTIONS (Called by GameEngine/GameService)
 // =================================================================
 
 function calculateForfeitPayout(table, forfeitingPlayerName) {
@@ -157,7 +155,6 @@ function calculateRoundScoreDetails(table) {
             let totalPointsGained = 0;
             activePlayerNames.forEach(pName => { 
                 if (pName !== bidWinnerName) { 
-                    // --- BUG FIX: Each defender only loses the exchange value ---
                     pointChanges[pName] -= exchangeValue;
                     totalPointsGained += exchangeValue; 
                 } 
@@ -205,7 +202,7 @@ function calculateRoundScoreDetails(table) {
 }
 
 
-async function handleGameOver(table, pool) {
+async function handleGameOver(table, transactionFn, statUpdateFn) {
     let gameWinnerName = "N/A";
     const { playerOrderActive, scores, theme, gameId, players } = table;
     try {
@@ -223,37 +220,36 @@ async function handleGameOver(table, pool) {
             const [p1, p2, p3] = finalPlayerScores;
             if (p1.score > p2.score && p2.score > p3.score) {
                 gameWinnerName = p1.name;
-                transactionPromises.push(transactionManager.postTransaction(pool, { userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 2, description: `Win and Payout from ${p3.name}` }));
-                statPromises.push(pool.query("UPDATE users SET wins = wins + 1 WHERE id = $1", [p1.userId]));
-                transactionPromises.push(transactionManager.postTransaction(pool, { userId: p2.userId, gameId, type: 'wash_payout', amount: tableCost, description: `Wash - Buy-in returned` }));
-                statPromises.push(pool.query("UPDATE users SET washes = washes + 1 WHERE id = $1", [p2.userId]));
-                statPromises.push(pool.query("UPDATE users SET losses = losses + 1 WHERE id = $1", [p3.userId]));
+                transactionPromises.push(transactionFn({ userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 2, description: `Win and Payout from ${p3.name}` }));
+                statPromises.push(statUpdateFn("UPDATE users SET wins = wins + 1 WHERE id = $1", [p1.userId]));
+                transactionPromises.push(transactionFn({ userId: p2.userId, gameId, type: 'wash_payout', amount: tableCost, description: `Wash - Buy-in returned` }));
+                statPromises.push(statUpdateFn("UPDATE users SET washes = washes + 1 WHERE id = $1", [p2.userId]));
+                statPromises.push(statUpdateFn("UPDATE users SET losses = losses + 1 WHERE id = $1", [p3.userId]));
             }
             else if (p1.score === p2.score && p2.score > p3.score) {
                 gameWinnerName = `${p1.name} & ${p2.name}`;
-                transactionPromises.push(transactionManager.postTransaction(pool, { userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 1.5, description: `Win (tie) - Split payout from ${p3.name}` }));
-                transactionPromises.push(transactionManager.postTransaction(pool, { userId: p2.userId, gameId, type: 'win_payout', amount: tableCost * 1.5, description: `Win (tie) - Split payout from ${p3.name}` }));
-                statPromises.push(pool.query("UPDATE users SET wins = wins + 1 WHERE id = ANY($1::int[])", [[p1.userId, p2.userId]]));
-                statPromises.push(pool.query("UPDATE users SET losses = losses + 1 WHERE id = $1", [p3.userId]));
+                transactionPromises.push(transactionFn({ userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 1.5, description: `Win (tie) - Split payout from ${p3.name}` }));
+                transactionPromises.push(transactionFn({ userId: p2.userId, gameId, type: 'win_payout', amount: tableCost * 1.5, description: `Win (tie) - Split payout from ${p3.name}` }));
+                statPromises.push(statUpdateFn("UPDATE users SET wins = wins + 1 WHERE id = ANY($1::int[])", [[p1.userId, p2.userId]]));
+                statPromises.push(statUpdateFn("UPDATE users SET losses = losses + 1 WHERE id = $1", [p3.userId]));
             }
             else if (p1.score > p2.score && p2.score === p3.score) {
                 gameWinnerName = p1.name;
-                transactionPromises.push(transactionManager.postTransaction(pool, { userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 3, description: `Win - Collects full pot` }));
-                statPromises.push(pool.query("UPDATE users SET wins = wins + 1 WHERE id = $1", [p1.userId]));
-                statPromises.push(pool.query("UPDATE users SET losses = losses + 1 WHERE id = ANY($1::int[])", [[p2.userId, p3.userId]]));
+                transactionPromises.push(transactionFn({ userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 3, description: `Win - Collects full pot` }));
+                statPromises.push(statUpdateFn("UPDATE users SET wins = wins + 1 WHERE id = $1", [p1.userId]));
+                statPromises.push(statUpdateFn("UPDATE users SET losses = losses + 1 WHERE id = ANY($1::int[])", [[p2.userId, p3.userId]]));
             }
             else {
                 gameWinnerName = "3-Way Tie";
                 finalPlayerScores.forEach(p => {
-                    transactionPromises.push(transactionManager.postTransaction(pool, { userId: p.userId, gameId, type: 'wash_payout', amount: tableCost, description: `3-Way Tie - Buy-in returned` }));
-                    statPromises.push(pool.query("UPDATE users SET washes = washes + 1 WHERE id = $1", [p.userId]));
+                    transactionPromises.push(transactionFn({ userId: p.userId, gameId, type: 'wash_payout', amount: tableCost, description: `3-Way Tie - Buy-in returned` }));
+                    statPromises.push(statUpdateFn("UPDATE users SET washes = washes + 1 WHERE id = $1", [p.userId]));
                 });
             }
         }
         
         await Promise.all(transactionPromises);
         await Promise.all(statPromises);
-        await transactionManager.updateGameRecordOutcome(pool, gameId, `Game Over! Winner: ${gameWinnerName}`);
         
     } catch(err) {
         console.error("Database error during game over update:", err);

@@ -2,8 +2,8 @@
 
 const GameEngine = require('../core/GameEngine');
 const transactionManager = require('../data/transactionManager');
-// --- THIS IS THE LINE TO FIX ---
-const { THEMES, TABLE_COSTS } = require('../core/constants');
+const { THEMES, TABLE_COSTS, SERVER_VERSION } = require('../core/constants');
+const gameLogic = require('../core/logic');
 
 /**
  * GameService orchestrates all game-related actions.
@@ -25,9 +25,7 @@ class GameService {
                 const tableId = `table-${tableCounter}`;
                 const tableNumber = i + 1;
                 const tableName = `${theme.name} #${tableNumber}`;
-                
-                // Note: The engine doesn't get io or pool anymore.
-                this.engines[tableId] = new GameEngine(tableId, theme.id, tableName, this.getLobbyState.bind(this));
+                this.engines[tableId] = new GameEngine(tableId, theme.id, tableName);
                 tableCounter++;
             }
         });
@@ -45,7 +43,6 @@ class GameService {
     }
 
     getLobbyState() {
-        // This logic is moved from the old gameState.js and adapted for the service
         const groupedByTheme = THEMES.map(theme => {
             const themeTables = Object.values(this.engines)
                 .filter(engine => engine.theme === theme.id)
@@ -62,29 +59,29 @@ class GameService {
                 });
             return { ...theme, cost: TABLE_COSTS[theme.id] || 0, tables: themeTables };
         });
-        
         return {
             themes: groupedByTheme,
-            serverVersion: require('../core/constants').SERVER_VERSION
+            serverVersion: SERVER_VERSION
         };
     }
-
 
     // --- Action Handlers (called by socket events) ---
 
     async playCard(tableId, userId, card) {
         const engine = this.getEngineById(tableId);
         if (!engine) return;
-
-        // 1. Call the pure engine method
         const result = engine.playCard(userId, card);
-        
-        // 2. Execute the returned side effects
         await this._executeEffects(tableId, result.effects);
     }
     
-    // ... Other action handlers for placeBid, leaveTable, etc. would follow this same pattern ...
-
+    async startGame(tableId, requestingUserId) {
+        const engine = this.getEngineById(tableId);
+        if (!engine) return;
+        const result = engine.startGame(requestingUserId);
+        await this._executeEffects(tableId, result.effects);
+    }
+    
+    // ... Other action handlers would follow this same pattern ...
 
     /**
      * The core of the service. This function takes an array of effects
@@ -101,7 +98,7 @@ class GameService {
             switch (effect.type) {
                 case 'BROADCAST_STATE':
                     this.io.to(tableId).emit('gameState', engine.getStateForClient());
-                    this._triggerBots(tableId); // Trigger bots after state change
+                    // this._triggerBots(tableId);
                     break;
 
                 case 'EMIT_TO_SOCKET':
@@ -111,44 +108,55 @@ class GameService {
                 case 'UPDATE_LOBBY':
                     this.io.emit('lobbyState', this.getLobbyState());
                     break;
+                
+                // --- THIS IS THE NEWLY ADDED LOGIC ---
+                case 'HANDLE_GAME_OVER': {
+                    const transactionFn = (data) => transactionManager.postTransaction(this.pool, data);
+                    const statUpdateFn = (query, params) => this.pool.query(query, params);
+
+                    const gameOverResult = await gameLogic.handleGameOver(effect.payload, transactionFn, statUpdateFn);
+                    await transactionManager.updateGameRecordOutcome(this.pool, effect.payload.gameId, `Game Over! Winner: ${gameOverResult.gameWinnerName}`);
+                    
+                    if (effect.onComplete) {
+                        effect.onComplete(gameOverResult.gameWinnerName);
+                    }
+                    
+                    Object.values(engine.players).forEach(p => {
+                        if (!p.isBot && p.socketId) {
+                            const playerSocket = this.io.sockets.sockets.get(p.socketId);
+                            if (playerSocket) {
+                                playerSocket.emit("requestUserSync"); 
+                            }
+                        }
+                    });
+                    break;
+                }
+                // --- END NEW LOGIC ---
 
                 case 'START_GAME_TRANSACTIONS': {
+                    // ... (this part remains unchanged)
                     try {
                         const gameId = await transactionManager.createGameRecord(this.pool, effect.payload.table);
                         await transactionManager.handleGameStartTransaction(this.pool, effect.payload.table, effect.payload.playerIds, gameId);
                         
-                        // If successful, call the onSuccess callback to update the engine's state
                         if (effect.onSuccess) effect.onSuccess(gameId);
 
                     } catch (err) {
                         const insufficientFundsMatch = err.message.match(/(.+) has insufficient tokens/);
                         const brokePlayerName = insufficientFundsMatch ? insufficientFundsMatch[1] : null;
 
-                        // If it fails, call the onFailure callback
                         if (effect.onFailure) effect.onFailure(err, brokePlayerName);
                         
-                        // Also emit an error to the whole table
                         this.io.to(tableId).emit('gameStartFailed', { message: err.message, kickedPlayer: brokePlayerName });
                     }
                     break;
                 }
-                
-                // ... More effect handlers would go here (e.g., HANDLE_GAME_OVER)
             }
         }
     }
 
-    /**
-     * Triggers bot actions for a specific table. This is now managed by the service.
-     * @param {string} tableId 
-     */
     _triggerBots(tableId) {
-        const engine = this.getEngineById(tableId);
-        if (!engine || engine.pendingBotAction) return;
-
-        // The bot logic from the old Table.js would be adapted here.
-        // It would check the engine's state and call the appropriate
-        // action handler on this service (e.g., this.playCard(...))
+        // Placeholder for future implementation
     }
 }
 
