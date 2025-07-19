@@ -1,3 +1,5 @@
+// backend/src/server.js
+
 require("dotenv").config();
 const http = require("http");
 const express = require("express");
@@ -13,8 +15,9 @@ const createLeaderboardRoutes = require('./api/leaderboard');
 const createAdminRoutes = require('./api/admin');
 const createFeedbackRoutes = require('./api/feedback'); 
 const createChatRoutes = require('./api/chat');
-const createDbTables = require('../data/createTables');
-const transactionManager = require("../data/transactionManager");
+// --- PATH CORRECTION ---
+const createDbTables = require('./data/createTables');
+const transactionManager = require("./data/transactionManager");
 
 const app = express();
 const server = http.createServer(app);
@@ -60,7 +63,6 @@ io.on("connection", (socket) => {
     socket.emit("lobbyState", state.getLobbyState());
 
     // --- CORE EVENT LISTENERS (DELEGATION MODEL) ---
-    // ... (All your game event listeners like joinTable, playCard, etc. remain here)
     socket.on("joinTable", async ({ tableId }) => {
         const tableToJoin = state.getTableById(tableId);
         if (!tableToJoin) return socket.emit("error", { message: "Table not found." });
@@ -207,10 +209,9 @@ io.on("connection", (socket) => {
         }
     });
 
-    socket.on("disconnect", async () => { // --- MODIFIED: Mark as async ---
+    socket.on("disconnect", async () => {
         console.log(`Socket disconnected: ${socket.user.username} (ID: ${socket.user.id}, Socket: ${socket.id})`);
         
-        // --- NEW: Announce logout/disconnect to the lobby chat ---
         try {
             const logoutMsgQuery = `
                 INSERT INTO lobby_chat_messages (user_id, username, message)
@@ -223,7 +224,6 @@ io.on("connection", (socket) => {
         } catch (chatError) {
             console.error("Failed to post logout message to chat:", chatError);
         }
-        // --- END NEW ---
         
         const tablePlayerIsOn = Object.values(state.getAllTables()).find(t => t.players[socket.user.id]);
         if (tablePlayerIsOn) {
@@ -248,7 +248,6 @@ server.listen(PORT, async () => {
     console.log("✅ Database connection successful.");
     await createDbTables(pool);
     
-    // --- MODIFICATION: Pass 'io' to the auth routes ---
     const authRoutes = createAuthRoutes(pool, bcrypt, jwt, io);
     app.use('/api/auth', authRoutes);
 
