@@ -1,4 +1,6 @@
-// backend/game/legalMoves.js
+// backend/src/core/legalMoves.js
+// This file contains the logic to determine legal moves in the game based on the current state
+// backend/src/core/legalMoves.js
 
 const { getSuit } = require('./logic');
 

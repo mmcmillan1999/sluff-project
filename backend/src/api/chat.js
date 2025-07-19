@@ -1,4 +1,4 @@
-// backend/routes/chat.js
+// backend/src/api/chat.js
 
 const express = require('express');
 

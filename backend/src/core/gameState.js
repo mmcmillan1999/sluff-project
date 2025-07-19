@@ -1,4 +1,5 @@
-// backend/game/gameState.js
+// backend/src/core/gameState.js
+// This file manages the in-memory game state, including table management and lobby state
 
 const Table = require('./Table'); // Import the new Table class
 const { SERVER_VERSION, TABLE_COSTS } = require('./constants');

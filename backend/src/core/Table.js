@@ -1,9 +1,10 @@
-// backend/game/Table.js
+// backend/src/core/Table.js
 
 const { SERVER_VERSION, TABLE_COSTS, BID_HIERARCHY, PLACEHOLDER_ID, deck, SUITS, BID_MULTIPLIERS } = require('./constants');
 const gameLogic = require('./logic');
 const BotPlayer = require('./BotPlayer');
-const transactionManager = require('../db/transactionManager');
+// --- PATH CORRECTION: The 'db' folder is now 'data' inside the 'src' directory ---
+const transactionManager = require('../data/transactionManager');
 const { shuffle } = require('../utils/shuffle');
 
 const BOT_NAMES = ["Mike Knight", "Grandma Joe", "Grampa Blane", "Kimba", "Courtney Sr.", "Cliff"];
@@ -66,33 +67,54 @@ class Table {
     // =================================================================
     // PUBLIC: Player & Connection Management
     // =================================================================
-
+    
     async joinTable(user, socketId) {
         const { id, username } = user;
         const isPlayerAlreadyInGame = !!this.players[id];
-        if (!isPlayerAlreadyInGame) {
-            const tableCost = TABLE_COSTS[this.theme] || 0;
-            try {
-                const tokenResult = await this.pool.query("SELECT SUM(amount) as tokens FROM transactions WHERE user_id = $1", [id]);
-                const userTokens = parseFloat(tokenResult.rows[0]?.tokens || 0);
-                if (userTokens < tableCost) {
-                    return this.io.to(socketId).emit("error", { message: `You need ${tableCost} tokens to join. You have ${userTokens.toFixed(2)}.` });
+
+        if (isPlayerAlreadyInGame) {
+            // This is a returning player, just update their connection status
+            this.players[id].disconnected = false;
+            this.players[id].socketId = socketId;
+        } else {
+            // This is a new player
+            const activePlayersCount = Object.values(this.players).filter(p => !p.isSpectator).length;
+
+            if (this.gameStarted || activePlayersCount >= 4) {
+                // Game is full or started, add as spectator
+                this.players[id] = { userId: id, playerName: username, socketId: socketId, isSpectator: true, disconnected: false };
+            } else {
+                // Check if they can afford to join
+                const tableCost = TABLE_COSTS[this.theme] || 0;
+                try {
+                    const tokenResult = await this.pool.query("SELECT SUM(amount) as tokens FROM transactions WHERE user_id = $1", [id]);
+                    const userTokens = parseFloat(tokenResult.rows[0]?.tokens || 0);
+                    if (userTokens < tableCost) {
+                        return this.io.to(socketId).emit("error", { message: `You need ${tableCost} tokens to join. You have ${userTokens.toFixed(2)}.` });
+                    }
+                    // Add as an active player
+                    this.players[id] = { userId: id, playerName: username, socketId: socketId, isSpectator: false, disconnected: false };
+                } catch (err) {
+                    return this.io.to(socketId).emit("error", { message: "A server error occurred trying to join the table." });
                 }
-            } catch (err) {
-                return this.io.to(socketId).emit("error", { message: "A server error occurred trying to join the table." });
             }
         }
-        if (this.gameStarted && !isPlayerAlreadyInGame) {
-            return this.io.to(socketId).emit("error", { message: "Game has already started." });
+
+        if (!this.scores[username]) {
+            this.scores[username] = 120;
         }
-        const activePlayersBeforeJoin = Object.values(this.players).filter(p => !p.isSpectator && !p.disconnected).length;
-        const canTakeSeat = activePlayersBeforeJoin < 4 && !this.gameStarted;
-        this.players[id] = { userId: id, playerName: username, socketId: socketId, isSpectator: this.players[id]?.isSpectator ?? !canTakeSeat, disconnected: false };
-        if (!this.scores[username]) { this.scores[username] = 120; }
+
         this._recalculateActivePlayerOrder();
+
         const activePlayersAfterJoin = this.playerOrderActive.length;
-        if (activePlayersAfterJoin >= 3 && !this.gameStarted) { this.state = "Ready to Start"; }
-        else if (activePlayersAfterJoin < 3 && !this.gameStarted) { this.state = "Waiting for Players"; }
+        if (!this.gameStarted) {
+            if (activePlayersAfterJoin >= 3) {
+                this.state = "Ready to Start";
+            } else {
+                this.state = "Waiting for Players";
+            }
+        }
+        
         await this._syncPlayerTokens(Object.keys(this.players));
         this.io.to(socketId).emit("joinedTable", { tableId: this.tableId, gameState: this.getStateForClient() });
         this._emitUpdate();
@@ -174,10 +196,6 @@ class Table {
         this._emitUpdate();
         this.emitLobbyUpdateCallback();
     }
-
-    // =================================================================
-    // PUBLIC: Game Flow Management
-    // =================================================================
 
     async startGame(requestingUserId) {
         if (this.gameStarted) return;

@@ -1,4 +1,5 @@
-// In a new file at: /routes/feedback.js
+// backend/src/api/feedback.js
+// This file handles feedback submission from users
 
 const express = require('express');
 

@@ -1,4 +1,5 @@
-// backend/game/constants.js
+// backend/src/core/constants.js
+// This file contains core constants used throughout the application
 
 const SERVER_VERSION = "9.0.0 - Game Economy";
 

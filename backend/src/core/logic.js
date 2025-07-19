@@ -1,4 +1,5 @@
-// backend/game/logic.js
+// backend/src/core/logic.js
+// This file contains core game logic functions, including card manipulation and scoring calculations
 
 const { RANKS_ORDER, BID_MULTIPLIERS, PLACEHOLDER_ID, CARD_POINT_VALUES, TABLE_COSTS } = require('./constants');
 const transactionManager = require('../db/transactionManager');

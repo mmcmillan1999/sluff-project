@@ -1,4 +1,6 @@
-// --- START FILE: Backend/routes/ai.js ---
+// backend/src/api/ai.js
+// This file handles AI-related routes, allowing the AI to call specific functions
+
 
 const express = require('express');
 const aiTools = require('../ai_tools');

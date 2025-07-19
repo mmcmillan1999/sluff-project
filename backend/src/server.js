@@ -1,4 +1,3 @@
-// --- Backend/server.js ---
 require("dotenv").config();
 const http = require("http");
 const express = require("express");
@@ -8,14 +7,14 @@ const { Pool } = require("pg");
 const jwt = require("jsonwebtoken");
 const bcrypt = require('bcrypt');
 
-const state = require('./game/gameState');
-const createAuthRoutes = require('./routes/auth');
-const createLeaderboardRoutes = require('./routes/leaderboard');
-const createAdminRoutes = require('./routes/admin');
-const createFeedbackRoutes = require('./routes/feedback'); 
-const createChatRoutes = require('./routes/chat');
-const createDbTables = require('./db/createTables');
-const transactionManager = require("./db/transactionManager");
+const state = require('./core/gameState');
+const createAuthRoutes = require('./api/auth');
+const createLeaderboardRoutes = require('./api/leaderboard');
+const createAdminRoutes = require('./api/admin');
+const createFeedbackRoutes = require('./api/feedback'); 
+const createChatRoutes = require('./api/chat');
+const createDbTables = require('../data/createTables');
+const transactionManager = require("../data/transactionManager");
 
 const app = express();
 const server = http.createServer(app);
@@ -239,7 +238,7 @@ io.on("connection", (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, async () => {
-  console.log(`Sluff Game Server (v${require('./game/constants').SERVER_VERSION}) running on port ${PORT}`);
+  console.log(`Sluff Game Server (v${require('./core/constants').SERVER_VERSION}) running on port ${PORT}`);
   try {
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,

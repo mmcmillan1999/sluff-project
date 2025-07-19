@@ -1,4 +1,5 @@
-// backend/db/createTables.js
+// backend/src/data/createTables.js
+// This file creates the necessary database tables and types for the application
 
 const createDbTables = async (pool) => {
     try {

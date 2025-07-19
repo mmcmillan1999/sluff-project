@@ -1,7 +1,7 @@
-// backend/db/transactionManager.js
+// backend/src/data/transactionManager.js
 
-// --- MODIFICATION: Import TABLE_COSTS to look up buy-in amounts ---
-const { TABLE_COSTS } = require('../game/constants');
+// --- PATH CORRECTION: The 'game' folder is now 'core' inside the 'src' directory ---
+const { TABLE_COSTS } = require('../core/constants');
 
 const createGameRecord = async (pool, table) => {
     const query = `
@@ -51,7 +51,6 @@ const updateGameRecordOutcome = async (pool, gameId, outcome) => {
     }
 };
 
-// --- MODIFICATION: Updated function to accept the 'table' object and use its theme ---
 const handleGameStartTransaction = async (pool, table, playerIds, gameId) => {
     // Look up the cost dynamically based on the table's theme, default to 1 if not found
     const cost = -(TABLE_COSTS[table.theme] || 1);

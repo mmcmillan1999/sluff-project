@@ -1,4 +1,5 @@
-// In a new file at: /routes/admin.js
+// backend/src/api/admin.js
+// This file handles admin-specific routes, such as generating the database schema
 
 const express = require('express');
 const fs = require('fs');
