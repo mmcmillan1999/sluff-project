@@ -18,12 +18,11 @@ import { getLobbyChatHistory } from '../services/api';
 import { SUITS_MAP, SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS } from '../constants';
 
 const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLogout, errorMessage, emitEvent, playSound, socket }) => {
-    // --- STEP 1: All useState and useRef hooks are at the top. ---
     const [seatAssignments, setSeatAssignments] = useState({ self: null, opponentLeft: null, opponentRight: null });
     const [showRoundSummaryModal, setShowRoundSummaryModal] = useState(false);
     const [showInsurancePrompt, setShowInsurancePrompt] = useState(false);
     const [showGameMenu, setShowGameMenu] = useState(false);
-    const [isFullscreen, setIsFullscreen] = useState(false);
+    // --- MODIFICATION: Removed unused isFullscreen state ---
     const [showIosPrompt, setShowIosPrompt] = useState(false);
     const [showDrawVote, setShowDrawVote] = useState(false);
     const [chatOpen, setChatOpen] = useState(false);
@@ -39,12 +38,10 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
     const insurancePromptShownRef = useRef(false);
     const errorTimerRef = useRef(null);
 
-    // --- STEP 2: Define derived variables needed by hooks. ---
     const selfPlayerInTable = currentTableState ? currentTableState.players[playerId] : null;
     const isSpectator = selfPlayerInTable?.isSpectator;
     const selfPlayerName = selfPlayerInTable?.playerName;
     
-    // --- STEP 3: All useEffect and useCallback hooks are called here, unconditionally. ---
     useEffect(() => {
         getLobbyChatHistory()
             .then(setChatMessages)
@@ -156,14 +153,8 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
 
     const isIos = () => /iPhone|iPad|iPod/i.test(navigator.userAgent);
     
-    useEffect(() => {
-        if (!isIos()) {
-            document.addEventListener('fullscreenchange', handleFullscreenChange);
-            return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-        }
-    }, []);
+    // --- MODIFICATION: Removed unused useEffect for fullscreenchange ---
 
-    // --- STEP 4: The guard clause is now the last item before the return statement. ---
     if (!currentTableState) {
         return <div>Loading table...</div>;
     }
@@ -223,22 +214,7 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
         return (<span key={cardString} style={{ ...style, display: 'inline-flex' }}>{cardContent}</span>);
     };
 
-    const handleFullscreenChange = () => {
-        setIsFullscreen(!!document.fullscreenElement);
-    };
-
-    const toggleFullscreen = () => {
-        if (isIos()) {
-            setShowIosPrompt(true);
-        } else if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen();
-        } else {
-            if (document.exitFullscreen) {
-                document.exitFullscreen();
-            }
-        }
-        setShowGameMenu(false);
-    };
+    // --- MODIFICATION: Removed unused handleFullscreenChange and toggleFullscreen functions ---
 
     const handleForfeit = () => {
         if (window.confirm("Are you sure you want to forfeit? This will count as a loss and your buy-in will be distributed to the other players.")) {
@@ -361,7 +337,6 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
                         setTouchStartX(null);
                     }}
                 >
-                    {/* --- MODIFICATION: Replaced the broken character with a proper SVG icon --- */}
                     <button className="chat-close-button" onClick={closeChatWindow} aria-label="Close chat window">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                             <line x1="18" y1="6" x2="6" y2="18"></line>
