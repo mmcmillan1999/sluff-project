@@ -17,12 +17,12 @@ import LobbyChat from './LobbyChat';
 import { getLobbyChatHistory } from '../services/api';
 import { SUITS_MAP, SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS } from '../constants';
 
-const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLogout, errorMessage, emitEvent, playSound, socket }) => {
+// --- MODIFICATION: Removed the unused 'errorMessage' prop ---
+const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLogout, emitEvent, playSound, socket }) => {
     const [seatAssignments, setSeatAssignments] = useState({ self: null, opponentLeft: null, opponentRight: null });
     const [showRoundSummaryModal, setShowRoundSummaryModal] = useState(false);
     const [showInsurancePrompt, setShowInsurancePrompt] = useState(false);
     const [showGameMenu, setShowGameMenu] = useState(false);
-    // --- MODIFICATION: Removed unused isFullscreen state ---
     const [showIosPrompt, setShowIosPrompt] = useState(false);
     const [showDrawVote, setShowDrawVote] = useState(false);
     const [chatOpen, setChatOpen] = useState(false);
@@ -153,8 +153,6 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
 
     const isIos = () => /iPhone|iPad|iPod/i.test(navigator.userAgent);
     
-    // --- MODIFICATION: Removed unused useEffect for fullscreenchange ---
-
     if (!currentTableState) {
         return <div>Loading table...</div>;
     }
@@ -213,8 +211,6 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
         if (isButton) return (<button key={cardString} onClick={onClick} disabled={disabled} style={style}>{cardContent}</button>);
         return (<span key={cardString} style={{ ...style, display: 'inline-flex' }}>{cardContent}</span>);
     };
-
-    // --- MODIFICATION: Removed unused handleFullscreenChange and toggleFullscreen functions ---
 
     const handleForfeit = () => {
         if (window.confirm("Are you sure you want to forfeit? This will count as a loss and your buy-in will be distributed to the other players.")) {
