@@ -170,6 +170,18 @@
     width: 150px;
 }
 
+.lobby-footer {
+    padding: 4px 20px;
+    background-color: #111;
+    flex-shrink: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.7em;
+    color: #888;
+    font-family: monospace;
+}
+
 /* Responsive styles for the lobby menu */
 @media (max-width: 768px) {
     .lobby-menu-popup {
@@ -178,3 +190,4 @@
         top: calc(100% + 5px);
     }
 }
+
