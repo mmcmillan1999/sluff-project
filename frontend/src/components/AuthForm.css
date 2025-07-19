@@ -1,0 +1,99 @@
+/* frontend/src/components/AuthForm.css */
+
+.auth-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    background-color: #333;
+    color: white;
+    padding: 20px;
+    font-family: 'Merriweather', serif;
+}
+
+.auth-logo {
+    width: 100%;
+    max-width: 300px;
+    margin-bottom: 20px;
+}
+
+.auth-title {
+    margin-top: 0;
+    font-family: 'Oswald', sans-serif;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 20px;
+    background-color: #444;
+    border-radius: 8px;
+    min-width: 300px;
+    width: 100%;
+    max-width: 400px;
+}
+
+.auth-input {
+    padding: 10px;
+    border-radius: 4px;
+    border: none;
+    font-size: 1em;
+}
+
+.auth-error {
+    color: #f87171; /* A lighter red for dark backgrounds */
+    margin: 0;
+    text-align: center;
+}
+
+.auth-button {
+    padding: 10px;
+    color: white;
+    cursor: pointer;
+    border: none;
+    border-radius: 4px;
+    font-size: 1.1em;
+    font-family: 'Oswald', sans-serif;
+}
+
+.auth-button.login {
+    background-color: #007bff;
+}
+
+.auth-button.register {
+    background-color: #28a745;
+}
+
+.switch-form-button {
+    background: none;
+    border: none;
+    color: #007bff;
+    margin-top: 15px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+/* Specific to Register component */
+.register-warning {
+    color: #856404;
+    background-color: #fff3cd;
+    border-color: #ffeeba;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 10px 0;
+    text-align: center;
+}
+
+.register-warning-title {
+    font-size: 1.1em;
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.register-warning-text {
+    margin: 0;
+    font-size: 0.95em;
+}

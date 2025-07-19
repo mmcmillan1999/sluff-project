@@ -1,0 +1,84 @@
+/* frontend/src/components/game/PointsBreakdownBar.css */
+
+.points-breakdown-container {
+    position: relative;
+    padding-top: 20px; 
+    margin-bottom: 10px;
+}
+
+.points-bar {
+    display: flex;
+    width: 100%;
+    height: 50px;
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+    background-color: #8b5cf6; /* Defender color as fallback */
+    border: 1px solid #a7a7a7;
+}
+
+/* The vertical "Break Even" line */
+.points-bar::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background-color: #a7f3d0; /* A light, minty green */
+    transform: translateX(-1.5px);
+    z-index: 2;
+}
+
+.break-even-label {
+    position: absolute;
+    top: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #0d6efd;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.7em;
+    font-family: 'Oswald', sans-serif;
+}
+
+.points-bar-bidder,
+.points-bar-defender {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 15px;
+    color: white;
+    font-family: 'Oswald', sans-serif;
+    transition: width 0.5s ease-in-out;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+}
+
+.points-bar-bidder {
+    background-color: #166534; /* Dark Green */
+    flex-shrink: 0; 
+}
+
+.points-bar-defender {
+    background-color: #8b5cf6; /* Purple */
+    flex-grow: 1; 
+}
+
+/* --- NEW STYLES for displaying info inside the bar --- */
+.player-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.1;
+}
+
+.player-name {
+    font-size: 1.1em;
+    font-weight: normal;
+}
+
+.player-points {
+    font-size: 1.3em;
+    font-weight: bold;
+}

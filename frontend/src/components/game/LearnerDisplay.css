@@ -1,0 +1,48 @@
+/* frontend/src/components/game/LearnerDisplay.css */
+
+.score-progress-container {
+    position: absolute;
+    /* 
+      THIS IS WHAT MOVES THE BAR UP AND DOWN ON THE SCREEN.
+      'bottom: 0;' anchors it to the bottom of its parent container.
+      You can change this to a pixel value like 'bottom: 10px;' to move it up,
+      or even change it to 'top: 0;' to anchor it to the top.
+    */
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 200px;
+    background-color: rgba(0, 0, 0, 0.6);
+    padding: 5px 8px;
+    border-radius: 8px;
+    color: white;
+    text-align: center;
+    font-family: 'Oswald', sans-serif;
+    z-index: 20;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.score-progress-label {
+    font-size: 1em;
+    margin-bottom: 4px;
+    text-shadow: 1px 1px 1px black;
+}
+
+.score-progress-bar-background {
+    width: 100%;
+    height: 12px;
+    background-color: #333;
+    border-radius: 5px;
+    border: 1px solid #555;
+    overflow: hidden;
+}
+
+.score-progress-bar-foreground {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s ease-in-out;
+}
+
+.learner-pile-details {
+    display: none;
+}

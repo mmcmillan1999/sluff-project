@@ -1,0 +1,81 @@
+/* frontend/src/components/game/LobbyChat.css */
+
+.lobby-chat-container {
+    flex-shrink: 0; /* Prevents this area from shrinking */
+    background-color: #1a1a1a;
+    border-top: 1px solid #444;
+}
+
+.chat-log-section {
+    padding: 0 15px;
+}
+
+.section-header {
+    font-family: 'Oswald', sans-serif;
+    font-size: 1.1em;
+    color: #ffc107;
+    background-color: #333;
+    padding: 6px 12px;
+    margin: 0;
+    cursor: pointer;
+    user-select: none;
+    border-radius: 6px 6px 0 0;
+}
+
+.chat-log-window {
+    /* --- MODIFICATION: Increased height for ~7 lines of text --- */
+    height: 150px; 
+    background-color: #2c2c2c;
+    border: 1px solid #333;
+    border-top: none;
+    padding: 10px;
+    overflow-y: auto;
+}
+
+.chat-placeholder-text {
+    color: #888;
+    font-style: italic;
+    text-align: center;
+    margin-top: 20px;
+}
+
+.chat-input-area {
+    display: flex;
+    gap: 10px;
+    padding: 8px 15px;
+    background-color: #1a1a1a;
+}
+
+.chat-input {
+    flex-grow: 1;
+    padding: 8px;
+    border-radius: 20px;
+    border: 1px solid #444;
+    background-color: #333;
+    color: white;
+    font-size: 1em;
+}
+
+.chat-send-button {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    background: linear-gradient(to bottom, #28a745, #218838);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+    
+}
+
+.chat-line {
+    color: #fff;
+    margin-bottom: 4px;
+    font-size: 0.9em;
+    text-align: left; /* Explicitly align text to the left */
+}

@@ -1,0 +1,210 @@
+/* frontend/src/components/LeaderboardView.css */
+
+.leaderboard-view {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background-color: #333;
+    color: white;
+    font-family: 'Merriweather', serif;
+    overflow: hidden;
+}
+
+.leaderboard-header {
+    padding: 10px 15px;
+    background-color: #212121;
+    border-bottom: 1px solid #444;
+    flex-shrink: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.leaderboard-title-group {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.leaderboard-logo {
+    height: 35px;
+    width: auto;
+}
+
+.leaderboard-title {
+    font-family: 'Oswald', sans-serif;
+    margin: 0;
+    font-size: 1.5em;
+}
+
+.leaderboard-header-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.back-button, .admin-button {
+    padding: 6px 14px;
+    font-family: 'Oswald', sans-serif;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+/* --- MODIFICATION: Specific styles for the icon button --- */
+.refresh-button {
+    background-color: #007bff;
+    padding: 4px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.refresh-button svg {
+    fill: white;
+    width: 22px;
+    height: 22px;
+}
+
+.back-button {
+    background: #6c757d;
+}
+
+.admin-button {
+    background-color: #dc3545;
+}
+
+.leaderboard-main {
+    flex-grow: 1;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    overflow: hidden;
+}
+
+.current-user-section {
+    flex-shrink: 0;
+}
+
+.your-rank-title {
+    font-family: 'Oswald', sans-serif;
+    font-size: 1em;
+    color: #ccc;
+    margin: 0 0 5px 5px;
+    text-transform: uppercase;
+}
+
+.full-leaderboard-container {
+    flex-grow: 1;
+    overflow-y: auto;
+    position: relative;
+}
+
+
+.leaderboard-table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: #444;
+    border-radius: 8px;
+    overflow: hidden;
+    /* --- MODIFICATION: Use fixed layout for predictable columns --- */
+    table-layout: fixed;
+}
+
+.leaderboard-table.current-user-table {
+    background-color: #2a2a2a;
+    border: 1px solid #ffc107;
+}
+
+.leaderboard-table th,
+.leaderboard-table td {
+    /* --- MODIFICATION: Tighter padding --- */
+    padding: 10px 8px;
+    text-align: left;
+    border-bottom: 1px solid #555;
+    vertical-align: middle;
+}
+
+/* --- MODIFICATION: Set specific widths for all columns --- */
+.leaderboard-table .rank-col { width: 12%; }
+.leaderboard-table .username-col { width: 35%; }
+.leaderboard-table .rotated-header { width: 12%; }
+.leaderboard-table .tokens-col { width: 17%; }
+
+.leaderboard-table td.username-cell {
+    /* These styles handle the truncation */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.leaderboard-table thead th {
+    background-color: #212121;
+    font-family: 'Oswald', sans-serif;
+    font-size: 1.1em;
+    color: #ffc107;
+    height: 40px; 
+    vertical-align: bottom;
+    padding-bottom: 8px;
+    /* --- MODIFICATION: Un-rotate the non-rotated headers --- */
+    transform: none;
+}
+
+.leaderboard-table th.rotated-header {
+    text-align: left;
+    white-space: nowrap;
+    vertical-align: middle;
+    /* --- MODIFICATION: Make space for rotated text --- */
+    height: 60px;
+    padding-left: 20px;
+}
+
+.leaderboard-table th.rotated-header span {
+    display: inline-block;
+    /* --- MODIFICATION: Adjusted rotation and origin for better alignment --- */
+    transform: rotate(-55deg);
+    transform-origin: 0 50%;
+    width: 30px; 
+}
+
+.leaderboard-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.leaderboard-table tbody tr:nth-child(even) {
+    background-color: #3e3e3e;
+}
+
+.leaderboard-table td.tokens {
+    font-weight: bold;
+    color: #ffc107;
+    text-align: right;
+}
+
+.loading-text,
+.error-text {
+    text-align: center;
+    padding-top: 40px;
+    font-size: 1.2em;
+}
+
+.error-text {
+    color: #f87171;
+}
+
+.leaderboard-footer {
+    flex-shrink: 0;
+    padding: 10px 15px;
+    background-color: #1a1a1a;
+    border-top: 1px solid #444;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+/* frontend/src/components/LeaderboardView.css */

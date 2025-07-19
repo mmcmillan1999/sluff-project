@@ -1,0 +1,105 @@
+/* frontend/src/components/LobbyTableCard.css */
+.table-card-container {
+    background: #3c3c3c;
+    border: 1px solid #555;
+    border-radius: 8px;
+    padding: 12px 15px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    transition: all 0.2s ease-in-out;
+}
+
+.table-card-container:not(.disabled):hover {
+    transform: translateY(-3px);
+    border-color: #777;
+}
+
+.table-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.table-card-title {
+    font-family: 'Oswald', sans-serif;
+    margin: 0;
+    font-size: 1.1em;
+    color: #fff;
+}
+
+.table-card-status {
+    font-weight: bold;
+    font-size: 0.8em;
+    padding: 3px 8px;
+    border-radius: 10px;
+    color: white;
+    /* --- MODIFICATION: Ensure status text doesn't wrap --- */
+    white-space: nowrap; 
+}
+
+/* --- MODIFICATION: Added specific class for the new status --- */
+.table-card-status.waiting-for-players { background-color: #28a745; }
+.table-card-status.playing { background-color: #ffc107; color: #333; }
+.table-card-status.full { background-color: #dc3545; }
+
+.table-card-body {
+    flex-grow: 1;
+}
+
+.player-list {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.9em;
+    color: #ccc;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    min-height: 36px;
+}
+
+.player-names {
+    flex-grow: 1;
+    margin-right: 10px;
+    /* --- MODIFICATION: Allow player names to shrink if needed but truncate gracefully --- */
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.open-seats {
+    font-style: italic;
+    color: #888;
+}
+
+.join-table-button {
+    flex-shrink: 0;
+    padding: 8px 12px; /* Adjusted padding */
+    background: linear-gradient(to bottom, #28a745, #218838);
+    color: white;
+    border: 1px solid #1e7e34;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: 'Oswald', sans-serif;
+    font-size: 1em;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.4);
+    /* --- MODIFICATION: Prevent button text from wrapping --- */
+    white-space: nowrap;
+}
+
+.join-table-button:hover:not(:disabled) {
+    background: linear-gradient(to bottom, #2ebf4f, #28a745);
+}
+
+.table-card-container.disabled {
+    opacity: 0.6;
+}
+
+.join-table-button:disabled {
+    background: #6c757d;
+    border-color: #5a6268;
+    cursor: not-allowed;
+}

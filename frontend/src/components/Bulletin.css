@@ -1,0 +1,51 @@
+/* frontend/src/components/Bulletin.css */
+
+.bulletin-container {
+    background-color: #2c2c2c;
+    border: 1px solid #4f4f4f;
+    border-radius: 8px;
+    padding: 15px 25px;
+    margin: 15px 0;
+    text-align: left;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    font-family: 'Merriweather', serif;
+    /* --- MODIFICATION: Make the container scrollable --- */
+    max-height: 220px; /* Adjust this value to control the visible area */
+    overflow-y: auto;  /* Add a scrollbar only when needed */
+}
+
+.bulletin-header {
+    font-family: 'Oswald', sans-serif;
+    color: #ffc107; /* Gold accent */
+    margin-top: 10px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #444;
+    padding-bottom: 5px;
+    font-size: 1.3em;
+}
+
+.bulletin-container > *:first-child {
+    margin-top: 0;
+}
+
+.bulletin-paragraph {
+    line-height: 1.6;
+    color: #e0e0e0;
+    margin-bottom: 15px;
+}
+
+.bulletin-list-item {
+    color: #d1d1d1;
+    margin-bottom: 5px;
+    padding-left: 10px;
+    position: relative;
+}
+
+.bulletin-list-item::before {
+    content: '•'; /* Bullet character */
+    color: #ffc107; /* Gold accent for the bullet */
+    font-weight: bold;
+    display: inline-block;
+    position: absolute;
+    left: -10px;
+}

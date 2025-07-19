@@ -1,0 +1,114 @@
+/* frontend/src/components/game/PlayerSeat.css */
+
+.player-seat-wrapper {
+    position: relative;
+}
+
+.player-seat {
+    text-align: center;
+    padding: 8px 12px;
+    background-color: rgba(255, 255, 255, 0.9);
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+    min-width: 150px;
+    border: 2px solid #ccc; /* Default border */
+    white-space: nowrap;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.player-name {
+    font-weight: bold;
+    font-size: 1.1em;
+}
+.player-name.is-self {
+    color: #15803d; /* Dark Green */
+}
+
+.player-stats-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9em;
+}
+
+.token-icon-inline {
+    height: 14px;
+    vertical-align: middle;
+}
+.info-divider {
+    color: #aaa;
+}
+
+/* State & Role Borders */
+.player-seat.disconnected { border-color: red; }
+.player-seat.bid-winner { border-color: #ffc107; }
+.player-seat.defender { border-color: #0d6efd; }
+.player-seat.active-turn { animation: pulsing-glow 1.5s infinite; }
+
+/* Puck Styles */
+.puck {
+    position: absolute;
+    top: -12px;
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7em;
+    font-weight: bold;
+    border: 1px solid black;
+    z-index: 5;
+    font-family: 'Oswald', sans-serif;
+}
+.dealer-puck { right: -12px; background-color: ivory; color: black; }
+.role-puck { left: -12px; }
+.role-puck.bid-winner { background-color: #ffc107; color: black; }
+.role-puck.defender { background-color: #0d6efd; color: white; }
+.role-puck.small-font { font-size: 0.6em; }
+
+/* Disconnected Controls */
+.disconnected-controls { margin-top: 5px; }
+.start-timer-button {
+    padding: 4px 8px;
+    font-size: 0.8em;
+    background-color: #ffc107;
+    color: black;
+    border: 1px solid #c69500;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: 'Oswald', sans-serif;
+}
+.timeout-display { font-weight: bold; color: #dc3545; font-size: 0.9em; }
+
+/* Token and Score Styles */
+.player-tokens, .player-score { font-weight: bold; display: flex; align-items: center; }
+.player-tokens { color: #b45309; }
+.player-score { color: #444; }
+
+/* --- NEW STYLES FOR THE ERROR TOOLTIP --- */
+.player-error-tooltip {
+    position: absolute;
+    bottom: -35px; /* Position it below the player seat */
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #b91c1c; /* Dark red */
+    color: white;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.9em;
+    font-weight: bold;
+    z-index: 15;
+    white-space: nowrap;
+    animation: fadeInAndOut 4s ease-in-out forwards;
+}
+
+@keyframes fadeInAndOut {
+    0% { opacity: 0; transform: translate(-50%, 10px); }
+    10% { opacity: 1; transform: translate(-50%, 0); }
+    90% { opacity: 1; transform: translate(-50%, 0); }
+    100% { opacity: 0; transform: translate(-50%, 10px); }
+}
