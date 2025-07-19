@@ -1,5 +1,5 @@
 const assert = require('assert');
-const Table = require('../src/core/Table');
+const Table = require('../src/core/GameEngine');
 
 // --- Mocks and Helpers ---
 
