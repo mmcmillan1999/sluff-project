@@ -17,7 +17,6 @@ import LobbyChat from './LobbyChat';
 import { getLobbyChatHistory } from '../services/api';
 import { SUITS_MAP, SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS } from '../constants';
 
-// --- MODIFICATION: Removed the unused 'errorMessage' prop ---
 const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLogout, emitEvent, playSound, socket }) => {
     const [seatAssignments, setSeatAssignments] = useState({ self: null, opponentLeft: null, opponentRight: null });
     const [showRoundSummaryModal, setShowRoundSummaryModal] = useState(false);
@@ -150,9 +149,9 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
         if (state === 'Bidding Phase' && gameStateRef.current === 'Dealing Pending') playSound('cardDeal');
         gameStateRef.current = state;
     }, [currentTableState, selfPlayerName, isSpectator, playSound]);
-
-    const isIos = () => /iPhone|iPad|iPod/i.test(navigator.userAgent);
     
+    // --- MODIFICATION: Removed the unused isIos function and its corresponding useEffect ---
+
     if (!currentTableState) {
         return <div>Loading table...</div>;
     }
