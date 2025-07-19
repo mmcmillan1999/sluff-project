@@ -10,7 +10,6 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
     
     const [activeTab, setActiveTab] = useState('');
     const [showMenu, setShowMenu] = useState(false);
-    // --- MODIFICATION: Set both sections to be expanded by default ---
     const [tablesExpanded, setTablesExpanded] = useState(true);
     const [bulletinExpanded, setBulletinExpanded] = useState(true);
     const [chatLogExpanded, setChatLogExpanded] = useState(true);
@@ -71,7 +70,6 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
                     <h2 className="lobby-title">Lobby</h2>
                 </div>
                 <div className="header-right">
-                    {/* --- MODIFICATION: Simplified the welcome message for a cleaner look --- */}
                     <span className="user-welcome"><strong>{user.username}</strong></span>
                     <div className="user-tokens">
                         <img src="/sluff_token.png" alt="Tokens" className="token-icon" />
@@ -106,7 +104,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
             <main className="lobby-main">
                 <div className="collapsible-section">
                     <h3 className="section-header" onClick={() => setTablesExpanded(!tablesExpanded)}>
-                        Game Tables {tablesExpanded ? <>↓</> : <>⇒</>}
+                        Game Tables {tablesExpanded ? <>â†“</> : <>â‡’</>}
                     </h3>
                     {tablesExpanded && (
                         <div className="table-grid">
@@ -125,7 +123,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
                 
                 <div className="collapsible-section">
                     <h3 className="section-header" onClick={() => setBulletinExpanded(!bulletinExpanded)}>
-                        Bulletin {bulletinExpanded ? <>↓</> : <>⇒</>}
+                        Bulletin {bulletinExpanded ? <>â†“</> : <>â‡’</>}
                     </h3>
                     {bulletinExpanded && <Bulletin />}
                 </div>
@@ -137,6 +135,12 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
                 socket={socket}
                 messages={chatMessages}
             />
+            
+            {/* --- NEW: Added a footer for server info --- */}
+            <footer className="lobby-footer">
+                <span>Server URL: {process.env.REACT_APP_SERVER_URL}</span>
+                <span>Version: {serverVersion}</span>
+            </footer>
         </div>
     );
 };
