@@ -1,4 +1,4 @@
-// NEW FILE: backend/src/core/handlers/scoringHandler.js
+// backend/src/core/handlers/scoringHandler.js
 
 const gameLogic = require('../logic');
 
@@ -9,7 +9,21 @@ const gameLogic = require('../logic');
  */
 function calculateRoundScores(engine) {
     const effects = [];
-    const roundData = gameLogic.calculateRoundScoreDetails(engine);
+    
+    // --- THIS IS THE CRITICAL LOGIC ---
+    // Calculate the total points including the widow before calling the details function.
+    const bidType = engine.bidWinnerInfo.bid;
+    let widowPoints = 0;
+    if (bidType === "Frog") {
+        widowPoints = gameLogic.calculateCardPoints(engine.widowDiscardsForFrogBidder);
+    } else if (bidType === "Solo" || bidType === "Heart Solo") {
+        widowPoints = gameLogic.calculateCardPoints(engine.originalDealtWidow);
+    }
+    const bidderTotalCardPoints = engine.bidderCardPoints + widowPoints;
+    // --- END CRITICAL LOGIC ---
+
+    // Now, we pass the complete engine state, INCLUDING the calculated total, to the logic function.
+    const roundData = gameLogic.calculateRoundScoreDetails({ ...engine, bidderTotalCardPoints });
 
     for (const playerName in roundData.pointChanges) {
         if (engine.scores[playerName] !== undefined) {
@@ -24,14 +38,36 @@ function calculateRoundScores(engine) {
     if (isGameOver) {
         effects.push({
             type: 'HANDLE_GAME_OVER',
-            payload: { /* ... payload data ... */ },
+            payload: { 
+                playerOrderActive: engine.playerOrderActive,
+                scores: engine.scores,
+                theme: engine.theme,
+                gameId: engine.gameId,
+                players: engine.players
+            },
             onComplete: (gameWinnerName) => {
                 engine.roundSummary.gameWinner = gameWinnerName;
             }
         });
     }
 
-    engine.roundSummary = { /* ... create summary object ... */ };
+    engine.roundSummary = {
+        message: isGameOver ? "Game Over!" : roundData.roundMessage,
+        finalScores: { ...engine.scores },
+        isGameOver,
+        gameWinner: null,
+        dealerOfRoundId: engine.dealer,
+        widowForReveal: roundData.widowForReveal,
+        insuranceDealWasMade: engine.insurance.dealExecuted,
+        insuranceDetails: engine.insurance.dealExecuted ? engine.insurance.executedDetails : null,
+        insuranceHindsight: roundData.insuranceHindsight,
+        allTricks: engine.capturedTricks,
+        finalBidderPoints: roundData.finalBidderPoints,
+        finalDefenderPoints: roundData.finalDefenderPoints,
+        pointChanges: roundData.pointChanges,
+        widowPointsValue: roundData.widowPointsValue,
+        bidType: roundData.bidType,
+    };
 
     effects.push({ type: 'SYNC_PLAYER_TOKENS', payload: { playerIds: Object.keys(engine.players) } });
     effects.push({ type: 'BROADCAST_STATE' });
