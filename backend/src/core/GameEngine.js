@@ -4,14 +4,12 @@ const { SERVER_VERSION, TABLE_COSTS, BID_HIERARCHY, PLACEHOLDER_ID, deck, SUITS,
 const gameLogic = require('./logic');
 const BotPlayer = require('./BotPlayer');
 const { shuffle } = require('../utils/shuffle');
+// --- NEW IMPORTS FOR HANDLERS ---
+const scoringHandler = require('./handlers/scoringHandler');
+const playHandler = require('./handlers/playHandler');
 
 const BOT_NAMES = ["Mike Knight", "Grandma Joe", "Grampa Blane", "Kimba", "Courtney Sr.", "Cliff"];
 
-/**
- * GameEngine is a PURE state machine for the Sluff card game.
- * It does NOT interact with sockets or databases directly.
- * Instead, its methods return a list of "effects" for a service layer to execute.
- */
 class GameEngine {
     constructor(tableId, theme, tableName) {
         this.tableId = tableId;
@@ -33,6 +31,10 @@ class GameEngine {
         this._initializeNewRoundState();
     }
 
+    _effects(a = []) {
+        return { effects: a };
+    }
+    
     // =================================================================
     // PUBLIC METHODS
     // =================================================================
@@ -40,10 +42,7 @@ class GameEngine {
     startForfeitTimer(requestingUserId, targetPlayerName) {
         if (!this.players[requestingUserId] || this.internalTimers.forfeit) return;
         const targetPlayer = Object.values(this.players).find(p => p.playerName === targetPlayerName);
-        if (!targetPlayer || !targetPlayer.disconnected) {
-            // TODO: Refactor to return an error effect
-            return;
-        }
+        if (!targetPlayer || !targetPlayer.disconnected) { return; }
         console.log(`[${this.tableId}] Forfeit timer started for ${targetPlayerName} by ${this.players[requestingUserId].playerName}.`);
         this.forfeiture.targetPlayerName = targetPlayerName;
         this.forfeiture.timeLeft = 120;
@@ -58,26 +57,19 @@ class GameEngine {
     joinTable(user, socketId) {
         const { id, username } = user;
         const isPlayerAlreadyInGame = !!this.players[id];
-
         if (isPlayerAlreadyInGame) {
             this.players[id].disconnected = false;
             this.players[id].socketId = socketId;
         } else {
             const activePlayersCount = Object.values(this.players).filter(p => !p.isSpectator).length;
-
             if (this.gameStarted || activePlayersCount >= 4) {
                 this.players[id] = { userId: id, playerName: username, socketId: socketId, isSpectator: true, disconnected: false };
             } else {
                  this.players[id] = { userId: id, playerName: username, socketId: socketId, isSpectator: false, disconnected: false };
             }
         }
-
-        if (!this.scores[username]) {
-            this.scores[username] = 120;
-        }
-
+        if (!this.scores[username]) this.scores[username] = 120;
         this._recalculateActivePlayerOrder();
-
         const activePlayersAfterJoin = this.playerOrderActive.length;
         if (!this.gameStarted) {
             this.state = (activePlayersAfterJoin >= 3) ? "Ready to Start" : "Waiting for Players";
@@ -133,25 +125,50 @@ class GameEngine {
     }
 
     startGame(requestingUserId) {
-        if (this.gameStarted) return;
-        if (!this.players[requestingUserId] || this.players[requestingUserId].isSpectator) return;
+        if (this.gameStarted) return this._effects();
+        if (!this.players[requestingUserId] || this.players[requestingUserId].isSpectator) return this._effects();
         const activePlayers = Object.values(this.players).filter(p => !p.isSpectator && !p.disconnected);
         if (activePlayers.length < 3) {
-            // TODO: Return an error effect
-            return;
+            return this._effects([{ type: 'EMIT_TO_SOCKET', payload: { socketId: this.players[requestingUserId].socketId, event: 'gameStartError', data: { message: "Need at least 3 players to start." } } }]);
         }
+        
         this.playerMode = activePlayers.length;
         const activePlayerIds = activePlayers.map(p => p.userId);
         
-        // This method will eventually be refactored to return effects
-        this.gameStarted = true;
-        activePlayers.forEach(p => { if (this.scores[p.playerName] === undefined) this.scores[p.playerName] = 120; });
-        if (this.playerMode === 3 && this.scores[PLACEHOLDER_ID] === undefined) { this.scores[PLACEHOLDER_ID] = 120; }
-        const shuffledPlayerIds = shuffle([...activePlayerIds]);
-        this.dealer = shuffledPlayerIds[0];
-        this._recalculateActivePlayerOrder();
-        this._initializeNewRoundState();
-        this.state = "Dealing Pending";
+        const effects = [{
+            type: 'START_GAME_TRANSACTIONS',
+            payload: { 
+                table: { tableId: this.tableId, theme: this.theme, playerMode: this.playerMode },
+                playerIds: activePlayers.filter(p => !p.isBot).map(p => p.userId) 
+            },
+            onSuccess: (gameId) => {
+                this.gameId = gameId;
+                this.gameStarted = true;
+                activePlayers.forEach(p => { if (this.scores[p.playerName] === undefined) this.scores[p.playerName] = 120; });
+                if (this.playerMode === 3 && this.scores[PLACEHOLDER_ID] === undefined) { this.scores[PLACEHOLDER_ID] = 120; }
+                const shuffledPlayerIds = shuffle([...activePlayerIds]);
+                this.dealer = shuffledPlayerIds[0];
+                this._recalculateActivePlayerOrder();
+                this._initializeNewRoundState();
+                this.state = "Dealing Pending";
+            },
+            onFailure: (error, brokePlayerName) => {
+                if (brokePlayerName) {
+                    const brokePlayer = Object.values(this.players).find(p => p.playerName === brokePlayerName);
+                    if (brokePlayer) delete this.players[brokePlayer.userId];
+                    this._recalculateActivePlayerOrder();
+                    this.playerMode = this.playerOrderActive.length;
+                    this.state = this.playerMode >= 3 ? "Ready to Start" : "Waiting for Players";
+                }
+                this.gameId = null; 
+            }
+        }];
+        
+        effects.push({ type: 'SYNC_PLAYER_TOKENS', payload: { playerIds: activePlayerIds } });
+        effects.push({ type: 'BROADCAST_STATE' });
+        effects.push({ type: 'UPDATE_LOBBY' });
+
+        return this._effects(effects);
     }
 
     dealCards(requestingUserId) {
@@ -168,10 +185,10 @@ class GameEngine {
     }
 
     placeBid(userId, bid) {
+        // This can be the next candidate for refactoring to its own handler
         if (userId !== this.biddingTurnPlayerId) return;
         const player = this.players[userId];
         if (!player) return;
-
         if (this.state === "Awaiting Frog Upgrade Decision") {
             if (userId !== this.originalFrogBidderId || (bid !== "Heart Solo" && bid !== "Pass")) return;
             if (bid === "Heart Solo") { this.currentHighestBidDetails = { userId, playerName: player.playerName, bid: "Heart Solo" }; }
@@ -180,16 +197,13 @@ class GameEngine {
             return;
         }
         if (this.state !== "Bidding Phase" || !BID_HIERARCHY.includes(bid) || this.playersWhoPassedThisRound.includes(userId)) return;
-        
         const currentHighestBidIndex = this.currentHighestBidDetails ? BID_HIERARCHY.indexOf(this.currentHighestBidDetails.bid) : -1;
         if (bid !== "Pass" && BID_HIERARCHY.indexOf(bid) <= currentHighestBidIndex) return;
-        
         if (bid !== "Pass") {
             this.currentHighestBidDetails = { userId, playerName: player.playerName, bid };
             if (bid === "Frog" && !this.originalFrogBidderId) this.originalFrogBidderId = userId;
             if (bid === "Solo" && this.originalFrogBidderId && userId !== this.originalFrogBidderId) this.soloBidMadeAfterFrog = true;
         } else { this.playersWhoPassedThisRound.push(userId); }
-        
         const activeBiddersRemaining = this.playerOrderActive.filter(id => !this.playersWhoPassedThisRound.includes(id));
         if ((this.currentHighestBidDetails && activeBiddersRemaining.length <= 1) || this.playersWhoPassedThisRound.length === this.playerOrderActive.length) {
             this.biddingTurnPlayerId = null;
@@ -210,66 +224,24 @@ class GameEngine {
     }
     
     chooseTrump(userId, suit) {
-        if (this.state !== "Trump Selection" || this.bidWinnerInfo?.userId !== userId || !["S", "C", "D"].includes(suit)) {
-            return;
-        }
+        if (this.state !== "Trump Selection" || this.bidWinnerInfo?.userId !== userId || !["S", "C", "D"].includes(suit)) return;
         this.trumpSuit = suit;
         this._transitionToPlayingPhase();
     }
 
     submitFrogDiscards(userId, discards) {
         const player = this.players[userId];
-        if (!player || this.state !== "Frog Widow Exchange" || this.bidWinnerInfo?.userId !== userId || !Array.isArray(discards) || discards.length !== 3) {
-            return;
-        }
+        if (!player || this.state !== "Frog Widow Exchange" || this.bidWinnerInfo?.userId !== userId || !Array.isArray(discards) || discards.length !== 3) return;
         const currentHand = this.hands[player.playerName];
-        if (!discards.every(card => currentHand.includes(card))) {
-            return; // TODO: Return error effect
-        }
+        if (!discards.every(card => currentHand.includes(card))) return;
         this.widowDiscardsForFrogBidder = discards;
         this.hands[player.playerName] = currentHand.filter(card => !discards.includes(card));
         this._transitionToPlayingPhase();
     }
 
     playCard(userId, card) {
-        if (userId !== this.trickTurnPlayerId) return;
-        const player = this.players[userId];
-        if (!player) return;
-
-        const hand = this.hands[player.playerName];
-        if (!hand || !hand.includes(card)) return;
-        
-        const isLeading = this.currentTrickCards.length === 0;
-        const playedSuit = gameLogic.getSuit(card);
-        if (isLeading) {
-            if (playedSuit === this.trumpSuit && !this.trumpBroken && !hand.every(c => gameLogic.getSuit(c) === this.trumpSuit)) {
-                // TODO: Return error effect
-                return;
-            }
-        } else {
-            const leadCardSuit = this.leadSuitCurrentTrick;
-            const hasLeadSuit = hand.some(c => gameLogic.getSuit(c) === leadCardSuit);
-            if (hasLeadSuit && playedSuit !== leadCardSuit) {
-                 // TODO: Return error effect
-                return;
-            }
-            if (!hasLeadSuit && hand.some(c => gameLogic.getSuit(c) === this.trumpSuit) && playedSuit !== this.trumpSuit) {
-                 // TODO: Return error effect
-                return;
-            }
-        }
-        this.hands[player.playerName] = hand.filter(c => c !== card);
-        this.currentTrickCards.push({ userId, playerName: player.playerName, card });
-        if (isLeading) this.leadSuitCurrentTrick = playedSuit;
-        if (playedSuit === this.trumpSuit) this.trumpBroken = true;
-        
-        const expectedCardsInTrick = this.playerOrderActive.length;
-        if (this.currentTrickCards.length === expectedCardsInTrick) {
-            this._resolveTrick();
-        } else {
-            const currentTurnPlayerIndex = this.playerOrderActive.indexOf(userId);
-            this.trickTurnPlayerId = this.playerOrderActive[(currentTurnPlayerIndex + 1) % this.playerOrderActive.length];
-        }
+        const effects = playHandler.playCard(this, userId, card);
+        return this._effects(effects);
     }
 
     requestNextRound(requestingUserId) {
@@ -279,7 +251,6 @@ class GameEngine {
     async reset() {
         console.log(`[${this.tableId}] Game is being reset.`);
         const originalPlayers = { ...this.players };
-        
         this.state = "Waiting for Players";
         this.players = {};
         this.playerOrderActive = [];
@@ -292,7 +263,6 @@ class GameEngine {
         this._nextBotId = -1;
         this.pendingBotAction = null;
         this._initializeNewRoundState();
-
         for (const userId in originalPlayers) {
             const playerInfo = originalPlayers[userId];
             if (!playerInfo.disconnected) {
@@ -313,11 +283,9 @@ class GameEngine {
     updateInsuranceSetting(userId, settingType, value) {
         const player = this.players[userId];
         if (!player || !this.insurance.isActive || this.insurance.dealExecuted) return;
-
         const multiplier = this.insurance.bidMultiplier;
         const parsedValue = parseInt(value, 10);
         if (isNaN(parsedValue)) return;
-
         if (settingType === 'bidderRequirement' && player.playerName === this.insurance.bidderPlayerName) {
             const minReq = -120 * multiplier;
             const maxReq = 120 * multiplier;
@@ -330,10 +298,7 @@ class GameEngine {
             if (parsedValue >= minOffer && parsedValue <= maxOffer) {
                 this.insurance.defenderOffers[player.playerName] = parsedValue;
             }
-        } else {
-            return;
-        }
-
+        } else { return; }
         const sumOfOffers = Object.values(this.insurance.defenderOffers || {}).reduce((sum, offer) => sum + (offer || 0), 0);
         if (this.insurance.bidderRequirement <= sumOfOffers) {
             this.insurance.dealExecuted = true;
@@ -363,27 +328,13 @@ class GameEngine {
     submitDrawVote(userId, vote) {
         const player = this.players[userId];
         if (!player || !this.drawRequest.isActive || !['wash', 'split', 'no'].includes(vote) || this.drawRequest.votes[player.playerName] !== null) return;
-        
         this.drawRequest.votes[player.playerName] = vote;
-    
-        if (vote === 'no') {
-            this.drawRequest.isActive = false;
-            // TODO: Return an effect to notify players
-            return;
-        }
-    
+        if (vote === 'no') { this.drawRequest.isActive = false; return; }
         const allVotes = Object.values(this.drawRequest.votes);
-        if (!allVotes.every(v => v !== null)) {
-            return;
-        }
-
+        if (!allVotes.every(v => v !== null)) return;
         this.drawRequest.isActive = false;
-        // TODO: This should return a HANDLE_DRAW_VOTE effect
-        // The service will then do the DB transactions and end the game.
         this.state = "Game Over";
     }
-
-
 
     // =================================================================
     // --- HELPER METHODS ---
@@ -391,25 +342,17 @@ class GameEngine {
 
     _initializeNewRoundState() {
         this.hands = {}; this.widow = []; this.originalDealtWidow = [];
-        this.biddingTurnPlayerId = null;
-        this.currentHighestBidDetails = null;
-        this.playersWhoPassedThisRound = [];
+        this.biddingTurnPlayerId = null; this.currentHighestBidDetails = null; this.playersWhoPassedThisRound = [];
         this.bidWinnerInfo = null; this.trumpSuit = null; this.trumpBroken = false; this.originalFrogBidderId = null; this.soloBidMadeAfterFrog = false; this.revealedWidowForFrog = []; this.widowDiscardsForFrogBidder = [];
-        this.trickTurnPlayerId = null;
-        this.trickLeaderId = null;
-        this.currentTrickCards = []; this.leadSuitCurrentTrick = null; this.lastCompletedTrick = null; this.tricksPlayedCount = 0; this.capturedTricks = {}; this.roundSummary = null; 
+        this.trickTurnPlayerId = null; this.trickLeaderId = null; this.currentTrickCards = []; this.leadSuitCurrentTrick = null; this.lastCompletedTrick = null; this.tricksPlayedCount = 0; this.capturedTricks = {}; this.roundSummary = null; 
         this.insurance = { isActive: false, bidMultiplier: null, bidderPlayerName: null, bidderRequirement: 0, defenderOffers: {}, dealExecuted: false, executedDetails: null };
-        this.forfeiture = { targetPlayerName: null, timeLeft: null };
-        this.drawRequest = { isActive: false, initiator: null, votes: {}, timer: null };
-        
+        this.forfeiture = { targetPlayerName: null, timeLeft: null }; this.drawRequest = { isActive: false, initiator: null, votes: {}, timer: null };
         Object.values(this.players).forEach(p => {
             if (p.playerName && this.scores[p.playerName] !== undefined) {
                 this.capturedTricks[p.playerName] = [];
             }
         });
-        
-        this.bidderCardPoints = 0;
-        this.defenderCardPoints = 0;
+        this.bidderCardPoints = 0; this.defenderCardPoints = 0;
     }
 
     _recalculateActivePlayerOrder() {
@@ -422,9 +365,7 @@ class GameEngine {
             const orderedIds = [];
             for (let i = 1; i <= playerUserIds.length; i++) { 
                 const playerId = playerUserIds[(dealerIndex + i) % playerUserIds.length]; 
-                if (this.players[playerId]) {
-                    orderedIds.push(playerId); 
-                }
+                if (this.players[playerId]) { orderedIds.push(playerId); }
             }
             this.playerOrderActive = orderedIds;
         } else { this.playerOrderActive = activePlayers.map(p => p.userId).sort((a,b) => a - b); }
@@ -433,13 +374,9 @@ class GameEngine {
     getStateForClient() {
         const state = {
             tableId: this.tableId, tableName: this.tableName, theme: this.theme, state: this.state, players: this.players,
-            playerOrderActive: Object.values(this.players)
-                .filter(p => this.playerOrderActive.includes(p.userId))
-                .sort((a, b) => this.playerOrderActive.indexOf(a.userId) - this.playerOrderActive.indexOf(b.userId))
-                .map(p => p.playerName),
+            playerOrderActive: Object.values(this.players).filter(p => this.playerOrderActive.includes(p.userId)).sort((a, b) => this.playerOrderActive.indexOf(a.userId) - this.playerOrderActive.indexOf(b.userId)).map(p => p.playerName),
             dealer: this.dealer, hands: this.hands, widow: this.widow, originalDealtWidow: this.originalDealtWidow, scores: this.scores, currentHighestBidDetails: this.currentHighestBidDetails, bidWinnerInfo: this.bidWinnerInfo, gameStarted: this.gameStarted, trumpSuit: this.trumpSuit, currentTrickCards: this.currentTrickCards, tricksPlayedCount: this.tricksPlayedCount, leadSuitCurrentTrick: this.leadSuitCurrentTrick, trumpBroken: this.trumpBroken, capturedTricks: this.capturedTricks, roundSummary: this.roundSummary, lastCompletedTrick: this.lastCompletedTrick, playersWhoPassedThisRound: this.playersWhoPassedThisRound.map(id => this.players[id]?.playerName), playerMode: this.playerMode, serverVersion: this.serverVersion, insurance: this.insurance, forfeiture: this.forfeiture, drawRequest: this.drawRequest, originalFrogBidderId: this.originalFrogBidderId, soloBidMadeAfterFrog: this.soloBidMadeAfterFrog, revealedWidowForFrog: this.revealedWidowForFrog, widowDiscardsForFrogBidder: this.widowDiscardsForFrogBidder,
-            bidderCardPoints: this.bidderCardPoints,
-            defenderCardPoints: this.defenderCardPoints,
+            bidderCardPoints: this.bidderCardPoints, defenderCardPoints: this.defenderCardPoints,
         };
         state.biddingTurnPlayerName = this.players[this.biddingTurnPlayerId]?.playerName;
         state.trickTurnPlayerName = this.players[this.trickTurnPlayerId]?.playerName;
@@ -455,42 +392,13 @@ class GameEngine {
     }
 
     _resolveForfeit(forfeitingPlayerName, reason) {
-        // TODO: This should return effects
         console.log(`[${this.tableId}] Forfeit by ${forfeitingPlayerName}`);
         this.state = "Game Over";
     }
 
-    _resolveTrick() {
-        const winnerInfo = gameLogic.determineTrickWinner(this.currentTrickCards, this.leadSuitCurrentTrick, this.trumpSuit);
-        this.lastCompletedTrick = { cards: [...this.currentTrickCards], winnerName: winnerInfo.playerName };
-        
-        const trickPoints = gameLogic.calculateCardPoints(this.lastCompletedTrick.cards.map(p => p.card));
-        const winnerIsBidder = winnerInfo.playerName === this.bidWinnerInfo.playerName;
-        if (winnerIsBidder) {
-            this.bidderCardPoints += trickPoints;
-        } else {
-            this.defenderCardPoints += trickPoints;
-        }
-
-        this.tricksPlayedCount++;
-        this.trickLeaderId = winnerInfo.userId;
-        const winnerName = winnerInfo.playerName;
-        if (winnerName && !this.capturedTricks[winnerName]) { this.capturedTricks[winnerName] = []; }
-        if (winnerName) { this.capturedTricks[winnerName].push(this.currentTrickCards.map(p => p.card)); }
-        
-        if (this.tricksPlayedCount === 11) {
-            this._calculateRoundScores();
-        } else {
-            this.state = "TrickCompleteLinger";
-            // TODO: Refactor to return a START_TIMER effect
-        }
-    }
-
     _resolveBiddingFinal() {
         if (!this.currentHighestBidDetails) {
-            this.state = "AllPassWidowReveal";
-            // TODO: Refactor to return a START_TIMER effect
-            return;
+            this.state = "AllPassWidowReveal"; return;
         }
         this.bidWinnerInfo = { ...this.currentHighestBidDetails };
         const bid = this.bidWinnerInfo.bid;
@@ -542,43 +450,13 @@ class GameEngine {
         const oldDealerId = this.playerOrderActive.shift();
         this.playerOrderActive.push(oldDealerId);
         this.dealer = this.playerOrderActive[0];
-        
         if (!this.players[this.dealer]) {
             console.error(`[${this.tableId}] FATAL: Could not find new dealer. Resetting table.`);
             this.reset();
             return;
         }
-
         this._initializeNewRoundState();
         this.state = "Dealing Pending";
-    }
-    
-    _calculateRoundScores() {
-        const roundData = gameLogic.calculateRoundScoreDetails(this);
-        for(const playerName in roundData.pointChanges) { if(this.scores[playerName] !== undefined) { this.scores[playerName] += roundData.pointChanges[playerName]; } }
-        let isGameOver = Object.values(this.scores).filter(s => typeof s === 'number').some(score => score <= 0);
-        
-        this.roundSummary = {
-            message: isGameOver ? "Game Over!" : roundData.roundMessage,
-            finalScores: { ...this.scores },
-            isGameOver,
-            gameWinner: null, // The service will determine the winner
-            dealerOfRoundId: this.dealer,
-            widowForReveal: roundData.widowForReveal,
-            insuranceDealWasMade: this.insurance.dealExecuted,
-            insuranceDetails: this.insurance.dealExecuted ? this.insurance.executedDetails : null,
-            insuranceHindsight: roundData.insuranceHindsight,
-            allTricks: this.capturedTricks,
-            // We can't know the final tokens until the service runs the transactions
-            playerTokens: this.playerTokens 
-        };
-
-        this.state = isGameOver ? "Game Over" : "Awaiting Next Round Trigger";
-
-        if (isGameOver) {
-            // TODO: In the next phase, this should return a HANDLE_GAME_OVER effect.
-            // For now, we'll let the client handle the "Play Again" button.
-        }
     }
 }
 
