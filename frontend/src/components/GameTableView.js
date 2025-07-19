@@ -22,8 +22,8 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
     const [showRoundSummaryModal, setShowRoundSummaryModal] = useState(false);
     const [showInsurancePrompt, setShowInsurancePrompt] = useState(false);
     const [showGameMenu, setShowGameMenu] = useState(false);
-    // --- FIX: Removed unused isFullscreen state ---
-    // const [isFullscreen, setIsFullscreen] = useState(false);
+    // --- FIX: Removed unused variables ---
+    // const [isFullscreen, setIsFullscreen] = useState(false); 
     const [showIosPrompt, setShowIosPrompt] = useState(false);
     const [showDrawVote, setShowDrawVote] = useState(false);
     const [chatOpen, setChatOpen] = useState(false);
