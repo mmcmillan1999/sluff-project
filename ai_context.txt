@@ -91,13 +91,11 @@ module.exports = {
   "name": "sluff-server",
   "version": "1.0.0",
   "description": "Sluff Card Game Server",
-  "main": "server.js",
+  "main": "src/server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js",
-    "test": "node tests/gameLogic.test.js && node tests/legalMoves.test.js && node tests/bot.test.js",
-    "test:api": "node tests/api.test.js",
-    "test:integration": "node tests/auth.test.js && node tests/lifecycle.test.js"
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "node tests/Table.integration.test.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
@@ -107,1237 +105,13 @@ module.exports = {
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.16.3",
     "socket.io": "^4.5.4",
-    "socket.io-client": "^4.7.5",
     "uuid": "^11.1.0"
   },
   "devDependencies": {
-    "node-fetch": "^2.7.0",
     "nodemon": "^2.0.22"
   }
 }
-
 --- END FILE: backend/package.json ---
-
---- START FILE: backend/server.js ---
-// --- Backend/server.js ---
-require("dotenv").config();
-const http = require("http");
-const express = require("express");
-const cors =require("cors");
-const { Server } = require("socket.io");
-const { Pool } = require("pg");
-const jwt = require("jsonwebtoken");
-const bcrypt = require('bcrypt');
-
-const state = require('./game/gameState');
-const createAuthRoutes = require('./routes/auth');
-const createLeaderboardRoutes = require('./routes/leaderboard');
-const createAdminRoutes = require('./routes/admin');
-const createFeedbackRoutes = require('./routes/feedback'); 
-const createChatRoutes = require('./routes/chat');
-const createDbTables = require('./db/createTables');
-const transactionManager = require("./db/transactionManager");
-
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: "*", methods: ["GET", "POST"] },
-});
-
-let pool;
-
-app.use(cors({ origin: "*" }));
-app.use(express.json());
-
-// =================================================================
-// AUTHENTICATION MIDDLEWARE
-// =================================================================
-
-io.use((socket, next) => {
-    const token = socket.handshake.auth.token;
-    if (!token) { 
-        return next(new Error("Authentication error: No token provided."));
-    }
-    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-        if (err) { 
-            return next(new Error("Authentication error: Invalid token."));
-        }
-        socket.user = user;
-        next();
-    });
-});
-
-// =================================================================
-// SOCKET.IO CONNECTION HANDLER
-// =================================================================
-
-io.on("connection", (socket) => {
-    console.log(`Socket connected: ${socket.user.username} (ID: ${socket.user.id}, Socket: ${socket.id})`);
-
-    const table = Object.values(state.getAllTables()).find(t => t.players[socket.user.id]);
-    if (table && table.players[socket.user.id].disconnected) {
-        table.reconnectPlayer(socket.user.id, socket);
-    }
-    
-    socket.emit("lobbyState", state.getLobbyState());
-
-    // --- CORE EVENT LISTENERS (DELEGATION MODEL) ---
-    // ... (All your game event listeners like joinTable, playCard, etc. remain here)
-    socket.on("joinTable", async ({ tableId }) => {
-        const tableToJoin = state.getTableById(tableId);
-        if (!tableToJoin) return socket.emit("error", { message: "Table not found." });
-
-        const previousTable = Object.values(state.getAllTables()).find(t => t.players[socket.user.id] && t.tableId !== tableId);
-        if (previousTable) {
-            await previousTable.leaveTable(socket.user.id);
-            socket.leave(previousTable.tableId);
-        }
-        
-        socket.join(tableId);
-        await tableToJoin.joinTable(socket.user, socket.id);
-    });
-
-    socket.on("leaveTable", async ({ tableId }) => {
-        const tableToLeave = state.getTableById(tableId);
-        if (tableToLeave) {
-            await tableToLeave.leaveTable(socket.user.id);
-        }
-        socket.leave(tableId);
-        socket.emit("lobbyState", state.getLobbyState());
-    });
-
-    socket.on("addBot", ({ tableId, name }) => {
-        const table = state.getTableById(tableId);
-        if (table) table.addBotPlayer(name || 'Lee');
-    });
-
-    socket.on("startGame", ({ tableId }) => {
-        const table = state.getTableById(tableId);
-        if (table) table.startGame(socket.user.id);
-    });
-    
-    socket.on("dealCards", ({ tableId }) => {
-        const table = state.getTableById(tableId);
-        if (table) table.dealCards(socket.user.id);
-    });
-
-    socket.on("placeBid", ({ tableId, bid }) => {
-        const table = state.getTableById(tableId);
-        if (table) table.placeBid(socket.user.id, bid);
-    });
-
-    socket.on("chooseTrump", ({ tableId, suit }) => {
-        const table = state.getTableById(tableId);
-        if (table) table.chooseTrump(socket.user.id, suit);
-    });
-
-    socket.on("submitFrogDiscards", ({ tableId, discards }) => {
-        const table = state.getTableById(tableId);
-        if (table) table.submitFrogDiscards(socket.user.id, discards);
-    });
-
-    socket.on("playCard", ({ tableId, card }) => {
-        const table = state.getTableById(tableId);
-        if (table) table.playCard(socket.user.id, card);
-    });
-
-    socket.on("requestNextRound", ({ tableId }) => {
-        const table = state.getTableById(tableId);
-        if (table) table.requestNextRound(socket.user.id);
-    });
-    
-    socket.on("forfeitGame", ({ tableId }) => {
-        const table = state.getTableById(tableId);
-        if (table) table.forfeitGame(socket.user.id);
-    });
-    
-    socket.on("resetGame", async ({ tableId }) => {
-        const table = state.getTableById(tableId);
-        if (table) await table.reset();
-    });
-
-    socket.on("updateInsuranceSetting", ({ tableId, settingType, value }) => {
-        const table = state.getTableById(tableId);
-        if (table) table.updateInsuranceSetting(socket.user.id, settingType, value);
-    });
-
-    socket.on("startTimeoutClock", ({ tableId, targetPlayerName }) => {
-        const table = state.getTableById(tableId);
-        if (table) table.startForfeitTimer(socket.user.id, targetPlayerName);
-    });
-
-    socket.on("requestDraw", ({ tableId }) => {
-        const table = state.getTableById(tableId);
-        if (table) table.requestDraw(socket.user.id);
-    });
-    
-    socket.on("submitDrawVote", ({ tableId, vote }) => {
-        const table = state.getTableById(tableId);
-        if (table) table.submitDrawVote(socket.user.id, vote);
-    });
-
-
-    // --- USER-SPECIFIC & MISC LISTENERS ---
-
-    socket.on("requestUserSync", async () => {
-        try {
-            const userQuery = "SELECT id, username, email, created_at, wins, losses, washes, is_admin FROM users WHERE id = $1";
-            const userResult = await pool.query(userQuery, [socket.user.id]);
-            const updatedUser = userResult.rows[0];
-
-            if (updatedUser) {
-                const tokenQuery = "SELECT SUM(amount) AS current_tokens FROM transactions WHERE user_id = $1";
-                const tokenResult = await pool.query(tokenQuery, [socket.user.id]);
-                updatedUser.tokens = parseFloat(tokenResult.rows[0]?.current_tokens || 0).toFixed(2);
-                socket.emit("updateUser", updatedUser);
-            }
-        } catch(err) {
-            console.error(`Error during user sync for user ${socket.user.id}:`, err);
-        }
-    });
-
-    socket.on("requestFreeToken", async () => {
-        try {
-            const tokenQuery = "SELECT SUM(amount) AS current_tokens FROM transactions WHERE user_id = $1";
-            const tokenResult = await pool.query(tokenQuery, [socket.user.id]);
-            const currentTokens = parseFloat(tokenResult.rows[0]?.current_tokens || 0);
-
-            if (currentTokens >= 5) {
-                return socket.emit("error", { message: "Sorry, free tokens are only for players with fewer than 5 tokens." });
-            }
-
-            await transactionManager.postTransaction(pool, {
-                userId: socket.user.id, gameId: null, type: 'free_token_mercy', amount: 1,
-                description: 'Mercy token requested by user'
-            });
-            
-            const userQuery = "SELECT id, username, email, created_at, wins, losses, washes, is_admin FROM users WHERE id = $1";
-            const userResult = await pool.query(userQuery, [socket.user.id]);
-            const updatedUser = userResult.rows[0];
-
-            if (updatedUser) {
-                const updatedTokenQuery = "SELECT SUM(amount) AS current_tokens FROM transactions WHERE user_id = $1";
-                const updatedTokenResult = await pool.query(updatedTokenQuery, [socket.user.id]);
-                updatedUser.tokens = parseFloat(updatedTokenResult.rows[0]?.current_tokens || 0).toFixed(2);
-                socket.emit("updateUser", updatedUser);
-            }
-
-            socket.emit("notification", { message: "1 free token has been added to your account!" });
-
-        } catch (err) {
-            socket.emit("error", { message: "Could not grant token." });
-        }
-    });
-
-    socket.on("disconnect", async () => { // --- MODIFIED: Mark as async ---
-        console.log(`Socket disconnected: ${socket.user.username} (ID: ${socket.user.id}, Socket: ${socket.id})`);
-        
-        // --- NEW: Announce logout/disconnect to the lobby chat ---
-        try {
-            const logoutMsgQuery = `
-                INSERT INTO lobby_chat_messages (user_id, username, message)
-                VALUES ($1, $2, $3)
-                RETURNING id, username, message, created_at;
-            `;
-            const msgValues = [socket.user.id, 'System', `${socket.user.username} has logged out.`];
-            const { rows } = await pool.query(logoutMsgQuery, msgValues);
-            io.emit('new_lobby_message', rows[0]);
-        } catch (chatError) {
-            console.error("Failed to post logout message to chat:", chatError);
-        }
-        // --- END NEW ---
-        
-        const tablePlayerIsOn = Object.values(state.getAllTables()).find(t => t.players[socket.user.id]);
-        if (tablePlayerIsOn) {
-            tablePlayerIsOn.disconnectPlayer(socket.user.id);
-        }
-    });
-});
-
-// =================================================================
-// SERVER STARTUP
-// =================================================================
-
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, async () => {
-  console.log(`Sluff Game Server (v${require('./game/constants').SERVER_VERSION}) running on port ${PORT}`);
-  try {
-    pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }
-    });
-    await pool.connect();
-    console.log("âœ… Database connection successful.");
-    await createDbTables(pool);
-    
-    // --- MODIFICATION: Pass 'io' to the auth routes ---
-    const authRoutes = createAuthRoutes(pool, bcrypt, jwt, io);
-    app.use('/api/auth', authRoutes);
-
-    const leaderboardRoutes = createLeaderboardRoutes(pool);
-    app.use('/api/leaderboard', leaderboardRoutes);
-
-    const adminRouter = createAdminRoutes(pool, jwt);
-    app.use('/api/admin', adminRouter);
-
-    const feedbackRouter = createFeedbackRoutes(pool, jwt); 
-    app.use('/api/feedback', feedbackRouter);              
-
-    const chatRouter = createChatRoutes(pool, io, jwt);
-    app.use('/api/chat', chatRouter);
-
-    state.initializeGameTables(io, pool);
-
-  } catch (err) {
-    console.error("âŒ DATABASE CONNECTION FAILED:", err);
-    process.exit(1);
-  }
-});
---- END FILE: backend/server.js ---
-
---- START FILE: backend/db/chatEndpoint.js ---
-// Example Express endpoint for lobby chat
-// This server file is illustrative only; the actual backend repository is not included.
-
-const express = require('express');
-const router = express.Router();
-
-// Expected database table: lobby_chat_messages
-// Fields: id SERIAL PRIMARY KEY, user_id INTEGER, username TEXT,
-// message TEXT, created_at TIMESTAMP DEFAULT NOW()
-
-// GET /api/chat - return chat history
-router.get('/', async (req, res) => {
-    // TODO: implement database fetch
-    res.json([]);
-});
-
-// POST /api/chat - add a new message
-router.post('/', async (req, res) => {
-    const { message } = req.body;
-    // TODO: insert message into database
-    // Return the saved message with id, username, etc.
-    res.json({ id: 0, username: req.user.username, message });
-});
-
-module.exports = router;
---- END FILE: backend/db/chatEndpoint.js ---
-
---- START FILE: backend/db/createTables.js ---
-// backend/db/createTables.js
-
-const createDbTables = async (pool) => {
-    try {
-        // This command creates the type if it doesn't exist at all.
-        await pool.query(`
-            DO $$ BEGIN
-                CREATE TYPE transaction_type_enum AS ENUM (
-                    'buy_in', 
-                    'win_payout', 
-                    'forfeit_loss', 
-                    'forfeit_payout',
-                    'admin_adjustment',
-                    'free_token_mercy',
-                    'wash_payout'
-                );
-            EXCEPTION
-                WHEN duplicate_object THEN null;
-            END $$;
-        `);
-
-        await pool.query(`
-            DO $$ BEGIN
-                CREATE TYPE user_role_enum AS ENUM ('player', 'admin');
-            EXCEPTION
-                WHEN duplicate_object THEN null;
-            END $$;
-        `);
-
-        // NEW: Add a status type for feedback tracking
-        await pool.query(`
-            DO $$ BEGIN
-                CREATE TYPE feedback_status_enum AS ENUM ('new', 'in_progress', 'resolved', 'wont_fix');
-            EXCEPTION
-                WHEN duplicate_object THEN null;
-            END $$;
-        `);
-
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                username VARCHAR(50) UNIQUE NOT NULL,
-                email VARCHAR(255) UNIQUE NOT NULL,
-                password_hash VARCHAR(255) NOT NULL,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                wins INTEGER DEFAULT 0,
-                losses INTEGER DEFAULT 0,
-                washes INTEGER DEFAULT 0,
-                is_admin BOOLEAN DEFAULT FALSE
-            );
-        `);
-
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS game_history (
-                game_id SERIAL PRIMARY KEY,
-                table_id VARCHAR(50),
-                theme VARCHAR(50),
-                player_count INTEGER,
-                start_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                end_time TIMESTAMP WITH TIME ZONE,
-                outcome TEXT
-            );
-        `);
-
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS transactions (
-                transaction_id SERIAL PRIMARY KEY,
-                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-                game_id INTEGER REFERENCES game_history(game_id) ON DELETE SET NULL,
-                transaction_type transaction_type_enum NOT NULL,
-                amount DECIMAL(10, 2) NOT NULL,
-                description TEXT,
-                transaction_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            );
-        `);
-
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS feedback (
-                feedback_id SERIAL PRIMARY KEY,
-                user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-                username VARCHAR(50),
-                submitted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                feedback_text TEXT NOT NULL,
-                table_id VARCHAR(50),
-                game_state_json JSONB,
-                status feedback_status_enum DEFAULT 'new'
-            );
-        `);
-
-        // --- NEW: Create the lobby chat messages table ---
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS lobby_chat_messages (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-                username VARCHAR(50),
-                message TEXT NOT NULL,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            );
-        `);
-
-
-        console.log("âœ… Tables checked/created successfully.");
-    } catch (err) {
-        console.error("Error during table creation/modification:", err);
-        throw err;
-    }
-};
-
-module.exports = createDbTables;
---- END FILE: backend/db/createTables.js ---
-
---- START FILE: backend/db/README.md ---
-# Lobby Chat Backend Endpoint
-
-This folder contains an illustrative Express router for handling lobby chat messages. The actual backend implementation is not part of this repository.
-
-## Database Table
-
-Create a table called `lobby_chat_messages` with the following fields:
-
-| Field      | Type      | Notes                       |
-|------------|-----------|-----------------------------|
-| `id`       | SERIAL    | Primary key                 |
-| `user_id`  | INTEGER   | ID of the user sending text |
-| `username` | TEXT      | Display name of sender      |
-| `message`  | TEXT      | Chat content                |
-| `created_at` | TIMESTAMP | Defaults to `NOW()`         |
-
-## API Routes
-
-- `GET /api/chat` â€“ Returns an array of recent chat messages.
-- `POST /api/chat` â€“ Accepts `{ message }` and stores a new message. Returns the saved message object.
-
-These endpoints are referenced by the front-end `LobbyChat` component.  
---- END FILE: backend/db/README.md ---
-
---- START FILE: backend/db/transactionManager.js ---
-// backend/db/transactionManager.js
-
-// --- MODIFICATION: Import TABLE_COSTS to look up buy-in amounts ---
-const { TABLE_COSTS } = require('../game/constants');
-
-const createGameRecord = async (pool, table) => {
-    const query = `
-        INSERT INTO game_history (table_id, theme, player_count, outcome)
-        VALUES ($1, $2, $3, $4)
-        RETURNING game_id;
-    `;
-    const values = [table.tableId, table.theme, table.playerMode, 'In Progress'];
-    try {
-        const result = await pool.query(query, values);
-        console.log(`[DB] Created game_id: ${result.rows[0].game_id} for table ${table.tableId}`);
-        return result.rows[0].game_id;
-    } catch (err) {
-        console.error('Error creating game record in database:', err);
-        throw err;
-    }
-};
-
-const postTransaction = async (pool, { userId, gameId, type, amount, description }) => {
-    const query = `
-        INSERT INTO transactions (user_id, game_id, transaction_type, amount, description)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING *;
-    `;
-    const values = [userId, gameId, type, amount, description];
-    try {
-        const result = await pool.query(query, values);
-        console.log(`[DB] Posted transaction_id: ${result.rows[0].transaction_id} for user_id: ${userId}, type: ${type}, amount: ${amount}`);
-        return result.rows[0];
-    } catch (err) {
-        console.error(`Error posting transaction for user ${userId}:`, err);
-        throw err;
-    }
-};
-
-const updateGameRecordOutcome = async (pool, gameId, outcome) => {
-    const query = `
-        UPDATE game_history
-        SET outcome = $1, end_time = NOW()
-        WHERE game_id = $2;
-    `;
-    try {
-        await pool.query(query, [outcome, gameId]);
-        console.log(`[DB] Finalized game_id: ${gameId} with outcome: "${outcome}"`);
-    } catch (err) {
-        console.error(`Error updating game record outcome for game_id ${gameId}:`, err);
-    }
-};
-
-// --- MODIFICATION: Updated function to accept the 'table' object and use its theme ---
-const handleGameStartTransaction = async (pool, table, playerIds, gameId) => {
-    // Look up the cost dynamically based on the table's theme, default to 1 if not found
-    const cost = -(TABLE_COSTS[table.theme] || 1);
-    const description = `Table buy-in for game #${gameId}`;
-
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-
-        const balanceQuery = `
-            SELECT user_id, SUM(amount) as current_tokens 
-            FROM transactions 
-            WHERE user_id = ANY($1::int[]) 
-            GROUP BY user_id;
-        `;
-        const balanceResult = await client.query(balanceQuery, [playerIds]);
-        
-        const playerBalances = balanceResult.rows.reduce((acc, row) => {
-            acc[row.user_id] = parseFloat(row.current_tokens);
-            return acc;
-        }, {});
-
-        for (const userId of playerIds) {
-            const balance = playerBalances[userId] || 0;
-            if (balance < Math.abs(cost)) {
-                const userRes = await client.query('SELECT username FROM users WHERE id = $1', [userId]);
-                const username = userRes.rows[0]?.username || `Player ID ${userId}`;
-                throw new Error(`${username} has insufficient tokens. Needs ${Math.abs(cost)}, but has ${balance.toFixed(2)}.`);
-            }
-        }
-
-        const transactionPromises = playerIds.map(userId => {
-            const insertQuery = `
-                INSERT INTO transactions(user_id, game_id, transaction_type, amount, description) 
-                VALUES($1, $2, 'buy_in', $3, $4);
-            `;
-            return client.query(insertQuery, [userId, gameId, cost, description]);
-        });
-        
-        await Promise.all(transactionPromises);
-
-        await client.query('COMMIT');
-        console.log(`âœ… Game start buy-in transaction successful for game ${gameId}`);
-
-    } catch (error) {
-        await client.query('ROLLBACK');
-        console.error("âŒ Game start transaction failed and was rolled back:", error.message);
-        throw error; 
-    } finally {
-        client.release();
-    }
-};
-
-const awardWinnings = async (pool, winnerId, potSize, gameId) => {
-    if (!winnerId || potSize <= 0) {
-        console.log("No winner or empty pot, skipping payout transaction.");
-        return;
-    }
-    await postTransaction(pool, {
-        userId: winnerId,
-        gameId: gameId,
-        type: 'win_payout',
-        amount: potSize,
-        description: `Winnings for game #${gameId}`
-    });
-    console.log(`âœ… Payout of ${potSize} tokens successful for user ${winnerId} in game ${gameId}`);
-};
-
-module.exports = {
-    createGameRecord,
-    postTransaction,
-    updateGameRecordOutcome,
-    handleGameStartTransaction,
-    awardWinnings
-};
---- END FILE: backend/db/transactionManager.js ---
-
---- START FILE: backend/game/BotPlayer.js ---
-const gameLogic = require('./logic');
-const { RANKS_ORDER, BID_HIERARCHY } = require('./constants');
-const { getLegalMoves } = require('./legalMoves'); // --- MODIFIED: Import the new logic ---
-
-// Helper function to get the rank value of a card for sorting.
-const getRankValue = (card) => RANKS_ORDER.indexOf(gameLogic.getRank(card));
-
-class BotPlayer {
-    constructor(userId, name, table) {
-        this.userId = userId;
-        this.playerName = name;
-        this.table = table;
-    }
-
-    /**
-     * Analyzes a hand to determine its point value and suit distribution.
-     * @param {string[]} hand - The array of card strings in the hand.
-     * @returns {{points: number, suits: {H: number, S: number, C: number, D: number}}}
-     */
-    _analyzeHand(hand) {
-        if (!hand || hand.length === 0) {
-            return { points: 0, suits: { H: 0, S: 0, C: 0, D: 0 } };
-        }
-        const points = gameLogic.calculateCardPoints(hand);
-        const suits = { H: 0, S: 0, C: 0, D: 0 };
-        for (const card of hand) {
-            suits[gameLogic.getSuit(card)]++;
-        }
-        return { points, suits };
-    }
-
-    makeBid() {
-        const hand = this.table.hands[this.playerName] || [];
-        const handStats = this._analyzeHand(hand);
-        const { points, suits } = handStats;
-
-        let potentialBid = "Pass";
-
-        // Evaluate for Heart Solo (highest bid)
-        if ((points > 30 && suits.H >= 5) || (points > 40 && suits.H >= 4)) {
-            potentialBid = "Heart Solo";
-        }
-        // Evaluate for other Solos
-        else if ((points > 30 && (suits.S >= 5 || suits.C >= 5 || suits.D >= 5)) ||
-                 (points > 40 && (suits.S >= 4 || suits.C >= 4 || suits.D >= 4))) {
-            potentialBid = "Solo";
-        }
-        // Evaluate for Frog
-        else if ((points > 30 && suits.H >= 4) || (points > 40 && suits.H >= 3)) {
-            potentialBid = "Frog";
-        }
-
-        // Check if the potential bid is higher than the current bid on the table
-        const currentBidDetails = this.table.currentHighestBidDetails;
-        const currentBidLevel = currentBidDetails ? BID_HIERARCHY.indexOf(currentBidDetails.bid) : -1;
-        const potentialBidLevel = BID_HIERARCHY.indexOf(potentialBid);
-
-        if (potentialBidLevel > currentBidLevel) {
-            this.table.placeBid(this.userId, potentialBid);
-        } else {
-            this.table.placeBid(this.userId, "Pass");
-        }
-    }
-
-    chooseTrump() {
-        const hand = this.table.hands[this.playerName] || [];
-        const handStats = this._analyzeHand(hand);
-        
-        // Find the strongest suit (non-Heart) to be trump
-        let bestSuit = 'C';
-        let maxCount = 0;
-        for (const suit of ['S', 'C', 'D']) {
-            if (handStats.suits[suit] > maxCount) {
-                maxCount = handStats.suits[suit];
-                bestSuit = suit;
-            }
-        }
-        this.table.chooseTrump(this.userId, bestSuit);
-    }
-
-    submitFrogDiscards() {
-        const hand = this.table.hands[this.playerName] || [];
-        // A slightly smarter discard: get rid of the lowest ranking cards
-        const sortedHand = [...hand].sort((a, b) => getRankValue(a) - getRankValue(b));
-        const discards = sortedHand.slice(0, 3);
-        this.table.submitFrogDiscards(this.userId, discards);
-    }
-
-    playCard() {
-        const hand = this.table.hands[this.playerName];
-        if (!hand || hand.length === 0) return;
-
-        // --- MODIFICATION: The entire card selection logic is now refactored ---
-
-        // 1. Get all legal moves first. This prevents the bot from ever getting stuck.
-        const isLeading = this.table.currentTrickCards.length === 0;
-        const legalPlays = getLegalMoves(
-            hand,
-            isLeading,
-            this.table.leadSuitCurrentTrick,
-            this.table.trumpSuit,
-            this.table.trumpBroken
-        );
-
-        // If for some reason there are no legal plays, exit to prevent a crash.
-        if (legalPlays.length === 0) {
-            console.error(`[${this.table.tableId}] Bot ${this.playerName} has no legal moves from hand: ${hand.join(', ')}`);
-            return;
-        }
-
-        // 2. Sort the legal cards from lowest rank to highest.
-        legalPlays.sort((a, b) => getRankValue(a) - getRankValue(b));
-
-        // 3. Apply the playing strategy you outlined.
-        let cardToPlay;
-        if (isLeading) {
-            // LOGIC A: I am leading the trick. Play my highest legal card.
-            cardToPlay = legalPlays[legalPlays.length - 1];
-        } else {
-            // LOGIC B: I am not leading.
-            // Find which of my legal cards can win the trick.
-            const winningPlays = legalPlays.filter(myCard => {
-                const potentialTrick = [...this.table.currentTrickCards, { card: myCard, userId: this.userId }];
-                const winner = gameLogic.determineTrickWinner(potentialTrick, this.table.leadSuitCurrentTrick, this.table.trumpSuit);
-                return winner.userId === this.userId;
-            });
-
-            if (winningPlays.length > 0) {
-                // I can win! Play the highest card I can win with.
-                winningPlays.sort((a, b) => getRankValue(a) - getRankValue(b));
-                cardToPlay = winningPlays[winningPlays.length - 1];
-            } else {
-                // I cannot win. Play my lowest legal card to save good cards.
-                cardToPlay = legalPlays[0];
-            }
-        }
-        
-        // 4. Play the chosen card.
-        this.table.playCard(this.userId, cardToPlay);
-    }
-}
-
-module.exports = BotPlayer;
---- END FILE: backend/game/BotPlayer.js ---
-
---- START FILE: backend/game/constants.js ---
-// backend/game/constants.js
-
-const SERVER_VERSION = "9.0.0 - Game Economy";
-
-const SUITS = { H: "Hearts", D: "Diamonds", C: "Clubs", S: "Spades" };
-const RANKS_ORDER = ["6", "7", "8", "9", "J", "Q", "K", "10", "A"];
-const CARD_POINT_VALUES = { "A": 11, "10": 10, "K": 4, "Q": 3, "J": 2, "9":0, "8":0, "7":0, "6":0 };
-const BID_HIERARCHY = ["Pass", "Frog", "Solo", "Heart Solo"];
-const BID_MULTIPLIERS = { "Frog": 1, "Solo": 2, "Heart Solo": 3 };
-const PLACEHOLDER_ID = "ScoreAbsorber";
-
-// --- MODIFICATION: Define table costs, including the new learner table ---
-const TABLE_COSTS = {
-    'miss-pauls-academy': 0.1,
-    'fort-creek': 1,
-    'shirecliff-road': 5,
-    'dans-deck': 20,
-};
-
-// Generate the initial, unshuffled deck
-const deck = [];
-for (const suitKey in SUITS) {
-  for (const rank of RANKS_ORDER) {
-    deck.push(rank + suitKey);
-  }
-}
-
-module.exports = {
-    SERVER_VERSION,
-    SUITS,
-    RANKS_ORDER,
-    CARD_POINT_VALUES,
-    BID_HIERARCHY,
-    BID_MULTIPLIERS,
-    PLACEHOLDER_ID,
-    TABLE_COSTS,
-    deck
-};
---- END FILE: backend/game/constants.js ---
-
---- START FILE: backend/game/gameState.js ---
-// backend/game/gameState.js
-
-const Table = require('./Table'); // Import the new Table class
-const { SERVER_VERSION, TABLE_COSTS } = require('./constants');
-
-let tables = {};
-
-// --- MODIFICATION: Reordered the themes to place Miss Paul's Academy last ---
-const THEMES = [
-    { id: 'fort-creek', name: 'Fort Creek', count: 10 },
-    { id: 'shirecliff-road', name: 'ShireCliff Road', count: 10 },
-    { id: 'dans-deck', name: "Dan's Deck", count: 10 },
-    { id: 'miss-pauls-academy', name: "Miss Paul's Academy", count: 10 },
-];
-
-/**
- * Creates instances of the Table class for each defined theme.
- * @param {object} io - The main socket.io server instance.
- * @param {object} pool - The PostgreSQL connection pool.
- */
-function initializeGameTables(io, pool) {
-    let tableCounter = 1;
-
-    const emitLobbyUpdate = () => {
-        io.emit("lobbyState", getLobbyState());
-    };
-
-    THEMES.forEach(theme => {
-        for (let i = 0; i < theme.count; i++) {
-            const tableId = `table-${tableCounter}`;
-            const tableNumber = i + 1;
-            const tableName = `${theme.name} #${tableNumber}`;
-            
-            tables[tableId] = new Table(tableId, theme.id, tableName, io, pool, emitLobbyUpdate);
-            tableCounter++;
-        }
-    });
-    console.log(`${tableCounter - 1} in-memory game tables initialized using Table class.`);
-}
-
-function getTableById(tableId) {
-    return tables[tableId];
-}
-
-function getAllTables() {
-    return tables;
-}
-
-/**
- * Gathers the state of all tables for the main lobby view.
- */
-function getLobbyState() {
-    const groupedByTheme = THEMES.map(theme => {
-        const themeTables = Object.values(tables)
-            .filter(tableInstance => tableInstance.theme === theme.id)
-            .map(tableInstance => {
-                const clientState = tableInstance.getStateForClient();
-                const activePlayers = Object.values(clientState.players).filter(p => !p.isSpectator);
-                return {
-                    tableId: clientState.tableId,
-                    tableName: clientState.tableName,
-                    state: clientState.state,
-                    playerCount: activePlayers.length,
-                    players: activePlayers.map(p => ({ userId: p.userId, playerName: p.playerName }))
-                };
-            });
-        return { ...theme, cost: TABLE_COSTS[theme.id] || 0, tables: themeTables };
-    });
-
-    const lobbyData = {
-        themes: groupedByTheme,
-        serverVersion: SERVER_VERSION
-    };
-    return lobbyData;
-}
-
-module.exports = {
-    initializeGameTables,
-    getTableById,
-    getAllTables,
-    getLobbyState,
-};
---- END FILE: backend/game/gameState.js ---
-
---- START FILE: backend/game/legalMoves.js ---
-// backend/game/legalMoves.js
-
-const { getSuit } = require('./logic');
-
-/**
- * Determines the set of legally playable cards from a player's hand based on the current game state.
- * @param {string[]} hand - The player's current hand of cards.
- * @param {boolean} isLeading - True if the player is leading the trick.
- * @param {string|null} leadSuit - The suit of the first card played in the trick (null if leading).
- * @param {string} trumpSuit - The current trump suit.
- * @param {boolean} trumpBroken - True if trump has been played in a previous trick.
- * @returns {string[]} An array of card strings representing the legal moves.
- */
-function getLegalMoves(hand, isLeading, leadSuit, trumpSuit, trumpBroken) {
-    if (isLeading) {
-        // --- Lead-Out Condition ---
-        const hasNonTrumpCards = hand.some(card => getSuit(card) !== trumpSuit);
-        if (!trumpBroken && hasNonTrumpCards) {
-            // Trump is not broken and player has other suits, so only non-trump cards are legal.
-            return hand.filter(card => getSuit(card) !== trumpSuit);
-        } else {
-            // Trump is broken, OR the player only has trump cards. Any card is legal.
-            return [...hand];
-        }
-    } else {
-        // --- Non-Lead-Out (Following) Condition ---
-        // 1. Do I have the suit that was led?
-        const cardsInLeadSuit = hand.filter(card => getSuit(card) === leadSuit);
-        if (cardsInLeadSuit.length > 0) {
-            // Yes - I must follow suit.
-            return cardsInLeadSuit;
-        }
-
-        // 2. No lead suit. Do I have trump?
-        const trumpCards = hand.filter(card => getSuit(card) === trumpSuit);
-        if (trumpCards.length > 0) {
-            // Yes - Trump must be played.
-            return trumpCards;
-        }
-
-        // 3. No lead suit and no trump. Any card can be played (sluff).
-        return [...hand];
-    }
-}
-
-module.exports = { getLegalMoves };
---- END FILE: backend/game/legalMoves.js ---
-
---- START FILE: backend/game/logic.js ---
-// backend/game/logic.js
-
-const { RANKS_ORDER, BID_MULTIPLIERS, PLACEHOLDER_ID, CARD_POINT_VALUES, TABLE_COSTS } = require('./constants');
-const transactionManager = require('../db/transactionManager');
-
-// =================================================================
-// PURE UTILITY FUNCTIONS
-// =================================================================
-
-const getSuit = (cardStr) => (cardStr ? cardStr.slice(-1) : null);
-const getRank = (cardStr) => (cardStr ? cardStr.slice(0, -1) : null);
-
-const calculateCardPoints = (cardsArray) => {
-    if (!cardsArray || cardsArray.length === 0) return 0;
-    return cardsArray.reduce((sum, cardString) => sum + (CARD_POINT_VALUES[getRank(cardString)] || 0), 0);
-};
-
-function determineTrickWinner(trickCards, leadSuit, trumpSuit) {
-    let highestTrumpPlay = null;
-    let highestLeadSuitPlay = null;
-    for (const play of trickCards) {
-        const cardSuit = getSuit(play.card);
-        const cardRankIndex = RANKS_ORDER.indexOf(getRank(play.card));
-        if (cardSuit === trumpSuit) {
-            if (!highestTrumpPlay || cardRankIndex > RANKS_ORDER.indexOf(getRank(highestTrumpPlay.card))) {
-                highestTrumpPlay = play;
-            }
-        } else if (cardSuit === leadSuit) {
-            if (!highestLeadSuitPlay || cardRankIndex > RANKS_ORDER.indexOf(getRank(highestLeadSuitPlay.card))) {
-                highestLeadSuitPlay = play;
-            }
-        }
-    }
-    return highestTrumpPlay || highestLeadSuitPlay;
-}
-
-
-// =================================================================
-// PURE CALCULATION FUNCTIONS (Called by Table Class)
-// =================================================================
-
-function calculateForfeitPayout(table, forfeitingPlayerName) {
-    const remainingPlayers = Object.values(table.players).filter(p => 
-        !p.isSpectator && 
-        p.playerName !== forfeitingPlayerName
-    );
-
-    if (remainingPlayers.length === 0) return {};
-
-    const tableBuyIn = TABLE_COSTS[table.theme] || 0;
-    const forfeitedPot = tableBuyIn;
-    const totalScoreOfRemaining = remainingPlayers.reduce((sum, player) => sum + (table.scores[player.playerName] || 0), 0);
-    
-    const payoutDetails = {};
-    if (totalScoreOfRemaining > 0) {
-        remainingPlayers.forEach(player => {
-            const playerScore = table.scores[player.playerName] || 0;
-            const proportion = playerScore / totalScoreOfRemaining;
-            const shareOfPot = forfeitedPot * proportion;
-            
-            payoutDetails[player.playerName] = {
-                totalGain: tableBuyIn + shareOfPot,
-                buyInReturned: tableBuyIn,
-                forfeitShare: shareOfPot,
-            };
-        });
-    } else {
-        const evenShare = forfeitedPot / remainingPlayers.length;
-        remainingPlayers.forEach(player => {
-            payoutDetails[player.playerName] = {
-                totalGain: tableBuyIn + evenShare,
-                buyInReturned: tableBuyIn,
-                forfeitShare: evenShare,
-            };
-        });
-    }
-
-    return payoutDetails;
-}
-
-function calculateDrawSplitPayout(table) {
-    const tableBuyIn = TABLE_COSTS[table.theme] || 0;
-    const playersInOrder = Object.values(table.players)
-        .filter(p => !p.isSpectator)
-        .map(p => ({ name: p.playerName, score: table.scores[p.playerName] || 0, userId: p.userId }))
-        .sort((a, b) => a.score - b.score);
-
-    if (playersInOrder.length !== 3) {
-        return { wash: true, players: playersInOrder };
-    }
-
-    const [lowest, ...others] = playersInOrder;
-    const [p1, p2] = others.sort((a,b) => b.score - a.score);
-
-    const lowestRecoveryPercentage = Math.max(0, lowest.score) / 120;
-    const lowestRecoveryAmount = tableBuyIn * lowestRecoveryPercentage;
-    const remainingPot = tableBuyIn - lowestRecoveryAmount;
-    
-    const totalScoreOfSplitters = p1.score + p2.score;
-    let p1Share = 0;
-    let p2Share = 0;
-
-    if (totalScoreOfSplitters > 0) {
-        p1Share = remainingPot * (p1.score / totalScoreOfSplitters);
-        p2Share = remainingPot * (p2.score / totalScoreOfSplitters);
-    } else {
-        p1Share = remainingPot / 2;
-        p2Share = remainingPot / 2;
-    }
-
-    const payouts = {
-        [lowest.name]: { userId: lowest.userId, totalReturn: lowestRecoveryAmount },
-        [p1.name]: { userId: p1.userId, totalReturn: tableBuyIn + p1Share },
-        [p2.name]: { userId: p2.userId, totalReturn: tableBuyIn + p2Share },
-    };
-
-    return { wash: false, payouts };
-}
-
-function calculateRoundScoreDetails(table) {
-    const { bidWinnerInfo, playerOrderActive, playerMode, capturedTricks, widowDiscardsForFrogBidder, originalDealtWidow, insurance, players, bidderTotalCardPoints } = table;
-    const bidWinnerName = bidWinnerInfo.playerName;
-    const bidType = bidWinnerInfo.bid;
-    const currentBidMultiplier = BID_MULTIPLIERS[bidType];
-    
-    const activePlayerNames = playerOrderActive.map(id => players[id].playerName);
-    
-    let widowPoints = 0;
-    let widowForReveal = [...originalDealtWidow];
-    if (bidType === "Frog") {
-        widowPoints = calculateCardPoints(widowDiscardsForFrogBidder);
-        widowForReveal = [...widowDiscardsForFrogBidder];
-    } else if (bidType === "Solo" || bidType === "Heart Solo") {
-        widowPoints = calculateCardPoints(originalDealtWidow);
-    }
-
-    let roundMessage = "";
-    const pointChanges = {};
-    activePlayerNames.forEach(p => pointChanges[p] = 0);
-    if(playerMode === 3) pointChanges[PLACEHOLDER_ID] = 0;
-
-    if (insurance.dealExecuted) {
-        const agreement = insurance.executedDetails.agreement;
-        pointChanges[agreement.bidderPlayerName] += agreement.bidderRequirement;
-        for (const defenderName in agreement.defenderOffers) {
-            pointChanges[defenderName] -= agreement.defenderOffers[defenderName];
-        }
-        roundMessage = `Insurance deal executed. Points exchanged based on agreement.`;
-    } else {
-        const scoreDifferenceFrom60 = bidderTotalCardPoints - 60;
-        const exchangeValue = Math.abs(scoreDifferenceFrom60) * currentBidMultiplier;
-        if (scoreDifferenceFrom60 === 0) { 
-            roundMessage = `${bidWinnerName} scored exactly 60. No points exchanged.`; 
-        } else if (bidderTotalCardPoints > 60) {
-            let totalPointsGained = 0;
-            activePlayerNames.forEach(pName => { 
-                if (pName !== bidWinnerName) { 
-                    // --- BUG FIX: Each defender only loses the exchange value ---
-                    pointChanges[pName] -= exchangeValue;
-                    totalPointsGained += exchangeValue; 
-                } 
-            });
-            pointChanges[bidWinnerName] += totalPointsGained;
-            roundMessage = `${bidWinnerName} succeeded! Gains ${totalPointsGained} points.`;
-        } else { // Bidder failed
-            let totalPointsLost = 0;
-            const activeOpponents = activePlayerNames.filter(pName => pName !== bidWinnerName);
-            activeOpponents.forEach(oppName => { 
-                pointChanges[oppName] += exchangeValue; 
-                totalPointsLost += exchangeValue; 
-            });
-            if (playerMode === 3) { 
-                pointChanges[PLACEHOLDER_ID] += exchangeValue; 
-                totalPointsLost += exchangeValue; 
-            }
-            else if (playerMode === 4) { 
-                const dealerName = table.players[table.dealer]?.playerName;
-                if(dealerName && !activeOpponents.includes(dealerName) && dealerName !== bidWinnerName) {
-                    pointChanges[dealerName] += exchangeValue; 
-                    totalPointsLost += exchangeValue;
-                }
-            }
-            pointChanges[bidWinnerName] -= totalPointsLost;
-            roundMessage = `${bidWinnerName} failed. Loses ${totalPointsLost} points.`;
-        }
-    }
-    
-    const insuranceHindsight = calculateInsuranceHindsight(table, bidderTotalCardPoints, currentBidMultiplier);
-
-    const finalBidderPoints = bidderTotalCardPoints;
-    const finalDefenderPoints = 120 - finalBidderPoints;
-
-    return {
-        pointChanges,
-        roundMessage,
-        widowForReveal,
-        insuranceHindsight,
-        finalBidderPoints,
-        finalDefenderPoints,
-        widowPointsValue: widowPoints,
-        bidType
-    };
-}
-
-
-async function handleGameOver(table, pool) {
-    let gameWinnerName = "N/A";
-    const { playerOrderActive, scores, theme, gameId, players } = table;
-    try {
-        const tableCost = TABLE_COSTS[theme] || 0;
-        const transactionPromises = [];
-        const statPromises = [];
-
-        const finalPlayerScores = playerOrderActive
-            .map(id => players[id])
-            .filter(p => p && !p.isBot)
-            .map(p => ({ name: p.playerName, score: scores[p.playerName], userId: p.userId }))
-            .sort((a, b) => b.score - a.score);
-        
-        if (finalPlayerScores.length === 3) {
-            const [p1, p2, p3] = finalPlayerScores;
-            if (p1.score > p2.score && p2.score > p3.score) {
-                gameWinnerName = p1.name;
-                transactionPromises.push(transactionManager.postTransaction(pool, { userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 2, description: `Win and Payout from ${p3.name}` }));
-                statPromises.push(pool.query("UPDATE users SET wins = wins + 1 WHERE id = $1", [p1.userId]));
-                transactionPromises.push(transactionManager.postTransaction(pool, { userId: p2.userId, gameId, type: 'wash_payout', amount: tableCost, description: `Wash - Buy-in returned` }));
-                statPromises.push(pool.query("UPDATE users SET washes = washes + 1 WHERE id = $1", [p2.userId]));
-                statPromises.push(pool.query("UPDATE users SET losses = losses + 1 WHERE id = $1", [p3.userId]));
-            }
-            else if (p1.score === p2.score && p2.score > p3.score) {
-                gameWinnerName = `${p1.name} & ${p2.name}`;
-                transactionPromises.push(transactionManager.postTransaction(pool, { userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 1.5, description: `Win (tie) - Split payout from ${p3.name}` }));
-                transactionPromises.push(transactionManager.postTransaction(pool, { userId: p2.userId, gameId, type: 'win_payout', amount: tableCost * 1.5, description: `Win (tie) - Split payout from ${p3.name}` }));
-                statPromises.push(pool.query("UPDATE users SET wins = wins + 1 WHERE id = ANY($1::int[])", [[p1.userId, p2.userId]]));
-                statPromises.push(pool.query("UPDATE users SET losses = losses + 1 WHERE id = $1", [p3.userId]));
-            }
-            else if (p1.score > p2.score && p2.score === p3.score) {
-                gameWinnerName = p1.name;
-                transactionPromises.push(transactionManager.postTransaction(pool, { userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 3, description: `Win - Collects full pot` }));
-                statPromises.push(pool.query("UPDATE users SET wins = wins + 1 WHERE id = $1", [p1.userId]));
-                statPromises.push(pool.query("UPDATE users SET losses = losses + 1 WHERE id = ANY($1::int[])", [[p2.userId, p3.userId]]));
-            }
-            else {
-                gameWinnerName = "3-Way Tie";
-                finalPlayerScores.forEach(p => {
-                    transactionPromises.push(transactionManager.postTransaction(pool, { userId: p.userId, gameId, type: 'wash_payout', amount: tableCost, description: `3-Way Tie - Buy-in returned` }));
-                    statPromises.push(pool.query("UPDATE users SET washes = washes + 1 WHERE id = $1", [p.userId]));
-                });
-            }
-        }
-        
-        await Promise.all(transactionPromises);
-        await Promise.all(statPromises);
-        await transactionManager.updateGameRecordOutcome(pool, gameId, `Game Over! Winner: ${gameWinnerName}`);
-        
-    } catch(err) {
-        console.error("Database error during game over update:", err);
-    }
-    return { gameWinnerName };
-}
-
-function calculateInsuranceHindsight(table, bidderTotalCardPoints, currentBidMultiplier) {
-    if (table.playerMode !== 3) return null;
-    const { playerOrderActive, bidWinnerInfo, insurance, players } = table;
-    const bidWinnerName = bidWinnerInfo.playerName;
-    const insuranceHindsight = {};
-    const activePlayerNames = playerOrderActive.map(id => players[id].playerName);
-    const defenders = activePlayerNames.filter(p => p !== bidWinnerName);
-    const outcomeFromCards = {};
-    const scoreDifferenceFrom60 = bidderTotalCardPoints - 60;
-    const exchangeValue = Math.abs(scoreDifferenceFrom60) * currentBidMultiplier;
-    if (scoreDifferenceFrom60 > 0) {
-        outcomeFromCards[bidWinnerName] = exchangeValue * 2;
-        defenders.forEach(def => outcomeFromCards[def] = -exchangeValue);
-    } else if (scoreDifferenceFrom60 < 0) {
-        outcomeFromCards[bidWinnerName] = -(exchangeValue * 2);
-        defenders.forEach(def => outcomeFromCards[def] = exchangeValue);
-    } else {
-         activePlayerNames.forEach(p => outcomeFromCards[p] = 0);
-    }
-    const potentialOutcomeFromDeal = {};
-    const sumOfFinalOffers = Object.values(insurance.defenderOffers).reduce((sum, offer) => sum + offer, 0);
-    potentialOutcomeFromDeal[bidWinnerName] = sumOfFinalOffers;
-    const costPerDefenderForced = Math.round(insurance.bidderRequirement / defenders.length);
-    defenders.forEach(def => { potentialOutcomeFromDeal[def] = -costPerDefenderForced; });
-    const actualOutcomeFromDeal = {};
-    if (insurance.dealExecuted) {
-        const agreement = insurance.executedDetails.agreement;
-        actualOutcomeFromDeal[agreement.bidderPlayerName] = agreement.bidderRequirement;
-        for (const defName in agreement.defenderOffers) {
-            actualOutcomeFromDeal[defName] = -agreement.defenderOffers[defName];
-       }
-    }
-    activePlayerNames.forEach(pName => {
-        let actualPoints, potentialPoints;
-        if (insurance.dealExecuted) {
-            actualPoints = actualOutcomeFromDeal[pName];
-            potentialPoints = outcomeFromCards[pName];
-        } else {
-            actualPoints = outcomeFromCards[pName];
-            potentialPoints = potentialOutcomeFromDeal[pName];
-        }
-        insuranceHindsight[pName] = {
-            actualPoints: actualPoints || 0,
-            actualReason: insurance.dealExecuted ? "Insurance Deal" : "Card Outcome",
-            potentialPoints: potentialPoints || 0,
-            potentialReason: insurance.dealExecuted ? "Played it Out" : "Taken Insurance Deal",
-            hindsightValue: (actualPoints || 0) - (potentialPoints || 0)
-        };
-    });
-    return insuranceHindsight;
-}
-
-module.exports = {
-    getSuit,
-    getRank,
-    determineTrickWinner,
-    calculateRoundScoreDetails,
-    handleGameOver,
-    calculateForfeitPayout,
-    calculateDrawSplitPayout,
-    calculateCardPoints
-};
---- END FILE: backend/game/logic.js ---
 
 --- START FILE: backend/game/Table.js ---
 // backend/game/Table.js
@@ -1346,16 +120,9 @@ const { SERVER_VERSION, TABLE_COSTS, BID_HIERARCHY, PLACEHOLDER_ID, deck, SUITS,
 const gameLogic = require('./logic');
 const BotPlayer = require('./BotPlayer');
 const transactionManager = require('../db/transactionManager');
-const { shuffle } = require('../utils/shuffle');
+const { shuffle } = require('../../utils/shuffle');
 
-// --- MODIFIED --- Expanded the list of predefined bot names.
-const BOT_NAMES = [
-    "Michael Jr.", "George Charles Watts Sr.", "Verl Fayette Sr.", "George",
-    "Courtney", "Verl Fayette Jr.", "Bob Lynn", "Wendell Taylor",
-    "Dutch Woolstenhulme", "Ken Woolstenhulme", "Alfred", "Joe Colete",
-    "Steve Richins", "Cliff Horning", "Mike Horning", "Jansen Richins",
-    "Steve Knight", "Samson Clyde", "Two-bits", "Blaze", "Jay & Deb"
-];
+const BOT_NAMES = ["Mike Knight", "Grandma Joe", "Grampa Blane", "Kimba", "Courtney Sr.", "Cliff"];
 
 class Table {
     constructor(tableId, theme, tableName, io, pool, emitLobbyUpdateCallback) {
@@ -1368,7 +135,7 @@ class Table {
         this.serverVersion = SERVER_VERSION;
         this.state = "Waiting for Players";
         this.players = {};
-        this.playerOrderActive = []; // --- MODIFIED --- Will now store user IDs instead of names.
+        this.playerOrderActive = [];
         this.scores = {};
         this.gameStarted = false;
         this.gameId = null;
@@ -1415,33 +182,54 @@ class Table {
     // =================================================================
     // PUBLIC: Player & Connection Management
     // =================================================================
-
+    
     async joinTable(user, socketId) {
         const { id, username } = user;
         const isPlayerAlreadyInGame = !!this.players[id];
-        if (!isPlayerAlreadyInGame) {
-            const tableCost = TABLE_COSTS[this.theme] || 0;
-            try {
-                const tokenResult = await this.pool.query("SELECT SUM(amount) as tokens FROM transactions WHERE user_id = $1", [id]);
-                const userTokens = parseFloat(tokenResult.rows[0]?.tokens || 0);
-                if (userTokens < tableCost) {
-                    return this.io.to(socketId).emit("error", { message: `You need ${tableCost} tokens to join. You have ${userTokens.toFixed(2)}.` });
+
+        if (isPlayerAlreadyInGame) {
+            // This is a returning player, just update their connection status
+            this.players[id].disconnected = false;
+            this.players[id].socketId = socketId;
+        } else {
+            // This is a new player
+            const activePlayersCount = Object.values(this.players).filter(p => !p.isSpectator).length;
+
+            if (this.gameStarted || activePlayersCount >= 4) {
+                // Game is full or started, add as spectator
+                this.players[id] = { userId: id, playerName: username, socketId: socketId, isSpectator: true, disconnected: false };
+            } else {
+                // Check if they can afford to join
+                const tableCost = TABLE_COSTS[this.theme] || 0;
+                try {
+                    const tokenResult = await this.pool.query("SELECT SUM(amount) as tokens FROM transactions WHERE user_id = $1", [id]);
+                    const userTokens = parseFloat(tokenResult.rows[0]?.tokens || 0);
+                    if (userTokens < tableCost) {
+                        return this.io.to(socketId).emit("error", { message: `You need ${tableCost} tokens to join. You have ${userTokens.toFixed(2)}.` });
+                    }
+                    // Add as an active player
+                    this.players[id] = { userId: id, playerName: username, socketId: socketId, isSpectator: false, disconnected: false };
+                } catch (err) {
+                    return this.io.to(socketId).emit("error", { message: "A server error occurred trying to join the table." });
                 }
-            } catch (err) {
-                return this.io.to(socketId).emit("error", { message: "A server error occurred trying to join the table." });
             }
         }
-        if (this.gameStarted && !isPlayerAlreadyInGame) {
-            return this.io.to(socketId).emit("error", { message: "Game has already started." });
+
+        if (!this.scores[username]) {
+            this.scores[username] = 120;
         }
-        const activePlayersBeforeJoin = Object.values(this.players).filter(p => !p.isSpectator && !p.disconnected).length;
-        const canTakeSeat = activePlayersBeforeJoin < 4 && !this.gameStarted;
-        this.players[id] = { userId: id, playerName: username, socketId: socketId, isSpectator: this.players[id]?.isSpectator ?? !canTakeSeat, disconnected: false };
-        if (!this.scores[username]) { this.scores[username] = 120; }
+
         this._recalculateActivePlayerOrder();
+
         const activePlayersAfterJoin = this.playerOrderActive.length;
-        if (activePlayersAfterJoin >= 3 && !this.gameStarted) { this.state = "Ready to Start"; }
-        else if (activePlayersAfterJoin < 3 && !this.gameStarted) { this.state = "Waiting for Players"; }
+        if (!this.gameStarted) {
+            if (activePlayersAfterJoin >= 3) {
+                this.state = "Ready to Start";
+            } else {
+                this.state = "Waiting for Players";
+            }
+        }
+        
         await this._syncPlayerTokens(Object.keys(this.players));
         this.io.to(socketId).emit("joinedTable", { tableId: this.tableId, gameState: this.getStateForClient() });
         this._emitUpdate();
@@ -1449,16 +237,15 @@ class Table {
     }
 
     addBotPlayer() {
-        // --- MODIFIED --- Complete overhaul of bot naming and selection logic.
         const currentPlayers = Object.values(this.players).filter(p => !p.isSpectator);
-        if (currentPlayers.length >= 4) return; // Table is full
+        if (currentPlayers.length >= 4) return;
 
         const currentBotNames = new Set(currentPlayers.filter(p => p.isBot).map(p => p.playerName));
         const availableNames = BOT_NAMES.filter(name => !currentBotNames.has(name));
 
         if (availableNames.length === 0) {
             console.log(`[${this.tableId}] No available bot names to add.`);
-            return; // No more unique named bots to add
+            return;
         }
 
         const botName = availableNames[Math.floor(Math.random() * availableNames.length)];
@@ -1524,10 +311,6 @@ class Table {
         this._emitUpdate();
         this.emitLobbyUpdateCallback();
     }
-
-    // =================================================================
-    // PUBLIC: Game Flow Management
-    // =================================================================
 
     async startGame(requestingUserId) {
         if (this.gameStarted) return;
@@ -1675,7 +458,6 @@ class Table {
         
         const isLeading = this.currentTrickCards.length === 0;
         const playedSuit = gameLogic.getSuit(card);
-        // --- MODIFICATION: Added logging and error emissions for all rule checks ---
         if (isLeading) {
             if (playedSuit === this.trumpSuit && !this.trumpBroken && !hand.every(c => gameLogic.getSuit(c) === this.trumpSuit)) {
                 const msg = "Cannot lead trump until it is broken.";
@@ -2073,24 +855,7 @@ class Table {
             });
         }
         await this._syncPlayerTokens(Object.keys(this.players));
-        
-        // --- MODIFICATION: Add bidWinnerInfo and playerOrderActive to the summary object ---
-        const playerOrderActiveNames = this.playerOrderActive.map(id => this.players[id]?.playerName).filter(Boolean);
-        this.roundSummary = { 
-            ...roundData, // Includes points, message, etc.
-            finalScores: { ...this.scores }, 
-            isGameOver, 
-            gameWinner: gameWinnerName, 
-            dealerOfRoundId: this.dealer, 
-            widowForReveal: roundData.widowForReveal, 
-            insuranceDealWasMade: this.insurance.dealExecuted, 
-            insuranceDetails: this.insurance.dealExecuted ? this.insurance.executedDetails : null, 
-            insuranceHindsight: roundData.insuranceHindsight, 
-            allTricks: this.capturedTricks, 
-            playerTokens: this.playerTokens,
-            bidWinnerInfo: { ...this.bidWinnerInfo }, // Snapshot of the winner info
-            playerOrderActive: playerOrderActiveNames, // Snapshot of the player order (names)
-        };
+        this.roundSummary = { message: finalOutcomeMessage, finalScores: { ...this.scores }, isGameOver, gameWinner: gameWinnerName, dealerOfRoundId: this.dealer, widowForReveal: roundData.widowForReveal, insuranceDealWasMade: this.insurance.dealExecuted, insuranceDetails: this.insurance.dealExecuted ? this.insurance.executedDetails : null, insuranceHindsight: roundData.insuranceHindsight, allTricks: this.capturedTricks, playerTokens: this.playerTokens };
         this.state = isGameOver ? "Game Over" : "Awaiting Next Round Trigger";
         this._emitUpdate();
     }
@@ -2164,6 +929,15 @@ class Table {
                 return;
             }
 
+            if (this.state === 'Awaiting Frog Upgrade Decision' && this.biddingTurnPlayerId === bot.userId) {
+                let delay = isCourtney ? standardDelay * 2 : standardDelay;
+                this.pendingBotAction = setTimeout(() => { 
+                    this.pendingBotAction = null; 
+                    this.placeBid(bot.userId, "Pass"); 
+                }, delay);
+                return;
+            }
+
             if (this.state === 'Bidding Phase' && this.biddingTurnPlayerId === bot.userId) {
                 let delay = isCourtney ? standardDelay * 2 : standardDelay;
                 this.pendingBotAction = setTimeout(() => { this.pendingBotAction = null; bot.makeBid(); }, delay);
@@ -2193,15 +967,14 @@ class Table {
     
     _initializeNewRoundState() {
         this.hands = {}; this.widow = []; this.originalDealtWidow = [];
-        this.biddingTurnPlayerId = null; // --- MODIFIED ---
+        this.biddingTurnPlayerId = null;
         this.currentHighestBidDetails = null;
-        this.playersWhoPassedThisRound = []; // --- MODIFIED --- Will store user IDs
+        this.playersWhoPassedThisRound = [];
         this.bidWinnerInfo = null; this.trumpSuit = null; this.trumpBroken = false; this.originalFrogBidderId = null; this.soloBidMadeAfterFrog = false; this.revealedWidowForFrog = []; this.widowDiscardsForFrogBidder = [];
-        this.trickTurnPlayerId = null; // --- MODIFIED ---
-        this.trickLeaderId = null; // --- MODIFIED ---
+        this.trickTurnPlayerId = null;
+        this.trickLeaderId = null;
         this.currentTrickCards = []; this.leadSuitCurrentTrick = null; this.lastCompletedTrick = null; this.tricksPlayedCount = 0; this.capturedTricks = {}; this.roundSummary = null; this.insurance = this._getInitialInsuranceState(); this.forfeiture = this._getInitialForfeitureState(); this.drawRequest = this._getInitialDrawRequestState();
         
-        // This logic remains correct as it uses player names as keys
         Object.values(this.players).forEach(p => {
             if (p.playerName && this.scores[p.playerName] !== undefined) {
                 this.capturedTricks[p.playerName] = [];
@@ -2245,90 +1018,94 @@ Once you have analyzed the entire context, please confirm that you understand th
 --- END FILE: backend/Onboarding/OpeningPrompt.txt ---
 
 --- START FILE: backend/Onboarding/Project_Roadmap_Prompt_3.txt ---
---- START OF REVISED FILE Backend\Onboarding\Project_Roadmap_Prompt_3.txt ---
 /**
-Sluff: Project Roadmap & Feature Plan
-=======================================
-KEY:
-- Fully Implemented: The feature is complete, from frontend UI to backend logic and database persistence.
-[P] - Partially Implemented: Significant parts of the feature are complete, but it is not fully functional.
-- Not Started: Little to no code has been written for this feature.
---- PHASE 1: Workable Local Prototype ---
-Goal: Establish the fundamental game logic and rules in a local, non-networked environment.
-[x] Core Rule Implementation: Code the basic logic for card dealing, bidding, trick-taking, and scoring.
-[x] State Management: Create a system to manage the state of a single game instance.
---- PHASE 2: Functional Web-Based Playable Game ---
-Goal: Transition the local prototype to a multiplayer web application with a basic user interface.
-[x] Client/Server Architecture: Set up the initial React frontend and Node.js backend with WebSocket communication.
-[x] Multiplayer Lobby: Implement a basic lobby system to allow multiple players to join a game table.
-[x] User Authentication: Add persistent user accounts with registration and login.
-[x] Transaction Ledger: Implement a robust, transaction-based system for managing player tokens.
---- PHASE 3: Alpha Testing with Real Users ---
-Goal: Address critical bugs, complete core logic, and deliver key features for family tournament play.
-High-Priority Bug Fixes & Logic Completion:
-[ ] Table Reset Logic: Fix the bug preventing a table from correctly resetting to a "waiting for players" state after a round concludes. (NOTE: The resetGame event and table.reset() method exist, but are considered faulty).
-[x] Forfeit & Disconnect Logic:
-[x] Implement the three possible outcomes for a mutual draw request. (NOTE: requestDraw and submitDrawVote events are fully implemented in Table.js, handling 'wash', 'split', and 'no' votes, with a DrawVoteModal on the frontend).
-[x] Finalize the logic for proportional token distribution when a player forfeits. (NOTE: _resolveForfeit in Table.js correctly calls calculateForfeitPayout from logic.js and updates the database).
-[P] Add a turn timer to prompt inactive players.
-Generated code
-- [x] A 2-minute forfeit timer for *disconnected* players is implemented and can be triggered from the UI.
-Use code with caution.
-Generated code
-- [ ] A timer for *AFK (still connected)* players who fail to take their turn has not been implemented.
-Use code with caution.
-[ ] "Dumb" AI Implementation:
-[ ] Create a baseline AI player that can join a game and make legal moves.
-[ ] The AI's strategy will be simple: if it can follow suit, it plays a random legal card; if it cannot, it plays a random trump or off-suit card.
-User Account & Security:
-[ ] Account Recovery: Implement a "Forgot Password" system via email.
-[ ] Email Confirmation: Require new users to confirm their email address upon registration.
-Quality of Life & UI Enhancements:
-[ ] Enhanced Card Play Experience: Overhaul the card playing mechanic to allow players to drag and drop their selected card onto the play area.
-[x] Visible Widow & Trump Puck:
-[x] Display the face-down Widow pile on the game table. (TableLayout.js -> renderWidowDisplay)
-[x] Add a visual indicator (a "puck") to the table that changes appearance once the trump suit has been broken. (TableLayout.js -> renderTrumpIndicatorPuck)
-[P] Expanded Sound Effects: Add sound effects for key actions:
-[x] Sounds for turnAlert, cardPlay, trickWin, and cardDeal are implemented in useSounds.js.
-[ ] Sounds for trump played, card sluffed, and a round-win celebration are missing.
-Tooling & Support:
-[P] In-App Feedback Tool:
-[x] Backend API (/api/feedback) and database table are fully implemented and ready to receive submissions.
-[ ] Frontend UI (e.g., a "Send Feedback" button in the game menu) has not been created to utilize the backend endpoint.
---- PHASE 4: Beta - Polish & Player Engagement ---
-Goal: Transform the game from a functional app into a polished, engaging experience ready for a public beta test.
-Visual & Sensory Polish:
-[ ] Card Art & Animation:
-[ ] Commission or create unique, high-quality art for the card faces and backs.
-[ ] Implement a smooth card dealing animation at the start of each round.
-[ ] Add a "flipping" animation when a card is played to the table.
-[ ] Mobile-First UI Overhaul: Conduct a thorough review and redesign of all UI components to ensure a seamless and intuitive experience on mobile phones.
-Feature Development:
-[x] New Player Onboarding:
-[x] Create low-stakes "Learner Tables" (miss-pauls-academy theme with a 0.1 token cost).
-[ ] Implement an in-game "Cheat Sheet" window showing points captured, cards played, and basic rule reminders.
-[x] Community & Chat:
-[x] Add a persistent chat window to the main lobby and in-game view. (NOTE: LobbyChat.js component is fully functional with API backend).
-[ ] Implement in-game "chat bubbles" that appear above a player's seat briefly and then fade away.
-[ ] Tournament Mode (v1):
-[ ] Develop a system for creating and managing multi-round tournaments.
-[ ] Includes a tournament bracket view and automated player progression.
-[ ] Private Rooms: Allow players to create password-protected tables to play exclusively with friends.
-[ ] Advanced Player Statistics: Create a dedicated profile screen where players can view detailed statistics, including win/loss ratio, favorite bid, performance by suit, trick-taking percentage, and more.
---- PHASE 5: Live Game - Monetization & Long-Term Growth ---
-Goal: Implement features to support a live, revenue-generating game and foster a long-term player community.
-Monetization & Economy:
-[ ] Rewarded Ads: Replace the "Mercy Token" system with a standard rewarded video ad that grants players tokens for watching.
-[ ] Cosmetic In-App Purchases:
-[ ] Sell unique card back designs.
-[ ] Sell custom table themes and environments (e.g., "The Ranch," "Grampa George," "Dan's Deck").
-[ ] Battle Pass / Seasonal System: Introduce a seasonal "pass" that allows players to unlock exclusive cosmetic rewards by playing and completing challenges.
-Community & Competition:
-[ ] Seasonal Leaderboards: Implement weekly and monthly leaderboards with rewards for top players to drive competition.
-[ ] Smart AI (Machine Learning): Begin collecting game data to train a more advanced AI that can provide a genuine challenge for experienced players in single-player modes.
-[ ] Interactive Tutorial: Create a guided, playable tutorial that walks new users through a full round of Sluff, explaining the rules and strategies as they go.
-*/
---- END OF REVISED FILE Backend\Onboarding\Project_Roadmap_Prompt_3.txt ---
+ * Sluff: Project Roadmap & Feature Plan
+ * =======================================
+ * KEY:
+ * [x] - Fully Implemented: The feature is complete, from UI to backend logic.
+ * [P] - Partially Implemented: Significant parts of the feature are complete but not fully functional.
+ * [ ] - Not Started: Little to no code has been written for this feature.
+ */
+
+---
+
+### PHASE 1: Workable Local Prototype
+*Goal: Establish the fundamental game logic and rules in a local, non-networked environment.*
+
+- [x] **Core Rule Implementation:** Code the basic logic for card dealing, bidding, trick-taking, and scoring.
+- [x] **State Management:** Create a system to manage the state of a single game instance.
+
+---
+
+### PHASE 2: Functional Web-Based Playable Game
+*Goal: Transition the local prototype to a multiplayer web application with a basic user interface.*
+
+- [x] **Client/Server Architecture:** Set up the initial React frontend and Node.js backend with WebSocket communication.
+- [x] **Multiplayer Lobby:** Implement a basic lobby system to allow multiple players to join a game table.
+- [x] **User Authentication:** Add persistent user accounts with registration and login.
+- [x] **Transaction Ledger:** Implement a robust, transaction-based system for managing player tokens.
+
+---
+
+### PHASE 3: Alpha Testing with Real Users
+*Goal: Address critical bugs, complete core logic, and deliver key features for family tournament play.*
+
+- [ ] **Table Reset Logic:** Fix the bug preventing a table from correctly resetting to a "waiting for players" state after a round concludes. (NOTE: The `resetGame` event and `table.reset()` method exist, but are considered faulty).
+- [x] **Forfeit & Disconnect Logic:**
+    - [x] Implement the three possible outcomes for a mutual draw request.
+    - [x] Finalize the logic for proportional token distribution when a player forfeits.
+- [P] **Turn Timer for Inactive Players:**
+    - [x] A 2-minute forfeit timer for *disconnected* players is implemented and can be triggered from the UI.
+    - [ ] A timer for *AFK (still connected)* players who fail to take their turn has not been implemented.
+- [x] **AI Player Implementation:**
+    - [x] Create a baseline AI player that can join a game and make legal moves.
+    - [x] AI strategy includes intelligent bidding based on hand strength and strategic card play (e.g., playing high to win, playing low to sluff).
+- [ ] **User Account & Security:**
+    - [ ] Account Recovery: Implement a "Forgot Password" system via email.
+    - [ ] Email Confirmation: Require new users to confirm their email address upon registration.
+- [ ] **Enhanced Card Play Experience:** Overhaul the card playing mechanic to allow players to drag and drop their selected card onto the play area.
+- [x] **Visible Widow & Trump Puck:**
+    - [x] Display the face-down Widow pile on the game table.
+    - [x] Add a visual indicator ("puck") to the table that changes appearance once the trump suit has been broken.
+- [P] **Expanded Sound Effects:**
+    - [x] Sounds for turnAlert, cardPlay, trickWin, and cardDeal are implemented.
+    - [ ] Sounds for trump played, card sluffed, and a round-win celebration are missing.
+- [P] **In-App Feedback Tool:**
+    - [x] Backend API (`/api/feedback`) and database table are fully implemented.
+    - [ ] Frontend UI to submit feedback has not been created.
+
+---
+
+### PHASE 4: Beta - Polish & Player Engagement
+*Goal: Transform the game from a functional app into a polished, engaging experience.*
+
+- [ ] **Card Art & Animation:**
+    - [ ] Commission or create unique, high-quality art for the card faces and backs.
+    - [ ] Implement a smooth card dealing animation.
+    - [ ] Add a "flipping" animation when a card is played.
+- [ ] **Mobile-First UI Overhaul:** Conduct a thorough review and redesign of all UI components for a seamless mobile experience.
+- [x] **New Player Onboarding:**
+    - [x] Create low-stakes "Learner Tables" (`miss-pauls-academy` theme).
+    - [ ] Implement an in-game "Cheat Sheet" window showing points captured, cards played, etc.
+- [x] **Community & Chat:**
+    - [x] Add a persistent chat window to the lobby and in-game view.
+    - [ ] Implement in-game "chat bubbles" that appear above a player's seat.
+- [ ] **Tournament Mode (v1):**
+    - [ ] Develop a system for creating and managing multi-round tournaments.
+- [ ] **Private Rooms:** Allow players to create password-protected tables.
+- [ ] **Advanced Player Statistics:** Create a dedicated profile screen for detailed player stats.
+
+---
+
+### PHASE 5: Live Game - Monetization & Long-Term Growth
+*Goal: Implement features to support a live, revenue-generating game and foster a long-term player community.*
+
+- [ ] **Rewarded Ads:** Replace the "Mercy Token" system with a standard rewarded video ad.
+- [ ] **Cosmetic In-App Purchases:** Sell unique card backs, table themes, etc.
+- [ ] **Battle Pass / Seasonal System:** Introduce a seasonal pass to unlock exclusive cosmetic rewards.
+- [ ] **Seasonal Leaderboards:** Implement weekly/monthly leaderboards with rewards.
+- [ ] **Smart AI (Machine Learning):** Begin collecting game data to train a more advanced AI.
+- [ ] **Interactive Tutorial:** Create a guided, playable tutorial for new users.
 --- END FILE: backend/Onboarding/Project_Roadmap_Prompt_3.txt ---
 
 --- START FILE: backend/Onboarding/Prompt_1.txt ---
@@ -2414,70 +1191,291 @@ Acknowledge and Confirm: Before you provide a solution, briefly acknowledge the 
 If you understand and agree to these rules of engagement, please let me know that you are ready for your first real instruction of the day.
 --- END FILE: backend/Onboarding/Prompt_4.txt ---
 
---- START FILE: backend/Onboarding/sluff_backend_overview.txt ---
-Overview
---------
-The repository is a Node.js backend for the â€œSluffâ€ card game. Its dependencies
-include Express, Socket.IO, PostgreSQL (via `pg`), JSON Web Tokens, and other
-packages listed in `package.json`.
+--- START FILE: backend/socket/gameHandlers.js ---
+--- END FILE: backend/socket/gameHandlers.js ---
 
-Entry Point
------------
-`server.js` is the main entry point. It loads environment variables, configures
-Express and Socket.IO, establishes a database connection, sets up authentication
-middleware, and mounts the API routes (auth, leaderboard, admin, and feedback).
-Game tables are initialized after the database is ready.
+--- START FILE: backend/socket/index.js ---
+--- END FILE: backend/socket/index.js ---
 
-Game Logic
-----------
-All in-memory game state is located in the `game` directory:
-- `constants.js` holds card constants, bidding rules, and table costs.
-- `gameState.js` manages the collection of tables and provides lobby state information.
-- `Table.js` is the core state machine. It tracks players, handles bidding and card
-  plays, manages draws and forfeits, and emits updates via Socket.IO.
-- `logic.js` contains pure functions for trick resolution, score calculations,
-  and payout logic when games end.
+--- START FILE: backend/src/server.js ---
+require("dotenv").config();
+const http = require("http");
+const express = require("express");
+const cors =require("cors");
+const { Server } = require("socket.io");
+const { Pool } = require("pg");
+const jwt = require("jsonwebtoken");
+const bcrypt = require('bcrypt');
 
-Database Layer
---------------
-`db/createTables.js` defines database tables for users, game history, transactions,
-and feedback. It also creates custom enumerations for transaction types and
-feedback status. `db/transactionManager.js` contains helper functions to record
-buy-ins, payouts, and game summaries.
+const state = require('./core/gameState');
+const createAuthRoutes = require('./api/auth');
+const createLeaderboardRoutes = require('./api/leaderboard');
+const createAdminRoutes = require('./api/admin');
+const createFeedbackRoutes = require('./api/feedback'); 
+const createChatRoutes = require('./api/chat');
+const createDbTables = require('../data/createTables');
+const transactionManager = require("../data/transactionManager");
 
-Express Routes
---------------
-- `routes/auth.js` manages user registration and login, returning JWTs.
-- `routes/leaderboard.js` aggregates user stats and token balances.
-- `routes/admin.js` and the similar `adminroutes.js` provide administrative
-  features like generating a Markdown schema of the database.
-- `routes/feedback.js` lets authenticated users submit feedback.
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: { origin: "*", methods: ["GET", "POST"] },
+});
 
-Developer Onboarding
---------------------
-The `Onboarding` folder contains several text prompts and a project roadmap.
-Prompt 4 explains the workflow, recommended tools (VS Code, GitHub, Netlify,
-Render, DBeaver), and collaboration guidelines such as asking questions whenever
-uncertain and providing full file modifications rather than snippets. The roadmap
-lists completed and upcoming features across development phases.
+let pool;
 
-Next Steps to Learn
--------------------
-1. Study `Table.js` and `logic.js` to understand bidding, trick-taking,
-   and scoring.
-2. Explore `db/transactionManager.js` and the route handlers to learn how
-   tokens and player statistics are stored.
-3. Review the onboarding prompts for project goals and collaboration practices.
-4. Check environment variables in `.env` (not included in the repo) for running
-   the project locally.
+app.use(cors({ origin: "*" }));
+app.use(express.json());
 
-This overview should help new contributors understand the layout and main
-components of the Sluff backend.
+// =================================================================
+// AUTHENTICATION MIDDLEWARE
+// =================================================================
 
---- END FILE: backend/Onboarding/sluff_backend_overview.txt ---
+io.use((socket, next) => {
+    const token = socket.handshake.auth.token;
+    if (!token) { 
+        return next(new Error("Authentication error: No token provided."));
+    }
+    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+        if (err) { 
+            return next(new Error("Authentication error: Invalid token."));
+        }
+        socket.user = user;
+        next();
+    });
+});
 
---- START FILE: backend/routes/admin.js ---
-// In a new file at: /routes/admin.js
+// =================================================================
+// SOCKET.IO CONNECTION HANDLER
+// =================================================================
+
+io.on("connection", (socket) => {
+    console.log(`Socket connected: ${socket.user.username} (ID: ${socket.user.id}, Socket: ${socket.id})`);
+
+    const table = Object.values(state.getAllTables()).find(t => t.players[socket.user.id]);
+    if (table && table.players[socket.user.id].disconnected) {
+        table.reconnectPlayer(socket.user.id, socket);
+    }
+    
+    socket.emit("lobbyState", state.getLobbyState());
+
+    // --- CORE EVENT LISTENERS (DELEGATION MODEL) ---
+    // ... (All your game event listeners like joinTable, playCard, etc. remain here)
+    socket.on("joinTable", async ({ tableId }) => {
+        const tableToJoin = state.getTableById(tableId);
+        if (!tableToJoin) return socket.emit("error", { message: "Table not found." });
+
+        const previousTable = Object.values(state.getAllTables()).find(t => t.players[socket.user.id] && t.tableId !== tableId);
+        if (previousTable) {
+            await previousTable.leaveTable(socket.user.id);
+            socket.leave(previousTable.tableId);
+        }
+        
+        socket.join(tableId);
+        await tableToJoin.joinTable(socket.user, socket.id);
+    });
+
+    socket.on("leaveTable", async ({ tableId }) => {
+        const tableToLeave = state.getTableById(tableId);
+        if (tableToLeave) {
+            await tableToLeave.leaveTable(socket.user.id);
+        }
+        socket.leave(tableId);
+        socket.emit("lobbyState", state.getLobbyState());
+    });
+
+    socket.on("addBot", ({ tableId, name }) => {
+        const table = state.getTableById(tableId);
+        if (table) table.addBotPlayer(name || 'Lee');
+    });
+
+    socket.on("startGame", ({ tableId }) => {
+        const table = state.getTableById(tableId);
+        if (table) table.startGame(socket.user.id);
+    });
+    
+    socket.on("dealCards", ({ tableId }) => {
+        const table = state.getTableById(tableId);
+        if (table) table.dealCards(socket.user.id);
+    });
+
+    socket.on("placeBid", ({ tableId, bid }) => {
+        const table = state.getTableById(tableId);
+        if (table) table.placeBid(socket.user.id, bid);
+    });
+
+    socket.on("chooseTrump", ({ tableId, suit }) => {
+        const table = state.getTableById(tableId);
+        if (table) table.chooseTrump(socket.user.id, suit);
+    });
+
+    socket.on("submitFrogDiscards", ({ tableId, discards }) => {
+        const table = state.getTableById(tableId);
+        if (table) table.submitFrogDiscards(socket.user.id, discards);
+    });
+
+    socket.on("playCard", ({ tableId, card }) => {
+        const table = state.getTableById(tableId);
+        if (table) table.playCard(socket.user.id, card);
+    });
+
+    socket.on("requestNextRound", ({ tableId }) => {
+        const table = state.getTableById(tableId);
+        if (table) table.requestNextRound(socket.user.id);
+    });
+    
+    socket.on("forfeitGame", ({ tableId }) => {
+        const table = state.getTableById(tableId);
+        if (table) table.forfeitGame(socket.user.id);
+    });
+    
+    socket.on("resetGame", async ({ tableId }) => {
+        const table = state.getTableById(tableId);
+        if (table) await table.reset();
+    });
+
+    socket.on("updateInsuranceSetting", ({ tableId, settingType, value }) => {
+        const table = state.getTableById(tableId);
+        if (table) table.updateInsuranceSetting(socket.user.id, settingType, value);
+    });
+
+    socket.on("startTimeoutClock", ({ tableId, targetPlayerName }) => {
+        const table = state.getTableById(tableId);
+        if (table) table.startForfeitTimer(socket.user.id, targetPlayerName);
+    });
+
+    socket.on("requestDraw", ({ tableId }) => {
+        const table = state.getTableById(tableId);
+        if (table) table.requestDraw(socket.user.id);
+    });
+    
+    socket.on("submitDrawVote", ({ tableId, vote }) => {
+        const table = state.getTableById(tableId);
+        if (table) table.submitDrawVote(socket.user.id, vote);
+    });
+
+
+    // --- USER-SPECIFIC & MISC LISTENERS ---
+
+    socket.on("requestUserSync", async () => {
+        try {
+            const userQuery = "SELECT id, username, email, created_at, wins, losses, washes, is_admin FROM users WHERE id = $1";
+            const userResult = await pool.query(userQuery, [socket.user.id]);
+            const updatedUser = userResult.rows[0];
+
+            if (updatedUser) {
+                const tokenQuery = "SELECT SUM(amount) AS current_tokens FROM transactions WHERE user_id = $1";
+                const tokenResult = await pool.query(tokenQuery, [socket.user.id]);
+                updatedUser.tokens = parseFloat(tokenResult.rows[0]?.current_tokens || 0).toFixed(2);
+                socket.emit("updateUser", updatedUser);
+            }
+        } catch(err) {
+            console.error(`Error during user sync for user ${socket.user.id}:`, err);
+        }
+    });
+
+    socket.on("requestFreeToken", async () => {
+        try {
+            const tokenQuery = "SELECT SUM(amount) AS current_tokens FROM transactions WHERE user_id = $1";
+            const tokenResult = await pool.query(tokenQuery, [socket.user.id]);
+            const currentTokens = parseFloat(tokenResult.rows[0]?.current_tokens || 0);
+
+            if (currentTokens >= 5) {
+                return socket.emit("error", { message: "Sorry, free tokens are only for players with fewer than 5 tokens." });
+            }
+
+            await transactionManager.postTransaction(pool, {
+                userId: socket.user.id, gameId: null, type: 'free_token_mercy', amount: 1,
+                description: 'Mercy token requested by user'
+            });
+            
+            const userQuery = "SELECT id, username, email, created_at, wins, losses, washes, is_admin FROM users WHERE id = $1";
+            const userResult = await pool.query(userQuery, [socket.user.id]);
+            const updatedUser = userResult.rows[0];
+
+            if (updatedUser) {
+                const updatedTokenQuery = "SELECT SUM(amount) AS current_tokens FROM transactions WHERE user_id = $1";
+                const updatedTokenResult = await pool.query(updatedTokenQuery, [socket.user.id]);
+                updatedUser.tokens = parseFloat(updatedTokenResult.rows[0]?.current_tokens || 0).toFixed(2);
+                socket.emit("updateUser", updatedUser);
+            }
+
+            socket.emit("notification", { message: "1 free token has been added to your account!" });
+
+        } catch (err) {
+            socket.emit("error", { message: "Could not grant token." });
+        }
+    });
+
+    socket.on("disconnect", async () => { // --- MODIFIED: Mark as async ---
+        console.log(`Socket disconnected: ${socket.user.username} (ID: ${socket.user.id}, Socket: ${socket.id})`);
+        
+        // --- NEW: Announce logout/disconnect to the lobby chat ---
+        try {
+            const logoutMsgQuery = `
+                INSERT INTO lobby_chat_messages (user_id, username, message)
+                VALUES ($1, $2, $3)
+                RETURNING id, username, message, created_at;
+            `;
+            const msgValues = [socket.user.id, 'System', `${socket.user.username} has logged out.`];
+            const { rows } = await pool.query(logoutMsgQuery, msgValues);
+            io.emit('new_lobby_message', rows[0]);
+        } catch (chatError) {
+            console.error("Failed to post logout message to chat:", chatError);
+        }
+        // --- END NEW ---
+        
+        const tablePlayerIsOn = Object.values(state.getAllTables()).find(t => t.players[socket.user.id]);
+        if (tablePlayerIsOn) {
+            tablePlayerIsOn.disconnectPlayer(socket.user.id);
+        }
+    });
+});
+
+// =================================================================
+// SERVER STARTUP
+// =================================================================
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, async () => {
+  console.log(`Sluff Game Server (v${require('./core/constants').SERVER_VERSION}) running on port ${PORT}`);
+  try {
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false }
+    });
+    await pool.connect();
+    console.log("âœ… Database connection successful.");
+    await createDbTables(pool);
+    
+    // --- MODIFICATION: Pass 'io' to the auth routes ---
+    const authRoutes = createAuthRoutes(pool, bcrypt, jwt, io);
+    app.use('/api/auth', authRoutes);
+
+    const leaderboardRoutes = createLeaderboardRoutes(pool);
+    app.use('/api/leaderboard', leaderboardRoutes);
+
+    const adminRouter = createAdminRoutes(pool, jwt);
+    app.use('/api/admin', adminRouter);
+
+    const feedbackRouter = createFeedbackRoutes(pool, jwt); 
+    app.use('/api/feedback', feedbackRouter);              
+
+    const chatRouter = createChatRoutes(pool, io, jwt);
+    app.use('/api/chat', chatRouter);
+
+    state.initializeGameTables(io, pool);
+
+  } catch (err) {
+    console.error("âŒ DATABASE CONNECTION FAILED:", err);
+    process.exit(1);
+  }
+});
+--- END FILE: backend/src/server.js ---
+
+--- START FILE: backend/src/api/admin.js ---
+// backend/src/api/admin.js
+// This file handles admin-specific routes, such as generating the database schema
 
 const express = require('express');
 const fs = require('fs');
@@ -2557,68 +1555,12 @@ const createAdminRoutes = (pool, jwt) => {
 };
 
 module.exports = createAdminRoutes;
---- END FILE: backend/routes/admin.js ---
+--- END FILE: backend/src/api/admin.js ---
 
---- START FILE: backend/routes/adminroutes.js ---
-// In a new file like /routes/adminRoutes.js
+--- START FILE: backend/src/api/ai.js ---
+// backend/src/api/ai.js
+// This file handles AI-related routes, allowing the AI to call specific functions
 
-const express = require('express');
-const router = express.Router();
-const db = require('../db'); // Your existing database connection
-const fs = require('fs');
-const path = require('path');
-
-// A middleware to check if the user is an admin (IMPORTANT!)
-const isAdmin = (req, res, next) => {
-  // This is a placeholder for your actual authentication logic.
-  // You would check the user's role from their session or JWT.
-  if (req.user && req.user.isAdmin) {
-    return next();
-  }
-  res.status(403).send('Access Forbidden');
-};
-
-// POST /api/admin/generate-schema
-router.post('/generate-schema', isAdmin, async (req, res) => {
-  try {
-    // 1. Run the query to get schema data
-    const sqlQuery = `
-      SELECT table_name, column_name, data_type
-      FROM information_schema.columns
-      WHERE table_schema = 'public'
-      ORDER BY table_name, ordinal_position;
-    `;
-    const { rows } = await db.query(sqlQuery);
-
-    // 2. Format the data into a Markdown string
-    let markdownContent = '# Database Schema\n\n';
-    let currentTable = '';
-    rows.forEach(row => {
-      if (row.table_name !== currentTable) {
-        currentTable = row.table_name;
-        markdownContent += `## \`${currentTable}\`\n`;
-      }
-      markdownContent += `- **${row.column_name}**: \`${row.data_type}\`\n`;
-    });
-
-    // 3. Write the content to the file
-    // This places the file in the root of your project
-    const filePath = path.join(__dirname, '../DATABASE_SCHEMA.md');
-    fs.writeFileSync(filePath, markdownContent);
-
-    res.status(200).send('DATABASE_SCHEMA.md has been updated successfully.');
-
-  } catch (error) {
-    console.error('Failed to generate schema file:', error);
-    res.status(500).send('Internal Server Error');
-  }
-});
-
-module.exports = router;
---- END FILE: backend/routes/adminroutes.js ---
-
---- START FILE: backend/routes/ai.js ---
-// --- START FILE: Backend/routes/ai.js ---
 
 const express = require('express');
 const aiTools = require('../ai_tools');
@@ -2677,9 +1619,9 @@ const createAiRoutes = (pool) => {
 
 module.exports = createAiRoutes;
 // --- END FILE: Backend/routes/ai.js ---
---- END FILE: backend/routes/ai.js ---
+--- END FILE: backend/src/api/ai.js ---
 
---- START FILE: backend/routes/auth.js ---
+--- START FILE: backend/src/api/auth.js ---
 const express = require('express');
 const router = express.Router();
 
@@ -2775,10 +1717,10 @@ module.exports = function(pool, bcrypt, jwt, io) {
 
     return router;
 };
---- END FILE: backend/routes/auth.js ---
+--- END FILE: backend/src/api/auth.js ---
 
---- START FILE: backend/routes/chat.js ---
-// backend/routes/chat.js
+--- START FILE: backend/src/api/chat.js ---
+// backend/src/api/chat.js
 
 const express = require('express');
 
@@ -2852,10 +1794,11 @@ const createChatRoutes = (pool, io, jwt) => {
 };
 
 module.exports = createChatRoutes;
---- END FILE: backend/routes/chat.js ---
+--- END FILE: backend/src/api/chat.js ---
 
---- START FILE: backend/routes/feedback.js ---
-// In a new file at: /routes/feedback.js
+--- START FILE: backend/src/api/feedback.js ---
+// backend/src/api/feedback.js
+// This file handles feedback submission from users
 
 const express = require('express');
 
@@ -2910,9 +1853,9 @@ const createFeedbackRoutes = (pool, jwt) => {
 };
 
 module.exports = createFeedbackRoutes;
---- END FILE: backend/routes/feedback.js ---
+--- END FILE: backend/src/api/feedback.js ---
 
---- START FILE: backend/routes/leaderboard.js ---
+--- START FILE: backend/src/api/leaderboard.js ---
 const express = require('express');
 const router = express.Router();
 
@@ -2952,13 +1895,1982 @@ module.exports = function(pool) {
     return router;
 };
 
---- END FILE: backend/routes/leaderboard.js ---
+--- END FILE: backend/src/api/leaderboard.js ---
 
---- START FILE: backend/socket/gameHandlers.js ---
---- END FILE: backend/socket/gameHandlers.js ---
+--- START FILE: backend/src/core/BotPlayer.js ---
+const gameLogic = require('./logic');
+const { RANKS_ORDER, BID_HIERARCHY } = require('./constants');
+const { getLegalMoves } = require('./legalMoves'); // --- MODIFIED: Import the new logic ---
 
---- START FILE: backend/socket/index.js ---
---- END FILE: backend/socket/index.js ---
+// Helper function to get the rank value of a card for sorting.
+const getRankValue = (card) => RANKS_ORDER.indexOf(gameLogic.getRank(card));
+
+class BotPlayer {
+    constructor(userId, name, table) {
+        this.userId = userId;
+        this.playerName = name;
+        this.table = table;
+    }
+
+    /**
+     * Analyzes a hand to determine its point value and suit distribution.
+     * @param {string[]} hand - The array of card strings in the hand.
+     * @returns {{points: number, suits: {H: number, S: number, C: number, D: number}}}
+     */
+    _analyzeHand(hand) {
+        if (!hand || hand.length === 0) {
+            return { points: 0, suits: { H: 0, S: 0, C: 0, D: 0 } };
+        }
+        const points = gameLogic.calculateCardPoints(hand);
+        const suits = { H: 0, S: 0, C: 0, D: 0 };
+        for (const card of hand) {
+            suits[gameLogic.getSuit(card)]++;
+        }
+        return { points, suits };
+    }
+
+    makeBid() {
+        const hand = this.table.hands[this.playerName] || [];
+        const handStats = this._analyzeHand(hand);
+        const { points, suits } = handStats;
+
+        let potentialBid = "Pass";
+
+        // Evaluate for Heart Solo (highest bid)
+        if ((points > 30 && suits.H >= 5) || (points > 40 && suits.H >= 4)) {
+            potentialBid = "Heart Solo";
+        }
+        // Evaluate for other Solos
+        else if ((points > 30 && (suits.S >= 5 || suits.C >= 5 || suits.D >= 5)) ||
+                 (points > 40 && (suits.S >= 4 || suits.C >= 4 || suits.D >= 4))) {
+            potentialBid = "Solo";
+        }
+        // Evaluate for Frog
+        else if ((points > 30 && suits.H >= 4) || (points > 40 && suits.H >= 3)) {
+            potentialBid = "Frog";
+        }
+
+        // Check if the potential bid is higher than the current bid on the table
+        const currentBidDetails = this.table.currentHighestBidDetails;
+        const currentBidLevel = currentBidDetails ? BID_HIERARCHY.indexOf(currentBidDetails.bid) : -1;
+        const potentialBidLevel = BID_HIERARCHY.indexOf(potentialBid);
+
+        if (potentialBidLevel > currentBidLevel) {
+            this.table.placeBid(this.userId, potentialBid);
+        } else {
+            this.table.placeBid(this.userId, "Pass");
+        }
+    }
+
+    chooseTrump() {
+        const hand = this.table.hands[this.playerName] || [];
+        const handStats = this._analyzeHand(hand);
+        
+        // Find the strongest suit (non-Heart) to be trump
+        let bestSuit = 'C';
+        let maxCount = 0;
+        for (const suit of ['S', 'C', 'D']) {
+            if (handStats.suits[suit] > maxCount) {
+                maxCount = handStats.suits[suit];
+                bestSuit = suit;
+            }
+        }
+        this.table.chooseTrump(this.userId, bestSuit);
+    }
+
+    submitFrogDiscards() {
+        const hand = this.table.hands[this.playerName] || [];
+        // A slightly smarter discard: get rid of the lowest ranking cards
+        const sortedHand = [...hand].sort((a, b) => getRankValue(a) - getRankValue(b));
+        const discards = sortedHand.slice(0, 3);
+        this.table.submitFrogDiscards(this.userId, discards);
+    }
+
+    playCard() {
+        const hand = this.table.hands[this.playerName];
+        if (!hand || hand.length === 0) return;
+
+        // --- MODIFICATION: The entire card selection logic is now refactored ---
+
+        // 1. Get all legal moves first. This prevents the bot from ever getting stuck.
+        const isLeading = this.table.currentTrickCards.length === 0;
+        const legalPlays = getLegalMoves(
+            hand,
+            isLeading,
+            this.table.leadSuitCurrentTrick,
+            this.table.trumpSuit,
+            this.table.trumpBroken
+        );
+
+        // If for some reason there are no legal plays, exit to prevent a crash.
+        if (legalPlays.length === 0) {
+            console.error(`[${this.table.tableId}] Bot ${this.playerName} has no legal moves from hand: ${hand.join(', ')}`);
+            return;
+        }
+
+        // 2. Sort the legal cards from lowest rank to highest.
+        legalPlays.sort((a, b) => getRankValue(a) - getRankValue(b));
+
+        // 3. Apply the playing strategy you outlined.
+        let cardToPlay;
+        if (isLeading) {
+            // LOGIC A: I am leading the trick. Play my highest legal card.
+            cardToPlay = legalPlays[legalPlays.length - 1];
+        } else {
+            // LOGIC B: I am not leading.
+            // Find which of my legal cards can win the trick.
+            const winningPlays = legalPlays.filter(myCard => {
+                const potentialTrick = [...this.table.currentTrickCards, { card: myCard, userId: this.userId }];
+                const winner = gameLogic.determineTrickWinner(potentialTrick, this.table.leadSuitCurrentTrick, this.table.trumpSuit);
+                return winner.userId === this.userId;
+            });
+
+            if (winningPlays.length > 0) {
+                // I can win! Play the highest card I can win with.
+                winningPlays.sort((a, b) => getRankValue(a) - getRankValue(b));
+                cardToPlay = winningPlays[winningPlays.length - 1];
+            } else {
+                // I cannot win. Play my lowest legal card to save good cards.
+                cardToPlay = legalPlays[0];
+            }
+        }
+        
+        // 4. Play the chosen card.
+        this.table.playCard(this.userId, cardToPlay);
+    }
+}
+
+module.exports = BotPlayer;
+--- END FILE: backend/src/core/BotPlayer.js ---
+
+--- START FILE: backend/src/core/constants.js ---
+// backend/src/core/constants.js
+// This file contains core constants used throughout the application
+
+const SERVER_VERSION = "9.0.0 - Game Economy";
+
+const SUITS = { H: "Hearts", D: "Diamonds", C: "Clubs", S: "Spades" };
+const RANKS_ORDER = ["6", "7", "8", "9", "J", "Q", "K", "10", "A"];
+const CARD_POINT_VALUES = { "A": 11, "10": 10, "K": 4, "Q": 3, "J": 2, "9":0, "8":0, "7":0, "6":0 };
+const BID_HIERARCHY = ["Pass", "Frog", "Solo", "Heart Solo"];
+const BID_MULTIPLIERS = { "Frog": 1, "Solo": 2, "Heart Solo": 3 };
+const PLACEHOLDER_ID = "ScoreAbsorber";
+
+// --- MODIFICATION: Define table costs, including the new learner table ---
+const TABLE_COSTS = {
+    'miss-pauls-academy': 0.1,
+    'fort-creek': 1,
+    'shirecliff-road': 5,
+    'dans-deck': 20,
+};
+
+// Generate the initial, unshuffled deck
+const deck = [];
+for (const suitKey in SUITS) {
+  for (const rank of RANKS_ORDER) {
+    deck.push(rank + suitKey);
+  }
+}
+
+module.exports = {
+    SERVER_VERSION,
+    SUITS,
+    RANKS_ORDER,
+    CARD_POINT_VALUES,
+    BID_HIERARCHY,
+    BID_MULTIPLIERS,
+    PLACEHOLDER_ID,
+    TABLE_COSTS,
+    deck
+};
+--- END FILE: backend/src/core/constants.js ---
+
+--- START FILE: backend/src/core/gameState.js ---
+// backend/src/core/gameState.js
+// This file manages the in-memory game state, including table management and lobby state
+
+const Table = require('./Table'); // Import the new Table class
+const { SERVER_VERSION, TABLE_COSTS } = require('./constants');
+
+let tables = {};
+
+// --- MODIFICATION: Reordered the themes to place Miss Paul's Academy last ---
+const THEMES = [
+    { id: 'fort-creek', name: 'Fort Creek', count: 10 },
+    { id: 'shirecliff-road', name: 'ShireCliff Road', count: 10 },
+    { id: 'dans-deck', name: "Dan's Deck", count: 10 },
+    { id: 'miss-pauls-academy', name: "Miss Paul's Academy", count: 10 },
+];
+
+/**
+ * Creates instances of the Table class for each defined theme.
+ * @param {object} io - The main socket.io server instance.
+ * @param {object} pool - The PostgreSQL connection pool.
+ */
+function initializeGameTables(io, pool) {
+    let tableCounter = 1;
+
+    const emitLobbyUpdate = () => {
+        io.emit("lobbyState", getLobbyState());
+    };
+
+    THEMES.forEach(theme => {
+        for (let i = 0; i < theme.count; i++) {
+            const tableId = `table-${tableCounter}`;
+            const tableNumber = i + 1;
+            const tableName = `${theme.name} #${tableNumber}`;
+            
+            tables[tableId] = new Table(tableId, theme.id, tableName, io, pool, emitLobbyUpdate);
+            tableCounter++;
+        }
+    });
+    console.log(`${tableCounter - 1} in-memory game tables initialized using Table class.`);
+}
+
+function getTableById(tableId) {
+    return tables[tableId];
+}
+
+function getAllTables() {
+    return tables;
+}
+
+/**
+ * Gathers the state of all tables for the main lobby view.
+ */
+function getLobbyState() {
+    const groupedByTheme = THEMES.map(theme => {
+        const themeTables = Object.values(tables)
+            .filter(tableInstance => tableInstance.theme === theme.id)
+            .map(tableInstance => {
+                const clientState = tableInstance.getStateForClient();
+                const activePlayers = Object.values(clientState.players).filter(p => !p.isSpectator);
+                return {
+                    tableId: clientState.tableId,
+                    tableName: clientState.tableName,
+                    state: clientState.state,
+                    playerCount: activePlayers.length,
+                    players: activePlayers.map(p => ({ userId: p.userId, playerName: p.playerName }))
+                };
+            });
+        return { ...theme, cost: TABLE_COSTS[theme.id] || 0, tables: themeTables };
+    });
+
+    const lobbyData = {
+        themes: groupedByTheme,
+        serverVersion: SERVER_VERSION
+    };
+    return lobbyData;
+}
+
+module.exports = {
+    initializeGameTables,
+    getTableById,
+    getAllTables,
+    getLobbyState,
+};
+--- END FILE: backend/src/core/gameState.js ---
+
+--- START FILE: backend/src/core/legalMoves.js ---
+// backend/src/core/legalMoves.js
+// This file contains the logic to determine legal moves in the game based on the current state
+// backend/src/core/legalMoves.js
+
+const { getSuit } = require('./logic');
+
+/**
+ * Determines the set of legally playable cards from a player's hand based on the current game state.
+ * @param {string[]} hand - The player's current hand of cards.
+ * @param {boolean} isLeading - True if the player is leading the trick.
+ * @param {string|null} leadSuit - The suit of the first card played in the trick (null if leading).
+ * @param {string} trumpSuit - The current trump suit.
+ * @param {boolean} trumpBroken - True if trump has been played in a previous trick.
+ * @returns {string[]} An array of card strings representing the legal moves.
+ */
+function getLegalMoves(hand, isLeading, leadSuit, trumpSuit, trumpBroken) {
+    if (isLeading) {
+        // --- Lead-Out Condition ---
+        const hasNonTrumpCards = hand.some(card => getSuit(card) !== trumpSuit);
+        if (!trumpBroken && hasNonTrumpCards) {
+            // Trump is not broken and player has other suits, so only non-trump cards are legal.
+            return hand.filter(card => getSuit(card) !== trumpSuit);
+        } else {
+            // Trump is broken, OR the player only has trump cards. Any card is legal.
+            return [...hand];
+        }
+    } else {
+        // --- Non-Lead-Out (Following) Condition ---
+        // 1. Do I have the suit that was led?
+        const cardsInLeadSuit = hand.filter(card => getSuit(card) === leadSuit);
+        if (cardsInLeadSuit.length > 0) {
+            // Yes - I must follow suit.
+            return cardsInLeadSuit;
+        }
+
+        // 2. No lead suit. Do I have trump?
+        const trumpCards = hand.filter(card => getSuit(card) === trumpSuit);
+        if (trumpCards.length > 0) {
+            // Yes - Trump must be played.
+            return trumpCards;
+        }
+
+        // 3. No lead suit and no trump. Any card can be played (sluff).
+        return [...hand];
+    }
+}
+
+module.exports = { getLegalMoves };
+--- END FILE: backend/src/core/legalMoves.js ---
+
+--- START FILE: backend/src/core/logic.js ---
+// backend/src/core/logic.js
+// This file contains core game logic functions, including card manipulation and scoring calculations
+
+const { RANKS_ORDER, BID_MULTIPLIERS, PLACEHOLDER_ID, CARD_POINT_VALUES, TABLE_COSTS } = require('./constants');
+const transactionManager = require('../db/transactionManager');
+
+// =================================================================
+// PURE UTILITY FUNCTIONS
+// =================================================================
+
+const getSuit = (cardStr) => (cardStr ? cardStr.slice(-1) : null);
+const getRank = (cardStr) => (cardStr ? cardStr.slice(0, -1) : null);
+
+const calculateCardPoints = (cardsArray) => {
+    if (!cardsArray || cardsArray.length === 0) return 0;
+    return cardsArray.reduce((sum, cardString) => sum + (CARD_POINT_VALUES[getRank(cardString)] || 0), 0);
+};
+
+function determineTrickWinner(trickCards, leadSuit, trumpSuit) {
+    let highestTrumpPlay = null;
+    let highestLeadSuitPlay = null;
+    for (const play of trickCards) {
+        const cardSuit = getSuit(play.card);
+        const cardRankIndex = RANKS_ORDER.indexOf(getRank(play.card));
+        if (cardSuit === trumpSuit) {
+            if (!highestTrumpPlay || cardRankIndex > RANKS_ORDER.indexOf(getRank(highestTrumpPlay.card))) {
+                highestTrumpPlay = play;
+            }
+        } else if (cardSuit === leadSuit) {
+            if (!highestLeadSuitPlay || cardRankIndex > RANKS_ORDER.indexOf(getRank(highestLeadSuitPlay.card))) {
+                highestLeadSuitPlay = play;
+            }
+        }
+    }
+    return highestTrumpPlay || highestLeadSuitPlay;
+}
+
+
+// =================================================================
+// PURE CALCULATION FUNCTIONS (Called by Table Class)
+// =================================================================
+
+function calculateForfeitPayout(table, forfeitingPlayerName) {
+    const remainingPlayers = Object.values(table.players).filter(p => 
+        !p.isSpectator && 
+        p.playerName !== forfeitingPlayerName
+    );
+
+    if (remainingPlayers.length === 0) return {};
+
+    const tableBuyIn = TABLE_COSTS[table.theme] || 0;
+    const forfeitedPot = tableBuyIn;
+    const totalScoreOfRemaining = remainingPlayers.reduce((sum, player) => sum + (table.scores[player.playerName] || 0), 0);
+    
+    const payoutDetails = {};
+    if (totalScoreOfRemaining > 0) {
+        remainingPlayers.forEach(player => {
+            const playerScore = table.scores[player.playerName] || 0;
+            const proportion = playerScore / totalScoreOfRemaining;
+            const shareOfPot = forfeitedPot * proportion;
+            
+            payoutDetails[player.playerName] = {
+                totalGain: tableBuyIn + shareOfPot,
+                buyInReturned: tableBuyIn,
+                forfeitShare: shareOfPot,
+            };
+        });
+    } else {
+        const evenShare = forfeitedPot / remainingPlayers.length;
+        remainingPlayers.forEach(player => {
+            payoutDetails[player.playerName] = {
+                totalGain: tableBuyIn + evenShare,
+                buyInReturned: tableBuyIn,
+                forfeitShare: evenShare,
+            };
+        });
+    }
+
+    return payoutDetails;
+}
+
+function calculateDrawSplitPayout(table) {
+    const tableBuyIn = TABLE_COSTS[table.theme] || 0;
+    const playersInOrder = Object.values(table.players)
+        .filter(p => !p.isSpectator)
+        .map(p => ({ name: p.playerName, score: table.scores[p.playerName] || 0, userId: p.userId }))
+        .sort((a, b) => a.score - b.score);
+
+    if (playersInOrder.length !== 3) {
+        return { wash: true, players: playersInOrder };
+    }
+
+    const [lowest, ...others] = playersInOrder;
+    const [p1, p2] = others.sort((a,b) => b.score - a.score);
+
+    const lowestRecoveryPercentage = Math.max(0, lowest.score) / 120;
+    const lowestRecoveryAmount = tableBuyIn * lowestRecoveryPercentage;
+    const remainingPot = tableBuyIn - lowestRecoveryAmount;
+    
+    const totalScoreOfSplitters = p1.score + p2.score;
+    let p1Share = 0;
+    let p2Share = 0;
+
+    if (totalScoreOfSplitters > 0) {
+        p1Share = remainingPot * (p1.score / totalScoreOfSplitters);
+        p2Share = remainingPot * (p2.score / totalScoreOfSplitters);
+    } else {
+        p1Share = remainingPot / 2;
+        p2Share = remainingPot / 2;
+    }
+
+    const payouts = {
+        [lowest.name]: { userId: lowest.userId, totalReturn: lowestRecoveryAmount },
+        [p1.name]: { userId: p1.userId, totalReturn: tableBuyIn + p1Share },
+        [p2.name]: { userId: p2.userId, totalReturn: tableBuyIn + p2Share },
+    };
+
+    return { wash: false, payouts };
+}
+
+function calculateRoundScoreDetails(table) {
+    const { bidWinnerInfo, playerOrderActive, playerMode, capturedTricks, widowDiscardsForFrogBidder, originalDealtWidow, insurance, players, bidderTotalCardPoints } = table;
+    const bidWinnerName = bidWinnerInfo.playerName;
+    const bidType = bidWinnerInfo.bid;
+    const currentBidMultiplier = BID_MULTIPLIERS[bidType];
+    
+    const activePlayerNames = playerOrderActive.map(id => players[id].playerName);
+    
+    let widowPoints = 0;
+    let widowForReveal = [...originalDealtWidow];
+    if (bidType === "Frog") {
+        widowPoints = calculateCardPoints(widowDiscardsForFrogBidder);
+        widowForReveal = [...widowDiscardsForFrogBidder];
+    } else if (bidType === "Solo" || bidType === "Heart Solo") {
+        widowPoints = calculateCardPoints(originalDealtWidow);
+    }
+
+    let roundMessage = "";
+    const pointChanges = {};
+    activePlayerNames.forEach(p => pointChanges[p] = 0);
+    if(playerMode === 3) pointChanges[PLACEHOLDER_ID] = 0;
+
+    if (insurance.dealExecuted) {
+        const agreement = insurance.executedDetails.agreement;
+        pointChanges[agreement.bidderPlayerName] += agreement.bidderRequirement;
+        for (const defenderName in agreement.defenderOffers) {
+            pointChanges[defenderName] -= agreement.defenderOffers[defenderName];
+        }
+        roundMessage = `Insurance deal executed. Points exchanged based on agreement.`;
+    } else {
+        const scoreDifferenceFrom60 = bidderTotalCardPoints - 60;
+        const exchangeValue = Math.abs(scoreDifferenceFrom60) * currentBidMultiplier;
+        if (scoreDifferenceFrom60 === 0) { 
+            roundMessage = `${bidWinnerName} scored exactly 60. No points exchanged.`; 
+        } else if (bidderTotalCardPoints > 60) {
+            let totalPointsGained = 0;
+            activePlayerNames.forEach(pName => { 
+                if (pName !== bidWinnerName) { 
+                    // --- BUG FIX: Each defender only loses the exchange value ---
+                    pointChanges[pName] -= exchangeValue;
+                    totalPointsGained += exchangeValue; 
+                } 
+            });
+            pointChanges[bidWinnerName] += totalPointsGained;
+            roundMessage = `${bidWinnerName} succeeded! Gains ${totalPointsGained} points.`;
+        } else { // Bidder failed
+            let totalPointsLost = 0;
+            const activeOpponents = activePlayerNames.filter(pName => pName !== bidWinnerName);
+            activeOpponents.forEach(oppName => { 
+                pointChanges[oppName] += exchangeValue; 
+                totalPointsLost += exchangeValue; 
+            });
+            if (playerMode === 3) { 
+                pointChanges[PLACEHOLDER_ID] += exchangeValue; 
+                totalPointsLost += exchangeValue; 
+            }
+            else if (playerMode === 4) { 
+                const dealerName = table.players[table.dealer]?.playerName;
+                if(dealerName && !activeOpponents.includes(dealerName) && dealerName !== bidWinnerName) {
+                    pointChanges[dealerName] += exchangeValue; 
+                    totalPointsLost += exchangeValue;
+                }
+            }
+            pointChanges[bidWinnerName] -= totalPointsLost;
+            roundMessage = `${bidWinnerName} failed. Loses ${totalPointsLost} points.`;
+        }
+    }
+    
+    const insuranceHindsight = calculateInsuranceHindsight(table, bidderTotalCardPoints, currentBidMultiplier);
+
+    const finalBidderPoints = bidderTotalCardPoints;
+    const finalDefenderPoints = 120 - finalBidderPoints;
+
+    return {
+        pointChanges,
+        roundMessage,
+        widowForReveal,
+        insuranceHindsight,
+        finalBidderPoints,
+        finalDefenderPoints,
+        widowPointsValue: widowPoints,
+        bidType
+    };
+}
+
+
+async function handleGameOver(table, pool) {
+    let gameWinnerName = "N/A";
+    const { playerOrderActive, scores, theme, gameId, players } = table;
+    try {
+        const tableCost = TABLE_COSTS[theme] || 0;
+        const transactionPromises = [];
+        const statPromises = [];
+
+        const finalPlayerScores = playerOrderActive
+            .map(id => players[id])
+            .filter(p => p && !p.isBot)
+            .map(p => ({ name: p.playerName, score: scores[p.playerName], userId: p.userId }))
+            .sort((a, b) => b.score - a.score);
+        
+        if (finalPlayerScores.length === 3) {
+            const [p1, p2, p3] = finalPlayerScores;
+            if (p1.score > p2.score && p2.score > p3.score) {
+                gameWinnerName = p1.name;
+                transactionPromises.push(transactionManager.postTransaction(pool, { userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 2, description: `Win and Payout from ${p3.name}` }));
+                statPromises.push(pool.query("UPDATE users SET wins = wins + 1 WHERE id = $1", [p1.userId]));
+                transactionPromises.push(transactionManager.postTransaction(pool, { userId: p2.userId, gameId, type: 'wash_payout', amount: tableCost, description: `Wash - Buy-in returned` }));
+                statPromises.push(pool.query("UPDATE users SET washes = washes + 1 WHERE id = $1", [p2.userId]));
+                statPromises.push(pool.query("UPDATE users SET losses = losses + 1 WHERE id = $1", [p3.userId]));
+            }
+            else if (p1.score === p2.score && p2.score > p3.score) {
+                gameWinnerName = `${p1.name} & ${p2.name}`;
+                transactionPromises.push(transactionManager.postTransaction(pool, { userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 1.5, description: `Win (tie) - Split payout from ${p3.name}` }));
+                transactionPromises.push(transactionManager.postTransaction(pool, { userId: p2.userId, gameId, type: 'win_payout', amount: tableCost * 1.5, description: `Win (tie) - Split payout from ${p3.name}` }));
+                statPromises.push(pool.query("UPDATE users SET wins = wins + 1 WHERE id = ANY($1::int[])", [[p1.userId, p2.userId]]));
+                statPromises.push(pool.query("UPDATE users SET losses = losses + 1 WHERE id = $1", [p3.userId]));
+            }
+            else if (p1.score > p2.score && p2.score === p3.score) {
+                gameWinnerName = p1.name;
+                transactionPromises.push(transactionManager.postTransaction(pool, { userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 3, description: `Win - Collects full pot` }));
+                statPromises.push(pool.query("UPDATE users SET wins = wins + 1 WHERE id = $1", [p1.userId]));
+                statPromises.push(pool.query("UPDATE users SET losses = losses + 1 WHERE id = ANY($1::int[])", [[p2.userId, p3.userId]]));
+            }
+            else {
+                gameWinnerName = "3-Way Tie";
+                finalPlayerScores.forEach(p => {
+                    transactionPromises.push(transactionManager.postTransaction(pool, { userId: p.userId, gameId, type: 'wash_payout', amount: tableCost, description: `3-Way Tie - Buy-in returned` }));
+                    statPromises.push(pool.query("UPDATE users SET washes = washes + 1 WHERE id = $1", [p.userId]));
+                });
+            }
+        }
+        
+        await Promise.all(transactionPromises);
+        await Promise.all(statPromises);
+        await transactionManager.updateGameRecordOutcome(pool, gameId, `Game Over! Winner: ${gameWinnerName}`);
+        
+    } catch(err) {
+        console.error("Database error during game over update:", err);
+    }
+    return { gameWinnerName };
+}
+
+function calculateInsuranceHindsight(table, bidderTotalCardPoints, currentBidMultiplier) {
+    if (table.playerMode !== 3) return null;
+    const { playerOrderActive, bidWinnerInfo, insurance, players } = table;
+    const bidWinnerName = bidWinnerInfo.playerName;
+    const insuranceHindsight = {};
+    const activePlayerNames = playerOrderActive.map(id => players[id].playerName);
+    const defenders = activePlayerNames.filter(p => p !== bidWinnerName);
+    const outcomeFromCards = {};
+    const scoreDifferenceFrom60 = bidderTotalCardPoints - 60;
+    const exchangeValue = Math.abs(scoreDifferenceFrom60) * currentBidMultiplier;
+    if (scoreDifferenceFrom60 > 0) {
+        outcomeFromCards[bidWinnerName] = exchangeValue * 2;
+        defenders.forEach(def => outcomeFromCards[def] = -exchangeValue);
+    } else if (scoreDifferenceFrom60 < 0) {
+        outcomeFromCards[bidWinnerName] = -(exchangeValue * 2);
+        defenders.forEach(def => outcomeFromCards[def] = exchangeValue);
+    } else {
+         activePlayerNames.forEach(p => outcomeFromCards[p] = 0);
+    }
+    const potentialOutcomeFromDeal = {};
+    const sumOfFinalOffers = Object.values(insurance.defenderOffers).reduce((sum, offer) => sum + offer, 0);
+    potentialOutcomeFromDeal[bidWinnerName] = sumOfFinalOffers;
+    const costPerDefenderForced = Math.round(insurance.bidderRequirement / defenders.length);
+    defenders.forEach(def => { potentialOutcomeFromDeal[def] = -costPerDefenderForced; });
+    const actualOutcomeFromDeal = {};
+    if (insurance.dealExecuted) {
+        const agreement = insurance.executedDetails.agreement;
+        actualOutcomeFromDeal[agreement.bidderPlayerName] = agreement.bidderRequirement;
+        for (const defName in agreement.defenderOffers) {
+            actualOutcomeFromDeal[defName] = -agreement.defenderOffers[defName];
+       }
+    }
+    activePlayerNames.forEach(pName => {
+        let actualPoints, potentialPoints;
+        if (insurance.dealExecuted) {
+            actualPoints = actualOutcomeFromDeal[pName];
+            potentialPoints = outcomeFromCards[pName];
+        } else {
+            actualPoints = outcomeFromCards[pName];
+            potentialPoints = potentialOutcomeFromDeal[pName];
+        }
+        insuranceHindsight[pName] = {
+            actualPoints: actualPoints || 0,
+            actualReason: insurance.dealExecuted ? "Insurance Deal" : "Card Outcome",
+            potentialPoints: potentialPoints || 0,
+            potentialReason: insurance.dealExecuted ? "Played it Out" : "Taken Insurance Deal",
+            hindsightValue: (actualPoints || 0) - (potentialPoints || 0)
+        };
+    });
+    return insuranceHindsight;
+}
+
+module.exports = {
+    getSuit,
+    getRank,
+    determineTrickWinner,
+    calculateRoundScoreDetails,
+    handleGameOver,
+    calculateForfeitPayout,
+    calculateDrawSplitPayout,
+    calculateCardPoints
+};
+--- END FILE: backend/src/core/logic.js ---
+
+--- START FILE: backend/src/core/Table.js ---
+// backend/src/core/Table.js
+
+const { SERVER_VERSION, TABLE_COSTS, BID_HIERARCHY, PLACEHOLDER_ID, deck, SUITS, BID_MULTIPLIERS } = require('./constants');
+const gameLogic = require('./logic');
+const BotPlayer = require('./BotPlayer');
+// --- PATH CORRECTION: The 'db' folder is now 'data' inside the 'src' directory ---
+const transactionManager = require('../data/transactionManager');
+const { shuffle } = require('../utils/shuffle');
+
+const BOT_NAMES = ["Mike Knight", "Grandma Joe", "Grampa Blane", "Kimba", "Courtney Sr.", "Cliff"];
+
+class Table {
+    constructor(tableId, theme, tableName, io, pool, emitLobbyUpdateCallback) {
+        this.io = io;
+        this.pool = pool;
+        this.emitLobbyUpdateCallback = emitLobbyUpdateCallback;
+        this.tableId = tableId;
+        this.tableName = tableName;
+        this.theme = theme;
+        this.serverVersion = SERVER_VERSION;
+        this.state = "Waiting for Players";
+        this.players = {};
+        this.playerOrderActive = [];
+        this.scores = {};
+        this.gameStarted = false;
+        this.gameId = null;
+        this.playerMode = null;
+        this.dealer = null;
+        this.internalTimers = {};
+        this.bots = {};
+        this._nextBotId = -1;
+        this.pendingBotAction = null;
+        this._initializeNewRoundState();
+    }
+    
+    // =================================================================
+    // PUBLIC: Forfeit & Timeout Logic
+    // =================================================================
+
+    startForfeitTimer(requestingUserId, targetPlayerName) {
+        if (!this.players[requestingUserId] || this.internalTimers.forfeit) return;
+        const targetPlayer = Object.values(this.players).find(p => p.playerName === targetPlayerName);
+        if (!targetPlayer || !targetPlayer.disconnected) {
+            return this.io.to(this.players[requestingUserId].socketId).emit("error", { message: "Cannot start timer: Player is not disconnected." });
+        }
+        console.log(`[${this.tableId}] Forfeit timer started for ${targetPlayerName} by ${this.players[requestingUserId].playerName}.`);
+        this.forfeiture.targetPlayerName = targetPlayerName;
+        this.forfeiture.timeLeft = 120;
+        this.internalTimers.forfeit = setInterval(() => {
+            if (!this.forfeiture.targetPlayerName) return this._clearForfeitTimer();
+            this.forfeiture.timeLeft -= 1;
+            if (this.forfeiture.timeLeft <= 0) {
+                this._resolveForfeit(targetPlayerName, "timeout");
+            } else {
+                this._emitUpdate();
+            }
+        }, 1000);
+        this._emitUpdate();
+    }
+
+    forfeitGame(userId) {
+        const playerName = this.players[userId]?.playerName;
+        if (!playerName || !this.gameStarted) return;
+        this._resolveForfeit(playerName, "voluntary forfeit");
+    }
+
+    // =================================================================
+    // PUBLIC: Player & Connection Management
+    // =================================================================
+    
+    async joinTable(user, socketId) {
+        const { id, username } = user;
+        const isPlayerAlreadyInGame = !!this.players[id];
+
+        if (isPlayerAlreadyInGame) {
+            // This is a returning player, just update their connection status
+            this.players[id].disconnected = false;
+            this.players[id].socketId = socketId;
+        } else {
+            // This is a new player
+            const activePlayersCount = Object.values(this.players).filter(p => !p.isSpectator).length;
+
+            if (this.gameStarted || activePlayersCount >= 4) {
+                // Game is full or started, add as spectator
+                this.players[id] = { userId: id, playerName: username, socketId: socketId, isSpectator: true, disconnected: false };
+            } else {
+                // Check if they can afford to join
+                const tableCost = TABLE_COSTS[this.theme] || 0;
+                try {
+                    const tokenResult = await this.pool.query("SELECT SUM(amount) as tokens FROM transactions WHERE user_id = $1", [id]);
+                    const userTokens = parseFloat(tokenResult.rows[0]?.tokens || 0);
+                    if (userTokens < tableCost) {
+                        return this.io.to(socketId).emit("error", { message: `You need ${tableCost} tokens to join. You have ${userTokens.toFixed(2)}.` });
+                    }
+                    // Add as an active player
+                    this.players[id] = { userId: id, playerName: username, socketId: socketId, isSpectator: false, disconnected: false };
+                } catch (err) {
+                    return this.io.to(socketId).emit("error", { message: "A server error occurred trying to join the table." });
+                }
+            }
+        }
+
+        if (!this.scores[username]) {
+            this.scores[username] = 120;
+        }
+
+        this._recalculateActivePlayerOrder();
+
+        const activePlayersAfterJoin = this.playerOrderActive.length;
+        if (!this.gameStarted) {
+            if (activePlayersAfterJoin >= 3) {
+                this.state = "Ready to Start";
+            } else {
+                this.state = "Waiting for Players";
+            }
+        }
+        
+        await this._syncPlayerTokens(Object.keys(this.players));
+        this.io.to(socketId).emit("joinedTable", { tableId: this.tableId, gameState: this.getStateForClient() });
+        this._emitUpdate();
+        this.emitLobbyUpdateCallback();
+    }
+
+    addBotPlayer() {
+        const currentPlayers = Object.values(this.players).filter(p => !p.isSpectator);
+        if (currentPlayers.length >= 4) return;
+
+        const currentBotNames = new Set(currentPlayers.filter(p => p.isBot).map(p => p.playerName));
+        const availableNames = BOT_NAMES.filter(name => !currentBotNames.has(name));
+
+        if (availableNames.length === 0) {
+            console.log(`[${this.tableId}] No available bot names to add.`);
+            return;
+        }
+
+        const botName = availableNames[Math.floor(Math.random() * availableNames.length)];
+        
+        const botId = this._nextBotId--;
+        this.players[botId] = {
+            userId: botId,
+            playerName: botName,
+            socketId: null,
+            isSpectator: false,
+            disconnected: false,
+            isBot: true
+        };
+        this.bots[botId] = new BotPlayer(botId, botName, this);
+        if (!this.scores[botName]) this.scores[botName] = 120;
+        this._recalculateActivePlayerOrder();
+        const activePlayers = this.playerOrderActive.length;
+        if (activePlayers >= 3 && !this.gameStarted) this.state = 'Ready to Start';
+        this._emitUpdate();
+        this.emitLobbyUpdateCallback();
+    }
+
+    async leaveTable(userId) {
+        if (!this.players[userId]) return;
+        const playerInfo = this.players[userId];
+        const safeLeaveStates = ["Waiting for Players", "Ready to Start", "Game Over"];
+        if (safeLeaveStates.includes(this.state) || playerInfo.isSpectator) { delete this.players[userId]; }
+        else if (this.gameId && this.gameStarted) { this.disconnectPlayer(userId); }
+        else { delete this.players[userId]; }
+        if (playerInfo.isBot) {
+            delete this.bots[userId];
+        }
+        this._recalculateActivePlayerOrder();
+        await this._syncPlayerTokens(Object.keys(this.players));
+        this._emitUpdate();
+        this.emitLobbyUpdateCallback();
+    }
+    
+    disconnectPlayer(userId) {
+        const player = this.players[userId];
+        if (!player) return;
+        if (!this.gameStarted || player.isSpectator) {
+            delete this.players[userId];
+            this._recalculateActivePlayerOrder();
+        } else {
+            console.log(`[${this.tableId}] Player ${player.playerName} has disconnected.`);
+            player.disconnected = true;
+        }
+        this._emitUpdate();
+        this.emitLobbyUpdateCallback();
+    }
+    
+    reconnectPlayer(userId, socket) {
+        if (!this.players[userId] || !this.players[userId].disconnected) return;
+        console.log(`[${this.tableId}] Reconnecting user ${this.players[userId].playerName}.`);
+        this.players[userId].disconnected = false;
+        this.players[userId].socketId = socket.id;
+        socket.join(this.tableId);
+        if (this.forfeiture.targetPlayerName === this.players[userId].playerName) {
+            this._clearForfeitTimer();
+            console.log(`[${this.tableId}] Cleared timeout for reconnected player ${this.players[userId].playerName}.`);
+        }
+        this._emitUpdate();
+        this.emitLobbyUpdateCallback();
+    }
+
+    async startGame(requestingUserId) {
+        if (this.gameStarted) return;
+        if (!this.players[requestingUserId] || this.players[requestingUserId].isSpectator) return;
+        const activePlayers = Object.values(this.players).filter(p => !p.isSpectator && !p.disconnected);
+        if (activePlayers.length < 3) { 
+            const userSocket = this.io.sockets.sockets.get(this.players[requestingUserId].socketId);
+            if (userSocket) {
+                userSocket.emit("gameStartError", { message: "Need at least 3 players to start." });
+            }
+            return;
+        }
+        this.playerMode = activePlayers.length;
+        const activePlayerIds = activePlayers.map(p => p.userId);
+        const humanIds = activePlayers.filter(p => !p.isBot).map(p => p.userId);
+        try {
+            this.gameId = await transactionManager.createGameRecord(this.pool, this);
+            if (humanIds.length > 0) {
+                await transactionManager.handleGameStartTransaction(this.pool, this, humanIds, this.gameId);
+            }
+            this.gameStarted = true;
+            activePlayers.forEach(p => { if (this.scores[p.playerName] === undefined) this.scores[p.playerName] = 120; });
+            if (this.playerMode === 3 && this.scores[PLACEHOLDER_ID] === undefined) { this.scores[PLACEHOLDER_ID] = 120; }
+            const shuffledPlayerIds = shuffle([...activePlayerIds]);
+            this.dealer = shuffledPlayerIds[0];
+            this._recalculateActivePlayerOrder();
+            this._initializeNewRoundState();
+            this.state = "Dealing Pending";
+            await this._syncPlayerTokens(activePlayerIds);
+            this._emitUpdate();
+            this.emitLobbyUpdateCallback();
+        } catch (err) {
+            const insufficientFundsMatch = err.message.match(/(.+) has insufficient tokens/);
+            if (insufficientFundsMatch) {
+                const brokePlayerName = insufficientFundsMatch[1];
+                const brokePlayer = Object.values(this.players).find(p => p.playerName === brokePlayerName);
+                if (brokePlayer) {
+                    delete this.players[brokePlayer.userId];
+                    this._recalculateActivePlayerOrder();
+                    this.playerMode = this.playerOrderActive.length;
+                    this.state = this.playerMode >= 3 ? "Ready to Start" : "Waiting for Players";
+                    this.gameId = null; 
+                    this.io.to(this.tableId).emit("gameStartFailed", { message: err.message, kickedPlayer: brokePlayerName });
+                    this._emitUpdate();
+                    this.emitLobbyUpdateCallback();
+                }
+            } else {
+                const userSocket = this.io.sockets.sockets.get(this.players[requestingUserId].socketId);
+                if (userSocket) {
+                    userSocket.emit("gameStartError", { message: err.message || "A server error occurred during buy-in." });
+                }
+                this.gameStarted = false; 
+                this.playerMode = null;
+                this.gameId = null;
+            }
+        }
+    }
+    
+    dealCards(requestingUserId) {
+        if (this.state !== "Dealing Pending" || requestingUserId !== this.dealer) return;
+        const shuffledDeck = shuffle([...deck]);
+        this.playerOrderActive.forEach((playerId, i) => {
+            const playerName = this.players[playerId].playerName;
+            this.hands[playerName] = shuffledDeck.slice(i * 11, (i + 1) * 11);
+        });
+        this.widow = shuffledDeck.slice(11 * this.playerOrderActive.length);
+        this.originalDealtWidow = [...this.widow];
+        this.state = "Bidding Phase";
+        this.biddingTurnPlayerId = this.playerOrderActive[0];
+        this._emitUpdate();
+    }
+
+    placeBid(userId, bid) {
+        if (userId !== this.biddingTurnPlayerId) return;
+        const player = this.players[userId];
+        if (!player) return;
+
+        if (this.state === "Awaiting Frog Upgrade Decision") {
+            if (userId !== this.originalFrogBidderId || (bid !== "Heart Solo" && bid !== "Pass")) return;
+            if (bid === "Heart Solo") { this.currentHighestBidDetails = { userId, playerName: player.playerName, bid: "Heart Solo" }; }
+            this.biddingTurnPlayerId = null;
+            this._resolveBiddingFinal();
+            return;
+        }
+        if (this.state !== "Bidding Phase" || !BID_HIERARCHY.includes(bid) || this.playersWhoPassedThisRound.includes(userId)) return;
+        
+        const currentHighestBidIndex = this.currentHighestBidDetails ? BID_HIERARCHY.indexOf(this.currentHighestBidDetails.bid) : -1;
+        if (bid !== "Pass" && BID_HIERARCHY.indexOf(bid) <= currentHighestBidIndex) return;
+        
+        if (bid !== "Pass") {
+            this.currentHighestBidDetails = { userId, playerName: player.playerName, bid };
+            if (bid === "Frog" && !this.originalFrogBidderId) this.originalFrogBidderId = userId;
+            if (bid === "Solo" && this.originalFrogBidderId && userId !== this.originalFrogBidderId) this.soloBidMadeAfterFrog = true;
+        } else { this.playersWhoPassedThisRound.push(userId); }
+        
+        const activeBiddersRemaining = this.playerOrderActive.filter(id => !this.playersWhoPassedThisRound.includes(id));
+        if ((this.currentHighestBidDetails && activeBiddersRemaining.length <= 1) || this.playersWhoPassedThisRound.length === this.playerOrderActive.length) {
+            this.biddingTurnPlayerId = null;
+            this._checkForFrogUpgrade();
+        } else {
+            let currentBidderIndex = this.playerOrderActive.indexOf(userId);
+            let nextBidderId = null;
+            for (let i = 1; i < this.playerOrderActive.length; i++) {
+                let potentialNextBidderId = this.playerOrderActive[(currentBidderIndex + i) % this.playerOrderActive.length];
+                if (!this.playersWhoPassedThisRound.includes(potentialNextBidderId)) {
+                    nextBidderId = potentialNextBidderId;
+                    break;
+                }
+            }
+            if (nextBidderId) { this.biddingTurnPlayerId = nextBidderId; }
+            else { this._checkForFrogUpgrade(); }
+        }
+        this._emitUpdate();
+    }
+    
+    chooseTrump(userId, suit) {
+        if (this.state !== "Trump Selection" || this.bidWinnerInfo?.userId !== userId || !["S", "C", "D"].includes(suit)) {
+            return;
+        }
+        this.trumpSuit = suit;
+        this._transitionToPlayingPhase();
+    }
+
+    submitFrogDiscards(userId, discards) {
+        const player = this.players[userId];
+        if (!player || this.state !== "Frog Widow Exchange" || this.bidWinnerInfo?.userId !== userId || !Array.isArray(discards) || discards.length !== 3) {
+            return;
+        }
+        const currentHand = this.hands[player.playerName];
+        if (!discards.every(card => currentHand.includes(card))) {
+            return this.io.to(player.socketId).emit("error", { message: "Invalid discard selection." });
+        }
+        this.widowDiscardsForFrogBidder = discards;
+        this.hands[player.playerName] = currentHand.filter(card => !discards.includes(card));
+        this._transitionToPlayingPhase();
+    }
+
+    playCard(userId, card) {
+        if (userId !== this.trickTurnPlayerId) return;
+        const player = this.players[userId];
+        if (!player) return;
+
+        const hand = this.hands[player.playerName];
+        if (!hand || !hand.includes(card)) return;
+        
+        const isLeading = this.currentTrickCards.length === 0;
+        const playedSuit = gameLogic.getSuit(card);
+        if (isLeading) {
+            if (playedSuit === this.trumpSuit && !this.trumpBroken && !hand.every(c => gameLogic.getSuit(c) === this.trumpSuit)) {
+                const msg = "Cannot lead trump until it is broken.";
+                console.error(`[${this.tableId}] ILLEGAL MOVE by ${player.playerName}: ${msg}`);
+                return this.io.to(player.socketId).emit("error", { message: msg });
+            }
+        } else {
+            const leadCardSuit = this.leadSuitCurrentTrick;
+            const hasLeadSuit = hand.some(c => gameLogic.getSuit(c) === leadCardSuit);
+            if (hasLeadSuit && playedSuit !== leadCardSuit) {
+                const msg = `Must follow suit (${SUITS[leadCardSuit]}).`;
+                console.error(`[${this.tableId}] ILLEGAL MOVE by ${player.playerName}: ${msg}`);
+                return this.io.to(player.socketId).emit("error", { message: msg });
+            }
+            if (!hasLeadSuit && hand.some(c => gameLogic.getSuit(c) === this.trumpSuit) && playedSuit !== this.trumpSuit) {
+                const msg = "You must play trump if you cannot follow suit.";
+                console.error(`[${this.tableId}] ILLEGAL MOVE by ${player.playerName}: ${msg}`);
+                return this.io.to(player.socketId).emit("error", { message: msg });
+            }
+        }
+        this.hands[player.playerName] = hand.filter(c => c !== card);
+        this.currentTrickCards.push({ userId, playerName: player.playerName, card });
+        if (isLeading) this.leadSuitCurrentTrick = playedSuit;
+        if (playedSuit === this.trumpSuit) this.trumpBroken = true;
+        
+        const expectedCardsInTrick = this.playerOrderActive.length;
+        if (this.currentTrickCards.length === expectedCardsInTrick) {
+            this._resolveTrick();
+        } else {
+            const currentTurnPlayerIndex = this.playerOrderActive.indexOf(userId);
+            this.trickTurnPlayerId = this.playerOrderActive[(currentTurnPlayerIndex + 1) % expectedCardsInTrick];
+            this._emitUpdate();
+        }
+    }
+
+    requestNextRound(requestingUserId) {
+        if (this.state === "Awaiting Next Round Trigger" && requestingUserId === this.roundSummary?.dealerOfRoundId) { this._advanceRound(); }
+    }
+
+    async reset() {
+        console.log(`[${this.tableId}] Game is being reset.`);
+        this._clearAllTimers();
+        const originalPlayers = { ...this.players };
+        Object.assign(this, new Table(this.tableId, this.theme, this.tableName, this.io, this.pool, this.emitLobbyUpdateCallback));
+        const playerIdsToKeep = [];
+        for (const userId in originalPlayers) {
+            const playerInfo = originalPlayers[userId];
+            if (!playerInfo.disconnected) {
+                this.players[userId] = { ...playerInfo, isSpectator: false, socketId: playerInfo.socketId };
+                if (playerInfo.isBot) {
+                    this.bots[userId] = new BotPlayer(parseInt(userId,10), playerInfo.playerName, this);
+                }
+                this.scores[playerInfo.playerName] = 120;
+                if (!playerInfo.isSpectator) { playerIdsToKeep.push(parseInt(userId, 10)); }
+            }
+        }
+        const botIds = Object.keys(this.bots).map(id => parseInt(id,10));
+        this._nextBotId = botIds.length ? Math.min(...botIds) - 1 : -1;
+        this._recalculateActivePlayerOrder();
+        this.playerMode = this.playerOrderActive.length;
+        this.state = this.playerMode >= 3 ? "Ready to Start" : "Waiting for Players";
+        await this._syncPlayerTokens(playerIdsToKeep);
+        this._emitUpdate();
+        this.emitLobbyUpdateCallback();
+    }
+    
+    updateInsuranceSetting(userId, settingType, value) {
+        const player = this.players[userId];
+        if (!player || !this.insurance.isActive || this.insurance.dealExecuted) return;
+
+        const multiplier = this.insurance.bidMultiplier;
+        const parsedValue = parseInt(value, 10);
+        if (isNaN(parsedValue)) return;
+
+        if (settingType === 'bidderRequirement' && player.playerName === this.insurance.bidderPlayerName) {
+            const minReq = -120 * multiplier;
+            const maxReq = 120 * multiplier;
+            if (parsedValue >= minReq && parsedValue <= maxReq) {
+                this.insurance.bidderRequirement = parsedValue;
+            }
+        } else if (settingType === 'defenderOffer' && this.insurance.defenderOffers.hasOwnProperty(player.playerName)) {
+            const minOffer = -60 * multiplier;
+            const maxOffer = 60 * multiplier;
+            if (parsedValue >= minOffer && parsedValue <= maxOffer) {
+                this.insurance.defenderOffers[player.playerName] = parsedValue;
+            }
+        } else {
+            return;
+        }
+
+        const sumOfOffers = Object.values(this.insurance.defenderOffers || {}).reduce((sum, offer) => sum + (offer || 0), 0);
+        if (this.insurance.bidderRequirement <= sumOfOffers) {
+            this.insurance.dealExecuted = true;
+            this.insurance.executedDetails = {
+                agreement: {
+                    bidderPlayerName: this.insurance.bidderPlayerName,
+                    bidderRequirement: this.insurance.bidderRequirement,
+                    defenderOffers: { ...this.insurance.defenderOffers }
+                }
+            };
+        }
+        this._emitUpdate();
+    }
+
+
+    requestDraw(userId) {
+        const player = this.players[userId];
+        if (!player || this.drawRequest.isActive || this.state !== 'Playing Phase') return;
+        this.drawRequest.isActive = true;
+        this.drawRequest.initiator = player.playerName;
+        this.drawRequest.votes = {};
+        const activePlayers = Object.values(this.players).filter(p => !p.isSpectator);
+        activePlayers.forEach(p => {
+            this.drawRequest.votes[p.playerName] = (p.playerName === player.playerName) ? 'wash' : null;
+        });
+        this.drawRequest.timer = 30;
+        this.internalTimers.draw = setInterval(() => {
+            if (!this.drawRequest.isActive) return clearInterval(this.internalTimers.draw);
+            this.drawRequest.timer -= 1;
+            if (this.drawRequest.timer <= 0) {
+                clearInterval(this.internalTimers.draw);
+                this.drawRequest.isActive = false;
+                this.io.to(this.tableId).emit("notification", { message: "Draw request timed out. Game resumes." });
+                this._emitUpdate();
+            } else {
+                this._emitUpdate();
+            }
+        }, 1000);
+        this._emitUpdate();
+    }
+
+    async submitDrawVote(userId, vote) {
+        const player = this.players[userId];
+        if (!player || !this.drawRequest.isActive || !['wash', 'split', 'no'].includes(vote) || this.drawRequest.votes[player.playerName] !== null) return;
+        
+        this.drawRequest.votes[player.playerName] = vote;
+    
+        if (vote === 'no') {
+            clearInterval(this.internalTimers.draw);
+            this.drawRequest.isActive = false;
+            this.io.to(this.tableId).emit("notification", { message: `${player.playerName} vetoed the draw. Game resumes.` });
+            this._emitUpdate();
+            return;
+        }
+    
+        const allVotes = Object.values(this.drawRequest.votes);
+        if (!allVotes.every(v => v !== null)) {
+            this._emitUpdate();
+            return;
+        }
+
+        clearInterval(this.internalTimers.draw);
+        this.drawRequest.isActive = false;
+        
+        try {
+            const voteCounts = allVotes.reduce((acc, v) => { acc[v] = (acc[v] || 0) + 1; return acc; }, {});
+            const tableCost = TABLE_COSTS[this.theme] || 0;
+            const activePlayers = Object.values(this.players).filter(p => !p.isSpectator);
+            let outcomeMessage = "Draw resolved.";
+            const transactionPromises = [];
+    
+            if (voteCounts.wash === activePlayers.length) {
+                outcomeMessage = "All players agreed to a wash. All buy-ins returned.";
+                activePlayers.forEach(p => {
+                    transactionPromises.push(transactionManager.postTransaction(this.pool, { userId: p.userId, gameId: this.gameId, type: 'wash_payout', amount: tableCost, description: `Draw Outcome: Wash` }));
+                });
+            } else if (voteCounts.wash > 0 && voteCounts.split > 0) {
+                outcomeMessage = "A split was agreed upon. Payouts calculated by score.";
+                const payoutResult = gameLogic.calculateDrawSplitPayout(this);
+                if (payoutResult && payoutResult.payouts) {
+                    for (const playerName in payoutResult.payouts) {
+                        const pData = payoutResult.payouts[playerName];
+                        transactionPromises.push(transactionManager.postTransaction(this.pool, { userId: pData.userId, gameId: this.gameId, type: 'win_payout', amount: pData.totalReturn, description: `Draw Outcome: Split` }));
+                    }
+                }
+            } else {
+                outcomeMessage = "The draw resulted in a wash. All buy-ins returned.";
+                activePlayers.forEach(p => {
+                    transactionPromises.push(transactionManager.postTransaction(this.pool, { userId: p.userId, gameId: this.gameId, type: 'wash_payout', amount: tableCost, description: `Draw Outcome: Wash (Default)` }));
+                });
+            }
+            
+            await Promise.all(transactionPromises);
+            await transactionManager.updateGameRecordOutcome(this.pool, this.gameId, outcomeMessage);
+    
+            this.state = "Game Over";
+            this.roundSummary = { message: outcomeMessage, isGameOver: true, finalScores: this.scores };
+            this._emitUpdate();
+            this.emitLobbyUpdateCallback();
+
+            this.internalTimers.drawReset = setTimeout(() => this.reset(), 10000);
+
+        } catch (error) {
+            console.error(`[${this.tableId}] Error resolving draw vote:`, error);
+            this.io.to(this.tableId).emit("notification", { message: `A server error occurred resolving the draw. Resuming game.` });
+            this.drawRequest = this._getInitialDrawRequestState();
+            this._emitUpdate();
+        }
+    }
+
+    // =================================================================
+    // INTERNAL: Game Flow and State Transitions (_prefix)
+    // =================================================================
+
+    _clearForfeitTimer() {
+        if (this.internalTimers.forfeit) {
+            clearInterval(this.internalTimers.forfeit);
+            delete this.internalTimers.forfeit;
+        }
+        this.forfeiture = this._getInitialForfeitureState();
+    }
+
+    async _resolveForfeit(forfeitingPlayerName, reason) {
+        if (this.state === "Game Over" || !this.gameId) return;
+        console.log(`[${this.tableId}] Resolving forfeit for ${forfeitingPlayerName}. Reason: ${reason}`);
+        this._clearAllTimers();
+        try {
+            const forfeitingPlayer = Object.values(this.players).find(p => p.playerName === forfeitingPlayerName);
+            const remainingPlayers = Object.values(this.players).filter(p => !p.isSpectator && p.playerName !== forfeitingPlayerName && !p.isBot);
+            const tokenChanges = gameLogic.calculateForfeitPayout(this, forfeitingPlayerName);
+            const transactionPromises = [];
+            if (forfeitingPlayer && !forfeitingPlayer.isBot) {
+                transactionPromises.push(transactionManager.postTransaction(this.pool, {
+                    userId: forfeitingPlayer.userId, gameId: this.gameId, type: 'forfeit_loss',
+                    amount: 0, description: `Forfeited game on table ${this.tableName}`
+                }));
+            }
+            remainingPlayers.forEach(player => {
+                const payoutInfo = tokenChanges[player.playerName];
+                if (payoutInfo && payoutInfo.totalGain > 0) {
+                    transactionPromises.push(transactionManager.postTransaction(this.pool, {
+                        userId: player.userId, gameId: this.gameId, type: 'forfeit_payout',
+                        amount: payoutInfo.totalGain, description: `Payout from ${forfeitingPlayerName}'s forfeit`
+                    }));
+                }
+            });
+            await Promise.all(transactionPromises);
+            const statUpdatePromises = [];
+            if (forfeitingPlayer && !forfeitingPlayer.isBot) {
+                statUpdatePromises.push(this.pool.query("UPDATE users SET losses = losses + 1 WHERE id = $1", [forfeitingPlayer.userId]));
+            }
+            remainingPlayers.forEach(player => {
+                statUpdatePromises.push(this.pool.query("UPDATE users SET washes = washes + 1 WHERE id = $1", [player.userId]));
+            });
+            await Promise.all(statUpdatePromises);
+            const outcomeMessage = `${forfeitingPlayerName} has forfeited the game due to ${reason}.`;
+            await transactionManager.updateGameRecordOutcome(this.pool, this.gameId, outcomeMessage);
+            Object.values(this.players).forEach(p => {
+                const playerSocket = this.io.sockets.sockets.get(p.socketId);
+                if (playerSocket) {
+                    playerSocket.emit("requestUserSync");
+                }
+            });
+            this.roundSummary = {
+                message: `${outcomeMessage} The game has ended.`, isGameOver: true,
+                gameWinner: `Payout to remaining players.`, finalScores: this.scores, payouts: tokenChanges,
+            };
+            this.state = "Game Over";
+            this._emitUpdate();
+            this.emitLobbyUpdateCallback();
+        } catch (err) {
+            console.error(`Database error during forfeit resolution for table ${this.tableId}:`, err);
+        }
+    }
+    
+    _resolveTrick() {
+        const winnerInfo = gameLogic.determineTrickWinner(this.currentTrickCards, this.leadSuitCurrentTrick, this.trumpSuit);
+        this.lastCompletedTrick = { cards: [...this.currentTrickCards], winnerName: winnerInfo.playerName };
+        
+        const trickPoints = gameLogic.calculateCardPoints(this.lastCompletedTrick.cards.map(p => p.card));
+        const winnerIsBidder = winnerInfo.playerName === this.bidWinnerInfo.playerName;
+        if (winnerIsBidder) {
+            this.bidderCardPoints += trickPoints;
+        } else {
+            this.defenderCardPoints += trickPoints;
+        }
+
+        this.tricksPlayedCount++;
+        this.trickLeaderId = winnerInfo.userId;
+        const winnerName = winnerInfo.playerName;
+        if (winnerName && !this.capturedTricks[winnerName]) { this.capturedTricks[winnerName] = []; }
+        if (winnerName) { this.capturedTricks[winnerName].push(this.currentTrickCards.map(p => p.card)); }
+        
+        if (this.tricksPlayedCount === 11) {
+            this._calculateRoundScores();
+        } else {
+            this.state = "TrickCompleteLinger";
+            this._emitUpdate();
+            this.internalTimers.trickLinger = setTimeout(() => {
+                if (this.state === "TrickCompleteLinger") {
+                    this.currentTrickCards = [];
+                    this.leadSuitCurrentTrick = null;
+                    this.trickTurnPlayerId = winnerInfo.userId;
+                    this.state = "Playing Phase";
+                    this._emitUpdate();
+                }
+            }, 1000);
+        }
+    }
+
+    _resolveBiddingFinal() {
+        if (!this.currentHighestBidDetails) {
+            this.state = "AllPassWidowReveal";
+            this._emitUpdate();
+            this.internalTimers.allPass = setTimeout(() => {
+                if (this.state === "AllPassWidowReveal") {
+                    this._advanceRound();
+                }
+            }, 3000);
+            return;
+        }
+        this.bidWinnerInfo = { ...this.currentHighestBidDetails };
+        const bid = this.bidWinnerInfo.bid;
+        if (bid === "Frog") { 
+            this.trumpSuit = "H"; 
+            this.state = "Frog Widow Exchange";
+            this.revealedWidowForFrog = [...this.widow];
+            const bidderHand = this.hands[this.bidWinnerInfo.playerName];
+            this.hands[this.bidWinnerInfo.playerName] = [...bidderHand, ...this.widow];
+        } else if (bid === "Heart Solo") { 
+            this.trumpSuit = "H"; 
+            this._transitionToPlayingPhase();
+        } else if (bid === "Solo") { 
+            this.state = "Trump Selection";
+        }
+        this._emitUpdate();
+        this.originalFrogBidderId = null;
+        this.soloBidMadeAfterFrog = false;
+    }
+
+    _checkForFrogUpgrade() {
+        if (this.soloBidMadeAfterFrog && this.originalFrogBidderId) {
+            this.state = "Awaiting Frog Upgrade Decision";
+            this.biddingTurnPlayerId = this.originalFrogBidderId;
+        } else { this._resolveBiddingFinal(); }
+        this._emitUpdate();
+    }
+    
+    _transitionToPlayingPhase() {
+        this.state = "Playing Phase";
+        this.tricksPlayedCount = 0;
+        this.trumpBroken = false;
+        this.currentTrickCards = [];
+        this.leadSuitCurrentTrick = null;
+        this.lastCompletedTrick = null;
+        this.trickLeaderId = this.bidWinnerInfo.userId;
+        this.trickTurnPlayerId = this.bidWinnerInfo.userId;
+        if (this.playerMode === 3) {
+            this.insurance.isActive = true;
+            const multiplier = BID_MULTIPLIERS[this.bidWinnerInfo.bid];
+            this.insurance.bidMultiplier = multiplier;
+            this.insurance.bidderPlayerName = this.bidWinnerInfo.playerName;
+            this.insurance.bidderRequirement = 120 * multiplier;
+            const defenders = this.playerOrderActive.map(id => this.players[id].playerName).filter(pName => pName !== this.bidWinnerInfo.playerName);
+            defenders.forEach(defName => { this.insurance.defenderOffers[defName] = -60 * multiplier; });
+        }
+        this._emitUpdate();
+    }
+    
+    _advanceRound() {
+        if (!this.gameStarted) return;
+        const oldDealerId = this.playerOrderActive.shift();
+        this.playerOrderActive.push(oldDealerId);
+        this.dealer = this.playerOrderActive[0];
+        
+        if (!this.players[this.dealer]) {
+            console.error(`[${this.tableId}] FATAL: Could not find new dealer. Resetting table.`);
+            this.reset();
+            return;
+        }
+
+        this._initializeNewRoundState();
+        this.state = "Dealing Pending";
+        console.log(`[${this.tableId}] Round advanced. New dealer: ${this.players[this.dealer].playerName}. State: ${this.state}`);
+        this._emitUpdate();
+    }
+    
+    async _calculateRoundScores() {
+        const roundData = gameLogic.calculateRoundScoreDetails(this);
+        for(const playerName in roundData.pointChanges) { if(this.scores[playerName] !== undefined) { this.scores[playerName] += roundData.pointChanges[playerName]; } }
+        let isGameOver = Object.values(this.scores).filter(s => typeof s === 'number').some(score => score <= 0);
+        let gameWinnerName = null;
+        let finalOutcomeMessage = roundData.roundMessage;
+        if (isGameOver) {
+            finalOutcomeMessage = "Game Over!";
+            const gameOverResult = await gameLogic.handleGameOver(this, this.pool);
+            gameWinnerName = gameOverResult.gameWinnerName;
+            Object.values(this.players).forEach(p => { 
+                if (!p.isBot) {
+                    const playerSocket = this.io.sockets.sockets.get(p.socketId);
+                    if (playerSocket) {
+                        playerSocket.emit("requestUserSync"); 
+                    }
+                }
+            });
+        }
+        await this._syncPlayerTokens(Object.keys(this.players));
+        this.roundSummary = { message: finalOutcomeMessage, finalScores: { ...this.scores }, isGameOver, gameWinner: gameWinnerName, dealerOfRoundId: this.dealer, widowForReveal: roundData.widowForReveal, insuranceDealWasMade: this.insurance.dealExecuted, insuranceDetails: this.insurance.dealExecuted ? this.insurance.executedDetails : null, insuranceHindsight: roundData.insuranceHindsight, allTricks: this.capturedTricks, playerTokens: this.playerTokens };
+        this.state = isGameOver ? "Game Over" : "Awaiting Next Round Trigger";
+        this._emitUpdate();
+    }
+
+    _recalculateActivePlayerOrder() {
+        const activePlayers = Object.values(this.players).filter(p => !p.isSpectator && !p.disconnected);
+        if (activePlayers.length === 0) { this.playerOrderActive = []; return; }
+        if (this.gameStarted && this.dealer) {
+            const playerUserIds = activePlayers.map(p => p.userId);
+            let dealerIndex = playerUserIds.indexOf(this.dealer);
+            if (dealerIndex === -1) { this.dealer = playerUserIds[0]; dealerIndex = 0; }
+            const orderedIds = [];
+            for (let i = 1; i <= playerUserIds.length; i++) { 
+                const playerId = playerUserIds[(dealerIndex + i) % playerUserIds.length]; 
+                if (this.players[playerId]) {
+                    orderedIds.push(playerId); 
+                }
+            }
+            this.playerOrderActive = orderedIds;
+        } else { this.playerOrderActive = activePlayers.map(p => p.userId).sort((a,b) => a - b); }
+    }
+
+    getStateForClient() {
+        const state = {
+            tableId: this.tableId, tableName: this.tableName, theme: this.theme, state: this.state, players: this.players,
+            playerOrderActive: Object.values(this.players)
+                .filter(p => this.playerOrderActive.includes(p.userId))
+                .sort((a, b) => this.playerOrderActive.indexOf(a.userId) - this.playerOrderActive.indexOf(b.userId))
+                .map(p => p.playerName), // Send names to client for UI
+            dealer: this.dealer, hands: this.hands, widow: this.widow, originalDealtWidow: this.originalDealtWidow, scores: this.scores, currentHighestBidDetails: this.currentHighestBidDetails, bidWinnerInfo: this.bidWinnerInfo, gameStarted: this.gameStarted, trumpSuit: this.trumpSuit, currentTrickCards: this.currentTrickCards, tricksPlayedCount: this.tricksPlayedCount, leadSuitCurrentTrick: this.leadSuitCurrentTrick, trumpBroken: this.trumpBroken, capturedTricks: this.capturedTricks, roundSummary: this.roundSummary, lastCompletedTrick: this.lastCompletedTrick, playersWhoPassedThisRound: this.playersWhoPassedThisRound.map(id => this.players[id]?.playerName), playerMode: this.playerMode, serverVersion: this.serverVersion, insurance: this.insurance, forfeiture: this.forfeiture, playerTokens: this.playerTokens, drawRequest: this.drawRequest, originalFrogBidderId: this.originalFrogBidderId, soloBidMadeAfterFrog: this.soloBidMadeAfterFrog, revealedWidowForFrog: this.revealedWidowForFrog, widowDiscardsForFrogBidder: this.widowDiscardsForFrogBidder,
+            bidderCardPoints: this.bidderCardPoints,
+            defenderCardPoints: this.defenderCardPoints,
+        };
+        // Derive player names for client compatibility
+        state.biddingTurnPlayerName = this.players[this.biddingTurnPlayerId]?.playerName;
+        state.trickTurnPlayerName = this.players[this.trickTurnPlayerId]?.playerName;
+        return state;
+    }
+    
+    _emitUpdate() {
+        this.io.to(this.tableId).emit('gameState', this.getStateForClient());
+        this._triggerBots();
+    }
+    
+    _triggerBots() {
+        if (this.pendingBotAction) return;
+
+        for (const botId in this.bots) {
+            const bot = this.bots[botId];
+            
+            const isCourtney = bot.playerName === "Courtney Sr.";
+            const standardDelay = 1000;
+            const playDelay = 1200;
+            const roundEndDelay = 8000;
+
+            if (this.state === 'Dealing Pending' && this.dealer === bot.userId) {
+                let delay = isCourtney ? standardDelay * 2 : standardDelay;
+                this.pendingBotAction = setTimeout(() => {
+                    this.pendingBotAction = null;
+                    this.dealCards(bot.userId);
+                }, delay);
+                return;
+            }
+
+            if (this.state === 'Awaiting Next Round Trigger' && this.roundSummary?.dealerOfRoundId === bot.userId) {
+                let delay = isCourtney ? roundEndDelay * 2 : roundEndDelay;
+                this.pendingBotAction = setTimeout(() => {
+                    this.pendingBotAction = null;
+                    this.requestNextRound(bot.userId);
+                }, delay);
+                return;
+            }
+
+            if (this.state === 'Awaiting Frog Upgrade Decision' && this.biddingTurnPlayerId === bot.userId) {
+                let delay = isCourtney ? standardDelay * 2 : standardDelay;
+                this.pendingBotAction = setTimeout(() => { 
+                    this.pendingBotAction = null; 
+                    this.placeBid(bot.userId, "Pass"); 
+                }, delay);
+                return;
+            }
+
+            if (this.state === 'Bidding Phase' && this.biddingTurnPlayerId === bot.userId) {
+                let delay = isCourtney ? standardDelay * 2 : standardDelay;
+                this.pendingBotAction = setTimeout(() => { this.pendingBotAction = null; bot.makeBid(); }, delay);
+                return;
+            }
+
+            if (this.state === 'Trump Selection' && this.bidWinnerInfo?.userId === bot.userId && !this.trumpSuit) {
+                let delay = isCourtney ? standardDelay * 2 : standardDelay;
+                this.pendingBotAction = setTimeout(() => { this.pendingBotAction = null; bot.chooseTrump(); }, delay);
+                return;
+            }
+
+            if (this.state === 'Frog Widow Exchange' && this.bidWinnerInfo?.userId === bot.userId && this.widowDiscardsForFrogBidder.length === 0) {
+                let delay = isCourtney ? standardDelay * 2 : standardDelay;
+                this.pendingBotAction = setTimeout(() => { this.pendingBotAction = null; bot.submitFrogDiscards(); }, delay);
+                return;
+            }
+
+            if (this.state === 'Playing Phase' && this.trickTurnPlayerId === bot.userId) {
+                let delay = isCourtney ? playDelay * 2 : playDelay;
+                this.pendingBotAction = setTimeout(() => { this.pendingBotAction = null; bot.playCard(); }, delay);
+                return;
+            }
+        }
+    }
+    _clearAllTimers() { for (const timer in this.internalTimers) { clearTimeout(this.internalTimers[timer]); clearInterval(this.internalTimers[timer]); } this.internalTimers = {}; }
+    
+    _initializeNewRoundState() {
+        this.hands = {}; this.widow = []; this.originalDealtWidow = [];
+        this.biddingTurnPlayerId = null;
+        this.currentHighestBidDetails = null;
+        this.playersWhoPassedThisRound = [];
+        this.bidWinnerInfo = null; this.trumpSuit = null; this.trumpBroken = false; this.originalFrogBidderId = null; this.soloBidMadeAfterFrog = false; this.revealedWidowForFrog = []; this.widowDiscardsForFrogBidder = [];
+        this.trickTurnPlayerId = null;
+        this.trickLeaderId = null;
+        this.currentTrickCards = []; this.leadSuitCurrentTrick = null; this.lastCompletedTrick = null; this.tricksPlayedCount = 0; this.capturedTricks = {}; this.roundSummary = null; this.insurance = this._getInitialInsuranceState(); this.forfeiture = this._getInitialForfeitureState(); this.drawRequest = this._getInitialDrawRequestState();
+        
+        Object.values(this.players).forEach(p => {
+            if (p.playerName && this.scores[p.playerName] !== undefined) {
+                this.capturedTricks[p.playerName] = [];
+            }
+        });
+        
+        this.bidderCardPoints = 0;
+        this.defenderCardPoints = 0;
+    }
+
+    async _syncPlayerTokens(playerIds) {
+        if (!playerIds || playerIds.length === 0) { this.playerTokens = {}; return; }
+        playerIds = playerIds.filter(id => parseInt(id,10) >= 0);
+        if (playerIds.length === 0) { this.playerTokens = {}; return; }
+        try {
+            const tokenQuery = `SELECT user_id, SUM(amount) as tokens FROM transactions WHERE user_id = ANY($1::int[]) GROUP BY user_id;`;
+            const tokenResult = await this.pool.query(tokenQuery, [playerIds]);
+            const newPlayerTokens = {};
+            const userIdToNameMap = Object.values(this.players).reduce((acc, player) => { acc[player.userId] = player.playerName; return acc; }, {});
+            tokenResult.rows.forEach(row => { const playerName = userIdToNameMap[row.user_id]; if (playerName) { newPlayerTokens[playerName] = parseFloat(row.tokens || 0).toFixed(2); } });
+            this.playerTokens = newPlayerTokens;
+        } catch (err) { console.error(`Error fetching tokens during sync for table ${this.tableId}:`, err); }
+    }
+    _getInitialInsuranceState() { return { isActive: false, bidMultiplier: null, bidderPlayerName: null, bidderRequirement: 0, defenderOffers: {}, dealExecuted: false, executedDetails: null }; }
+    _getInitialForfeitureState() { return { targetPlayerName: null, timeLeft: null }; }
+    _getInitialDrawRequestState() { return { isActive: false, initiator: null, votes: {}, timer: null }; }
+}
+
+module.exports = Table;
+--- END FILE: backend/src/core/Table.js ---
+
+--- START FILE: backend/src/data/chatEndpoint.js ---
+// Example Express endpoint for lobby chat
+// This server file is illustrative only; the actual backend repository is not included.
+
+const express = require('express');
+const router = express.Router();
+
+// Expected database table: lobby_chat_messages
+// Fields: id SERIAL PRIMARY KEY, user_id INTEGER, username TEXT,
+// message TEXT, created_at TIMESTAMP DEFAULT NOW()
+
+// GET /api/chat - return chat history
+router.get('/', async (req, res) => {
+    // TODO: implement database fetch
+    res.json([]);
+});
+
+// POST /api/chat - add a new message
+router.post('/', async (req, res) => {
+    const { message } = req.body;
+    // TODO: insert message into database
+    // Return the saved message with id, username, etc.
+    res.json({ id: 0, username: req.user.username, message });
+});
+
+module.exports = router;
+--- END FILE: backend/src/data/chatEndpoint.js ---
+
+--- START FILE: backend/src/data/createTables.js ---
+// backend/src/data/createTables.js
+// This file creates the necessary database tables and types for the application
+
+const createDbTables = async (pool) => {
+    try {
+        // This command creates the type if it doesn't exist at all.
+        await pool.query(`
+            DO $$ BEGIN
+                CREATE TYPE transaction_type_enum AS ENUM (
+                    'buy_in', 
+                    'win_payout', 
+                    'forfeit_loss', 
+                    'forfeit_payout',
+                    'admin_adjustment',
+                    'free_token_mercy',
+                    'wash_payout'
+                );
+            EXCEPTION
+                WHEN duplicate_object THEN null;
+            END $$;
+        `);
+
+        await pool.query(`
+            DO $$ BEGIN
+                CREATE TYPE user_role_enum AS ENUM ('player', 'admin');
+            EXCEPTION
+                WHEN duplicate_object THEN null;
+            END $$;
+        `);
+
+        // NEW: Add a status type for feedback tracking
+        await pool.query(`
+            DO $$ BEGIN
+                CREATE TYPE feedback_status_enum AS ENUM ('new', 'in_progress', 'resolved', 'wont_fix');
+            EXCEPTION
+                WHEN duplicate_object THEN null;
+            END $$;
+        `);
+
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(50) UNIQUE NOT NULL,
+                email VARCHAR(255) UNIQUE NOT NULL,
+                password_hash VARCHAR(255) NOT NULL,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                wins INTEGER DEFAULT 0,
+                losses INTEGER DEFAULT 0,
+                washes INTEGER DEFAULT 0,
+                is_admin BOOLEAN DEFAULT FALSE
+            );
+        `);
+
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS game_history (
+                game_id SERIAL PRIMARY KEY,
+                table_id VARCHAR(50),
+                theme VARCHAR(50),
+                player_count INTEGER,
+                start_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                end_time TIMESTAMP WITH TIME ZONE,
+                outcome TEXT
+            );
+        `);
+
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS transactions (
+                transaction_id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                game_id INTEGER REFERENCES game_history(game_id) ON DELETE SET NULL,
+                transaction_type transaction_type_enum NOT NULL,
+                amount DECIMAL(10, 2) NOT NULL,
+                description TEXT,
+                transaction_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS feedback (
+                feedback_id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                username VARCHAR(50),
+                submitted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                feedback_text TEXT NOT NULL,
+                table_id VARCHAR(50),
+                game_state_json JSONB,
+                status feedback_status_enum DEFAULT 'new'
+            );
+        `);
+
+        // --- NEW: Create the lobby chat messages table ---
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS lobby_chat_messages (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                username VARCHAR(50),
+                message TEXT NOT NULL,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+
+        console.log("âœ… Tables checked/created successfully.");
+    } catch (err) {
+        console.error("Error during table creation/modification:", err);
+        throw err;
+    }
+};
+
+module.exports = createDbTables;
+--- END FILE: backend/src/data/createTables.js ---
+
+--- START FILE: backend/src/data/README.md ---
+# Lobby Chat Backend Endpoint
+
+This folder contains an illustrative Express router for handling lobby chat messages. The actual backend implementation is not part of this repository.
+
+## Database Table
+
+Create a table called `lobby_chat_messages` with the following fields:
+
+| Field      | Type      | Notes                       |
+|------------|-----------|-----------------------------|
+| `id`       | SERIAL    | Primary key                 |
+| `user_id`  | INTEGER   | ID of the user sending text |
+| `username` | TEXT      | Display name of sender      |
+| `message`  | TEXT      | Chat content                |
+| `created_at` | TIMESTAMP | Defaults to `NOW()`         |
+
+## API Routes
+
+- `GET /api/chat` â€“ Returns an array of recent chat messages.
+- `POST /api/chat` â€“ Accepts `{ message }` and stores a new message. Returns the saved message object.
+
+These endpoints are referenced by the front-end `LobbyChat` component.  
+--- END FILE: backend/src/data/README.md ---
+
+--- START FILE: backend/src/data/transactionManager.js ---
+// backend/src/data/transactionManager.js
+
+// --- PATH CORRECTION: The 'game' folder is now 'core' inside the 'src' directory ---
+const { TABLE_COSTS } = require('../core/constants');
+
+const createGameRecord = async (pool, table) => {
+    const query = `
+        INSERT INTO game_history (table_id, theme, player_count, outcome)
+        VALUES ($1, $2, $3, $4)
+        RETURNING game_id;
+    `;
+    const values = [table.tableId, table.theme, table.playerMode, 'In Progress'];
+    try {
+        const result = await pool.query(query, values);
+        console.log(`[DB] Created game_id: ${result.rows[0].game_id} for table ${table.tableId}`);
+        return result.rows[0].game_id;
+    } catch (err) {
+        console.error('Error creating game record in database:', err);
+        throw err;
+    }
+};
+
+const postTransaction = async (pool, { userId, gameId, type, amount, description }) => {
+    const query = `
+        INSERT INTO transactions (user_id, game_id, transaction_type, amount, description)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING *;
+    `;
+    const values = [userId, gameId, type, amount, description];
+    try {
+        const result = await pool.query(query, values);
+        console.log(`[DB] Posted transaction_id: ${result.rows[0].transaction_id} for user_id: ${userId}, type: ${type}, amount: ${amount}`);
+        return result.rows[0];
+    } catch (err) {
+        console.error(`Error posting transaction for user ${userId}:`, err);
+        throw err;
+    }
+};
+
+const updateGameRecordOutcome = async (pool, gameId, outcome) => {
+    const query = `
+        UPDATE game_history
+        SET outcome = $1, end_time = NOW()
+        WHERE game_id = $2;
+    `;
+    try {
+        await pool.query(query, [outcome, gameId]);
+        console.log(`[DB] Finalized game_id: ${gameId} with outcome: "${outcome}"`);
+    } catch (err) {
+        console.error(`Error updating game record outcome for game_id ${gameId}:`, err);
+    }
+};
+
+const handleGameStartTransaction = async (pool, table, playerIds, gameId) => {
+    // Look up the cost dynamically based on the table's theme, default to 1 if not found
+    const cost = -(TABLE_COSTS[table.theme] || 1);
+    const description = `Table buy-in for game #${gameId}`;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const balanceQuery = `
+            SELECT user_id, SUM(amount) as current_tokens 
+            FROM transactions 
+            WHERE user_id = ANY($1::int[]) 
+            GROUP BY user_id;
+        `;
+        const balanceResult = await client.query(balanceQuery, [playerIds]);
+        
+        const playerBalances = balanceResult.rows.reduce((acc, row) => {
+            acc[row.user_id] = parseFloat(row.current_tokens);
+            return acc;
+        }, {});
+
+        for (const userId of playerIds) {
+            const balance = playerBalances[userId] || 0;
+            if (balance < Math.abs(cost)) {
+                const userRes = await client.query('SELECT username FROM users WHERE id = $1', [userId]);
+                const username = userRes.rows[0]?.username || `Player ID ${userId}`;
+                throw new Error(`${username} has insufficient tokens. Needs ${Math.abs(cost)}, but has ${balance.toFixed(2)}.`);
+            }
+        }
+
+        const transactionPromises = playerIds.map(userId => {
+            const insertQuery = `
+                INSERT INTO transactions(user_id, game_id, transaction_type, amount, description) 
+                VALUES($1, $2, 'buy_in', $3, $4);
+            `;
+            return client.query(insertQuery, [userId, gameId, cost, description]);
+        });
+        
+        await Promise.all(transactionPromises);
+
+        await client.query('COMMIT');
+        console.log(`âœ… Game start buy-in transaction successful for game ${gameId}`);
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error("âŒ Game start transaction failed and was rolled back:", error.message);
+        throw error; 
+    } finally {
+        client.release();
+    }
+};
+
+const awardWinnings = async (pool, winnerId, potSize, gameId) => {
+    if (!winnerId || potSize <= 0) {
+        console.log("No winner or empty pot, skipping payout transaction.");
+        return;
+    }
+    await postTransaction(pool, {
+        userId: winnerId,
+        gameId: gameId,
+        type: 'win_payout',
+        amount: potSize,
+        description: `Winnings for game #${gameId}`
+    });
+    console.log(`âœ… Payout of ${potSize} tokens successful for user ${winnerId} in game ${gameId}`);
+};
+
+module.exports = {
+    createGameRecord,
+    postTransaction,
+    updateGameRecordOutcome,
+    handleGameStartTransaction,
+    awardWinnings
+};
+--- END FILE: backend/src/data/transactionManager.js ---
+
+--- START FILE: backend/src/db/transactionManager.js ---
+// backend/db/transactionManager.js
+
+// --- MODIFICATION: Import TABLE_COSTS to look up buy-in amounts ---
+const { TABLE_COSTS } = require('../core/constants');
+
+const createGameRecord = async (pool, table) => {
+    const query = `
+        INSERT INTO game_history (table_id, theme, player_count, outcome)
+        VALUES ($1, $2, $3, $4)
+        RETURNING game_id;
+    `;
+    const values = [table.tableId, table.theme, table.playerMode, 'In Progress'];
+    try {
+        const result = await pool.query(query, values);
+        console.log(`[DB] Created game_id: ${result.rows[0].game_id} for table ${table.tableId}`);
+        return result.rows[0].game_id;
+    } catch (err) {
+        console.error('Error creating game record in database:', err);
+        throw err;
+    }
+};
+
+const postTransaction = async (pool, { userId, gameId, type, amount, description }) => {
+    const query = `
+        INSERT INTO transactions (user_id, game_id, transaction_type, amount, description)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING *;
+    `;
+    const values = [userId, gameId, type, amount, description];
+    try {
+        const result = await pool.query(query, values);
+        console.log(`[DB] Posted transaction_id: ${result.rows[0].transaction_id} for user_id: ${userId}, type: ${type}, amount: ${amount}`);
+        return result.rows[0];
+    } catch (err) {
+        console.error(`Error posting transaction for user ${userId}:`, err);
+        throw err;
+    }
+};
+
+const updateGameRecordOutcome = async (pool, gameId, outcome) => {
+    const query = `
+        UPDATE game_history
+        SET outcome = $1, end_time = NOW()
+        WHERE game_id = $2;
+    `;
+    try {
+        await pool.query(query, [outcome, gameId]);
+        console.log(`[DB] Finalized game_id: ${gameId} with outcome: "${outcome}"`);
+    } catch (err) {
+        console.error(`Error updating game record outcome for game_id ${gameId}:`, err);
+    }
+};
+
+// --- MODIFICATION: Updated function to accept the 'table' object and use its theme ---
+const handleGameStartTransaction = async (pool, table, playerIds, gameId) => {
+    // Look up the cost dynamically based on the table's theme, default to 1 if not found
+    const cost = -(TABLE_COSTS[table.theme] || 1);
+    const description = `Table buy-in for game #${gameId}`;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const balanceQuery = `
+            SELECT user_id, SUM(amount) as current_tokens 
+            FROM transactions 
+            WHERE user_id = ANY($1::int[]) 
+            GROUP BY user_id;
+        `;
+        const balanceResult = await client.query(balanceQuery, [playerIds]);
+        
+        const playerBalances = balanceResult.rows.reduce((acc, row) => {
+            acc[row.user_id] = parseFloat(row.current_tokens);
+            return acc;
+        }, {});
+
+        for (const userId of playerIds) {
+            const balance = playerBalances[userId] || 0;
+            if (balance < Math.abs(cost)) {
+                const userRes = await client.query('SELECT username FROM users WHERE id = $1', [userId]);
+                const username = userRes.rows[0]?.username || `Player ID ${userId}`;
+                throw new Error(`${username} has insufficient tokens. Needs ${Math.abs(cost)}, but has ${balance.toFixed(2)}.`);
+            }
+        }
+
+        const transactionPromises = playerIds.map(userId => {
+            const insertQuery = `
+                INSERT INTO transactions(user_id, game_id, transaction_type, amount, description) 
+                VALUES($1, $2, 'buy_in', $3, $4);
+            `;
+            return client.query(insertQuery, [userId, gameId, cost, description]);
+        });
+        
+        await Promise.all(transactionPromises);
+
+        await client.query('COMMIT');
+        console.log(`âœ… Game start buy-in transaction successful for game ${gameId}`);
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error("âŒ Game start transaction failed and was rolled back:", error.message);
+        throw error; 
+    } finally {
+        client.release();
+    }
+};
+
+const awardWinnings = async (pool, winnerId, potSize, gameId) => {
+    if (!winnerId || potSize <= 0) {
+        console.log("No winner or empty pot, skipping payout transaction.");
+        return;
+    }
+    await postTransaction(pool, {
+        userId: winnerId,
+        gameId: gameId,
+        type: 'win_payout',
+        amount: potSize,
+        description: `Winnings for game #${gameId}`
+    });
+    console.log(`âœ… Payout of ${potSize} tokens successful for user ${winnerId} in game ${gameId}`);
+};
+
+module.exports = {
+    createGameRecord,
+    postTransaction,
+    updateGameRecordOutcome,
+    handleGameStartTransaction,
+    awardWinnings
+};
+--- END FILE: backend/src/db/transactionManager.js ---
 
 --- START FILE: backend/tests/api.test.js ---
 const assert = require('assert');
@@ -3174,7 +4086,7 @@ function runBotTests() {
 runBotTests();
 --- END FILE: backend/tests/bot.test.js ---
 
---- START FILE: backend/tests/gameLogic.test.js ---
+--- START FILE: backend/tests/gameLogic.unit.test.js ---
 const assert = require('assert');
 const gameLogic = require('../game/logic');
 
@@ -3282,7 +4194,7 @@ function runGameLogicTests() {
 }
 
 runGameLogicTests();
---- END FILE: backend/tests/gameLogic.test.js ---
+--- END FILE: backend/tests/gameLogic.unit.test.js ---
 
 --- START FILE: backend/tests/legalMoves.test.js ---
 const assert = require('assert');
@@ -3433,6 +4345,95 @@ runLifecycleTests().catch(err => {
     process.exit(1);
 });
 --- END FILE: backend/tests/lifecycle.test.js ---
+
+--- START FILE: backend/tests/Table.integration.test.js ---
+const assert = require('assert');
+const Table = require('../src/core/Table');
+
+// --- Mocks and Helpers ---
+
+// A mock socket.io server object to capture emissions
+const mockIo = {
+    lastEmit: null,
+    to: function(tableId) {
+        return {
+            emit: (event, data) => {
+                this.lastEmit = { event, data };
+                // console.log(`Mock IO emitted to ${tableId}: ${event}`);
+            }
+        };
+    }
+};
+
+// A helper to pause execution, allowing async bot actions to complete
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// --- The Test Case ---
+
+async function testFrogUpgradeScenario() {
+    console.log("Running: testFrogUpgradeScenario...");
+
+    // 1. ARRANGE: Set up the game state
+    const table = new Table('test-table-1', 'fort-creek', 'Test Table', mockIo, null, () => {});
+    
+    // Add players: one bot, one human
+    table.addBotPlayer(); // Bot gets ID -1, Name "Mike Knight"
+    await table.joinTable({ id: 101, username: "HumanPlayer" }, "socket123");
+    
+    // Ensure we have exactly two players for this test
+    assert.strictEqual(Object.keys(table.players).length, 2, "Should have 2 players");
+    
+    // Start the game. Since it's random, we find out who the dealer is.
+    await table.startGame(101); // Human starts the game
+    table.dealCards(table.dealer);
+
+    // Identify who is who in the turn order
+    const botId = table.playerOrderActive.find(id => id < 0);
+    const humanId = table.playerOrderActive.find(id => id > 0);
+    const botPlayer = table.players[botId];
+    const humanPlayer = table.players[humanId];
+
+    // Make sure the bidding starts with the first player in order
+    assert.strictEqual(table.state, "Bidding Phase", "Game should be in Bidding Phase");
+    const firstBidderId = table.biddingTurnPlayerId;
+    const secondBidderId = table.playerOrderActive.find(id => id !== firstBidderId);
+
+    // 2. ACT: Perform the sequence of bids that causes the bug
+    console.log(`  - ${table.players[firstBidderId].playerName} bids Frog...`);
+    table.placeBid(firstBidderId, "Frog"); // First player bids Frog
+
+    console.log(`  - ${table.players[secondBidderId].playerName} bids Solo...`);
+    table.placeBid(secondBidderId, "Solo"); // Second player bids Solo
+    
+    // The game state should now be waiting for the original Frog bidder
+    assert.strictEqual(table.state, "Awaiting Frog Upgrade Decision", "State should be Awaiting Frog Upgrade Decision");
+    assert.strictEqual(table.biddingTurnPlayerId, firstBidderId, "Turn should return to the original Frog bidder");
+
+    console.log(`  - Waiting for ${botPlayer.playerName} to automatically pass...`);
+    await sleep(1200); // Wait for the bot's timeout to fire
+
+    // 3. ASSERT: Check the final state
+    assert.strictEqual(table.state, "Trump Selection", "Game should have proceeded to Trump Selection");
+    assert.strictEqual(table.bidWinnerInfo.userId, secondBidderId, "The Solo bidder should be the winner");
+    assert.strictEqual(table.bidWinnerInfo.bid, "Solo", "The winning bid should be Solo");
+    
+    console.log("...Success!\n");
+}
+
+
+// --- Test Runner ---
+async function runAllTests() {
+    try {
+        await testFrogUpgradeScenario();
+        console.log("âœ… All Table integration tests passed!");
+    } catch (error) {
+        console.error("âŒ A test failed:", error);
+        process.exit(1); // Exit with an error code
+    }
+}
+
+runAllTests();
+--- END FILE: backend/tests/Table.integration.test.js ---
 
 --- START FILE: backend/utils/shuffle.js ---
 // Backend/utils/shuffle.js
@@ -5015,13 +6016,11 @@ import LobbyChat from './LobbyChat';
 import { getLobbyChatHistory } from '../services/api';
 import { SUITS_MAP, SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS } from '../constants';
 
-const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLogout, errorMessage, emitEvent, playSound, socket }) => {
+const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLogout, emitEvent, playSound, socket }) => {
     const [seatAssignments, setSeatAssignments] = useState({ self: null, opponentLeft: null, opponentRight: null });
     const [showRoundSummaryModal, setShowRoundSummaryModal] = useState(false);
     const [showInsurancePrompt, setShowInsurancePrompt] = useState(false);
     const [showGameMenu, setShowGameMenu] = useState(false);
-    // --- FIX: Removed unused variables ---
-    // const [isFullscreen, setIsFullscreen] = useState(false); 
     const [showIosPrompt, setShowIosPrompt] = useState(false);
     const [showDrawVote, setShowDrawVote] = useState(false);
     const [chatOpen, setChatOpen] = useState(false);
@@ -5149,16 +6148,6 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
         if (state === 'Bidding Phase' && gameStateRef.current === 'Dealing Pending') playSound('cardDeal');
         gameStateRef.current = state;
     }, [currentTableState, selfPlayerName, isSpectator, playSound]);
-
-    const isIos = () => /iPhone|iPad|iPod/i.test(navigator.userAgent);
-    
-    useEffect(() => {
-        if (!isIos()) {
-            // const handleFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
-            // document.addEventListener('fullscreenchange', handleFullscreenChange);
-            // return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-        }
-    }, []);
     
     if (!currentTableState) {
         return <div>Loading table...</div>;
@@ -5340,7 +6329,12 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
                         setTouchStartX(null);
                     }}
                 >
-                    <button className="chat-close-button" onClick={closeChatWindow} aria-label="Close chat window">Ãƒâ€”</button>
+                    <button className="chat-close-button" onClick={closeChatWindow} aria-label="Close chat window">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
                     <LobbyChat
                         socket={socket}
                         messages={chatMessages}

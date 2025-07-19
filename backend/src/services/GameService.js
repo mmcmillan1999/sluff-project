@@ -65,19 +65,18 @@ class GameService {
         await this._executeEffects(tableId, result.effects);
     }
     
-    // --- New handler for game over logic ---
     async handleGameOver(payload) {
         let gameWinnerName = "N/A";
         const { playerOrderActive, scores, theme, gameId, players } = payload;
         const tableCost = TABLE_COSTS[theme] || 0;
 
-        const finalPlayerScores = playerOrderActive
-            .map(id => players[id])
-            .filter(p => p && !p.isBot)
-            .map(p => ({ name: p.playerName, score: scores[p.playerName], userId: p.userId }))
-            .sort((a, b) => b.score - a.score);
-        
         try {
+            const finalPlayerScores = playerOrderActive
+                .map(id => players[id])
+                .filter(p => p && !p.isBot)
+                .map(p => ({ name: p.playerName, score: scores[p.playerName], userId: p.userId }))
+                .sort((a, b) => b.score - a.score);
+            
             if (finalPlayerScores.length === 3) {
                 const [p1, p2, p3] = finalPlayerScores;
                 if (p1.score > p2.score && p2.score > p3.score) {
@@ -88,7 +87,26 @@ class GameService {
                     await this.pool.query("UPDATE users SET washes = washes + 1 WHERE id = $1", [p2.userId]);
                     await this.pool.query("UPDATE users SET losses = losses + 1 WHERE id = $1", [p3.userId]);
                 }
-                // ... (other tie conditions) ...
+                else if (p1.score === p2.score && p2.score > p3.score) {
+                    gameWinnerName = `${p1.name} & ${p2.name}`;
+                    await transactionManager.postTransaction(this.pool, { userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 1.5, description: `Win (tie) - Split payout from ${p3.name}` });
+                    await transactionManager.postTransaction(this.pool, { userId: p2.userId, gameId, type: 'win_payout', amount: tableCost * 1.5, description: `Win (tie) - Split payout from ${p3.name}` });
+                    await this.pool.query("UPDATE users SET wins = wins + 1 WHERE id = ANY($1::int[])", [[p1.userId, p2.userId]]);
+                    await this.pool.query("UPDATE users SET losses = losses + 1 WHERE id = $1", [p3.userId]);
+                }
+                else if (p1.score > p2.score && p2.score === p3.score) {
+                    gameWinnerName = p1.name;
+                    await transactionManager.postTransaction(this.pool, { userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 3, description: `Win - Collects full pot` });
+                    await this.pool.query("UPDATE users SET wins = wins + 1 WHERE id = $1", [p1.userId]);
+                    await this.pool.query("UPDATE users SET losses = losses + 1 WHERE id = ANY($1::int[])", [[p2.userId, p3.userId]]);
+                }
+                else {
+                    gameWinnerName = "3-Way Tie";
+                    for (const p of finalPlayerScores) {
+                        await transactionManager.postTransaction(this.pool, { userId: p.userId, gameId, type: 'wash_payout', amount: tableCost, description: `3-Way Tie - Buy-in returned` });
+                        await this.pool.query("UPDATE users SET washes = washes + 1 WHERE id = $1", [p.userId]);
+                    }
+                }
             }
             await transactionManager.updateGameRecordOutcome(this.pool, gameId, `Game Over! Winner: ${gameWinnerName}`);
         } catch(err) {
@@ -97,6 +115,17 @@ class GameService {
 
         return { gameWinnerName };
     }
+
+    // --- NEW METHOD FOR HARD RESET ---
+    resetAllEngines() {
+        console.log("[ADMIN] Resetting all game engines to initial state.");
+        Object.values(this.engines).forEach(engine => {
+            engine.reset();
+        });
+        // After resetting, immediately broadcast the new, empty lobby state.
+        this.io.emit('lobbyState', this.getLobbyState());
+    }
+    // --- END NEW METHOD ---
 
     async _executeEffects(tableId, effects = []) {
         if (!effects || effects.length === 0) return;
@@ -122,8 +151,6 @@ class GameService {
                     }, effect.payload.duration);
                     break;
                 case 'SYNC_PLAYER_TOKENS':
-                    // This is a great addition, but let's stick to the simpler `requestUserSync` for now
-                    // to avoid duplicating logic. The effect system supports this well.
                     Object.values(engine.players).forEach(p => {
                         if (!p.isBot && p.socketId) {
                             const playerSocket = this.io.sockets.sockets.get(p.socketId);
@@ -136,7 +163,6 @@ class GameService {
                     if (effect.onComplete) {
                         effect.onComplete(gameOverResult.gameWinnerName);
                     }
-                    // We must broadcast the final state *after* the winner's name has been set.
                     this.io.to(tableId).emit('gameState', engine.getStateForClient());
                     break;
                 }

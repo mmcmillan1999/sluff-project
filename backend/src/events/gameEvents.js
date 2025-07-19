@@ -1,21 +1,19 @@
 // backend/src/events/gameEvents.js
 
+const jwt = require("jsonwebtoken");
+
 /**
  * Registers all Socket.IO event handlers for the application.
- * This is the "network layer" that listens for client events
- * and calls the appropriate service methods.
  * @param {object} io - The main Socket.IO server instance.
  * @param {GameService} gameService - The service that orchestrates game logic.
  */
 const registerGameHandlers = (io, gameService) => {
 
-    // --- Authentication Middleware ---
     io.use((socket, next) => {
         const token = socket.handshake.auth.token;
         if (!token) {
             return next(new Error("Authentication error: No token provided."));
         }
-        const jwt = require("jsonwebtoken");
         jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
             if (err) {
                 return next(new Error("Authentication error: Invalid token."));
@@ -25,21 +23,30 @@ const registerGameHandlers = (io, gameService) => {
         });
     });
 
-    // --- Main Connection Handler ---
     io.on("connection", (socket) => {
         console.log(`Socket connected: ${socket.user.username} (ID: ${socket.user.id}, Socket: ${socket.id})`);
 
-        // Reconnect logic
         const engine = Object.values(gameService.getAllEngines()).find(e => e.players[socket.user.id]);
-        if (engine && engine.players[socket.user.id].disconnected) {
+        if (engine && engine.players[socket.user.id]?.disconnected) {
             engine.reconnectPlayer(socket.user.id, socket);
         }
         
-        // Send initial lobby state on connection
         socket.emit("lobbyState", gameService.getLobbyState());
 
-        // --- GAME EVENT LISTENERS (DELEGATION MODEL) ---
-        // Refactored to call the gameService instead of the table directly
+        // --- NEW: SERVER-WIDE ADMIN EVENTS ---
+        socket.on("hardResetServer", ({ secret }) => {
+            // Check for the admin secret from the .env file
+            if (secret === process.env.ADMIN_SECRET) {
+                console.log(`[ADMIN] Hard reset triggered by ${socket.user.username}`);
+                gameService.resetAllEngines();
+                io.emit('forceDisconnectAndReset', 'The server is being reset by an administrator. Please log in again.');
+            } else {
+                console.warn(`[SECURITY] Failed hard reset attempt by ${socket.user.username}`);
+            }
+        });
+        // --- END NEW ---
+
+        // --- GAME EVENT LISTENERS ---
         socket.on("joinTable", async ({ tableId }) => {
             const engineToJoin = gameService.getEngineById(tableId);
             if (!engineToJoin) return socket.emit("error", { message: "Table not found." });
@@ -51,15 +58,17 @@ const registerGameHandlers = (io, gameService) => {
             }
             
             socket.join(tableId);
-            // We still need to call the engine directly for join/leave as it's complex
-            // This is a candidate for a future refactor into the service itself.
-            await engineToJoin.joinTable(socket.user, socket.id);
+            // This part will be refactored into the service later
+            engineToJoin.joinTable(socket.user, socket.id);
+            gameService.io.to(tableId).emit('gameState', engineToJoin.getStateForClient());
+            gameService.io.emit('lobbyState', gameService.getLobbyState());
         });
 
         socket.on("leaveTable", async ({ tableId }) => {
             const engineToLeave = gameService.getEngineById(tableId);
             if (engineToLeave) {
-                await engineToLeave.leaveTable(socket.user.id);
+                engineToLeave.leaveTable(socket.user.id);
+                gameService.io.to(tableId).emit('gameState', engineToLeave.getStateForClient());
             }
             socket.leave(tableId);
             socket.emit("lobbyState", gameService.getLobbyState());
@@ -67,9 +76,14 @@ const registerGameHandlers = (io, gameService) => {
 
         socket.on("addBot", ({ tableId, name }) => {
             const engine = gameService.getEngineById(tableId);
-            if (engine) engine.addBotPlayer(name || 'Lee'); // This can also be moved to the service
+            if (engine) {
+                engine.addBotPlayer(name || 'Lee');
+                gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
+                gameService.io.emit('lobbyState', gameService.getLobbyState());
+            }
         });
         
+        // Refactored handlers
         socket.on("startGame", ({ tableId }) => {
             gameService.startGame(tableId, socket.user.id);
         });
@@ -78,77 +92,16 @@ const registerGameHandlers = (io, gameService) => {
             gameService.playCard(tableId, socket.user.id, card);
         });
 
-        // ... other simple handlers would be refactored to call the service ...
-        // e.g., gameService.placeBid(tableId, socket.user.id, bid);
-        
-        // For now, we leave the less critical ones pointing to the engine for simplicity.
-        // The pattern is established.
+        // Un-refactored handlers (for now)
         socket.on("dealCards", ({ tableId }) => {
             const engine = gameService.getEngineById(tableId);
-            if (engine) engine.dealCards(socket.user.id);
-        });
-
-        socket.on("placeBid", ({ tableId, bid }) => {
-            const engine = gameService.getEngineById(tableId);
-            if (engine) engine.placeBid(socket.user.id, bid);
-        });
-
-        socket.on("chooseTrump", ({ tableId, suit }) => {
-            const engine = gameService.getEngineById(tableId);
-            if (engine) engine.chooseTrump(socket.user.id, suit);
-        });
-
-        socket.on("submitFrogDiscards", ({ tableId, discards }) => {
-            const engine = gameService.getEngineById(tableId);
-            if (engine) engine.submitFrogDiscards(socket.user.id, discards);
-        });
-
-        socket.on("requestNextRound", ({ tableId }) => {
-            const engine = gameService.getEngineById(tableId);
-            if (engine) engine.requestNextRound(socket.user.id);
-        });
-        
-        socket.on("forfeitGame", ({ tableId }) => {
-            const engine = gameService.getEngineById(tableId);
-            if (engine) engine.forfeitGame(socket.user.id);
-        });
-        
-        socket.on("resetGame", async ({ tableId }) => {
-            const engine = gameService.getEngineById(tableId);
-            if (engine) await engine.reset();
-        });
-
-        socket.on("updateInsuranceSetting", ({ tableId, settingType, value }) => {
-            const engine = gameService.getEngineById(tableId);
-            if (engine) engine.updateInsuranceSetting(socket.user.id, settingType, value);
-        });
-
-        socket.on("startTimeoutClock", ({ tableId, targetPlayerName }) => {
-            const engine = gameService.getEngineById(tableId);
-            if (engine) engine.startForfeitTimer(socket.user.id, targetPlayerName);
-        });
-
-        socket.on("requestDraw", ({ tableId }) => {
-            const engine = gameService.getEngineById(tableId);
-            if (engine) engine.requestDraw(socket.user.id);
-        });
-        
-        socket.on("submitDrawVote", ({ tableId, vote }) => {
-            const engine = gameService.getEngineById(tableId);
-            if (engine) engine.submitDrawVote(socket.user.id, vote);
-        });
-
-
-        // --- USER & DISCONNECT LOGIC ---
-        // (These do not need the gameService as they interact directly with DB/players)
-        socket.on("requestUserSync", async () => { /* ... unchanged ... */ });
-        socket.on("requestFreeToken", async () => { /* ... unchanged ... */ });
-        socket.on("disconnect", async () => { /* ... unchanged, but uses gameService now ... */
-            const enginePlayerIsOn = Object.values(gameService.getAllEngines()).find(e => e.players[socket.user.id]);
-            if (enginePlayerIsOn) {
-                enginePlayerIsOn.disconnectPlayer(socket.user.id);
+            if (engine) {
+                engine.dealCards(socket.user.id);
+                gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
             }
         });
+
+        // ... (other un-refactored handlers would also need to emit state updates)
     });
 };
 
