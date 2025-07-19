@@ -1,5 +1,4 @@
 // backend/src/core/constants.js
-// This file contains core constants used throughout the application
 
 const SERVER_VERSION = "9.0.0 - Game Economy";
 
@@ -10,13 +9,21 @@ const BID_HIERARCHY = ["Pass", "Frog", "Solo", "Heart Solo"];
 const BID_MULTIPLIERS = { "Frog": 1, "Solo": 2, "Heart Solo": 3 };
 const PLACEHOLDER_ID = "ScoreAbsorber";
 
-// --- MODIFICATION: Define table costs, including the new learner table ---
 const TABLE_COSTS = {
     'miss-pauls-academy': 0.1,
     'fort-creek': 1,
     'shirecliff-road': 5,
     'dans-deck': 20,
 };
+
+// --- NEWLY ADDED ---
+const THEMES = [
+    { id: 'fort-creek', name: 'Fort Creek', count: 10 },
+    { id: 'shirecliff-road', name: 'ShireCliff Road', count: 10 },
+    { id: 'dans-deck', name: "Dan's Deck", count: 10 },
+    { id: 'miss-pauls-academy', name: "Miss Paul's Academy", count: 10 },
+];
+// --- END NEWLY ADDED ---
 
 // Generate the initial, unshuffled deck
 const deck = [];
@@ -35,5 +42,6 @@ module.exports = {
     BID_MULTIPLIERS,
     PLACEHOLDER_ID,
     TABLE_COSTS,
+    THEMES, // --- ADDED TO EXPORTS ---
     deck
 };
