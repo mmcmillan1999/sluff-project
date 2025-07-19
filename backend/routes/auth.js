@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
 
-// This function will be called from server.js with the db (pool), bcrypt, and jwt dependencies
-module.exports = function(pool, bcrypt, jwt) {
+// --- MODIFICATION: Pass 'io' into the function ---
+module.exports = function(pool, bcrypt, jwt, io) {
 
     // REGISTRATION ROUTE
     router.post('/register', async (req, res) => {
@@ -13,14 +13,11 @@ module.exports = function(pool, bcrypt, jwt) {
             }
             const hashedPassword = await bcrypt.hash(password, 10);
             
-            // Step 1: Insert the new user and get their ID back
             const insertUserQuery = 'INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id';
             const userResult = await pool.query(insertUserQuery, [username, email, hashedPassword]);
             const newUserId = userResult.rows[0].id;
 
-            // Step 2: Create the initial transaction for the starting 8 tokens
             const startingTokens = 8.00;
-            // --- MODIFICATION: Changed to a valid ENUM value ---
             const transactionType = 'admin_adjustment'; 
             const description = 'New user starting balance';
             const insertTransactionQuery = 'INSERT INTO transactions (user_id, amount, transaction_type, description) VALUES ($1, $2, $3, $4)';
@@ -42,7 +39,6 @@ module.exports = function(pool, bcrypt, jwt) {
                 return res.status(400).json({ message: "Email and password are required." });
             }
 
-            // Using $1 for PostgreSQL
             const userQuery = 'SELECT id, username, password_hash, is_admin FROM users WHERE email = $1';
             const userResult = await pool.query(userQuery, [email]);
 
@@ -57,13 +53,27 @@ module.exports = function(pool, bcrypt, jwt) {
                 return res.status(401).json({ message: "Invalid credentials." });
             }
 
-            // Using $1 for PostgreSQL
             const tokenQuery = "SELECT SUM(amount) AS tokens FROM transactions WHERE user_id = $1";
             const tokenResult = await pool.query(tokenQuery, [user.id]);
             const tokens = parseFloat(tokenResult.rows[0].tokens || 0).toFixed(2);
 
             const payload = { id: user.id, username: user.username, is_admin: user.is_admin };
             const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1d' });
+
+            // --- NEW: Announce login to the lobby chat ---
+            try {
+                const loginMsgQuery = `
+                    INSERT INTO lobby_chat_messages (user_id, username, message)
+                    VALUES ($1, $2, $3)
+                    RETURNING id, username, message, created_at;
+                `;
+                const msgValues = [user.id, 'System', `${user.username} has logged on.`];
+                const { rows } = await pool.query(loginMsgQuery, msgValues);
+                io.emit('new_lobby_message', rows[0]);
+            } catch (chatError) {
+                console.error("Failed to post login message to chat:", chatError);
+            }
+            // --- END NEW ---
 
             res.json({
                 token,

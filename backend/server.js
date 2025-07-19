@@ -61,7 +61,7 @@ io.on("connection", (socket) => {
     socket.emit("lobbyState", state.getLobbyState());
 
     // --- CORE EVENT LISTENERS (DELEGATION MODEL) ---
-
+    // ... (All your game event listeners like joinTable, playCard, etc. remain here)
     socket.on("joinTable", async ({ tableId }) => {
         const tableToJoin = state.getTableById(tableId);
         if (!tableToJoin) return socket.emit("error", { message: "Table not found." });
@@ -155,6 +155,7 @@ io.on("connection", (socket) => {
         if (table) table.submitDrawVote(socket.user.id, vote);
     });
 
+
     // --- USER-SPECIFIC & MISC LISTENERS ---
 
     socket.on("requestUserSync", async () => {
@@ -189,7 +190,6 @@ io.on("connection", (socket) => {
                 description: 'Mercy token requested by user'
             });
             
-            // --- MODIFICATION: Fetch the user's new profile and push it to the client ---
             const userQuery = "SELECT id, username, email, created_at, wins, losses, washes, is_admin FROM users WHERE id = $1";
             const userResult = await pool.query(userQuery, [socket.user.id]);
             const updatedUser = userResult.rows[0];
@@ -198,9 +198,8 @@ io.on("connection", (socket) => {
                 const updatedTokenQuery = "SELECT SUM(amount) AS current_tokens FROM transactions WHERE user_id = $1";
                 const updatedTokenResult = await pool.query(updatedTokenQuery, [socket.user.id]);
                 updatedUser.tokens = parseFloat(updatedTokenResult.rows[0]?.current_tokens || 0).toFixed(2);
-                socket.emit("updateUser", updatedUser); // This sends the complete, fresh user object
+                socket.emit("updateUser", updatedUser);
             }
-            // --- END MODIFICATION ---
 
             socket.emit("notification", { message: "1 free token has been added to your account!" });
 
@@ -209,8 +208,24 @@ io.on("connection", (socket) => {
         }
     });
 
-    socket.on("disconnect", () => {
+    socket.on("disconnect", async () => { // --- MODIFIED: Mark as async ---
         console.log(`Socket disconnected: ${socket.user.username} (ID: ${socket.user.id}, Socket: ${socket.id})`);
+        
+        // --- NEW: Announce logout/disconnect to the lobby chat ---
+        try {
+            const logoutMsgQuery = `
+                INSERT INTO lobby_chat_messages (user_id, username, message)
+                VALUES ($1, $2, $3)
+                RETURNING id, username, message, created_at;
+            `;
+            const msgValues = [socket.user.id, 'System', `${socket.user.username} has logged out.`];
+            const { rows } = await pool.query(logoutMsgQuery, msgValues);
+            io.emit('new_lobby_message', rows[0]);
+        } catch (chatError) {
+            console.error("Failed to post logout message to chat:", chatError);
+        }
+        // --- END NEW ---
+        
         const tablePlayerIsOn = Object.values(state.getAllTables()).find(t => t.players[socket.user.id]);
         if (tablePlayerIsOn) {
             tablePlayerIsOn.disconnectPlayer(socket.user.id);
@@ -234,7 +249,8 @@ server.listen(PORT, async () => {
     console.log("✅ Database connection successful.");
     await createDbTables(pool);
     
-    const authRoutes = createAuthRoutes(pool, bcrypt, jwt);
+    // --- MODIFICATION: Pass 'io' to the auth routes ---
+    const authRoutes = createAuthRoutes(pool, bcrypt, jwt, io);
     app.use('/api/auth', authRoutes);
 
     const leaderboardRoutes = createLeaderboardRoutes(pool);
