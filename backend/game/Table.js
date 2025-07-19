@@ -6,14 +6,7 @@ const BotPlayer = require('./BotPlayer');
 const transactionManager = require('../db/transactionManager');
 const { shuffle } = require('../utils/shuffle');
 
-// --- MODIFIED --- Expanded the list of predefined bot names.
-const BOT_NAMES = [
-    "Michael Jr.", "George Charles Watts Sr.", "Verl Fayette Sr.", "George",
-    "Courtney", "Verl Fayette Jr.", "Bob Lynn", "Wendell Taylor",
-    "Dutch Woolstenhulme", "Ken Woolstenhulme", "Alfred", "Joe Colete",
-    "Steve Richins", "Cliff Horning", "Mike Horning", "Jansen Richins",
-    "Steve Knight", "Samson Clyde", "Two-bits", "Blaze", "Jay & Deb"
-];
+const BOT_NAMES = ["Mike Knight", "Grandma Joe", "Grampa Blane", "Kimba", "Courtney Sr.", "Cliff"];
 
 class Table {
     constructor(tableId, theme, tableName, io, pool, emitLobbyUpdateCallback) {
@@ -26,7 +19,7 @@ class Table {
         this.serverVersion = SERVER_VERSION;
         this.state = "Waiting for Players";
         this.players = {};
-        this.playerOrderActive = []; // --- MODIFIED --- Will now store user IDs instead of names.
+        this.playerOrderActive = [];
         this.scores = {};
         this.gameStarted = false;
         this.gameId = null;
@@ -107,16 +100,15 @@ class Table {
     }
 
     addBotPlayer() {
-        // --- MODIFIED --- Complete overhaul of bot naming and selection logic.
         const currentPlayers = Object.values(this.players).filter(p => !p.isSpectator);
-        if (currentPlayers.length >= 4) return; // Table is full
+        if (currentPlayers.length >= 4) return;
 
         const currentBotNames = new Set(currentPlayers.filter(p => p.isBot).map(p => p.playerName));
         const availableNames = BOT_NAMES.filter(name => !currentBotNames.has(name));
 
         if (availableNames.length === 0) {
             console.log(`[${this.tableId}] No available bot names to add.`);
-            return; // No more unique named bots to add
+            return;
         }
 
         const botName = availableNames[Math.floor(Math.random() * availableNames.length)];
@@ -333,7 +325,6 @@ class Table {
         
         const isLeading = this.currentTrickCards.length === 0;
         const playedSuit = gameLogic.getSuit(card);
-        // --- MODIFICATION: Added logging and error emissions for all rule checks ---
         if (isLeading) {
             if (playedSuit === this.trumpSuit && !this.trumpBroken && !hand.every(c => gameLogic.getSuit(c) === this.trumpSuit)) {
                 const msg = "Cannot lead trump until it is broken.";
@@ -731,24 +722,7 @@ class Table {
             });
         }
         await this._syncPlayerTokens(Object.keys(this.players));
-        
-        // --- MODIFICATION: Add bidWinnerInfo and playerOrderActive to the summary object ---
-        const playerOrderActiveNames = this.playerOrderActive.map(id => this.players[id]?.playerName).filter(Boolean);
-        this.roundSummary = { 
-            ...roundData, // Includes points, message, etc.
-            finalScores: { ...this.scores }, 
-            isGameOver, 
-            gameWinner: gameWinnerName, 
-            dealerOfRoundId: this.dealer, 
-            widowForReveal: roundData.widowForReveal, 
-            insuranceDealWasMade: this.insurance.dealExecuted, 
-            insuranceDetails: this.insurance.dealExecuted ? this.insurance.executedDetails : null, 
-            insuranceHindsight: roundData.insuranceHindsight, 
-            allTricks: this.capturedTricks, 
-            playerTokens: this.playerTokens,
-            bidWinnerInfo: { ...this.bidWinnerInfo }, // Snapshot of the winner info
-            playerOrderActive: playerOrderActiveNames, // Snapshot of the player order (names)
-        };
+        this.roundSummary = { message: finalOutcomeMessage, finalScores: { ...this.scores }, isGameOver, gameWinner: gameWinnerName, dealerOfRoundId: this.dealer, widowForReveal: roundData.widowForReveal, insuranceDealWasMade: this.insurance.dealExecuted, insuranceDetails: this.insurance.dealExecuted ? this.insurance.executedDetails : null, insuranceHindsight: roundData.insuranceHindsight, allTricks: this.capturedTricks, playerTokens: this.playerTokens };
         this.state = isGameOver ? "Game Over" : "Awaiting Next Round Trigger";
         this._emitUpdate();
     }
@@ -822,6 +796,15 @@ class Table {
                 return;
             }
 
+            if (this.state === 'Awaiting Frog Upgrade Decision' && this.biddingTurnPlayerId === bot.userId) {
+                let delay = isCourtney ? standardDelay * 2 : standardDelay;
+                this.pendingBotAction = setTimeout(() => { 
+                    this.pendingBotAction = null; 
+                    this.placeBid(bot.userId, "Pass"); 
+                }, delay);
+                return;
+            }
+
             if (this.state === 'Bidding Phase' && this.biddingTurnPlayerId === bot.userId) {
                 let delay = isCourtney ? standardDelay * 2 : standardDelay;
                 this.pendingBotAction = setTimeout(() => { this.pendingBotAction = null; bot.makeBid(); }, delay);
@@ -851,15 +834,14 @@ class Table {
     
     _initializeNewRoundState() {
         this.hands = {}; this.widow = []; this.originalDealtWidow = [];
-        this.biddingTurnPlayerId = null; // --- MODIFIED ---
+        this.biddingTurnPlayerId = null;
         this.currentHighestBidDetails = null;
-        this.playersWhoPassedThisRound = []; // --- MODIFIED --- Will store user IDs
+        this.playersWhoPassedThisRound = [];
         this.bidWinnerInfo = null; this.trumpSuit = null; this.trumpBroken = false; this.originalFrogBidderId = null; this.soloBidMadeAfterFrog = false; this.revealedWidowForFrog = []; this.widowDiscardsForFrogBidder = [];
-        this.trickTurnPlayerId = null; // --- MODIFIED ---
-        this.trickLeaderId = null; // --- MODIFIED ---
+        this.trickTurnPlayerId = null;
+        this.trickLeaderId = null;
         this.currentTrickCards = []; this.leadSuitCurrentTrick = null; this.lastCompletedTrick = null; this.tricksPlayedCount = 0; this.capturedTricks = {}; this.roundSummary = null; this.insurance = this._getInitialInsuranceState(); this.forfeiture = this._getInitialForfeitureState(); this.drawRequest = this._getInitialDrawRequestState();
         
-        // This logic remains correct as it uses player names as keys
         Object.values(this.players).forEach(p => {
             if (p.playerName && this.scores[p.playerName] !== undefined) {
                 this.capturedTricks[p.playerName] = [];

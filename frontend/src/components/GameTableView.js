@@ -150,8 +150,6 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
         gameStateRef.current = state;
     }, [currentTableState, selfPlayerName, isSpectator, playSound]);
     
-    // --- MODIFICATION: Removed the unused isIos function and its corresponding useEffect ---
-
     if (!currentTableState) {
         return <div>Loading table...</div>;
     }
