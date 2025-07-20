@@ -442,6 +442,9 @@
 
 button.card-display {
     cursor: pointer;
+    align-items: flex-start !important;
+    justify-content: flex-start !important;
+    text-align: left !important;
 }
 
 button.card-display:disabled {
