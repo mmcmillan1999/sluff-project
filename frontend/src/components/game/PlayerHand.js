@@ -96,47 +96,45 @@ const PlayerHand = ({
     const isLeading = currentTrickCards.length === 0;
     const legalMoves = getLegalMoves(myHand, isLeading, leadSuitCurrentTrick, trumpSuit, trumpBroken);
 
-    // --- NEW DYNAMIC SPACING LOGIC ---
-    const cardWidth = 65; // pixels
-    const handAreaWidth = windowWidth * 0.9; // Use 90% of screen width
+    const cardWidth = 65;
+    const handAreaWidth = windowWidth * 0.95; // Use 95% of screen width for more space
     const N = myHandToDisplay.length;
 
-    const legalCardCount = legalMoves.length;
+    const legalCardCount = isMyTurnToPlay ? legalMoves.length : N; // If not my turn, all cards are "legal" visually
     const illegalCardCount = N - legalCardCount;
     
-    // Define overlap amounts
-    const legalOverlap = 25;  // Legal cards are less overlapped
-    const illegalOverlap = 50; // Illegal cards are more overlapped
+    const legalOverlap = 25;
+    const illegalOverlap = 55; // Increase overlap for illegal cards
 
-    const totalWidth = (legalCardCount * (cardWidth - legalOverlap)) + (illegalCardCount * (cardWidth - illegalOverlap)) + legalOverlap;
+    const totalWidth = (legalCardCount * (cardWidth - legalOverlap)) + (illegalCardCount * (cardWidth - illegalOverlap)) + (legalCardCount > 0 ? legalOverlap : illegalOverlap);
 
     let finalOverlapLegal = legalOverlap;
     let finalOverlapIllegal = illegalOverlap;
 
     if (totalWidth > handAreaWidth) {
-        // If the hand is too wide even with default overlaps, calculate a new dynamic overlap
         const overflow = totalWidth - handAreaWidth;
-        const perCardReduction = overflow / (N > 1 ? N-1 : 1);
+        const perCardReduction = overflow / (N > 1 ? N - 1 : 1);
         finalOverlapLegal = legalOverlap + perCardReduction;
         finalOverlapIllegal = illegalOverlap + perCardReduction;
     }
-    // --- END NEW LOGIC ---
 
     return (
         <div className="player-hand-container">
             <div className={`player-hand-cards ${isMyTurnToPlay ? 'my-turn' : ''}`}>
                 {myHandToDisplay.map((card, index) => {
-                    const isLegal = isMyTurnToPlay && legalMoves.includes(card);
-                    const overlapAmount = isLegal ? finalOverlapLegal : finalOverlapIllegal;
+                    // --- THIS IS THE FIX for shading ---
+                    // A card is only illegal if it's your turn AND it's not in the legal moves list.
+                    const isIllegal = isMyTurnToPlay && !legalMoves.includes(card);
+                    const overlapAmount = isIllegal ? finalOverlapIllegal : finalOverlapLegal;
 
                     return (
                         <div key={card} className="player-hand-card-wrapper" style={{ marginLeft: index > 0 ? `-${overlapAmount}px` : 0 }}>
                             {renderCard(card, {
                                 isButton: true,
                                 onClick: () => handlePlayCard(card),
-                                disabled: !isLegal,
+                                disabled: !isMyTurnToPlay || isIllegal,
                                 large: true,
-                                className: !isLegal ? 'illegal-move' : ''
+                                className: isIllegal ? 'illegal-move' : ''
                             })}
                         </div>
                     );
