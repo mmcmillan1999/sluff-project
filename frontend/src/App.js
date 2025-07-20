@@ -11,7 +11,7 @@ import AdminView from "./components/AdminView.js";
 import "./components/AdminView.css";
 import { useSounds } from "./hooks/useSounds.js";
 
-const SERVER_URL = "https://sluff-backend.onrender.com";
+const SERVER_URL = process.env.REACT_APP_SERVER_URL || "https://sluff-backend.onrender.com";
 const socket = io(SERVER_URL, {
     autoConnect: false,
     reconnectionAttempts: 5,
