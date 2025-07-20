@@ -1,3 +1,5 @@
+// frontend/src/components/LobbyView.js
+
 import React, { useState, useEffect } from 'react';
 import './LobbyView.css';
 import Bulletin from './Bulletin';
@@ -12,7 +14,6 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
     const [showMenu, setShowMenu] = useState(false);
     const [tablesExpanded, setTablesExpanded] = useState(true);
     const [bulletinExpanded, setBulletinExpanded] = useState(true);
-    const [chatLogExpanded, setChatLogExpanded] = useState(true);
     const [chatMessages, setChatMessages] = useState([]);
 
     useEffect(() => {
@@ -103,8 +104,9 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
 
             <main className="lobby-main">
                 <div className="collapsible-section">
+                    {/* --- THIS IS THE VISUAL CHANGE --- */}
                     <h3 className="section-header" onClick={() => setTablesExpanded(!tablesExpanded)}>
-                        Game Tables {tablesExpanded ? <>â†“</> : <>â‡’</>}
+                        Game Tables {tablesExpanded ? '▼' : '►'}
                     </h3>
                     {tablesExpanded && (
                         <div className="table-grid">
@@ -122,23 +124,20 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
                 </div>
                 
                 <div className="collapsible-section">
+                     {/* --- THIS IS THE VISUAL CHANGE --- */}
                     <h3 className="section-header" onClick={() => setBulletinExpanded(!bulletinExpanded)}>
-                        Bulletin {bulletinExpanded ? <>â†“</> : <>â‡’</>}
+                        Bulletin {bulletinExpanded ? '▼' : '►'}
                     </h3>
                     {bulletinExpanded && <Bulletin />}
                 </div>
             </main>
 
             <LobbyChat
-                chatLogExpanded={chatLogExpanded}
-                onToggleChatLog={() => setChatLogExpanded(prev => !prev)}
                 socket={socket}
                 messages={chatMessages}
             />
             
-            {/* --- NEW: Added a footer for server info --- */}
             <footer className="lobby-footer">
-                <span>Server URL: {process.env.REACT_APP_SERVER_URL}</span>
                 <span>Version: {serverVersion}</span>
             </footer>
         </div>
