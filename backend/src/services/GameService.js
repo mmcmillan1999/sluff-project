@@ -52,52 +52,31 @@ class GameService {
 
     // --- Action Handlers (called by socket events) ---
     async playCard(tableId, userId, card) {
-        const engine = this.getEngineById(tableId);
-        if (!engine) return;
-        const result = engine.playCard(userId, card);
-        await this._executeEffects(tableId, result.effects);
+        await this._performAction(tableId, (engine) => engine.playCard(userId, card));
     }
     
     async startGame(tableId, requestingUserId) {
-        const engine = this.getEngineById(tableId);
-        if (!engine) return;
-        const result = engine.startGame(requestingUserId);
-        await this._executeEffects(tableId, result.effects);
+        await this._performAction(tableId, (engine) => engine.startGame(requestingUserId));
     }
     
     async dealCards(tableId, requestingUserId) {
-        const engine = this.getEngineById(tableId);
-        if (!engine) return;
-        const result = engine.dealCards(requestingUserId);
-        await this._executeEffects(tableId, result.effects);
+        await this._performAction(tableId, (engine) => engine.dealCards(requestingUserId));
     }
 
     async placeBid(tableId, userId, bid) {
-        const engine = this.getEngineById(tableId);
-        if (!engine) return;
-        const result = engine.placeBid(userId, bid);
-        await this._executeEffects(tableId, result.effects);
+        await this._performAction(tableId, (engine) => engine.placeBid(userId, bid));
     }
 
     async chooseTrump(tableId, userId, suit) {
-        const engine = this.getEngineById(tableId);
-        if (!engine) return;
-        const result = engine.chooseTrump(userId, suit);
-        await this._executeEffects(tableId, result.effects);
+        await this._performAction(tableId, (engine) => engine.chooseTrump(userId, suit));
     }
 
     async submitFrogDiscards(tableId, userId, discards) {
-        const engine = this.getEngineById(tableId);
-        if (!engine) return;
-        const result = engine.submitFrogDiscards(userId, discards);
-        await this._executeEffects(tableId, result.effects);
+        await this._performAction(tableId, (engine) => engine.submitFrogDiscards(userId, discards));
     }
 
     async requestNextRound(tableId, userId) {
-        const engine = this.getEngineById(tableId);
-        if (!engine) return;
-        const result = engine.requestNextRound(userId);
-        await this._executeEffects(tableId, result.effects);
+        await this._performAction(tableId, (engine) => engine.requestNextRound(userId));
     }
     
     async handleGameOver(payload) {
@@ -158,6 +137,21 @@ class GameService {
         this.io.emit('lobbyState', this.getLobbyState());
     }
 
+    async _performAction(tableId, actionFn) {
+        const engine = this.getEngineById(tableId);
+        if (!engine) return;
+
+        if (engine.pendingBotAction) {
+            clearTimeout(engine.pendingBotAction);
+            engine.pendingBotAction = null;
+        }
+
+        const result = actionFn(engine);
+        if (result && result.effects) {
+            await this._executeEffects(tableId, result.effects);
+        }
+    }
+    
     async _executeEffects(tableId, effects = []) {
         if (!effects || effects.length === 0) return;
         const engine = this.getEngineById(tableId);

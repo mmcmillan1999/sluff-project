@@ -11,7 +11,11 @@ const biddingHandler = require('./handlers/biddingHandler');
 const BOT_NAMES = ["Mike Knight", "Grandma Joe", "Grampa Blane", "Kimba", "Courtney Sr.", "Cliff"];
 
 class GameEngine {
-    constructor(tableId, theme, tableName) {
+    // --- THIS IS THE FIX ---
+    constructor(tableId, theme, tableName, emitLobbyUpdateCallback) {
+        this.emitLobbyUpdateCallback = emitLobbyUpdateCallback; // This parameter was missing
+        // --- END FIX ---
+        
         this.tableId = tableId;
         this.tableName = tableName;
         this.theme = theme;
