@@ -207,4 +207,34 @@
     gap: 10px;
 }
 
+.card-display {
+    padding: 8px;
+    border: 1px solid #777;
+    border-radius: 6px;
+    text-align: center;
+    font-weight: bold;
+    display: inline-flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    cursor: default;
+}
+
+.card-display.illegal-move {
+    filter: grayscale(80%) brightness(0.8);
+    cursor: not-allowed;
+}
+
+button.card-display {
+    cursor: pointer;
+}
+
+button.card-display:disabled {
+    cursor: not-allowed;
+}
+
+.card-symbol {
+    font-size: 125%;
+}
 /* frontend/src/components/LeaderboardView.css */

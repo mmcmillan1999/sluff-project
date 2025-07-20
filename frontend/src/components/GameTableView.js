@@ -19,7 +19,7 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
     const [showRoundSummaryModal, setShowRoundSummaryModal] = useState(false);
     const [showInsurancePrompt, setShowInsurancePrompt] = useState(false);
     const [showGameMenu, setShowGameMenu] = useState(false);
-    const [showIosPrompt, setShowIosPrompt] = useState(false);
+    const [showIosPwaPrompt, setShowIosPwaPrompt] = useState(false);
     const [showDrawVote, setShowDrawVote] = useState(false);
     const [chatOpen, setChatOpen] = useState(false);
     const [unreadChat, setUnreadChat] = useState(0);
@@ -160,8 +160,10 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
         setChatOpen(false);
     };
 
-    const renderCard = (cardString, { isButton = false, onClick = null, disabled = false, isSelected = false, small = false, large = false, isFaceDown = false, style: customStyle = {} } = {}) => {
-        const width = large ? '65px' : (small ? '30px' : '45px');
+    const renderCard = (cardString, options = {}) => {
+        const { isButton = false, onClick = null, disabled = false, isSelected = false, small = false, large = false, isFaceDown = false, style: customStyle = {}, className = '' } = options;
+
+        const width = large ? '70px' : (small ? '37.5px' : '45px');
         const height = large ? '90px' : (small ? '50px' : '70px');
 
         if (isFaceDown) {
@@ -174,19 +176,7 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
 
         if (!cardString) {
             return (
-                <div 
-                    className="card-placeholder" 
-                    style={{ 
-                        width, 
-                        height, 
-                        border: '2px dashed rgba(0, 0, 0, 0.2)', 
-                        margin: '3px', 
-                        display: 'inline-block', 
-                        borderRadius: '4px', 
-                        backgroundColor: 'transparent',
-                        boxSizing: 'border-box' 
-                    }}>
-                </div>
+                <div className="card-placeholder" style={{ width, height, margin: '3px', ...customStyle }}></div>
             );
         }
         
@@ -194,16 +184,24 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
         const suit = cardString.slice(-1);
         const symbol = SUIT_SYMBOLS[suit] || suit;
         const color = SUIT_COLORS[suit] || 'black';
-        const backgroundColor = SUIT_BACKGROUNDS[suit] || 'white';
-        let borderStyle = isSelected ? '3px solid royalblue' : '1px solid #777';
-        const baseFontSize = large ? '1.3em' : (small ? '0.8em' : '1em');
-        const style = { padding: large ? '10px' : (small ? '4px' : '8px'), border: borderStyle, borderRadius: '4px', backgroundColor: isSelected ? 'lightblue' : backgroundColor, color: color, margin: '3px', minWidth: width, height, textAlign: 'center', fontWeight: 'bold', fontSize: baseFontSize, cursor: isButton && !disabled ? 'pointer' : 'default', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', ...customStyle };
+        const backgroundColor = isSelected ? 'lightblue' : (SUIT_BACKGROUNDS[suit] || 'white');
 
-        const symbolStyle = { fontSize: '125%' };
-        const cardContent = <>{rank !== '?' && rank}<span style={symbolStyle}>{symbol}</span></>;
+        const cardClasses = ['card-display', className].filter(Boolean).join(' ');
+        const cardContent = <>{rank !== '?' && rank}<span className="card-symbol">{symbol}</span></>;
 
-        if (isButton) return (<button key={cardString} onClick={onClick} disabled={disabled} style={style}>{cardContent}</button>);
-        return (<span key={cardString} style={{ ...style, display: 'inline-flex' }}>{cardContent}</span>);
+        const style = { 
+            backgroundColor, 
+            color, 
+            minWidth: width, 
+            height,
+            fontSize: large ? '1.3em' : (small ? '0.8em' : '1em'),
+            ...customStyle
+        };
+        
+        if (isButton) {
+            return (<button onClick={onClick} disabled={disabled} style={style} className={cardClasses}>{cardContent}</button>);
+        }
+        return (<span style={style} className={cardClasses}>{cardContent}</span>);
     };
 
     const handleForfeit = () => {
@@ -253,7 +251,7 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
                 onVote={(vote) => emitEvent("submitDrawVote", { vote })}
             />
 
-            <IosPwaPrompt show={showIosPrompt} onClose={() => setShowIosPrompt(false)} />
+            <IosPwaPrompt show={showIosPrompt} onClose={() => setShowIosPwaPrompt(false)} />
 
             <RoundSummaryModal
                 summaryData={currentTableState.roundSummary}

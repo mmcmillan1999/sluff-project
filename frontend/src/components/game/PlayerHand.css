@@ -1,0 +1,42 @@
+/* frontend/src/components/game/PlayerHand.css */
+
+@keyframes pulsing-glow {
+    0% { box-shadow: 0 0 6px #3b82f6; }
+    50% { box-shadow: 0 0 24px #60a5fa; }
+    100% { box-shadow: 0 0 6px #3b82f6; }
+}
+
+.player-hand-container {
+    flex-grow: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 5px 0;
+    width: 100%;
+}
+
+.player-hand-cards {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    padding: 10px;
+    max-width: 95vw;
+    margin: 0 auto;
+    transition: all 0.3s ease;
+}
+
+.player-hand-cards.my-turn {
+    animation: pulsing-glow 2s infinite;
+    border-radius: 12px;
+    background-color: rgba(59, 130, 246, 0.1);
+}
+
+.player-hand-card-wrapper {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.player-hand-card-wrapper:hover {
+    transform: translateY(-12px);
+    z-index: 100; /* Ensure the hovered card is on top */
+}

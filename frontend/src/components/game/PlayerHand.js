@@ -1,7 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { RANKS_ORDER, SUIT_SORT_ORDER } from '../../constants';
+// frontend/src/components/game/PlayerHand.js
 
-// Helper function for card sorting
+import React, { useState, useEffect, useCallback } from 'react';
+import './PlayerHand.css';
+import { RANKS_ORDER, SUIT_SORT_ORDER } from '../../constants';
+import { getLegalMoves } from '../../utils/legalMoves'; // We'll create this new utility file
+
 const getSuitLocal = (cardStr) => cardStr.slice(-1);
 const getRankLocal = (cardStr) => cardStr.slice(0, -1);
 
@@ -25,9 +28,16 @@ const PlayerHand = ({
     renderCard
 }) => {
     const [selectedDiscards, setSelectedDiscards] = useState([]);
+    const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
-    const { state, hands, bidWinnerInfo, revealedWidowForFrog } = currentTableState;
+    const { state, hands, bidWinnerInfo, revealedWidowForFrog, trickTurnPlayerName, currentTrickCards, leadSuitCurrentTrick, trumpSuit, trumpBroken } = currentTableState;
     const myHand = hands[selfPlayerName] || [];
+
+    useEffect(() => {
+        const handleResize = () => setWindowWidth(window.innerWidth);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     useEffect(() => {
         if (state !== "Frog Widow Exchange") {
@@ -45,11 +55,11 @@ const PlayerHand = ({
         emitEvent("playCard", { card });
     }, [emitEvent]);
 
-
     if (state === "Frog Widow Exchange" && bidWinnerInfo?.playerName === selfPlayerName) {
+        // Frog discard logic remains the same...
         return (
             <div style={{ backgroundColor: 'rgba(0,0,0,0.7)', padding: '15px', borderRadius: '10px', width: '100%', textAlign: 'center' }}>
-                <p style={{color: 'white'}}>You took the widow. Select 3 cards from your hand to discard:</p>
+                <p style={{color: 'white'}}>You took the widow. Select 3 cards to discard:</p>
                 <div style={{ display: 'flex', justifyContent: 'center', gap: '5px', marginBottom: '15px', color: 'white' }}>
                     <span>Revealed Widow:</span>
                     {(revealedWidowForFrog || []).map((card, index) => renderCard(card, { key: `widow-${index}` }))}
@@ -82,19 +92,41 @@ const PlayerHand = ({
     }
 
     const myHandToDisplay = sortHandBySuit(myHand);
-    const isMyTurnToPlay = state === "Playing Phase" && currentTableState.trickTurnPlayerName === selfPlayerName;
+    const isMyTurnToPlay = state === "Playing Phase" && trickTurnPlayerName === selfPlayerName;
+
+    // --- NEW: LEGAL MOVES & DYNAMIC SPACING LOGIC ---
+    const isLeading = currentTrickCards.length === 0;
+    const legalMoves = getLegalMoves(myHand, isLeading, leadSuitCurrentTrick, trumpSuit, trumpBroken);
+
+    const cardWidth = 70; // Base width of a card in pixels
+    const handAreaWidth = windowWidth * 0.85; // Use 85% of screen width for the hand
+    const N = myHandToDisplay.length;
+    let overlap = 0;
+    if (N > 1) {
+        const totalCardWidth = N * cardWidth;
+        if (totalCardWidth > handAreaWidth) {
+            overlap = (totalCardWidth - handAreaWidth) / (N - 1);
+        }
+    }
+    // --- END NEW LOGIC ---
 
     return (
-        <div style={{ flexGrow: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-            {/* --- MODIFICATION: Added a className for responsive styling --- */}
-            <div className="player-hand-cards">
-                {myHandToDisplay.map((card, index) => renderCard(card, {
-                    key: card,
-                    isButton: true,
-                    onClick: () => handlePlayCard(card),
-                    disabled: !isMyTurnToPlay,
-                    style: { animation: `fadeIn 0.5s ease-out forwards`, animationDelay: `${index * 0.05}s`, opacity: 0 }
-                }))}
+        <div className="player-hand-container">
+            <div className={`player-hand-cards ${isMyTurnToPlay ? 'my-turn' : ''}`}>
+                {myHandToDisplay.map((card, index) => {
+                    const isLegal = legalMoves.includes(card);
+                    return (
+                        <div key={card} className="player-hand-card-wrapper" style={{ marginLeft: index > 0 ? `-${overlap}px` : 0 }}>
+                            {renderCard(card, {
+                                isButton: true,
+                                onClick: () => handlePlayCard(card),
+                                disabled: isMyTurnToPlay ? !isLegal : true, // Disable if not your turn OR not a legal move
+                                large: true,
+                                className: isMyTurnToPlay && !isLegal ? 'illegal-move' : '' // Pass className for styling illegal cards
+                            })}
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );
