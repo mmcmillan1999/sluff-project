@@ -19,7 +19,7 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
     const [showRoundSummaryModal, setShowRoundSummaryModal] = useState(false);
     const [showInsurancePrompt, setShowInsurancePrompt] = useState(false);
     const [showGameMenu, setShowGameMenu] = useState(false);
-    const [showIosPwaPrompt, setShowIosPwaPrompt] = useState(false);
+    const [showIosPwaPrompt, setShowIosPwaPrompt] = useState(false); // This is the corrected line
     const [showDrawVote, setShowDrawVote] = useState(false);
     const [chatOpen, setChatOpen] = useState(false);
     const [unreadChat, setUnreadChat] = useState(0);
@@ -251,7 +251,7 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
                 onVote={(vote) => emitEvent("submitDrawVote", { vote })}
             />
 
-            <IosPwaPrompt show={showIosPrompt} onClose={() => setShowIosPwaPrompt(false)} />
+            <IosPwaPrompt show={showIosPwaPrompt} onClose={() => setShowIosPwaPrompt(false)} />
 
             <RoundSummaryModal
                 summaryData={currentTableState.roundSummary}
