@@ -116,14 +116,12 @@ class GameService {
         return { gameWinnerName };
     }
 
-    // --- SERVER RESET METHOD ---
     resetAllEngines() {
         console.log("[ADMIN] Resetting all game engines to initial state.");
-        this.engines = {}; // Throw away the old engines
-        this._initializeEngines(); // Create a fresh set
+        this.engines = {};
+        this._initializeEngines();
         this.io.emit('lobbyState', this.getLobbyState());
     }
-    // --- END RESET METHOD ---
 
     async _executeEffects(tableId, effects = []) {
         if (!effects || effects.length === 0) return;
@@ -133,6 +131,7 @@ class GameService {
             switch (effect.type) {
                 case 'BROADCAST_STATE':
                     this.io.to(tableId).emit('gameState', engine.getStateForClient());
+                    this._triggerBots(tableId); // UNCOMMENTED
                     break;
                 case 'EMIT_TO_SOCKET':
                     this.io.to(effect.payload.socketId).emit(effect.payload.event, effect.payload.data);
@@ -182,7 +181,60 @@ class GameService {
     }
 
     _triggerBots(tableId) {
-        // Placeholder for future implementation
+        const engine = this.getEngineById(tableId);
+        if (!engine || engine.pendingBotAction) return;
+
+        for (const botId in engine.bots) {
+            const bot = engine.bots[botId];
+            
+            const isCourtney = bot.playerName === "Courtney Sr.";
+            const standardDelay = 1000;
+            const playDelay = 1200;
+            const roundEndDelay = 8000;
+
+            const makeMove = (actionFn) => {
+                const delay = 
+                    engine.state === 'Playing Phase' ? (isCourtney ? playDelay * 2 : playDelay) :
+                    engine.state === 'Awaiting Next Round Trigger' ? (isCourtney ? roundEndDelay * 2 : roundEndDelay) :
+                    (isCourtney ? standardDelay * 2 : standardDelay);
+
+                engine.pendingBotAction = setTimeout(() => {
+                    engine.pendingBotAction = null;
+                    actionFn();
+                    this.io.to(tableId).emit('gameState', engine.getStateForClient());
+                    this._triggerBots(tableId);
+                }, delay);
+            };
+
+            if (engine.state === 'Dealing Pending' && engine.dealer == bot.userId) {
+                makeMove(() => engine.dealCards(bot.userId));
+                return;
+            }
+            if (engine.state === 'Awaiting Next Round Trigger' && engine.roundSummary?.dealerOfRoundId == bot.userId) {
+                makeMove(() => engine.requestNextRound(bot.userId));
+                return;
+            }
+            if (engine.state === 'Awaiting Frog Upgrade Decision' && engine.biddingTurnPlayerId == bot.userId) {
+                makeMove(() => engine.placeBid(bot.userId, "Pass"));
+                return;
+            }
+            if (engine.state === 'Bidding Phase' && engine.biddingTurnPlayerId == bot.userId) {
+                makeMove(() => bot.makeBid());
+                return;
+            }
+            if (engine.state === 'Trump Selection' && engine.bidWinnerInfo?.userId == bot.userId && !engine.trumpSuit) {
+                makeMove(() => bot.chooseTrump());
+                return;
+            }
+            if (engine.state === 'Frog Widow Exchange' && engine.bidWinnerInfo?.userId == bot.userId && engine.widowDiscardsForFrogBidder.length === 0) {
+                makeMove(() => bot.submitFrogDiscards());
+                return;
+            }
+            if (engine.state === 'Playing Phase' && engine.trickTurnPlayerId == bot.userId) {
+                makeMove(() => bot.playCard());
+                return;
+            }
+        }
     }
 }
 
