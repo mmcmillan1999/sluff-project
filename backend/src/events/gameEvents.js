@@ -1,7 +1,7 @@
 // backend/src/events/gameEvents.js
 
 const jwt = require("jsonwebtoken");
-const transactionManager = require('../data/transactionManager'); // Needed for free token
+const transactionManager = require('../data/transactionManager');
 
 const registerGameHandlers = (io, gameService) => {
 
@@ -18,7 +18,6 @@ const registerGameHandlers = (io, gameService) => {
     io.on("connection", (socket) => {
         console.log(`Socket connected: ${socket.user.username} (ID: ${socket.user.id}, Socket: ${socket.id})`);
 
-        // --- RECONNECT LOGIC ---
         const engine = Object.values(gameService.getAllEngines()).find(e => e.players[socket.user.id]);
         if (engine && engine.players[socket.user.id]?.disconnected) {
             engine.reconnectPlayer(socket.user.id, socket);
@@ -27,13 +26,9 @@ const registerGameHandlers = (io, gameService) => {
         
         socket.emit("lobbyState", gameService.getLobbyState());
 
-        // --- SERVER-WIDE ADMIN EVENTS ---
-        socket.on("hardResetServer", async () => { // No longer needs secret
-            // Check if the user is an admin
+        socket.on("hardResetServer", async () => {
             if (socket.user.is_admin) {
-                // ADDED: Server log for initiation
                 console.log(`[ADMIN] Hard reset initiated by ${socket.user.username}.`);
-                
                 try {
                     const pool = gameService.pool;
                     const query = `INSERT INTO lobby_chat_messages (user_id, username, message) VALUES ($1, $2, $3)`;
@@ -42,25 +37,19 @@ const registerGameHandlers = (io, gameService) => {
                 } catch (error) {
                     console.error("Failed to post server reset message to chat:", error);
                 }
-                
                 gameService.resetAllEngines();
-                
                 socket.emit("notification", { message: "Server reset successfully initiated." });
                 setTimeout(() => {
                     io.emit('forceDisconnectAndReset', 'The server has been reset. Please log in again.');
                     io.disconnectSockets(true);
                 }, 500);
-                
             } else {
-                // ADDED: Server log for failed attempt
                 console.warn(`[SECURITY] FAILED hard reset attempt by non-admin user: ${socket.user.username}`);
                 return socket.emit("error", { message: "Admin privileges required." });
             }
         });
-        // --- END ADMIN EVENTS ---
-        
-        // --- GAME EVENT LISTENERS ---
-        socket.on("joinTable", async ({ tableId }) => {
+
+        socket.on("joinTable", ({ tableId }) => {
             const engineToJoin = gameService.getEngineById(tableId);
             if (!engineToJoin) return socket.emit("error", { message: "Table not found." });
 
@@ -73,11 +62,14 @@ const registerGameHandlers = (io, gameService) => {
             
             socket.join(tableId);
             engineToJoin.joinTable(socket.user, socket.id);
+            
+            socket.emit('joinedTable', { gameState: engineToJoin.getStateForClient() });
+            
             gameService.io.to(tableId).emit('gameState', engineToJoin.getStateForClient());
             gameService.io.emit('lobbyState', gameService.getLobbyState());
         });
 
-        socket.on("leaveTable", async ({ tableId }) => {
+        socket.on("leaveTable", ({ tableId }) => {
             const engineToLeave = gameService.getEngineById(tableId);
             if (engineToLeave) {
                 engineToLeave.leaveTable(socket.user.id);
@@ -164,7 +156,6 @@ const registerGameHandlers = (io, gameService) => {
             }
         });
 
-        // --- USER-SPECIFIC & MISC LISTENERS ---
         socket.on("requestUserSync", async () => {
             try {
                 const pool = gameService.pool;
