@@ -1,8 +1,6 @@
 // frontend/src/components/GameTableView.js
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-
 import './GameTableView.css';
-
 import PlayerHand from './game/PlayerHand';
 import InsuranceControls from './game/InsuranceControls';
 import RoundSummaryModal from './game/RoundSummaryModal';
@@ -13,7 +11,6 @@ import InsurancePrompt from './game/InsurancePrompt';
 import IosPwaPrompt from './game/IosPwaPrompt';
 import DrawVoteModal from './game/DrawVoteModal';
 import LobbyChat from './LobbyChat';
-
 import { getLobbyChatHistory } from '../services/api';
 import { SUITS_MAP, SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS } from '../constants';
 
@@ -42,7 +39,7 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
     const selfPlayerName = selfPlayerInTable?.playerName;
     
     useEffect(() => {
-        getLobbyChatHistory()
+        getLobbyChatHistory(50)
             .then(setChatMessages)
             .catch(err => {
                 console.error('Failed to load chat history:', err);

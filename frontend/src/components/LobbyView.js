@@ -5,7 +5,6 @@ import './LobbyView.css';
 import Bulletin from './Bulletin';
 import LobbyTableCard from './LobbyTableCard';
 import LobbyChat from './LobbyChat';
-
 import { getLobbyChatHistory } from '../services/api';
 
 const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowAdmin, errorMessage, emitEvent, socket }) => {
@@ -17,7 +16,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
     const [chatMessages, setChatMessages] = useState([]);
 
     useEffect(() => {
-        getLobbyChatHistory()
+        getLobbyChatHistory(50)
             .then(setChatMessages)
             .catch(err => {
                 console.error('Failed to load lobby chat history:', err);
