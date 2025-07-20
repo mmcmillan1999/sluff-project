@@ -205,7 +205,7 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
             cursor: isButton && !disabled ? 'pointer' : 'default',
             display: 'flex',
             flexDirection: 'column',
-            justifyContent: 'center',
+            justifyContent: 'flex-start',
             alignItems: 'flex-start',
             ...customStyle
         };
