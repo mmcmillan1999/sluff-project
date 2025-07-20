@@ -174,14 +174,16 @@ class GameService {
                 case 'UPDATE_LOBBY':
                     this.io.emit('lobbyState', this.getLobbyState());
                     break;
-                case 'START_TIMER':
-                    setTimeout(async () => {
+                case 'START_TIMER': {
+                    const timerFn = this.timerOverride || setTimeout;
+                    timerFn(async () => {
                         const followUpEffects = effect.payload.onTimeout(engine);
                         if (followUpEffects && followUpEffects.length > 0) {
                             await this._executeEffects(tableId, followUpEffects);
                         }
                     }, effect.payload.duration);
                     break;
+                }
                 case 'SYNC_PLAYER_TOKENS':
                     Object.values(engine.players).forEach(p => {
                         if (!p.isBot && p.socketId) {

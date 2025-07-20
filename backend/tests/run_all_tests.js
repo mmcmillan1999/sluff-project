@@ -1,25 +1,34 @@
 // backend/tests/run_all_tests.js
 
+// Import the actual test functions from their files
+const runBotTests = require('./bot.test.js');
+const runGameLogicTests = require('./gameLogic.unit.test.js');
+const runLegalMovesTests = require('./legalMoves.test.js');
+const runTableIntegrationTests = require('./Table.integration.test.js');
+
 async function run() {
     try {
-        console.log('--- Running All Backend Tests ---');
+        console.log('--- Running All Backend Unit & Integration Tests ---');
         
-        // We require and immediately call the test functions.
-        // The 'require' statement executes the file.
-        require('./bot.test.js');
-        require('./gameLogic.unit.test.js');
-        require('./legalMoves.test.js');
-        // Note: auth.test.js and api.test.js require a running server,
-        // so we don't include them in this automated unit/integration test suite.
+        // --- UNIT TESTS ---
+        console.log('\n[1/4] Running BotPlayer.js tests...');
+        runBotTests();
         
-        // The Table.integration.test.js is more complex and best run on its own for now.
-        // console.log('\nTo run the full integration test, use: node tests/Table.integration.test.js');
+        console.log('\n[2/4] Running gameLogic.unit.test.js tests...');
+        runGameLogicTests();
+
+        console.log('\n[3/4] Running legalMoves.test.js tests...');
+        runLegalMovesTests();
+        
+        // --- INTEGRATION TESTS ---
+        console.log('\n[4/4] Running Table.integration.test.js...');
+        await runTableIntegrationTests();
 
         console.log('\n--- ✅ All applicable tests passed! ---');
         process.exit(0); // Exit with success code
     } catch (error) {
         console.error('\n--- ❌ A test failed! ---');
-        console.error(error);
+        // The individual test files will log their own detailed errors.
         process.exit(1); // Exit with failure code
     }
 }

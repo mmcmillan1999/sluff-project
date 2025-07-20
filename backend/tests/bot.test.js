@@ -10,7 +10,6 @@ class MockEngine {
         this.hands = { 'TestBot': hand };
         this.currentHighestBidDetails = null;
     }
-    // The mock engine doesn't need any methods because the new BotPlayer is pure.
 }
 
 function runBotTests() {
@@ -53,4 +52,8 @@ function runBotTests() {
     console.log('  ✔ All BotPlayer.js tests passed!');
 }
 
-runBotTests();
+if (require.main === module) {
+    runBotTests();
+}
+
+module.exports = runBotTests;
