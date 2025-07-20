@@ -52,14 +52,12 @@ const registerGameHandlers = (io, gameService) => {
         socket.on("joinTable", ({ tableId }) => {
             const engineToJoin = gameService.getEngineById(tableId);
             if (!engineToJoin) return socket.emit("error", { message: "Table not found." });
-
             const previousEngine = Object.values(gameService.getAllEngines()).find(e => e.players[socket.user.id] && e.tableId !== tableId);
             if (previousEngine) {
                 previousEngine.leaveTable(socket.user.id);
                 socket.leave(previousEngine.tableId);
                 gameService.io.to(previousEngine.tableId).emit('gameState', previousEngine.getStateForClient());
             }
-            
             socket.join(tableId);
             engineToJoin.joinTable(socket.user, socket.id);
             socket.emit('joinedTable', { gameState: engineToJoin.getStateForClient() });
@@ -72,10 +70,10 @@ const registerGameHandlers = (io, gameService) => {
             if (engineToLeave) {
                 engineToLeave.leaveTable(socket.user.id);
                 gameService.io.to(tableId).emit('gameState', engineToLeave.getStateForClient());
+                gameService.io.emit('lobbyState', gameService.getLobbyState());
             }
             socket.leave(tableId);
             socket.emit("lobbyState", gameService.getLobbyState());
-            gameService.io.emit('lobbyState', gameService.getLobbyState());
         });
 
         socket.on("addBot", ({ tableId, name }) => {
@@ -87,15 +85,16 @@ const registerGameHandlers = (io, gameService) => {
             }
         });
         
+        // --- ALL HANDLERS NOW POINT TO THE SERVICE ---
         socket.on("startGame", ({tableId}) => gameService.startGame(tableId, socket.user.id));
         socket.on("playCard", ({tableId, card}) => gameService.playCard(tableId, socket.user.id, card));
-        
-        // --- THIS IS THE CORRECTED HANDLER ---
-        socket.on("dealCards", ({tableId}) => {
-            gameService.dealCards(tableId, socket.user.id);
-        });
-        // --- END CORRECTION ---
+        socket.on("dealCards", ({tableId}) => gameService.dealCards(tableId, socket.user.id));
+        socket.on("placeBid", ({tableId, bid}) => gameService.placeBid(tableId, socket.user.id, bid));
+        socket.on("chooseTrump", ({tableId, suit}) => gameService.chooseTrump(tableId, socket.user.id, suit));
+        socket.on("submitFrogDiscards", ({tableId, discards}) => gameService.submitFrogDiscards(tableId, socket.user.id, discards));
+        socket.on("requestNextRound", ({tableId}) => gameService.requestNextRound(tableId, socket.user.id));
 
+        // --- NON-EFFECT HANDLERS (for now) ---
         const createDirectHandler = (methodName) => (payload) => {
             const { tableId, ...args } = payload;
             const engine = gameService.getEngineById(tableId);
@@ -105,61 +104,20 @@ const registerGameHandlers = (io, gameService) => {
                 gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
             }
         };
-        
-        socket.on("placeBid", ({tableId, bid}) => {
-            const engine = gameService.getEngineById(tableId);
-            if (engine) {
-                engine.placeBid(socket.user.id, bid);
-                gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
-            }
-        });
-        socket.on("chooseTrump", ({tableId, suit}) => {
-            const engine = gameService.getEngineById(tableId);
-            if (engine) {
-                engine.chooseTrump(socket.user.id, suit);
-                gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
-            }
-        });
-        socket.on("submitFrogDiscards", ({tableId, discards}) => {
-            const engine = gameService.getEngineById(tableId);
-            if (engine) {
-                engine.submitFrogDiscards(socket.user.id, discards);
-                gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
-            }
-        });
-        socket.on("requestNextRound", createDirectHandler('requestNextRound'));
         socket.on("forfeitGame", createDirectHandler('forfeitGame'));
         socket.on("resetGame", createDirectHandler('reset'));
-        socket.on("updateInsuranceSetting", ({tableId, settingType, value}) => {
-            const engine = gameService.getEngineById(tableId);
-            if (engine) {
-                engine.updateInsuranceSetting(socket.user.id, settingType, value);
-                gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
-            }
-        });
-        socket.on("startTimeoutClock", ({tableId, targetPlayerName}) => {
-            const engine = gameService.getEngineById(tableId);
-            if (engine) {
-                engine.startForfeitTimer(socket.user.id, targetPlayerName);
-                gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
-            }
-        });
+        socket.on("updateInsuranceSetting", createDirectHandler('updateInsuranceSetting'));
+        socket.on("startTimeoutClock", createDirectHandler('startTimeoutClock'));
         socket.on("requestDraw", createDirectHandler('requestDraw'));
-        socket.on("submitDrawVote", ({tableId, vote}) => {
-            const engine = gameService.getEngineById(tableId);
-            if (engine) {
-                engine.submitDrawVote(socket.user.id, vote);
-                gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
-            }
-        });
+        socket.on("submitDrawVote", createDirectHandler('submitDrawVote'));
 
+        // --- USER-SPECIFIC & MISC LISTENERS ---
         socket.on("requestUserSync", async () => {
             try {
                 const pool = gameService.pool;
                 const userQuery = "SELECT id, username, email, created_at, wins, losses, washes, is_admin FROM users WHERE id = $1";
                 const userResult = await pool.query(userQuery, [socket.user.id]);
                 const updatedUser = userResult.rows[0];
-
                 if (updatedUser) {
                     const tokenQuery = "SELECT SUM(amount) AS current_tokens FROM transactions WHERE user_id = $1";
                     const tokenResult = await pool.query(tokenQuery, [socket.user.id]);
@@ -177,16 +135,13 @@ const registerGameHandlers = (io, gameService) => {
                 const tokenQuery = "SELECT SUM(amount) AS current_tokens FROM transactions WHERE user_id = $1";
                 const tokenResult = await pool.query(tokenQuery, [socket.user.id]);
                 const currentTokens = parseFloat(tokenResult.rows[0]?.current_tokens || 0);
-
                 if (currentTokens >= 5) {
                     return socket.emit("error", { message: "Sorry, free tokens are only for players with fewer than 5 tokens." });
                 }
-
                 await transactionManager.postTransaction(pool, {
                     userId: socket.user.id, gameId: null, type: 'free_token_mercy', amount: 1,
                     description: 'Mercy token requested by user'
                 });
-                
                 socket.emit("notification", { message: "1 free token has been added to your account!" });
                 socket.emit("requestUserSync");
             } catch (err) {
@@ -196,20 +151,14 @@ const registerGameHandlers = (io, gameService) => {
 
         socket.on("disconnect", async () => {
             console.log(`Socket disconnected: ${socket.user.username} (ID: ${socket.user.id}, Socket: ${socket.id})`);
-            
             const enginePlayerIsOn = Object.values(gameService.getAllEngines()).find(e => e.players[socket.user.id]);
             if (enginePlayerIsOn) {
                 enginePlayerIsOn.disconnectPlayer(socket.user.id);
                 gameService.io.to(enginePlayerIsOn.tableId).emit('gameState', enginePlayerIsOn.getStateForClient());
             }
-
             try {
                 const pool = gameService.pool;
-                const logoutMsgQuery = `
-                    INSERT INTO lobby_chat_messages (user_id, username, message)
-                    VALUES ($1, $2, $3)
-                    RETURNING id, username, message, created_at;
-                `;
+                const logoutMsgQuery = `INSERT INTO lobby_chat_messages (user_id, username, message) VALUES ($1, $2, $3) RETURNING id, username, message, created_at;`;
                 const msgValues = [socket.user.id, 'System', `${socket.user.username} has logged out.`];
                 const { rows } = await pool.query(logoutMsgQuery, msgValues);
                 io.emit('new_lobby_message', rows[0]);

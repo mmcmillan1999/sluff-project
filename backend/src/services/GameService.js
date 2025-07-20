@@ -64,15 +64,41 @@ class GameService {
         const result = engine.startGame(requestingUserId);
         await this._executeEffects(tableId, result.effects);
     }
-
-    // --- NEW METHOD ADDED HERE ---
+    
     async dealCards(tableId, requestingUserId) {
         const engine = this.getEngineById(tableId);
         if (!engine) return;
         const result = engine.dealCards(requestingUserId);
         await this._executeEffects(tableId, result.effects);
     }
-    // --- END NEW METHOD ---
+
+    async placeBid(tableId, userId, bid) {
+        const engine = this.getEngineById(tableId);
+        if (!engine) return;
+        const result = engine.placeBid(userId, bid);
+        await this._executeEffects(tableId, result.effects);
+    }
+
+    async chooseTrump(tableId, userId, suit) {
+        const engine = this.getEngineById(tableId);
+        if (!engine) return;
+        const result = engine.chooseTrump(userId, suit);
+        await this._executeEffects(tableId, result.effects);
+    }
+
+    async submitFrogDiscards(tableId, userId, discards) {
+        const engine = this.getEngineById(tableId);
+        if (!engine) return;
+        const result = engine.submitFrogDiscards(userId, discards);
+        await this._executeEffects(tableId, result.effects);
+    }
+
+    async requestNextRound(tableId, userId) {
+        const engine = this.getEngineById(tableId);
+        if (!engine) return;
+        const result = engine.requestNextRound(userId);
+        await this._executeEffects(tableId, result.effects);
+    }
     
     async handleGameOver(payload) {
         let gameWinnerName = "N/A";
@@ -201,7 +227,7 @@ class GameService {
             const playDelay = 1200;
             const roundEndDelay = 8000;
 
-            const makeMove = (actionFn) => {
+            const makeMove = (actionFn, ...args) => {
                 const delay = 
                     engine.state === 'Playing Phase' ? (isCourtney ? playDelay * 2 : playDelay) :
                     engine.state === 'Awaiting Next Round Trigger' ? (isCourtney ? roundEndDelay * 2 : roundEndDelay) :
@@ -209,49 +235,34 @@ class GameService {
 
                 engine.pendingBotAction = setTimeout(() => {
                     engine.pendingBotAction = null;
-                    const result = actionFn(); // Capture the effects
-                    if (result && result.effects) {
-                        this._executeEffects(tableId, result.effects);
-                    } else {
-                        // For older methods that don't return effects yet
-                        this.io.to(tableId).emit('gameState', engine.getStateForClient());
-                        this._triggerBots(tableId);
-                    }
+                    actionFn(tableId, bot.userId, ...args);
                 }, delay);
             };
 
             if (engine.state === 'Dealing Pending' && engine.dealer == bot.userId) {
-                makeMove(() => engine.dealCards(bot.userId));
-                return;
+                return makeMove(this.dealCards.bind(this));
             }
             if (engine.state === 'Awaiting Next Round Trigger' && engine.roundSummary?.dealerOfRoundId == bot.userId) {
-                makeMove(() => engine.requestNextRound(bot.userId));
-                return;
+                return makeMove(this.requestNextRound.bind(this));
             }
             if (engine.state === 'Awaiting Frog Upgrade Decision' && engine.biddingTurnPlayerId == bot.userId) {
-                makeMove(() => engine.placeBid(bot.userId, "Pass"));
-                return;
+                return makeMove(this.placeBid.bind(this), "Pass");
             }
             if (engine.state === 'Bidding Phase' && engine.biddingTurnPlayerId == bot.userId) {
-                makeMove(() => bot.makeBid());
-                return;
+                const bid = bot.makeBid(); // Bot logic now returns the bid
+                return makeMove(this.placeBid.bind(this), bid);
             }
             if (engine.state === 'Trump Selection' && engine.bidWinnerInfo?.userId == bot.userId && !engine.trumpSuit) {
-                makeMove(() => bot.chooseTrump());
-                return;
+                const suit = bot.chooseTrump(); // Bot logic now returns the suit
+                return makeMove(this.chooseTrump.bind(this), suit);
             }
             if (engine.state === 'Frog Widow Exchange' && engine.bidWinnerInfo?.userId == bot.userId && engine.widowDiscardsForFrogBidder.length === 0) {
-                makeMove(() => bot.submitFrogDiscards());
-                return;
+                const discards = bot.submitFrogDiscards(); // Bot logic now returns discards
+                return makeMove(this.submitFrogDiscards.bind(this), discards);
             }
             if (engine.state === 'Playing Phase' && engine.trickTurnPlayerId == bot.userId) {
-                // Since playCard is refactored, we call the service method
-                const delay = isCourtney ? playDelay * 2 : playDelay;
-                engine.pendingBotAction = setTimeout(() => {
-                    engine.pendingBotAction = null;
-                    bot.playCard(); // This will call engine.playCard
-                }, delay);
-                return;
+                const card = bot.playCard(); // Bot logic now returns the card
+                return makeMove(this.playCard.bind(this), card);
             }
         }
     }

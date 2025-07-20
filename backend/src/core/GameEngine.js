@@ -1,11 +1,8 @@
 // backend/src/core/GameEngine.js
 
-const { SERVER_VERSION, TABLE_COSTS, BID_HIERARCHY, PLACEHOLDER_ID, deck, SUITS, BID_MULTIPLIERS } = require('./constants');
-const gameLogic = require('./logic');
+const { SERVER_VERSION, BID_HIERARCHY, PLACEHOLDER_ID, deck, SUITS, BID_MULTIPLIERS } = require('./constants');
 const BotPlayer = require('./BotPlayer');
 const { shuffle } = require('../utils/shuffle');
-// --- NEW IMPORTS FOR HANDLERS ---
-const scoringHandler = require('./handlers/scoringHandler');
 const playHandler = require('./handlers/playHandler');
 
 const BOT_NAMES = ["Mike Knight", "Grandma Joe", "Grampa Blane", "Kimba", "Courtney Sr.", "Cliff"];
@@ -31,9 +28,7 @@ class GameEngine {
         this._initializeNewRoundState();
     }
 
-    _effects(a = []) {
-        return { effects: a };
-    }
+    _effects(a = []) { return { effects: a }; }
     
     // =================================================================
     // PUBLIC METHODS
@@ -172,9 +167,7 @@ class GameEngine {
     }
 
     dealCards(requestingUserId) {
-        if (this.state !== "Dealing Pending" || requestingUserId !== this.dealer) {
-            return this._effects(); // Return empty effects if action is illegal
-        }
+        if (this.state !== "Dealing Pending" || requestingUserId !== this.dealer) return this._effects();
         const shuffledDeck = shuffle([...deck]);
         this.playerOrderActive.forEach((playerId, i) => {
             const playerName = this.players[playerId].playerName;
@@ -184,31 +177,32 @@ class GameEngine {
         this.originalDealtWidow = [...this.widow];
         this.state = "Bidding Phase";
         this.biddingTurnPlayerId = this.playerOrderActive[0];
-        
-        // Return an effect to broadcast the state change
         return this._effects([{ type: 'BROADCAST_STATE' }]);
     }
 
     placeBid(userId, bid) {
-        // This can be the next candidate for refactoring to its own handler
-        if (userId !== this.biddingTurnPlayerId) return;
+        if (userId !== this.biddingTurnPlayerId) return this._effects();
         const player = this.players[userId];
-        if (!player) return;
+        if (!player) return this._effects();
+
         if (this.state === "Awaiting Frog Upgrade Decision") {
-            if (userId !== this.originalFrogBidderId || (bid !== "Heart Solo" && bid !== "Pass")) return;
+            if (userId !== this.originalFrogBidderId || (bid !== "Heart Solo" && bid !== "Pass")) return this._effects();
             if (bid === "Heart Solo") { this.currentHighestBidDetails = { userId, playerName: player.playerName, bid: "Heart Solo" }; }
             this.biddingTurnPlayerId = null;
             this._resolveBiddingFinal();
-            return;
+            return this._effects([{ type: 'BROADCAST_STATE' }]);
         }
-        if (this.state !== "Bidding Phase" || !BID_HIERARCHY.includes(bid) || this.playersWhoPassedThisRound.includes(userId)) return;
+        if (this.state !== "Bidding Phase" || !BID_HIERARCHY.includes(bid) || this.playersWhoPassedThisRound.includes(userId)) return this._effects();
+        
         const currentHighestBidIndex = this.currentHighestBidDetails ? BID_HIERARCHY.indexOf(this.currentHighestBidDetails.bid) : -1;
-        if (bid !== "Pass" && BID_HIERARCHY.indexOf(bid) <= currentHighestBidIndex) return;
+        if (bid !== "Pass" && BID_HIERARCHY.indexOf(bid) <= currentHighestBidIndex) return this._effects();
+        
         if (bid !== "Pass") {
             this.currentHighestBidDetails = { userId, playerName: player.playerName, bid };
             if (bid === "Frog" && !this.originalFrogBidderId) this.originalFrogBidderId = userId;
             if (bid === "Solo" && this.originalFrogBidderId && userId !== this.originalFrogBidderId) this.soloBidMadeAfterFrog = true;
         } else { this.playersWhoPassedThisRound.push(userId); }
+        
         const activeBiddersRemaining = this.playerOrderActive.filter(id => !this.playersWhoPassedThisRound.includes(id));
         if ((this.currentHighestBidDetails && activeBiddersRemaining.length <= 1) || this.playersWhoPassedThisRound.length === this.playerOrderActive.length) {
             this.biddingTurnPlayerId = null;
@@ -226,22 +220,26 @@ class GameEngine {
             if (nextBidderId) { this.biddingTurnPlayerId = nextBidderId; }
             else { this._checkForFrogUpgrade(); }
         }
+        
+        return this._effects([{ type: 'BROADCAST_STATE' }]);
     }
     
     chooseTrump(userId, suit) {
-        if (this.state !== "Trump Selection" || this.bidWinnerInfo?.userId !== userId || !["S", "C", "D"].includes(suit)) return;
+        if (this.state !== "Trump Selection" || this.bidWinnerInfo?.userId !== userId || !["S", "C", "D"].includes(suit)) return this._effects();
         this.trumpSuit = suit;
         this._transitionToPlayingPhase();
+        return this._effects([{ type: 'BROADCAST_STATE' }]);
     }
 
     submitFrogDiscards(userId, discards) {
         const player = this.players[userId];
-        if (!player || this.state !== "Frog Widow Exchange" || this.bidWinnerInfo?.userId !== userId || !Array.isArray(discards) || discards.length !== 3) return;
+        if (!player || this.state !== "Frog Widow Exchange" || this.bidWinnerInfo?.userId !== userId || !Array.isArray(discards) || discards.length !== 3) return this._effects();
         const currentHand = this.hands[player.playerName];
-        if (!discards.every(card => currentHand.includes(card))) return;
+        if (!discards.every(card => currentHand.includes(card))) return this._effects();
         this.widowDiscardsForFrogBidder = discards;
         this.hands[player.playerName] = currentHand.filter(card => !discards.includes(card));
         this._transitionToPlayingPhase();
+        return this._effects([{ type: 'BROADCAST_STATE' }]);
     }
 
     playCard(userId, card) {
@@ -250,10 +248,13 @@ class GameEngine {
     }
 
     requestNextRound(requestingUserId) {
-        if (this.state === "Awaiting Next Round Trigger" && requestingUserId === this.roundSummary?.dealerOfRoundId) { this._advanceRound(); }
+        if (this.state === "Awaiting Next Round Trigger" && requestingUserId === this.roundSummary?.dealerOfRoundId) {
+            this._advanceRound();
+        }
+        return this._effects([{ type: 'BROADCAST_STATE' }]);
     }
 
-    async reset() {
+    reset() {
         console.log(`[${this.tableId}] Game is being reset.`);
         const originalPlayers = { ...this.players };
         this.state = "Waiting for Players";
@@ -283,6 +284,7 @@ class GameEngine {
         this._recalculateActivePlayerOrder();
         this.playerMode = this.playerOrderActive.length;
         this.state = this.playerMode >= 3 ? "Ready to Start" : "Waiting for Players";
+        return this._effects([{ type: 'BROADCAST_STATE' }, { type: 'UPDATE_LOBBY' }]);
     }
     
     updateInsuranceSetting(userId, settingType, value) {
