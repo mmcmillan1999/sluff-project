@@ -1,6 +1,7 @@
 // backend/src/events/gameEvents.js
 
 const jwt = require("jsonwebtoken");
+const transactionManager = require('../data/transactionManager'); // Needed for free token
 
 const registerGameHandlers = (io, gameService) => {
 
@@ -17,30 +18,45 @@ const registerGameHandlers = (io, gameService) => {
     io.on("connection", (socket) => {
         console.log(`Socket connected: ${socket.user.username} (ID: ${socket.user.id}, Socket: ${socket.id})`);
 
+        // --- RECONNECT LOGIC ---
         const engine = Object.values(gameService.getAllEngines()).find(e => e.players[socket.user.id]);
         if (engine && engine.players[socket.user.id]?.disconnected) {
             engine.reconnectPlayer(socket.user.id, socket);
+            gameService.io.to(engine.tableId).emit('gameState', engine.getStateForClient());
         }
         
         socket.emit("lobbyState", gameService.getLobbyState());
 
         // --- SERVER-WIDE ADMIN EVENTS ---
-        socket.on("hardResetServer", ({ secret }) => {
+        socket.on("hardResetServer", async ({ secret }) => {
             if (!socket.user.is_admin) {
                 console.warn(`[SECURITY] Non-admin ${socket.user.username} attempted hard reset.`);
                 return socket.emit("error", { message: "Admin privileges required." });
             }
             if (secret === process.env.ADMIN_SECRET) {
                 console.log(`[ADMIN] Hard reset triggered by ${socket.user.username}`);
+                try {
+                    const pool = gameService.pool;
+                    const query = `INSERT INTO lobby_chat_messages (user_id, username, message) VALUES ($1, $2, $3)`;
+                    await pool.query(query, [socket.user.id, 'System', 'The server is being reset by an administrator.']);
+                    io.emit('new_lobby_message', { id: Date.now(), username: 'System', message: 'The server is being reset by an administrator.' });
+                } catch (error) {
+                    console.error("Failed to post server reset message to chat:", error);
+                }
+                
                 gameService.resetAllEngines();
-                io.emit('forceDisconnectAndReset', 'The server has been reset. Please log in again.');
-                io.disconnectSockets(true);
+                
+                socket.emit("notification", { message: "Server reset successfully initiated." });
+                setTimeout(() => {
+                    io.emit('forceDisconnectAndReset', 'The server has been reset. Please log in again.');
+                    io.disconnectSockets(true);
+                }, 500);
+                
             } else {
                 console.warn(`[SECURITY] Failed hard reset attempt by ${socket.user.username} with wrong secret.`);
                 return socket.emit("error", { message: "Invalid reset secret." });
             }
         });
-        // --- END ADMIN EVENTS ---
 
         // --- GAME EVENT LISTENERS ---
         socket.on("joinTable", async ({ tableId }) => {
@@ -49,15 +65,15 @@ const registerGameHandlers = (io, gameService) => {
 
             const previousEngine = Object.values(gameService.getAllEngines()).find(e => e.players[socket.user.id] && e.tableId !== tableId);
             if (previousEngine) {
-                previousEngine.leaveTable(socket.user.id); // Engine state change
+                previousEngine.leaveTable(socket.user.id);
                 socket.leave(previousEngine.tableId);
-                gameService.io.to(previousEngine.tableId).emit('gameState', previousEngine.getStateForClient()); // Broadcast update
+                gameService.io.to(previousEngine.tableId).emit('gameState', previousEngine.getStateForClient());
             }
             
             socket.join(tableId);
-            engineToJoin.joinTable(socket.user, socket.id); // Engine state change
-            gameService.io.to(tableId).emit('gameState', engineToJoin.getStateForClient()); // Broadcast update
-            gameService.io.emit('lobbyState', gameService.getLobbyState()); // Update lobby
+            engineToJoin.joinTable(socket.user, socket.id);
+            gameService.io.to(tableId).emit('gameState', engineToJoin.getStateForClient());
+            gameService.io.emit('lobbyState', gameService.getLobbyState());
         });
 
         socket.on("leaveTable", async ({ tableId }) => {
@@ -65,10 +81,10 @@ const registerGameHandlers = (io, gameService) => {
             if (engineToLeave) {
                 engineToLeave.leaveTable(socket.user.id);
                 gameService.io.to(tableId).emit('gameState', engineToLeave.getStateForClient());
-                gameService.io.emit('lobbyState', gameService.getLobbyState());
             }
             socket.leave(tableId);
             socket.emit("lobbyState", gameService.getLobbyState());
+            gameService.io.emit('lobbyState', gameService.getLobbyState());
         });
 
         socket.on("addBot", ({ tableId, name }) => {
@@ -80,30 +96,133 @@ const registerGameHandlers = (io, gameService) => {
             }
         });
         
-        // Refactored handlers that use the service
-        socket.on("startGame", ({ tableId }) => { gameService.startGame(tableId, socket.user.id); });
-        socket.on("playCard", ({ tableId, card }) => { gameService.playCard(tableId, socket.user.id, card); });
-
-        // Un-refactored handlers that still call the engine directly
-        const createDirectHandler = (methodName) => ({ tableId, ...payload }) => {
+        const createDirectHandler = (methodName, needsUpdate = true) => (payload) => {
+            const { tableId, ...args } = payload;
             const engine = gameService.getEngineById(tableId);
             if (engine && typeof engine[methodName] === 'function') {
-                engine[methodName](socket.user.id, payload);
-                gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
+                const methodArgs = Object.keys(args).length > 0 ? [socket.user.id, args] : [socket.user.id];
+                engine[methodName](...methodArgs);
+                if (needsUpdate) {
+                    gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
+                }
             }
         };
 
+        socket.on("startGame", ({tableId}) => gameService.startGame(tableId, socket.user.id));
+        socket.on("playCard", ({tableId, card}) => gameService.playCard(tableId, socket.user.id, card));
         socket.on("dealCards", createDirectHandler('dealCards'));
-        socket.on("placeBid", createDirectHandler('placeBid'));
-        socket.on("chooseTrump", createDirectHandler('chooseTrump'));
-        socket.on("submitFrogDiscards", createDirectHandler('submitFrogDiscards'));
+        socket.on("placeBid", ({tableId, bid}) => {
+            const engine = gameService.getEngineById(tableId);
+            if (engine) {
+                engine.placeBid(socket.user.id, bid);
+                gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
+            }
+        });
+        socket.on("chooseTrump", ({tableId, suit}) => {
+            const engine = gameService.getEngineById(tableId);
+            if (engine) {
+                engine.chooseTrump(socket.user.id, suit);
+                gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
+            }
+        });
+        socket.on("submitFrogDiscards", ({tableId, discards}) => {
+            const engine = gameService.getEngineById(tableId);
+            if (engine) {
+                engine.submitFrogDiscards(socket.user.id, discards);
+                gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
+            }
+        });
         socket.on("requestNextRound", createDirectHandler('requestNextRound'));
         socket.on("forfeitGame", createDirectHandler('forfeitGame'));
         socket.on("resetGame", createDirectHandler('reset'));
-        socket.on("updateInsuranceSetting", createDirectHandler('updateInsuranceSetting'));
-        socket.on("startTimeoutClock", createDirectHandler('startTimeoutClock'));
+        socket.on("updateInsuranceSetting", ({tableId, settingType, value}) => {
+            const engine = gameService.getEngineById(tableId);
+            if (engine) {
+                engine.updateInsuranceSetting(socket.user.id, settingType, value);
+                gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
+            }
+        });
+        socket.on("startTimeoutClock", ({tableId, targetPlayerName}) => {
+            const engine = gameService.getEngineById(tableId);
+            if (engine) {
+                engine.startForfeitTimer(socket.user.id, targetPlayerName);
+                gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
+            }
+        });
         socket.on("requestDraw", createDirectHandler('requestDraw'));
-        socket.on("submitDrawVote", createDirectHandler('submitDrawVote'));
+        socket.on("submitDrawVote", ({tableId, vote}) => {
+            const engine = gameService.getEngineById(tableId);
+            if (engine) {
+                engine.submitDrawVote(socket.user.id, vote);
+                gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
+            }
+        });
+
+        // --- USER-SPECIFIC & MISC LISTENERS ---
+        socket.on("requestUserSync", async () => {
+            try {
+                const pool = gameService.pool;
+                const userQuery = "SELECT id, username, email, created_at, wins, losses, washes, is_admin FROM users WHERE id = $1";
+                const userResult = await pool.query(userQuery, [socket.user.id]);
+                const updatedUser = userResult.rows[0];
+
+                if (updatedUser) {
+                    const tokenQuery = "SELECT SUM(amount) AS current_tokens FROM transactions WHERE user_id = $1";
+                    const tokenResult = await pool.query(tokenQuery, [socket.user.id]);
+                    updatedUser.tokens = parseFloat(tokenResult.rows[0]?.current_tokens || 0).toFixed(2);
+                    socket.emit("updateUser", updatedUser);
+                }
+            } catch(err) {
+                console.error(`Error during user sync for user ${socket.user.id}:`, err);
+            }
+        });
+
+        socket.on("requestFreeToken", async () => {
+            try {
+                const pool = gameService.pool;
+                const tokenQuery = "SELECT SUM(amount) AS current_tokens FROM transactions WHERE user_id = $1";
+                const tokenResult = await pool.query(tokenQuery, [socket.user.id]);
+                const currentTokens = parseFloat(tokenResult.rows[0]?.current_tokens || 0);
+
+                if (currentTokens >= 5) {
+                    return socket.emit("error", { message: "Sorry, free tokens are only for players with fewer than 5 tokens." });
+                }
+
+                await transactionManager.postTransaction(pool, {
+                    userId: socket.user.id, gameId: null, type: 'free_token_mercy', amount: 1,
+                    description: 'Mercy token requested by user'
+                });
+                
+                socket.emit("notification", { message: "1 free token has been added to your account!" });
+                socket.emit("requestUserSync"); // Trigger a sync to update the user's token display
+            } catch (err) {
+                socket.emit("error", { message: "Could not grant token." });
+            }
+        });
+
+        socket.on("disconnect", async () => {
+            console.log(`Socket disconnected: ${socket.user.username} (ID: ${socket.user.id}, Socket: ${socket.id})`);
+            
+            const enginePlayerIsOn = Object.values(gameService.getAllEngines()).find(e => e.players[socket.user.id]);
+            if (enginePlayerIsOn) {
+                enginePlayerIsOn.disconnectPlayer(socket.user.id);
+                gameService.io.to(enginePlayerIsOn.tableId).emit('gameState', enginePlayerIsOn.getStateForClient());
+            }
+
+            try {
+                const pool = gameService.pool;
+                const logoutMsgQuery = `
+                    INSERT INTO lobby_chat_messages (user_id, username, message)
+                    VALUES ($1, $2, $3)
+                    RETURNING id, username, message, created_at;
+                `;
+                const msgValues = [socket.user.id, 'System', `${socket.user.username} has logged out.`];
+                const { rows } = await pool.query(logoutMsgQuery, msgValues);
+                io.emit('new_lobby_message', rows[0]);
+            } catch (chatError) {
+                console.error("Failed to post logout message to chat:", chatError);
+            }
+        });
     });
 };
 
