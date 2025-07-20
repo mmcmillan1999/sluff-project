@@ -1,24 +1,18 @@
 // backend/src/api/ai.js
-// This file handles AI-related routes, allowing the AI to call specific functions
-
 
 const express = require('express');
-const aiTools = require('../ai_tools');
+// --- PATH CORRECTION ---
+const aiTools = require('../services/ai_tools');
 
-// This is a simple "whitelist" of the tools the AI is allowed to call.
-// This prevents any possibility of calling unintended functions.
 const availableTools = {
   getTableState: aiTools.getTableState,
   getUserByUsername: aiTools.getUserByUsername,
 };
 
-const createAiRoutes = (pool) => {
+// --- MODIFICATION: Accept gameService instance ---
+const createAiRoutes = (pool, gameService) => {
   const router = express.Router();
 
-  // IMPORTANT: Secure this endpoint!
-  // Anyone who knows the URL could call your functions. We use a simple
-  // secret key in the header. In a real production app, you might use
-  // a more advanced system like Google Cloud IAM.
   const checkAiAuth = (req, res, next) => {
     const secret = req.headers['x-ai-secret-key'];
     if (!secret || secret !== process.env.AI_SECRET_KEY) {
@@ -28,7 +22,6 @@ const createAiRoutes = (pool) => {
   };
 
   router.post('/execute-tool', checkAiAuth, async (req, res) => {
-    // The AI Studio will send a body like: { "functionCall": { "name": "...", "args": {...} } }
     const { name, args } = req.body.functionCall;
 
     const tool = availableTools[name];
@@ -38,10 +31,9 @@ const createAiRoutes = (pool) => {
     }
 
     try {
-      // Call the requested function. We pass 'args' and the 'pool' for db access.
-      const result = await tool(args, pool);
+      // --- MODIFICATION: Pass gameService to the tool ---
+      const result = await tool(args, pool, gameService);
 
-      // Send the result back to the AI Studio in the required format.
       res.json({
         functionResponse: {
           name,
@@ -58,4 +50,3 @@ const createAiRoutes = (pool) => {
 };
 
 module.exports = createAiRoutes;
-// --- END FILE: Backend/routes/ai.js ---

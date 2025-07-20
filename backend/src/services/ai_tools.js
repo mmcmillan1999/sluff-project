@@ -1,4 +1,4 @@
-// --- START FILE: Backend/ai_tools.js ---
+// backend/src/services/ai_tools.js
 
 /**
  * This module contains functions that can be called by the AI assistant.
@@ -7,29 +7,32 @@
  * extremely robust security and confirmation checks in place.
  */
 
-// We need the global 'state' to access in-memory table data.
-const state = require('./game/gameState');
+// REMOVED: const state = require('./game/gameState');
 
 /**
  * Retrieves the complete, real-time game state for a specific table ID.
  * @param {object} args - The arguments for the function.
  * @param {string} args.tableId - The ID of the table to look up (e.g., "table-1").
+ * @param {object} pool - The database pool (passed by the router).
+ * @param {GameService} gameService - The game service instance (passed by the router).
  * @returns {Promise<object>} The full state of the requested table.
  */
-async function getTableState({ tableId }) {
-  const table = state.getTableById(tableId);
-  if (!table) {
+async function getTableState({ tableId }, pool, gameService) {
+  if (!gameService) {
+    return { error: "Game service is not available." };
+  }
+  const engine = gameService.getEngineById(tableId);
+  if (!engine) {
     return { error: `Table with ID '${tableId}' not found.` };
   }
-  // The getStateForClient() method already prepares a clean object for us.
-  return table.getStateForClient();
+  return engine.getStateForClient();
 }
 
 /**
  * Retrieves a user's profile, stats, and current token balance from the database.
  * @param {object} args - The arguments for the function.
- * @param {object} pool - The PostgreSQL connection pool.
  * @param {string} args.username - The username of the player to look up.
+ * @param {object} pool - The PostgreSQL connection pool.
  * @returns {Promise<object>} The user's combined profile and token data.
  */
 async function getUserByUsername({ username }, pool) {
@@ -51,7 +54,6 @@ async function getUserByUsername({ username }, pool) {
       return { error: `User with username '${username}' not found.` };
     }
     
-    // Ensure tokens are formatted consistently
     rows[0].tokens = parseFloat(rows[0].tokens).toFixed(2);
     return rows[0];
 
@@ -61,9 +63,7 @@ async function getUserByUsername({ username }, pool) {
   }
 }
 
-// Export the functions so our switchboard can use them.
 module.exports = {
   getTableState,
   getUserByUsername,
 };
-// --- END FILE: Backend/ai_tools.js ---
