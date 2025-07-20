@@ -62,9 +62,7 @@ const registerGameHandlers = (io, gameService) => {
             
             socket.join(tableId);
             engineToJoin.joinTable(socket.user, socket.id);
-            
             socket.emit('joinedTable', { gameState: engineToJoin.getStateForClient() });
-            
             gameService.io.to(tableId).emit('gameState', engineToJoin.getStateForClient());
             gameService.io.emit('lobbyState', gameService.getLobbyState());
         });
@@ -91,6 +89,12 @@ const registerGameHandlers = (io, gameService) => {
         
         socket.on("startGame", ({tableId}) => gameService.startGame(tableId, socket.user.id));
         socket.on("playCard", ({tableId, card}) => gameService.playCard(tableId, socket.user.id, card));
+        
+        // --- THIS IS THE CORRECTED HANDLER ---
+        socket.on("dealCards", ({tableId}) => {
+            gameService.dealCards(tableId, socket.user.id);
+        });
+        // --- END CORRECTION ---
 
         const createDirectHandler = (methodName) => (payload) => {
             const { tableId, ...args } = payload;
@@ -101,14 +105,7 @@ const registerGameHandlers = (io, gameService) => {
                 gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
             }
         };
-
-        socket.on("dealCards", ({tableId}) => {
-            const engine = gameService.getEngineById(tableId);
-            if (engine) {
-                engine.dealCards(socket.user.id);
-                gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
-            }
-        });
+        
         socket.on("placeBid", ({tableId, bid}) => {
             const engine = gameService.getEngineById(tableId);
             if (engine) {

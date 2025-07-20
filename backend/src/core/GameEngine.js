@@ -172,7 +172,9 @@ class GameEngine {
     }
 
     dealCards(requestingUserId) {
-        if (this.state !== "Dealing Pending" || requestingUserId !== this.dealer) return;
+        if (this.state !== "Dealing Pending" || requestingUserId !== this.dealer) {
+            return this._effects(); // Return empty effects if action is illegal
+        }
         const shuffledDeck = shuffle([...deck]);
         this.playerOrderActive.forEach((playerId, i) => {
             const playerName = this.players[playerId].playerName;
@@ -182,6 +184,9 @@ class GameEngine {
         this.originalDealtWidow = [...this.widow];
         this.state = "Bidding Phase";
         this.biddingTurnPlayerId = this.playerOrderActive[0];
+        
+        // Return an effect to broadcast the state change
+        return this._effects([{ type: 'BROADCAST_STATE' }]);
     }
 
     placeBid(userId, bid) {

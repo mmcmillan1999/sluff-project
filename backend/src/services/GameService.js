@@ -64,6 +64,15 @@ class GameService {
         const result = engine.startGame(requestingUserId);
         await this._executeEffects(tableId, result.effects);
     }
+
+    // --- NEW METHOD ADDED HERE ---
+    async dealCards(tableId, requestingUserId) {
+        const engine = this.getEngineById(tableId);
+        if (!engine) return;
+        const result = engine.dealCards(requestingUserId);
+        await this._executeEffects(tableId, result.effects);
+    }
+    // --- END NEW METHOD ---
     
     async handleGameOver(payload) {
         let gameWinnerName = "N/A";
@@ -131,7 +140,7 @@ class GameService {
             switch (effect.type) {
                 case 'BROADCAST_STATE':
                     this.io.to(tableId).emit('gameState', engine.getStateForClient());
-                    this._triggerBots(tableId); // UNCOMMENTED
+                    this._triggerBots(tableId);
                     break;
                 case 'EMIT_TO_SOCKET':
                     this.io.to(effect.payload.socketId).emit(effect.payload.event, effect.payload.data);
@@ -200,9 +209,14 @@ class GameService {
 
                 engine.pendingBotAction = setTimeout(() => {
                     engine.pendingBotAction = null;
-                    actionFn();
-                    this.io.to(tableId).emit('gameState', engine.getStateForClient());
-                    this._triggerBots(tableId);
+                    const result = actionFn(); // Capture the effects
+                    if (result && result.effects) {
+                        this._executeEffects(tableId, result.effects);
+                    } else {
+                        // For older methods that don't return effects yet
+                        this.io.to(tableId).emit('gameState', engine.getStateForClient());
+                        this._triggerBots(tableId);
+                    }
                 }, delay);
             };
 
@@ -231,7 +245,12 @@ class GameService {
                 return;
             }
             if (engine.state === 'Playing Phase' && engine.trickTurnPlayerId == bot.userId) {
-                makeMove(() => bot.playCard());
+                // Since playCard is refactored, we call the service method
+                const delay = isCourtney ? playDelay * 2 : playDelay;
+                engine.pendingBotAction = setTimeout(() => {
+                    engine.pendingBotAction = null;
+                    bot.playCard(); // This will call engine.playCard
+                }, delay);
                 return;
             }
         }
