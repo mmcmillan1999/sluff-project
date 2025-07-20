@@ -521,3 +521,36 @@
         bottom: calc(100% + 5px);
     }
 }
+
+card-display {
+    padding: 8px;
+    border: 1px solid #777;
+    border-radius: 6px;
+    text-align: center;
+    font-weight: bold;
+    display: flex; /* Use flexbox for alignment */
+    flex-direction: column;
+    justify-content: flex-start; /* Align content to the top */
+    align-items: flex-start; /* Align content to the left */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    cursor: default;
+    padding-left: 5px; /* Add padding for left alignment */
+}
+
+.card-display.illegal-move {
+    filter: grayscale(80%) brightness(0.8);
+    cursor: not-allowed;
+}
+
+button.card-display {
+    cursor: pointer;
+}
+
+button.card-display:disabled {
+    cursor: not-allowed;
+}
+
+.card-symbol {
+    font-size: 125%;
+    margin-top: 2px; /* Add some space between rank and symbol */
+}

@@ -19,7 +19,7 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
     const [showRoundSummaryModal, setShowRoundSummaryModal] = useState(false);
     const [showInsurancePrompt, setShowInsurancePrompt] = useState(false);
     const [showGameMenu, setShowGameMenu] = useState(false);
-    const [showIosPwaPrompt, setShowIosPwaPrompt] = useState(false); // This is the corrected line
+    const [showIosPwaPrompt, setShowIosPwaPrompt] = useState(false);
     const [showDrawVote, setShowDrawVote] = useState(false);
     const [chatOpen, setChatOpen] = useState(false);
     const [unreadChat, setUnreadChat] = useState(0);
@@ -163,8 +163,9 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
     const renderCard = (cardString, options = {}) => {
         const { isButton = false, onClick = null, disabled = false, isSelected = false, small = false, large = false, isFaceDown = false, style: customStyle = {}, className = '' } = options;
 
-        const width = large ? '70px' : (small ? '37.5px' : '45px');
-        const height = large ? '90px' : (small ? '50px' : '70px');
+        // --- THIS IS THE CHANGE: Reduced card sizes ---
+        const width = large ? '65px' : (small ? '37.5px' : '45px');
+        const height = large ? '85px' : (small ? '50px' : '70px');
 
         if (isFaceDown) {
             return (
@@ -194,7 +195,7 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
             color, 
             minWidth: width, 
             height,
-            fontSize: large ? '1.3em' : (small ? '0.8em' : '1em'),
+            fontSize: large ? '1.2em' : (small ? '0.8em' : '1em'), // Slightly smaller font
             ...customStyle
         };
         
