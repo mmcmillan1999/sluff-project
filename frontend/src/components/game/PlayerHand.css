@@ -22,9 +22,8 @@
     align-items: flex-end;
     padding: 10px;
     height: 110px;
-    /* --- THIS IS THE FIX: Allow container to expand --- */
     width: 100%;
-    max-width: 98vw; /* Use almost all available width */
+    max-width: 98vw;
     margin: 0 auto;
     transition: all 0.3s ease;
 }
@@ -45,6 +44,7 @@
     z-index: 100;
 }
 
+/* This pseudo-element creates the dark shade over illegal cards */
 .illegal-move::after {
     content: '';
     position: absolute;

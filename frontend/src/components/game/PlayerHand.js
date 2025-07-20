@@ -97,14 +97,14 @@ const PlayerHand = ({
     const legalMoves = getLegalMoves(myHand, isLeading, leadSuitCurrentTrick, trumpSuit, trumpBroken);
 
     const cardWidth = 65;
-    const handAreaWidth = windowWidth * 0.95; // Use 95% of screen width for more space
+    const handAreaWidth = windowWidth * 0.95;
     const N = myHandToDisplay.length;
 
-    const legalCardCount = isMyTurnToPlay ? legalMoves.length : N; // If not my turn, all cards are "legal" visually
+    const legalCardCount = isMyTurnToPlay ? legalMoves.length : N;
     const illegalCardCount = N - legalCardCount;
     
     const legalOverlap = 25;
-    const illegalOverlap = 55; // Increase overlap for illegal cards
+    const illegalOverlap = 55;
 
     const totalWidth = (legalCardCount * (cardWidth - legalOverlap)) + (illegalCardCount * (cardWidth - illegalOverlap)) + (legalCardCount > 0 ? legalOverlap : illegalOverlap);
 
@@ -122,9 +122,7 @@ const PlayerHand = ({
         <div className="player-hand-container">
             <div className={`player-hand-cards ${isMyTurnToPlay ? 'my-turn' : ''}`}>
                 {myHandToDisplay.map((card, index) => {
-                    // --- THIS IS THE FIX for shading ---
-                    // A card is only illegal if it's your turn AND it's not in the legal moves list.
-                    const isIllegal = isMyTurnToPlay && !legalMoves.includes(card);
+                    const isIllegal = state === "Playing Phase" && isMyTurnToPlay && !legalMoves.includes(card);
                     const overlapAmount = isIllegal ? finalOverlapIllegal : finalOverlapLegal;
 
                     return (

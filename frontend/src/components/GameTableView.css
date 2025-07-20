@@ -57,7 +57,6 @@
     box-shadow: inset 0 0 25px rgba(0,0,0,0.5);
 }
 
-/* Default Player Seat Positions (for landscape/desktop) */
 .player-seat-left {
     position: absolute;
     top: 50%;
@@ -74,7 +73,6 @@
     z-index: 10;
 }
 
-/* This seat is always at the bottom, inside the oval */
 .player-seat-bottom {
     position: absolute;
     bottom: 5%;
@@ -311,15 +309,6 @@
     gap: 10px;
 }
 
-.player-hand-cards {
-    display: flex;
-    flex-wrap: nowrap;
-    gap: 5px;
-    justify-content: center;
-    padding: 5px;
-    overflow-x: auto;
-}
-
 .game-view-chat-container {
     width: 320px;
     position: absolute;
@@ -438,50 +427,41 @@
     stroke: white;
 }
 
-.vertical-test-box-container {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
+.card-display {
+    border: 1px solid #777;
+    border-radius: 6px;
+    font-weight: bold;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    z-index: 20;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: 4px;
+    box-sizing: border-box;
 }
 
-.vertical-test-box-container.left {
-    left: 10px;
+button.card-display {
+    cursor: pointer;
 }
 
-.vertical-test-box-container.right {
-    right: 10px;
+button.card-display:disabled {
+    cursor: not-allowed;
 }
 
-.vertical-test-box {
-    padding: 5px 10px;
-    background-color: #333;
-    color: white;
-    border: 1px solid #555;
-    border-radius: 4px;
-    font-size: 1em;
-    writing-mode: vertical-rl;
-    text-orientation: mixed;
+.card-symbol {
+    font-size: 150%;
+    line-height: 1;
+    margin-top: 2px;
 }
 
-.vertical-test-box-container.left .vertical-test-box {
-    transform: rotate(180deg);
-}
-
-
-/* --- MOBILE & RESPONSIVE STYLES --- */
 @media (orientation: portrait) {
     .table-oval { border-radius: 50px; }
 
-    /* Apply rotation for portrait mode */
-    .player-seat-left {
-        transform: translateY(-50%) rotate(90deg);
+    .player-seat-left .player-seat {
+        transform: rotate(90deg);
     }
-    .player-seat-right {
-        transform: translateY(-50%) rotate(-90deg);
+    .player-seat-right .player-seat {
+        transform: rotate(-90deg);
     }
 
     .trick-pile-container { bottom: 15%; }
@@ -496,10 +476,7 @@
         padding: 5px;
         gap: 5px;
     }
-    .player-hand-cards {
-        flex-wrap: wrap;
-        justify-content: center;
-    }
+    
     .footer-controls-wrapper {
         width: 100%;
         justify-content: space-between;
@@ -520,37 +497,4 @@
         right: 5vw;
         bottom: calc(100% + 5px);
     }
-}
-
-card-display {
-    padding: 8px;
-    border: 1px solid #777;
-    border-radius: 6px;
-    text-align: center;
-    font-weight: bold;
-    display: flex; /* Use flexbox for alignment */
-    flex-direction: column;
-    justify-content: flex-start; /* Align content to the top */
-    align-items: flex-start; /* Align content to the left */
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    cursor: default;
-    padding-left: 5px; /* Add padding for left alignment */
-}
-
-.card-display.illegal-move {
-    filter: grayscale(80%) brightness(0.8);
-    cursor: not-allowed;
-}
-
-button.card-display {
-    cursor: pointer;
-}
-
-button.card-display:disabled {
-    cursor: not-allowed;
-}
-
-.card-symbol {
-    font-size: 125%;
-    margin-top: 2px; /* Add some space between rank and symbol */
 }
