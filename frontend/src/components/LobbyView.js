@@ -104,7 +104,6 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
 
             <main className="lobby-main">
                 <div className="collapsible-section">
-                    {/* --- THIS IS THE VISUAL CHANGE --- */}
                     <h3 className="section-header" onClick={() => setTablesExpanded(!tablesExpanded)}>
                         Game Tables {tablesExpanded ? '▼' : '►'}
                     </h3>
@@ -124,7 +123,6 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
                 </div>
                 
                 <div className="collapsible-section">
-                     {/* --- THIS IS THE VISUAL CHANGE --- */}
                     <h3 className="section-header" onClick={() => setBulletinExpanded(!bulletinExpanded)}>
                         Bulletin {bulletinExpanded ? '▼' : '►'}
                     </h3>
@@ -138,6 +136,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
             />
             
             <footer className="lobby-footer">
+                <span>Server: {process.env.REACT_APP_SERVER_URL || 'wss://sluff-backend.onrender.com'}</span>
                 <span>Version: {serverVersion}</span>
             </footer>
         </div>
