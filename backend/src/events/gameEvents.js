@@ -28,13 +28,12 @@ const registerGameHandlers = (io, gameService) => {
         socket.emit("lobbyState", gameService.getLobbyState());
 
         // --- SERVER-WIDE ADMIN EVENTS ---
-        socket.on("hardResetServer", async ({ secret }) => {
-            if (!socket.user.is_admin) {
-                console.warn(`[SECURITY] Non-admin ${socket.user.username} attempted hard reset.`);
-                return socket.emit("error", { message: "Admin privileges required." });
-            }
-            if (secret === process.env.ADMIN_SECRET) {
-                console.log(`[ADMIN] Hard reset triggered by ${socket.user.username}`);
+        socket.on("hardResetServer", async () => { // No longer needs secret
+            // Check if the user is an admin
+            if (socket.user.is_admin) {
+                // ADDED: Server log for initiation
+                console.log(`[ADMIN] Hard reset initiated by ${socket.user.username}.`);
+                
                 try {
                     const pool = gameService.pool;
                     const query = `INSERT INTO lobby_chat_messages (user_id, username, message) VALUES ($1, $2, $3)`;
@@ -53,11 +52,13 @@ const registerGameHandlers = (io, gameService) => {
                 }, 500);
                 
             } else {
-                console.warn(`[SECURITY] Failed hard reset attempt by ${socket.user.username} with wrong secret.`);
-                return socket.emit("error", { message: "Invalid reset secret." });
+                // ADDED: Server log for failed attempt
+                console.warn(`[SECURITY] FAILED hard reset attempt by non-admin user: ${socket.user.username}`);
+                return socket.emit("error", { message: "Admin privileges required." });
             }
         });
-
+        // --- END ADMIN EVENTS ---
+        
         // --- GAME EVENT LISTENERS ---
         socket.on("joinTable", async ({ tableId }) => {
             const engineToJoin = gameService.getEngineById(tableId);
@@ -96,21 +97,26 @@ const registerGameHandlers = (io, gameService) => {
             }
         });
         
-        const createDirectHandler = (methodName, needsUpdate = true) => (payload) => {
+        socket.on("startGame", ({tableId}) => gameService.startGame(tableId, socket.user.id));
+        socket.on("playCard", ({tableId, card}) => gameService.playCard(tableId, socket.user.id, card));
+
+        const createDirectHandler = (methodName) => (payload) => {
             const { tableId, ...args } = payload;
             const engine = gameService.getEngineById(tableId);
             if (engine && typeof engine[methodName] === 'function') {
                 const methodArgs = Object.keys(args).length > 0 ? [socket.user.id, args] : [socket.user.id];
                 engine[methodName](...methodArgs);
-                if (needsUpdate) {
-                    gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
-                }
+                gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
             }
         };
 
-        socket.on("startGame", ({tableId}) => gameService.startGame(tableId, socket.user.id));
-        socket.on("playCard", ({tableId, card}) => gameService.playCard(tableId, socket.user.id, card));
-        socket.on("dealCards", createDirectHandler('dealCards'));
+        socket.on("dealCards", ({tableId}) => {
+            const engine = gameService.getEngineById(tableId);
+            if (engine) {
+                engine.dealCards(socket.user.id);
+                gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
+            }
+        });
         socket.on("placeBid", ({tableId, bid}) => {
             const engine = gameService.getEngineById(tableId);
             if (engine) {
@@ -194,7 +200,7 @@ const registerGameHandlers = (io, gameService) => {
                 });
                 
                 socket.emit("notification", { message: "1 free token has been added to your account!" });
-                socket.emit("requestUserSync"); // Trigger a sync to update the user's token display
+                socket.emit("requestUserSync");
             } catch (err) {
                 socket.emit("error", { message: "Could not grant token." });
             }
