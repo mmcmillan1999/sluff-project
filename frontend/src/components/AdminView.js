@@ -1,18 +1,19 @@
+// frontend/src/components/AdminView.js
+
 import React from 'react';
 
 const AdminView = ({ onReturnToLobby, emitEvent }) => {
 
     const handleHardReset = () => {
         if (window.confirm("SERVER RESET WARNING:\n\nThis will boot ALL players from ALL tables, reset ALL in-progress games, and force everyone to log in again. This action cannot be undone.\n\nAre you sure you want to proceed?")) {
-            const secret = prompt("Enter the server reset secret (Mouse_...):");
-            if (secret) {
-                emitEvent("hardResetServer", { secret });
-            }
+            // --- MODIFICATION: No longer needs a secret ---
+            emitEvent("hardResetServer", {});
         }
     };
 
     const handleResetAllTokens = () => {
         if (window.confirm("TOKEN RESET WARNING:\n\nThis will reset the token balance for ALL players on the server to the default amount. This is useful for starting a new season.\n\nAre you sure you want to proceed?")) {
+            // Note: This still has a secret prompt. We can remove it if you wish.
             const secret = prompt("Enter the token reset secret (Ben_...):");
             if (secret) {
                 emitEvent("resetAllTokens", { secret });
