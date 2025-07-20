@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './PlayerHand.css';
 import { RANKS_ORDER, SUIT_SORT_ORDER } from '../../constants';
-import { getLegalMoves } from '../../utils/legalMoves'; // We'll create this new utility file
+import { getLegalMoves } from '../../utils/legalMoves';
 
 const getSuitLocal = (cardStr) => cardStr.slice(-1);
 const getRankLocal = (cardStr) => cardStr.slice(0, -1);
@@ -56,7 +56,6 @@ const PlayerHand = ({
     }, [emitEvent]);
 
     if (state === "Frog Widow Exchange" && bidWinnerInfo?.playerName === selfPlayerName) {
-        // Frog discard logic remains the same...
         return (
             <div style={{ backgroundColor: 'rgba(0,0,0,0.7)', padding: '15px', borderRadius: '10px', width: '100%', textAlign: 'center' }}>
                 <p style={{color: 'white'}}>You took the widow. Select 3 cards to discard:</p>
@@ -93,20 +92,33 @@ const PlayerHand = ({
 
     const myHandToDisplay = sortHandBySuit(myHand);
     const isMyTurnToPlay = state === "Playing Phase" && trickTurnPlayerName === selfPlayerName;
-
-    // --- NEW: LEGAL MOVES & DYNAMIC SPACING LOGIC ---
+    
     const isLeading = currentTrickCards.length === 0;
     const legalMoves = getLegalMoves(myHand, isLeading, leadSuitCurrentTrick, trumpSuit, trumpBroken);
 
-    const cardWidth = 70; // Base width of a card in pixels
-    const handAreaWidth = windowWidth * 0.85; // Use 85% of screen width for the hand
+    // --- NEW DYNAMIC SPACING LOGIC ---
+    const cardWidth = 65; // pixels
+    const handAreaWidth = windowWidth * 0.9; // Use 90% of screen width
     const N = myHandToDisplay.length;
-    let overlap = 0;
-    if (N > 1) {
-        const totalCardWidth = N * cardWidth;
-        if (totalCardWidth > handAreaWidth) {
-            overlap = (totalCardWidth - handAreaWidth) / (N - 1);
-        }
+
+    const legalCardCount = legalMoves.length;
+    const illegalCardCount = N - legalCardCount;
+    
+    // Define overlap amounts
+    const legalOverlap = 25;  // Legal cards are less overlapped
+    const illegalOverlap = 50; // Illegal cards are more overlapped
+
+    const totalWidth = (legalCardCount * (cardWidth - legalOverlap)) + (illegalCardCount * (cardWidth - illegalOverlap)) + legalOverlap;
+
+    let finalOverlapLegal = legalOverlap;
+    let finalOverlapIllegal = illegalOverlap;
+
+    if (totalWidth > handAreaWidth) {
+        // If the hand is too wide even with default overlaps, calculate a new dynamic overlap
+        const overflow = totalWidth - handAreaWidth;
+        const perCardReduction = overflow / (N > 1 ? N-1 : 1);
+        finalOverlapLegal = legalOverlap + perCardReduction;
+        finalOverlapIllegal = illegalOverlap + perCardReduction;
     }
     // --- END NEW LOGIC ---
 
@@ -114,15 +126,17 @@ const PlayerHand = ({
         <div className="player-hand-container">
             <div className={`player-hand-cards ${isMyTurnToPlay ? 'my-turn' : ''}`}>
                 {myHandToDisplay.map((card, index) => {
-                    const isLegal = legalMoves.includes(card);
+                    const isLegal = isMyTurnToPlay && legalMoves.includes(card);
+                    const overlapAmount = isLegal ? finalOverlapLegal : finalOverlapIllegal;
+
                     return (
-                        <div key={card} className="player-hand-card-wrapper" style={{ marginLeft: index > 0 ? `-${overlap}px` : 0 }}>
+                        <div key={card} className="player-hand-card-wrapper" style={{ marginLeft: index > 0 ? `-${overlapAmount}px` : 0 }}>
                             {renderCard(card, {
                                 isButton: true,
                                 onClick: () => handlePlayCard(card),
-                                disabled: isMyTurnToPlay ? !isLegal : true, // Disable if not your turn OR not a legal move
+                                disabled: !isLegal,
                                 large: true,
-                                className: isMyTurnToPlay && !isLegal ? 'illegal-move' : '' // Pass className for styling illegal cards
+                                className: !isLegal ? 'illegal-move' : ''
                             })}
                         </div>
                     );

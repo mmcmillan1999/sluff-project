@@ -21,6 +21,7 @@
     justify-content: center;
     align-items: flex-end;
     padding: 10px;
+    height: 110px; /* Give the container a fixed height */
     max-width: 95vw;
     margin: 0 auto;
     transition: all 0.3s ease;
@@ -34,9 +35,28 @@
 
 .player-hand-card-wrapper {
     transition: transform 0.2s ease, box-shadow 0.2s ease;
+    position: relative; /* Needed for the ::after element */
 }
 
 .player-hand-card-wrapper:hover {
     transform: translateY(-12px);
-    z-index: 100; /* Ensure the hovered card is on top */
+    z-index: 100;
+}
+
+/* --- NEW: Styling for illegal cards --- */
+.illegal-move {
+    /* We don't use filter anymore, as it affects the whole card */
+    cursor: not-allowed;
+}
+
+.illegal-move::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5); /* The dark shade */
+    border-radius: 6px; /* Match the card's border-radius */
+    pointer-events: none; /* Allows clicks to pass through if needed */
 }
