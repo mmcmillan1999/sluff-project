@@ -116,16 +116,14 @@ class GameService {
         return { gameWinnerName };
     }
 
-    // --- NEW METHOD FOR HARD RESET ---
+    // --- SERVER RESET METHOD ---
     resetAllEngines() {
         console.log("[ADMIN] Resetting all game engines to initial state.");
-        Object.values(this.engines).forEach(engine => {
-            engine.reset();
-        });
-        // After resetting, immediately broadcast the new, empty lobby state.
+        this.engines = {}; // Throw away the old engines
+        this._initializeEngines(); // Create a fresh set
         this.io.emit('lobbyState', this.getLobbyState());
     }
-    // --- END NEW METHOD ---
+    // --- END RESET METHOD ---
 
     async _executeEffects(tableId, effects = []) {
         if (!effects || effects.length === 0) return;
