@@ -1,6 +1,5 @@
 // frontend/src/__mocks__/mockGameState.js
 
-// A baseline game state for testing purposes.
 export const getMockGameState = (overrides = {}) => {
     const baseState = {
         tableId: 'table-1',
@@ -34,9 +33,7 @@ export const getMockGameState = (overrides = {}) => {
         lastCompletedTrick: null,
         playersWhoPassedThisRound: [],
         playerMode: 3,
-        // ... add other base properties as needed
     };
-
-    // Deep merge overrides into the base state
+    
     return { ...baseState, ...overrides };
 };

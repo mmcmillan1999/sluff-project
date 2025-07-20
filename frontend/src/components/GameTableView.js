@@ -163,7 +163,6 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
     const renderCard = (cardString, options = {}) => {
         const { isButton = false, onClick = null, disabled = false, isSelected = false, small = false, large = false, isFaceDown = false, style: customStyle = {}, className = '' } = options;
 
-        // --- THIS IS THE CHANGE: Reduced card sizes ---
         const width = large ? '65px' : (small ? '37.5px' : '45px');
         const height = large ? '85px' : (small ? '50px' : '70px');
 
@@ -190,26 +189,14 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
         const cardClasses = ['card-display', className].filter(Boolean).join(' ');
         const cardContent = <>{rank !== '?' && rank}<span className="card-symbol">{symbol}</span></>;
 
-        const style = {
-            padding: large ? '10px' : (small ? '4px' : '8px'),
-            border: borderStyle,
-            borderRadius: '4px',
-            backgroundColor: isSelected ? 'lightblue' : backgroundColor,
-            color: color,
-            margin: '3px',
-            minWidth: width,
+        const style = { 
+            backgroundColor, 
+            color, 
+            minWidth: width, 
             height,
-            textAlign: 'left',
-            fontWeight: 'bold',
-            fontSize: baseFontSize,
-            cursor: isButton && !disabled ? 'pointer' : 'default',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'flex-start',
-            alignItems: 'flex-start',
+            fontSize: large ? '1.2em' : (small ? '0.8em' : '1em'),
             ...customStyle
         };
-
         
         if (isButton) {
             return (<button onClick={onClick} disabled={disabled} style={style} className={cardClasses}>{cardContent}</button>);
