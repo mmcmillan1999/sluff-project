@@ -24,13 +24,18 @@ const createChatRoutes = (pool, io, jwt) => {
     // GET /api/chat - Fetch recent chat messages
     router.get('/', checkAuth(jwt), async (req, res) => {
         try {
+            const limit = parseInt(req.query.limit, 10) || 50;
             const query = `
                 SELECT id, username, message, created_at 
-                FROM lobby_chat_messages 
-                ORDER BY created_at ASC 
-                LIMIT 50;
+                FROM (
+                    SELECT id, username, message, created_at 
+                    FROM lobby_chat_messages
+                    ORDER BY created_at DESC
+                    LIMIT $1
+                ) AS recent_messages
+                ORDER BY created_at ASC;
             `;
-            const { rows } = await pool.query(query);
+            const { rows } = await pool.query(query, [limit]);
             res.json(rows);
         } catch (error) {
             console.error('Failed to fetch chat history:', error);

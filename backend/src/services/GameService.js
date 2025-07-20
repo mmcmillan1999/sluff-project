@@ -227,7 +227,7 @@ class GameService {
             const playDelay = 1200;
             const roundEndDelay = 8000;
 
-            const makeMove = (actionFn, ...args) => {
+            const makeMove = (actionServiceFn, ...args) => {
                 const delay = 
                     engine.state === 'Playing Phase' ? (isCourtney ? playDelay * 2 : playDelay) :
                     engine.state === 'Awaiting Next Round Trigger' ? (isCourtney ? roundEndDelay * 2 : roundEndDelay) :
@@ -235,34 +235,36 @@ class GameService {
 
                 engine.pendingBotAction = setTimeout(() => {
                     engine.pendingBotAction = null;
-                    actionFn(tableId, bot.userId, ...args);
+                    actionServiceFn.call(this, tableId, bot.userId, ...args);
                 }, delay);
             };
 
             if (engine.state === 'Dealing Pending' && engine.dealer == bot.userId) {
-                return makeMove(this.dealCards.bind(this));
+                return makeMove(this.dealCards);
             }
             if (engine.state === 'Awaiting Next Round Trigger' && engine.roundSummary?.dealerOfRoundId == bot.userId) {
-                return makeMove(this.requestNextRound.bind(this));
+                return makeMove(this.requestNextRound);
             }
             if (engine.state === 'Awaiting Frog Upgrade Decision' && engine.biddingTurnPlayerId == bot.userId) {
-                return makeMove(this.placeBid.bind(this), "Pass");
+                return makeMove(this.placeBid, "Pass");
             }
             if (engine.state === 'Bidding Phase' && engine.biddingTurnPlayerId == bot.userId) {
-                const bid = bot.makeBid(); // Bot logic now returns the bid
-                return makeMove(this.placeBid.bind(this), bid);
+                const bid = bot.makeBid();
+                return makeMove(this.placeBid, bid);
             }
             if (engine.state === 'Trump Selection' && engine.bidWinnerInfo?.userId == bot.userId && !engine.trumpSuit) {
-                const suit = bot.chooseTrump(); // Bot logic now returns the suit
-                return makeMove(this.chooseTrump.bind(this), suit);
+                const suit = bot.chooseTrump();
+                return makeMove(this.chooseTrump, suit);
             }
             if (engine.state === 'Frog Widow Exchange' && engine.bidWinnerInfo?.userId == bot.userId && engine.widowDiscardsForFrogBidder.length === 0) {
-                const discards = bot.submitFrogDiscards(); // Bot logic now returns discards
-                return makeMove(this.submitFrogDiscards.bind(this), discards);
+                const discards = bot.submitFrogDiscards();
+                return makeMove(this.submitFrogDiscards, discards);
             }
             if (engine.state === 'Playing Phase' && engine.trickTurnPlayerId == bot.userId) {
-                const card = bot.playCard(); // Bot logic now returns the card
-                return makeMove(this.playCard.bind(this), card);
+                const card = bot.playCard();
+                if (card) {
+                    return makeMove(this.playCard, card);
+                }
             }
         }
     }

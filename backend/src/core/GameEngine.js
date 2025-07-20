@@ -4,6 +4,8 @@ const { SERVER_VERSION, BID_HIERARCHY, PLACEHOLDER_ID, deck, SUITS, BID_MULTIPLI
 const BotPlayer = require('./BotPlayer');
 const { shuffle } = require('../utils/shuffle');
 const playHandler = require('./handlers/playHandler');
+const scoringHandler = require('./handlers/scoringHandler');
+const PlayerList = require('./PlayerList');
 
 const BOT_NAMES = ["Mike Knight", "Grandma Joe", "Grampa Blane", "Kimba", "Courtney Sr.", "Cliff"];
 
@@ -15,7 +17,7 @@ class GameEngine {
         this.serverVersion = SERVER_VERSION;
         this.state = "Waiting for Players";
         this.players = {};
-        this.playerOrderActive = [];
+        this.playerOrder = new PlayerList();
         this.scores = {};
         this.gameStarted = false;
         this.gameId = null;
@@ -52,49 +54,57 @@ class GameEngine {
     joinTable(user, socketId) {
         const { id, username } = user;
         const isPlayerAlreadyInGame = !!this.players[id];
+
         if (isPlayerAlreadyInGame) {
             this.players[id].disconnected = false;
             this.players[id].socketId = socketId;
         } else {
-            const activePlayersCount = Object.values(this.players).filter(p => !p.isSpectator).length;
+            const activePlayersCount = this.playerOrder.count;
             if (this.gameStarted || activePlayersCount >= 4) {
                 this.players[id] = { userId: id, playerName: username, socketId: socketId, isSpectator: true, disconnected: false };
             } else {
                  this.players[id] = { userId: id, playerName: username, socketId: socketId, isSpectator: false, disconnected: false };
+                 this.playerOrder.add(id);
             }
         }
         if (!this.scores[username]) this.scores[username] = 120;
-        this._recalculateActivePlayerOrder();
-        const activePlayersAfterJoin = this.playerOrderActive.length;
+        
+        const activePlayersAfterJoin = this.playerOrder.count;
         if (!this.gameStarted) {
             this.state = (activePlayersAfterJoin >= 3) ? "Ready to Start" : "Waiting for Players";
         }
     }
 
     addBotPlayer() {
-        const currentPlayers = Object.values(this.players).filter(p => !p.isSpectator);
-        if (currentPlayers.length >= 4) return;
-        const currentBotNames = new Set(currentPlayers.filter(p => p.isBot).map(p => p.playerName));
+        if (this.playerOrder.count >= 4) return;
+        const currentBotNames = new Set(Object.values(this.players).filter(p => p.isBot).map(p => p.playerName));
         const availableNames = BOT_NAMES.filter(name => !currentBotNames.has(name));
         if (availableNames.length === 0) return;
+        
         const botName = availableNames[Math.floor(Math.random() * availableNames.length)];
         const botId = this._nextBotId--;
+        
         this.players[botId] = { userId: botId, playerName: botName, socketId: null, isSpectator: false, disconnected: false, isBot: true };
         this.bots[botId] = new BotPlayer(botId, botName, this);
         if (!this.scores[botName]) this.scores[botName] = 120;
-        this._recalculateActivePlayerOrder();
-        if (this.playerOrderActive.length >= 3 && !this.gameStarted) this.state = 'Ready to Start';
+        
+        this.playerOrder.add(botId);
+
+        if (this.playerOrder.count >= 3 && !this.gameStarted) this.state = 'Ready to Start';
     }
 
     leaveTable(userId) {
         if (!this.players[userId]) return;
         const playerInfo = this.players[userId];
         const safeLeaveStates = ["Waiting for Players", "Ready to Start", "Game Over"];
-        if (safeLeaveStates.includes(this.state) || playerInfo.isSpectator) { delete this.players[userId]; }
-        else if (this.gameId && this.gameStarted) { this.disconnectPlayer(userId); }
-        else { delete this.players[userId]; }
-        if (playerInfo.isBot) delete this.bots[userId];
-        this._recalculateActivePlayerOrder();
+
+        if (safeLeaveStates.includes(this.state) || playerInfo.isSpectator) {
+            delete this.players[userId];
+            if (playerInfo.isBot) delete this.bots[userId];
+            this.playerOrder.remove(userId);
+        } else if (this.gameId && this.gameStarted) {
+            this.disconnectPlayer(userId);
+        }
     }
     
     disconnectPlayer(userId) {
@@ -102,7 +112,8 @@ class GameEngine {
         if (!player) return;
         if (!this.gameStarted || player.isSpectator) {
             delete this.players[userId];
-            this._recalculateActivePlayerOrder();
+            if (player.isBot) delete this.bots[userId];
+            this.playerOrder.remove(userId);
         } else {
             console.log(`[${this.tableId}] Player ${player.playerName} has disconnected.`);
             player.disconnected = true;
@@ -122,40 +133,45 @@ class GameEngine {
     startGame(requestingUserId) {
         if (this.gameStarted) return this._effects();
         if (!this.players[requestingUserId] || this.players[requestingUserId].isSpectator) return this._effects();
-        const activePlayers = Object.values(this.players).filter(p => !p.isSpectator && !p.disconnected);
-        if (activePlayers.length < 3) {
+        
+        const activePlayerIds = this.playerOrder.allIds;
+        if (activePlayerIds.length < 3) {
             return this._effects([{ type: 'EMIT_TO_SOCKET', payload: { socketId: this.players[requestingUserId].socketId, event: 'gameStartError', data: { message: "Need at least 3 players to start." } } }]);
         }
         
-        this.playerMode = activePlayers.length;
-        const activePlayerIds = activePlayers.map(p => p.userId);
+        this.playerMode = activePlayerIds.length;
         
         const effects = [{
             type: 'START_GAME_TRANSACTIONS',
             payload: { 
                 table: { tableId: this.tableId, theme: this.theme, playerMode: this.playerMode },
-                playerIds: activePlayers.filter(p => !p.isBot).map(p => p.userId) 
+                playerIds: activePlayerIds.filter(id => !this.players[id].isBot) 
             },
             onSuccess: (gameId) => {
                 this.gameId = gameId;
                 this.gameStarted = true;
-                activePlayers.forEach(p => { if (this.scores[p.playerName] === undefined) this.scores[p.playerName] = 120; });
+                activePlayerIds.forEach(id => { if (this.scores[this.players[id].playerName] === undefined) this.scores[this.players[id].playerName] = 120; });
                 if (this.playerMode === 3 && this.scores[PLACEHOLDER_ID] === undefined) { this.scores[PLACEHOLDER_ID] = 120; }
+                
                 const shuffledPlayerIds = shuffle([...activePlayerIds]);
                 this.dealer = shuffledPlayerIds[0];
-                this._recalculateActivePlayerOrder();
+                this.playerOrder.setTurnOrder(this.dealer);
+                
                 this._initializeNewRoundState();
                 this.state = "Dealing Pending";
             },
             onFailure: (error, brokePlayerName) => {
                 if (brokePlayerName) {
                     const brokePlayer = Object.values(this.players).find(p => p.playerName === brokePlayerName);
-                    if (brokePlayer) delete this.players[brokePlayer.userId];
-                    this._recalculateActivePlayerOrder();
-                    this.playerMode = this.playerOrderActive.length;
-                    this.state = this.playerMode >= 3 ? "Ready to Start" : "Waiting for Players";
+                    if (brokePlayer) {
+                        delete this.players[brokePlayer.userId];
+                        this.playerOrder.remove(brokePlayer.userId);
+                    }
                 }
+                this.gameStarted = false;
                 this.gameId = null; 
+                this.playerMode = this.playerOrder.count;
+                this.state = this.playerMode >= 3 ? "Ready to Start" : "Waiting for Players";
             }
         }];
         
@@ -168,15 +184,16 @@ class GameEngine {
 
     dealCards(requestingUserId) {
         if (this.state !== "Dealing Pending" || requestingUserId !== this.dealer) return this._effects();
+        const turnOrder = this.playerOrder.turnOrder;
         const shuffledDeck = shuffle([...deck]);
-        this.playerOrderActive.forEach((playerId, i) => {
+        turnOrder.forEach((playerId, i) => {
             const playerName = this.players[playerId].playerName;
             this.hands[playerName] = shuffledDeck.slice(i * 11, (i + 1) * 11);
         });
-        this.widow = shuffledDeck.slice(11 * this.playerOrderActive.length);
+        this.widow = shuffledDeck.slice(11 * turnOrder.length);
         this.originalDealtWidow = [...this.widow];
         this.state = "Bidding Phase";
-        this.biddingTurnPlayerId = this.playerOrderActive[0];
+        this.biddingTurnPlayerId = turnOrder[0];
         return this._effects([{ type: 'BROADCAST_STATE' }]);
     }
 
@@ -203,15 +220,15 @@ class GameEngine {
             if (bid === "Solo" && this.originalFrogBidderId && userId !== this.originalFrogBidderId) this.soloBidMadeAfterFrog = true;
         } else { this.playersWhoPassedThisRound.push(userId); }
         
-        const activeBiddersRemaining = this.playerOrderActive.filter(id => !this.playersWhoPassedThisRound.includes(id));
-        if ((this.currentHighestBidDetails && activeBiddersRemaining.length <= 1) || this.playersWhoPassedThisRound.length === this.playerOrderActive.length) {
+        const activeBiddersRemaining = this.playerOrder.turnOrder.filter(id => !this.playersWhoPassedThisRound.includes(id));
+        if ((this.currentHighestBidDetails && activeBiddersRemaining.length <= 1) || this.playersWhoPassedThisRound.length === this.playerOrder.turnOrder.length) {
             this.biddingTurnPlayerId = null;
             this._checkForFrogUpgrade();
         } else {
-            let currentBidderIndex = this.playerOrderActive.indexOf(userId);
+            let currentBidderIndex = this.playerOrder.turnOrder.indexOf(userId);
             let nextBidderId = null;
-            for (let i = 1; i < this.playerOrderActive.length; i++) {
-                let potentialNextBidderId = this.playerOrderActive[(currentBidderIndex + i) % this.playerOrderActive.length];
+            for (let i = 1; i < this.playerOrder.turnOrder.length; i++) {
+                let potentialNextBidderId = this.playerOrder.turnOrder[(currentBidderIndex + i) % this.playerOrder.turnOrder.length];
                 if (!this.playersWhoPassedThisRound.includes(potentialNextBidderId)) {
                     nextBidderId = potentialNextBidderId;
                     break;
@@ -220,7 +237,6 @@ class GameEngine {
             if (nextBidderId) { this.biddingTurnPlayerId = nextBidderId; }
             else { this._checkForFrogUpgrade(); }
         }
-        
         return this._effects([{ type: 'BROADCAST_STATE' }]);
     }
     
@@ -259,7 +275,7 @@ class GameEngine {
         const originalPlayers = { ...this.players };
         this.state = "Waiting for Players";
         this.players = {};
-        this.playerOrderActive = [];
+        this.playerOrder = new PlayerList();
         this.scores = {};
         this.gameStarted = false;
         this.gameId = null;
@@ -277,12 +293,10 @@ class GameEngine {
                     this.bots[userId] = new BotPlayer(parseInt(userId,10), playerInfo.playerName, this);
                 }
                 this.scores[playerInfo.playerName] = 120;
+                this.playerOrder.add(parseInt(userId, 10)); // Re-add players in their old order
             }
         }
-        const botIds = Object.keys(this.bots).map(id => parseInt(id,10));
-        this._nextBotId = botIds.length ? Math.min(...botIds) - 1 : -1;
-        this._recalculateActivePlayerOrder();
-        this.playerMode = this.playerOrderActive.length;
+        this.playerMode = this.playerOrder.count;
         this.state = this.playerMode >= 3 ? "Ready to Start" : "Waiting for Players";
         return this._effects([{ type: 'BROADCAST_STATE' }, { type: 'UPDATE_LOBBY' }]);
     }
@@ -325,7 +339,7 @@ class GameEngine {
         this.drawRequest.isActive = true;
         this.drawRequest.initiator = player.playerName;
         this.drawRequest.votes = {};
-        const activePlayers = Object.values(this.players).filter(p => !p.isSpectator);
+        const activePlayers = this.playerOrder.allIds.map(id => this.players[id]);
         activePlayers.forEach(p => {
             this.drawRequest.votes[p.playerName] = (p.playerName === player.playerName) ? 'wash' : null;
         });
@@ -360,34 +374,6 @@ class GameEngine {
             }
         });
         this.bidderCardPoints = 0; this.defenderCardPoints = 0;
-    }
-
-    _recalculateActivePlayerOrder() {
-        const activePlayers = Object.values(this.players).filter(p => !p.isSpectator && !p.disconnected);
-        if (activePlayers.length === 0) { this.playerOrderActive = []; return; }
-        if (this.gameStarted && this.dealer) {
-            const playerUserIds = activePlayers.map(p => p.userId);
-            let dealerIndex = playerUserIds.indexOf(this.dealer);
-            if (dealerIndex === -1) { this.dealer = playerUserIds[0]; dealerIndex = 0; }
-            const orderedIds = [];
-            for (let i = 1; i <= playerUserIds.length; i++) { 
-                const playerId = playerUserIds[(dealerIndex + i) % playerUserIds.length]; 
-                if (this.players[playerId]) { orderedIds.push(playerId); }
-            }
-            this.playerOrderActive = orderedIds;
-        } else { this.playerOrderActive = activePlayers.map(p => p.userId).sort((a,b) => a - b); }
-    }
-
-    getStateForClient() {
-        const state = {
-            tableId: this.tableId, tableName: this.tableName, theme: this.theme, state: this.state, players: this.players,
-            playerOrderActive: Object.values(this.players).filter(p => this.playerOrderActive.includes(p.userId)).sort((a, b) => this.playerOrderActive.indexOf(a.userId) - this.playerOrderActive.indexOf(b.userId)).map(p => p.playerName),
-            dealer: this.dealer, hands: this.hands, widow: this.widow, originalDealtWidow: this.originalDealtWidow, scores: this.scores, currentHighestBidDetails: this.currentHighestBidDetails, bidWinnerInfo: this.bidWinnerInfo, gameStarted: this.gameStarted, trumpSuit: this.trumpSuit, currentTrickCards: this.currentTrickCards, tricksPlayedCount: this.tricksPlayedCount, leadSuitCurrentTrick: this.leadSuitCurrentTrick, trumpBroken: this.trumpBroken, capturedTricks: this.capturedTricks, roundSummary: this.roundSummary, lastCompletedTrick: this.lastCompletedTrick, playersWhoPassedThisRound: this.playersWhoPassedThisRound.map(id => this.players[id]?.playerName), playerMode: this.playerMode, serverVersion: this.serverVersion, insurance: this.insurance, forfeiture: this.forfeiture, drawRequest: this.drawRequest, originalFrogBidderId: this.originalFrogBidderId, soloBidMadeAfterFrog: this.soloBidMadeAfterFrog, revealedWidowForFrog: this.revealedWidowForFrog, widowDiscardsForFrogBidder: this.widowDiscardsForFrogBidder,
-            bidderCardPoints: this.bidderCardPoints, defenderCardPoints: this.defenderCardPoints,
-        };
-        state.biddingTurnPlayerName = this.players[this.biddingTurnPlayerId]?.playerName;
-        state.trickTurnPlayerName = this.players[this.trickTurnPlayerId]?.playerName;
-        return state;
     }
     
     _clearForfeitTimer() {
@@ -447,16 +433,18 @@ class GameEngine {
             this.insurance.bidMultiplier = multiplier;
             this.insurance.bidderPlayerName = this.bidWinnerInfo.playerName;
             this.insurance.bidderRequirement = 120 * multiplier;
-            const defenders = this.playerOrderActive.map(id => this.players[id].playerName).filter(pName => pName !== this.bidWinnerInfo.playerName);
+            const defenders = this.playerOrder.turnOrder.map(id => this.players[id].playerName).filter(pName => pName !== this.bidWinnerInfo.playerName);
             defenders.forEach(defName => { this.insurance.defenderOffers[defName] = -60 * multiplier; });
         }
     }
     
     _advanceRound() {
         if (!this.gameStarted) return;
-        const oldDealerId = this.playerOrderActive.shift();
-        this.playerOrderActive.push(oldDealerId);
-        this.dealer = this.playerOrderActive[0];
+        this.playerOrder.setTurnOrder(this.dealer); // Re-order based on old dealer
+        const oldDealerId = this.playerOrder.turnOrder.pop(); // The last person in the turn order was the dealer
+        this.playerOrder.turnOrder.unshift(oldDealerId); // Move them to the front to become the new first bidder
+        this.dealer = this.playerOrder.turnOrder[this.playerOrder.turnOrder.length -1]; // The new dealer is the last person in the new turn order
+
         if (!this.players[this.dealer]) {
             console.error(`[${this.tableId}] FATAL: Could not find new dealer. Resetting table.`);
             this.reset();
@@ -464,6 +452,19 @@ class GameEngine {
         }
         this._initializeNewRoundState();
         this.state = "Dealing Pending";
+    }
+
+    getStateForClient() {
+        const activeTurnOrder = this.gameStarted ? this.playerOrder.turnOrder : this.playerOrder.allIds;
+        const state = {
+            tableId: this.tableId, tableName: this.tableName, theme: this.theme, state: this.state, players: this.players,
+            playerOrderActive: activeTurnOrder.map(id => this.players[id]?.playerName).filter(Boolean),
+            dealer: this.dealer, hands: this.hands, widow: this.widow, originalDealtWidow: this.originalDealtWidow, scores: this.scores, currentHighestBidDetails: this.currentHighestBidDetails, bidWinnerInfo: this.bidWinnerInfo, gameStarted: this.gameStarted, trumpSuit: this.trumpSuit, currentTrickCards: this.currentTrickCards, tricksPlayedCount: this.tricksPlayedCount, leadSuitCurrentTrick: this.leadSuitCurrentTrick, trumpBroken: this.trumpBroken, capturedTricks: this.capturedTricks, roundSummary: this.roundSummary, lastCompletedTrick: this.lastCompletedTrick, playersWhoPassedThisRound: this.playersWhoPassedThisRound.map(id => this.players[id]?.playerName), playerMode: this.playerMode, serverVersion: this.serverVersion, insurance: this.insurance, forfeiture: this.forfeiture, drawRequest: this.drawRequest, originalFrogBidderId: this.originalFrogBidderId, soloBidMadeAfterFrog: this.soloBidMadeAfterFrog, revealedWidowForFrog: this.revealedWidowForFrog, widowDiscardsForFrogBidder: this.widowDiscardsForFrogBidder,
+            bidderCardPoints: this.bidderCardPoints, defenderCardPoints: this.defenderCardPoints,
+        };
+        state.biddingTurnPlayerName = this.players[this.biddingTurnPlayerId]?.playerName;
+        state.trickTurnPlayerName = this.players[this.trickTurnPlayerId]?.playerName;
+        return state;
     }
 }
 
