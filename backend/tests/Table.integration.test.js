@@ -7,18 +7,15 @@ const GameService = require('../src/services/GameService');
 // --- Mocks and Helpers ---
 const mockIo = { to: () => ({ emit: () => {} }), emit: () => {}, sockets: { sockets: new Map() } };
 
-// This mock timer will be used to control time in our tests
 class MockTimer {
     constructor() {
         this.callbacks = [];
         this.duration = 0;
     }
-    // The mock function just stores the callback and duration
     mockSetTimeout(callback, duration) {
         this.callbacks.push(callback);
         this.duration = duration;
     }
-    // A function to manually trigger the stored callbacks
     async tick() {
         while(this.callbacks.length > 0) {
             const cb = this.callbacks.shift();
@@ -27,18 +24,57 @@ class MockTimer {
     }
 }
 
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // --- Test Cases ---
 
-async function testBotBiddingProcess() { /* ... This test function is unchanged from the last version ... */ }
+async function testBotBiddingProcess() {
+    console.log("Running Test: testBotBiddingProcess...");
+
+    // 1. ARRANGE
+    const gameService = new GameService(mockIo, null);
+    const engine = gameService.getEngineById('table-1');
+    const humanId = 101;
+    
+    engine.joinTable({ id: humanId, username: "HumanPlayer" }, "socket123");
+    engine.addBotPlayer(); // Bot 1 (ID: -1)
+    engine.addBotPlayer(); // Bot 2 (ID: -2)
+    
+    assert.deepStrictEqual(engine.playerOrder.allIds, [humanId, -1, -2], "Initial join order is incorrect");
+
+    engine.gameStarted = true;
+    engine.gameId = 1;
+    engine.playerMode = 3;
+    engine.dealer = humanId;
+    engine.playerOrder.setTurnOrder(engine.dealer);
+    engine.state = "Dealing Pending";
+    
+    const firstBidderId = engine.playerOrder.turnOrder[0];
+    assert.strictEqual(firstBidderId, -1, "The first bidder after the dealer should be Bot 1 (ID: -1)");
+    
+    // 2. ACT
+    console.log(`  - Human (dealer) deals cards...`);
+    await gameService.dealCards('table-1', humanId);
+    
+    // 3. ASSERT (Immediate)
+    assert.strictEqual(engine.state, "Bidding Phase", "After dealing, state should be Bidding Phase.");
+    assert.strictEqual(engine.biddingTurnPlayerId, firstBidderId, `Turn should belong to the first bidder (ID: ${firstBidderId}).`);
+
+    console.log("  - Waiting for bot to make a bid...");
+    await sleep(1500);
+
+    // 4. ASSERT (After Delay)
+    const bidsMade = engine.playersWhoPassedThisRound.length + (engine.currentHighestBidDetails ? 1 : 0);
+    assert.strictEqual(bidsMade, 1, "Expected exactly one bid to have been made by the bot.");
+    
+    console.log("...Success! Bot bidding was triggered correctly.\n");
+}
 
 async function testAllPlayersPass() {
     console.log("Running Test: testAllPlayersPass...");
     
-    // 1. ARRANGE
     const mockTimer = new MockTimer();
     const gameService = new GameService(mockIo, null);
-    // Override the service's timer with our mock
     gameService.timerOverride = mockTimer.mockSetTimeout.bind(mockTimer);
     
     const engine = gameService.getEngineById('table-1');
@@ -51,22 +87,18 @@ async function testAllPlayersPass() {
     engine.state = "Dealing Pending";
     await gameService.dealCards('table-1', 3);
 
-    // 2. ACT
     console.log("  - All players pass...");
     await gameService.placeBid('table-1', 1, "Pass");
     await gameService.placeBid('table-1', 2, "Pass");
     await gameService.placeBid('table-1', 3, "Pass");
 
-    // 3. ASSERT (Widow Reveal State)
     assert.strictEqual(engine.state, "AllPassWidowReveal", "State should be AllPassWidowReveal after all players pass.");
     assert.strictEqual(mockTimer.callbacks.length, 1, "A timer should have been set for the widow reveal.");
     assert.ok(mockTimer.duration >= 1000 && mockTimer.duration <= 6000, `Widow reveal duration (${mockTimer.duration}ms) is out of bounds (1-6s).`);
 
-    // 4. ACT (Advance Time)
     console.log(`  - Advancing mock timer by ${mockTimer.duration}ms...`);
     await mockTimer.tick();
 
-    // 5. ASSERT (Next Round State)
     assert.strictEqual(engine.state, "Dealing Pending", "State should be Dealing Pending after the widow reveal timer.");
     assert.strictEqual(engine.dealer, 1, "The dealer should have advanced to the next player (Player A).");
 
@@ -76,7 +108,6 @@ async function testAllPlayersPass() {
 async function testBotHandlesFrogUpgrade() {
     console.log("Running Test: testBotHandlesFrogUpgrade...");
 
-    // 1. ARRANGE
     const gameService = new GameService(mockIo, null);
     const engine = gameService.getEngineById('table-1');
     const humanId = 101;
@@ -91,21 +122,17 @@ async function testBotHandlesFrogUpgrade() {
     engine.state = "Dealing Pending";
     await gameService.dealCards('table-1', -2);
 
-    // 2. ACT
     console.log("  - Bot 1 bids Frog, Human passes, Bot 2 bids Solo...");
     await gameService.placeBid('table-1', -1, "Frog");
     await gameService.placeBid('table-1', humanId, "Pass");
     await gameService.placeBid('table-1', -2, "Solo");
 
-    // 3. ASSERT (Waiting for Upgrade Decision)
     assert.strictEqual(engine.state, "Awaiting Frog Upgrade Decision", "State should be waiting for the original frog bidder.");
     assert.strictEqual(engine.biddingTurnPlayerId, -1, "Turn should return to Bot 1 to decide on upgrading.");
 
-    // 4. ACT (Let the bot think and act)
     console.log("  - Waiting for Bot 1 to pass on the upgrade...");
     await sleep(1500);
 
-    // 5. ASSERT (Final Bidding State)
     assert.strictEqual(engine.state, "Trump Selection", "State should advance to Trump Selection after the bot passes.");
     assert.strictEqual(engine.bidWinnerInfo.userId, -2, "The final bid winner should be Bot 2.");
     assert.strictEqual(engine.bidWinnerInfo.bid, "Solo", "The winning bid should be Solo.");
