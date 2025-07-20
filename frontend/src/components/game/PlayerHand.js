@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import './PlayerHand.css';
 import { RANKS_ORDER, SUIT_SORT_ORDER } from '../../constants';
 
 // Helper function for card sorting
@@ -25,9 +26,18 @@ const PlayerHand = ({
     renderCard
 }) => {
     const [selectedDiscards, setSelectedDiscards] = useState([]);
+    const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 0);
 
     const { state, hands, bidWinnerInfo, revealedWidowForFrog } = currentTableState;
     const myHand = hands[selfPlayerName] || [];
+
+    useEffect(() => {
+        const handleResize = () => {
+            setWindowWidth(window.innerWidth);
+        };
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     useEffect(() => {
         if (state !== "Frog Widow Exchange") {
@@ -84,16 +94,31 @@ const PlayerHand = ({
     const myHandToDisplay = sortHandBySuit(myHand);
     const isMyTurnToPlay = state === "Playing Phase" && currentTableState.trickTurnPlayerName === selfPlayerName;
 
+    const cardWidth = 70; // width used in renderCard for large cards
+    const N = myHandToDisplay.length;
+    const handAreaWidth = windowWidth * 0.85;
+    let overlap = 0;
+    if (N > 1) {
+        overlap = Math.max(0, cardWidth - ((handAreaWidth - cardWidth) / (N - 1)));
+        if (N <= 3) overlap = 0;
+    }
+
     return (
         <div style={{ flexGrow: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-            {/* --- MODIFICATION: Added a className for responsive styling --- */}
-            <div className="player-hand-cards">
+            <div className={`player-hand-cards${isMyTurnToPlay ? ' my-turn' : ''}`}>
                 {myHandToDisplay.map((card, index) => renderCard(card, {
                     key: card,
                     isButton: true,
                     onClick: () => handlePlayCard(card),
                     disabled: !isMyTurnToPlay,
-                    style: { animation: `fadeIn 0.5s ease-out forwards`, animationDelay: `${index * 0.05}s`, opacity: 0 }
+                    style: {
+                        animation: `fadeIn 0.5s ease-out forwards`,
+                        animationDelay: `${index * 0.05}s`,
+                        opacity: 0,
+                        marginLeft: index === 0 ? 0 : `-${overlap}px`,
+                        zIndex: index,
+                    },
+                    className: 'player-hand-card'
                 }))}
             </div>
         </div>

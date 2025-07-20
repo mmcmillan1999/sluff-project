@@ -160,9 +160,9 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
         setChatOpen(false);
     };
 
-    const renderCard = (cardString, { isButton = false, onClick = null, disabled = false, isSelected = false, small = false, large = false, isFaceDown = false, style: customStyle = {} } = {}) => {
-        const width = large ? '65px' : (small ? '30px' : '45px');
-        const height = large ? '90px' : (small ? '50px' : '70px');
+    const renderCard = (cardString, { isButton = false, onClick = null, disabled = false, isSelected = false, small = false, large = false, isFaceDown = false, style: customStyle = {}, className = '' } = {}) => {
+        const width = large ? '80px' : (small ? '40px' : '70px');
+        const height = large ? '110px' : (small ? '60px' : '100px');
 
         if (isFaceDown) {
             return (
@@ -197,13 +197,13 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
         const backgroundColor = SUIT_BACKGROUNDS[suit] || 'white';
         let borderStyle = isSelected ? '3px solid royalblue' : '1px solid #777';
         const baseFontSize = large ? '1.3em' : (small ? '0.8em' : '1em');
-        const style = { padding: large ? '10px' : (small ? '4px' : '8px'), border: borderStyle, borderRadius: '4px', backgroundColor: isSelected ? 'lightblue' : backgroundColor, color: color, margin: '3px', minWidth: width, height, textAlign: 'center', fontWeight: 'bold', fontSize: baseFontSize, cursor: isButton && !disabled ? 'pointer' : 'default', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', ...customStyle };
+        const style = { padding: large ? '10px' : (small ? '4px' : '8px'), border: borderStyle, borderRadius: '8px', backgroundColor: isSelected ? 'lightblue' : backgroundColor, color: color, margin: '3px', minWidth: width, height, textAlign: 'center', fontWeight: 'bold', fontSize: baseFontSize, cursor: isButton && !disabled ? 'pointer' : 'default', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.3)', ...customStyle };
 
         const symbolStyle = { fontSize: '125%' };
         const cardContent = <>{rank !== '?' && rank}<span style={symbolStyle}>{symbol}</span></>;
 
-        if (isButton) return (<button key={cardString} onClick={onClick} disabled={disabled} style={style}>{cardContent}</button>);
-        return (<span key={cardString} style={{ ...style, display: 'inline-flex' }}>{cardContent}</span>);
+        if (isButton) return (<button key={cardString} onClick={onClick} disabled={disabled} style={style} className={className}>{cardContent}</button>);
+        return (<span key={cardString} style={{ ...style, display: 'inline-flex' }} className={className}>{cardContent}</span>);
     };
 
     const handleForfeit = () => {

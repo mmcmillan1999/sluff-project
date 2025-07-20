@@ -1,0 +1,24 @@
+.player-hand-cards {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    padding: 5px;
+    max-width: 90vw;
+    margin: 0 auto;
+}
+
+.player-hand-cards.my-turn {
+    animation: pulsing-glow 1.5s infinite;
+    border-radius: 8px;
+}
+
+.player-hand-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.player-hand-card:hover,
+.player-hand-card:active {
+    transform: translateY(-8px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+}
