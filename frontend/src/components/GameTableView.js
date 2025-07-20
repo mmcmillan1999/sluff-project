@@ -190,14 +190,26 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
         const cardClasses = ['card-display', className].filter(Boolean).join(' ');
         const cardContent = <>{rank !== '?' && rank}<span className="card-symbol">{symbol}</span></>;
 
-        const style = { 
-            backgroundColor, 
-            color, 
-            minWidth: width, 
+        const style = {
+            padding: large ? '10px' : (small ? '4px' : '8px'),
+            border: borderStyle,
+            borderRadius: '4px',
+            backgroundColor: isSelected ? 'lightblue' : backgroundColor,
+            color: color,
+            margin: '3px',
+            minWidth: width,
             height,
-            fontSize: large ? '1.2em' : (small ? '0.8em' : '1em'), // Slightly smaller font
+            textAlign: 'left',
+            fontWeight: 'bold',
+            fontSize: baseFontSize,
+            cursor: isButton && !disabled ? 'pointer' : 'default',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'flex-start',
             ...customStyle
         };
+
         
         if (isButton) {
             return (<button onClick={onClick} disabled={disabled} style={style} className={cardClasses}>{cardContent}</button>);
