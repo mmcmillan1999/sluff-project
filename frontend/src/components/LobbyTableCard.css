@@ -78,9 +78,9 @@
 .join-table-button {
     flex-shrink: 0;
     padding: 8px 12px; /* Adjusted padding */
-    background: linear-gradient(to bottom, #28a745, #218838);
+    background: linear-gradient(to bottom, #0d6efd, #0b5ed7); /* CHANGED TO BLUE */
     color: white;
-    border: 1px solid #1e7e34;
+    border: 1px solid #0a58ca; /* CHANGED TO BLUE */
     border-radius: 6px;
     cursor: pointer;
     font-family: 'Oswald', sans-serif;
@@ -91,7 +91,7 @@
 }
 
 .join-table-button:hover:not(:disabled) {
-    background: linear-gradient(to bottom, #2ebf4f, #28a745);
+    background: linear-gradient(to bottom, #3b82f6, #0d6efd); /* CHANGED TO BLUE */
 }
 
 .table-card-container.disabled {
