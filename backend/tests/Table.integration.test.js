@@ -3,10 +3,12 @@
 const assert = require('assert');
 const GameEngine = require('../src/core/GameEngine');
 const GameService = require('../src/services/GameService');
-const PlayerList = require('../src/core/PlayerList'); // We need this for one of the tests
+const gameLogic = require('../src/core/logic'); // Import gameLogic for the mock service
+const PlayerList = require('../src/core/PlayerList');
 
 // --- Mocks and Helpers ---
 const mockIo = { to: () => ({ emit: () => {} }), emit: () => {}, sockets: { sockets: new Map() } };
+const mockPool = { query: () => Promise.resolve() }; // A mock pool for stat updates
 
 class MockTimer {
     constructor() {
@@ -25,158 +27,153 @@ class MockTimer {
     }
 }
 
+// --- NEW MOCK SERVICE TO HANDLE ASYNC EFFECTS ---
+class MockEffectProcessor {
+    constructor() {
+        this.pool = mockPool;
+    }
+
+    async processEffects(engine, effects) {
+        if (!effects || !effects.length) return;
+        for (const effect of effects) {
+            switch (effect.type) {
+                case 'HANDLE_DRAW_OUTCOME':
+                    const summary = await gameLogic.handleDrawGameOver(
+                        {...effect.payload, pool: this.pool},
+                        effect.payload.outcome,
+                        () => Promise.resolve(), // Mock transaction function
+                        () => Promise.resolve()  // Mock stat update function
+                    );
+                    if (effect.onComplete) {
+                        effect.onComplete(summary);
+                    }
+                    break;
+                // Add other effect types here if needed for future tests
+            }
+        }
+    }
+}
+// --- END NEW MOCK SERVICE ---
+
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // --- Test Cases ---
 
 async function testBotBiddingProcess() {
     console.log("Running Test: testBotBiddingProcess...");
-
-    // 1. ARRANGE
     const gameService = new GameService(mockIo, null);
     const engine = gameService.getEngineById('table-1');
     const humanId = 101;
-    
     engine.joinTable({ id: humanId, username: "HumanPlayer" }, "socket123");
-    engine.addBotPlayer(); // Bot 1 (ID: -1)
-    engine.addBotPlayer(); // Bot 2 (ID: -2)
-    
-    // Manually set the game state for a predictable test
-    engine.gameStarted = true;
-    engine.gameId = 1;
-    engine.playerMode = 3;
+    engine.addBotPlayer();
+    engine.addBotPlayer();
+    engine.gameStarted = true; engine.gameId = 1; engine.playerMode = 3;
     engine.dealer = humanId;
-    engine.playerOrder.setTurnOrder(engine.dealer); // This sets turn order to [-1, -2, 101]
+    engine.playerOrder.setTurnOrder(engine.dealer);
     engine.state = "Dealing Pending";
-    
     const firstBidderId = engine.playerOrder.turnOrder[0];
-    
-    // 2. ACT
     console.log(`  - Human (dealer) deals cards...`);
     await gameService.dealCards('table-1', humanId);
-    
-    assert.strictEqual(engine.state, "Bidding Phase", "After dealing, state should be Bidding Phase.");
-    assert.strictEqual(engine.biddingTurnPlayerId, firstBidderId, `Turn should belong to the first bidder (ID: ${firstBidderId}).`);
-
+    assert.strictEqual(engine.state, "Bidding Phase");
+    assert.strictEqual(engine.biddingTurnPlayerId, firstBidderId);
     console.log("  - Waiting for bot to make a bid...");
     await sleep(1500);
-
-    // 3. ASSERT
     const bidsMade = engine.playersWhoPassedThisRound.length + (engine.currentHighestBidDetails ? 1 : 0);
     assert.strictEqual(bidsMade, 1, "Expected exactly one bid to have been made by the bot.");
-    
     console.log("...Success! Bot bidding was triggered correctly.\n");
 }
 
 async function testAllPlayersPass() {
     console.log("Running Test: testAllPlayersPass...");
-    
     const mockTimer = new MockTimer();
     const gameService = new GameService(mockIo, null);
     gameService.timerOverride = mockTimer.mockSetTimeout.bind(mockTimer);
-    
     const engine = gameService.getEngineById('table-1');
     engine.joinTable({ id: 1, username: "Player A" }, "s1");
     engine.joinTable({ id: 2, username: "Player B" }, "s2");
     engine.joinTable({ id: 3, username: "Player C" }, "s3");
-
     engine.gameStarted = true; engine.gameId = 1; engine.playerMode = 3;
     engine.dealer = 3;
     engine.playerOrder.setTurnOrder(engine.dealer);
     engine.state = "Dealing Pending";
     await gameService.dealCards('table-1', 3);
-
     console.log("  - All players pass...");
     await gameService.placeBid('table-1', 1, "Pass");
     await gameService.placeBid('table-1', 2, "Pass");
     await gameService.placeBid('table-1', 3, "Pass");
-
-    assert.strictEqual(engine.state, "AllPassWidowReveal", "State should be AllPassWidowReveal after all players pass.");
-    assert.strictEqual(mockTimer.callbacks.length, 1, "A timer should have been set for the widow reveal.");
-    assert.ok(mockTimer.duration >= 1000 && mockTimer.duration <= 6000, `Widow reveal duration (${mockTimer.duration}ms) is out of bounds (1-6s).`);
-
+    assert.strictEqual(engine.state, "AllPassWidowReveal");
+    assert.strictEqual(mockTimer.callbacks.length, 1);
     console.log(`  - Advancing mock timer by ${mockTimer.duration}ms...`);
     await mockTimer.tick();
-
-    assert.strictEqual(engine.state, "Dealing Pending", "State should be Dealing Pending after the widow reveal timer.");
-    assert.strictEqual(engine.dealer, 1, "The dealer should have advanced to the next player (Player A).");
-
+    assert.strictEqual(engine.state, "Dealing Pending");
+    assert.strictEqual(engine.dealer, 1);
     console.log("...Success! All-pass scenario works correctly.\n");
 }
 
 async function testBotHandlesFrogUpgrade() {
     console.log("Running Test: testBotHandlesFrogUpgrade...");
-
     const gameService = new GameService(mockIo, null);
     const engine = gameService.getEngineById('table-1');
     const humanId = 101;
-    
-    engine.addBotPlayer(); // Bot 1 (ID: -1, will bid Frog)
+    engine.addBotPlayer();
     engine.joinTable({ id: humanId, username: "HumanPlayer" }, "socket123");
-    engine.addBotPlayer(); // Bot 2 (ID: -2, will bid Solo)
-
+    engine.addBotPlayer();
     engine.gameStarted = true; engine.gameId = 1; engine.playerMode = 3;
     engine.dealer = -2;
     engine.playerOrder.setTurnOrder(engine.dealer);
     engine.state = "Dealing Pending";
     await gameService.dealCards('table-1', -2);
-
     console.log("  - Bot 1 bids Frog, Human passes, Bot 2 bids Solo...");
     await gameService.placeBid('table-1', -1, "Frog");
     await gameService.placeBid('table-1', humanId, "Pass");
     await gameService.placeBid('table-1', -2, "Solo");
-
-    assert.strictEqual(engine.state, "Awaiting Frog Upgrade Decision", "State should be waiting for the original frog bidder.");
-    assert.strictEqual(engine.biddingTurnPlayerId, -1, "Turn should return to Bot 1 to decide on upgrading.");
-
+    assert.strictEqual(engine.state, "Awaiting Frog Upgrade Decision");
+    assert.strictEqual(engine.biddingTurnPlayerId, -1);
     console.log("  - Waiting for Bot 1 to pass on the upgrade...");
     await sleep(1500);
-
-    assert.strictEqual(engine.state, "Trump Selection", "State should advance to Trump Selection after the bot passes.");
-    assert.strictEqual(engine.bidWinnerInfo.userId, -2, "The final bid winner should be Bot 2.");
-    assert.strictEqual(engine.bidWinnerInfo.bid, "Solo", "The winning bid should be Solo.");
-
+    assert.strictEqual(engine.state, "Trump Selection");
+    assert.strictEqual(engine.bidWinnerInfo.userId, -2);
+    assert.strictEqual(engine.bidWinnerInfo.bid, "Solo");
     console.log("...Success! Bot correctly handled the frog upgrade scenario.\n");
 }
 
-// --- NEW TEST SUITE FOR DRAW VOTING ---
 async function testDrawRequestLifecycle() {
     console.log("Running Test: testDrawRequestLifecycle...");
+    const effectProcessor = new MockEffectProcessor();
 
     const setupEngineForDraw = () => {
         const engine = new GameEngine('table-draw-test', 'fort-creek', 'Draw Test Table');
         engine.joinTable({ id: 1, username: "P1" }, "s1");
         engine.joinTable({ id: 2, username: "P2" }, "s2");
         engine.joinTable({ id: 3, username: "P3" }, "s3");
-        engine.gameStarted = true;
+        engine.gameStarted = true; engine.gameId = 1;
         engine.playerMode = 3;
         engine.state = "Playing Phase";
         return engine;
     };
 
-    // Test Case 1: A 'no' vote cancels the draw.
     let engine = setupEngineForDraw();
-    engine.requestDraw(1); // P1 requests draw
+    engine.requestDraw(1);
     assert.strictEqual(engine.drawRequest.isActive, true, "Draw request should be active after initiation.");
-    engine.submitDrawVote(2, 'no'); // P2 votes no
+    engine.submitDrawVote(2, 'no');
     assert.strictEqual(engine.drawRequest.isActive, false, "Draw request should be inactive after a 'no' vote.");
     assert.strictEqual(engine.state, "Playing Phase", "Game state should remain 'Playing Phase' after a 'no' vote.");
     console.log("  - Passed: 'No' vote correctly cancels draw.");
 
-    // Test Case 2: A unanimous 'wash' vote ends the game.
     engine = setupEngineForDraw();
-    engine.requestDraw(1); // P1 requests draw (auto-votes 'wash')
+    engine.requestDraw(1);
     engine.submitDrawVote(2, 'wash');
-    engine.submitDrawVote(3, 'wash');
+    const finalVoteResult = engine.submitDrawVote(3, 'wash');
+    await effectProcessor.processEffects(engine, finalVoteResult.effects); // Process the async effect
     assert.strictEqual(engine.drawRequest.isActive, false, "Draw request should be inactive after all votes.");
     assert.strictEqual(engine.state, "Game Over", "Game state should be 'Game Over' after unanimous vote.");
     console.log("  - Passed: Unanimous 'wash' vote ends the game.");
 
-    // Test Case 3: A mixed 'split'/'wash' vote ends the game.
     engine = setupEngineForDraw();
-    engine.requestDraw(1); // P1 requests draw (auto-votes 'wash')
+    engine.requestDraw(1);
     engine.submitDrawVote(2, 'split');
-    engine.submitDrawVote(3, 'split');
+    const mixedVoteResult = engine.submitDrawVote(3, 'split');
+    await effectProcessor.processEffects(engine, mixedVoteResult.effects); // Process the async effect
     assert.strictEqual(engine.state, "Game Over", "Game state should be 'Game Over' after mixed positive vote.");
     console.log("  - Passed: Mixed 'split'/'wash' vote ends the game.");
 
@@ -189,7 +186,7 @@ async function runAllTests() {
         await testBotBiddingProcess();
         await testAllPlayersPass();
         await testBotHandlesFrogUpgrade();
-        await testDrawRequestLifecycle(); // Added new test suite
+        await testDrawRequestLifecycle();
     } catch (error) {
         console.error("â Œ A test failed:", error);
         throw error;

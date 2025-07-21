@@ -1,3 +1,5 @@
+// backend/src/core/GameEngine.js
+
 const { SERVER_VERSION, BID_HIERARCHY, PLACEHOLDER_ID, deck, SUITS, BID_MULTIPLIERS } = require('./constants');
 const BotPlayer = require('./BotPlayer');
 const { shuffle } = require('../utils/shuffle');
@@ -252,16 +254,10 @@ class GameEngine {
 
     reset() {
         console.log(`[${this.tableId}] Game is being reset by 'Play Again' button.`);
-
-        // --- NEW, SAFER RESET LOGIC ---
-
-        // 1. Reset game-specific state, but keep player list intact for now.
         this.gameStarted = false;
         this.gameId = null;
         this.playerMode = null;
-        this._initializeNewRoundState(); // This clears all round-related data.
-
-        // 2. Remove any players who disconnected during the game.
+        this._initializeNewRoundState();
         for (const userId in this.players) {
             if (this.players[userId].disconnected) {
                 console.log(`[${this.tableId}] Removing disconnected player ${this.players[userId].playerName} during reset.`);
@@ -273,19 +269,14 @@ class GameEngine {
             }
         }
         
-        // 3. Reset scores and status for all remaining players.
         this.scores = {};
         for (const userId in this.players) {
             const player = this.players[userId];
-            player.isSpectator = false; // Everyone is an active player now.
+            player.isSpectator = false;
             this.scores[player.playerName] = 120;
         }
-
-        // 4. Update the final table state.
         this.playerMode = this.playerOrder.count;
         this.state = this.playerMode >= 3 ? "Ready to Start" : "Waiting for Players";
-
-        // Reset dealer to null. A new dealer will be picked in startGame().
         this.dealer = null;
 
         console.log(`[${this.tableId}] Reset complete. State is now '${this.state}' with ${this.playerMode} players.`);
@@ -327,26 +318,58 @@ class GameEngine {
 
     requestDraw(userId) {
         const player = this.players[userId];
-        if (!player || this.drawRequest.isActive || this.state !== 'Playing Phase') return;
+        if (!player || this.drawRequest.isActive || this.state !== 'Playing Phase') return this._effects();
         this.drawRequest.isActive = true;
         this.drawRequest.initiator = player.playerName;
         this.drawRequest.votes = {};
         const activePlayers = this.playerOrder.allIds.map(id => this.players[id]);
         activePlayers.forEach(p => {
-            this.drawRequest.votes[p.playerName] = (p.playerName === player.playerName) ? 'wash' : null;
+            if (!p.isSpectator) {
+                this.drawRequest.votes[p.playerName] = (p.playerName === player.playerName) ? 'wash' : null;
+            }
         });
         this.drawRequest.timer = 30;
+        return this._effects([{ type: 'BROADCAST_STATE' }]);
     }
 
     submitDrawVote(userId, vote) {
         const player = this.players[userId];
-        if (!player || !this.drawRequest.isActive || !['wash', 'split', 'no'].includes(vote) || this.drawRequest.votes[player.playerName] !== null) return;
+        if (!player || !this.drawRequest.isActive || !['wash', 'split', 'no'].includes(vote) || this.drawRequest.votes[player.playerName] !== null) {
+            return this._effects();
+        }
+
         this.drawRequest.votes[player.playerName] = vote;
-        if (vote === 'no') { this.drawRequest.isActive = false; return; }
+        
+        if (vote === 'no') {
+            this.drawRequest.isActive = false;
+            return this._effects([
+                { type: 'EMIT_TO_TABLE', payload: { event: 'drawDeclined' } },
+                { type: 'BROADCAST_STATE' }
+            ]);
+        }
+
         const allVotes = Object.values(this.drawRequest.votes);
-        if (!allVotes.every(v => v !== null)) return;
+        if (allVotes.some(v => v === null)) {
+            return this._effects([{ type: 'BROADCAST_STATE' }]);
+        }
+        
         this.drawRequest.isActive = false;
-        this.state = "Game Over";
+        const outcome = allVotes.includes('split') ? 'split' : 'wash';
+
+        return this._effects([{
+            type: 'HANDLE_DRAW_OUTCOME',
+            payload: {
+                outcome,
+                gameId: this.gameId,
+                theme: this.theme,
+                players: this.players,
+                scores: this.scores
+            },
+            onComplete: (summary) => {
+                this.roundSummary = summary;
+                this.state = "Game Over";
+            }
+        }]);
     }
 
     // =================================================================

@@ -1,7 +1,6 @@
 // frontend/src/components/game/RoundSummaryModal.js
 import React, { useState } from 'react';
 import './RoundSummaryModal.css';
-// --- MODIFICATION: Import BID_MULTIPLIERS ---
 import { CARD_POINT_VALUES, BID_MULTIPLIERS } from '../../constants';
 import PointsBreakdownBar from './PointsBreakdownBar';
 
@@ -38,7 +37,8 @@ const RoundSummaryModal = ({
         finalDefenderPoints,
         pointChanges,
         widowPointsValue,
-        bidType
+        bidType,
+        drawOutcome, // New property for draws
     } = summaryData;
     
     const insuranceAgreement = insurance?.executedDetails?.agreement;
@@ -54,7 +54,6 @@ const RoundSummaryModal = ({
         }, 0);
     };
 
-    // --- NEW: Calculations for the points breakdown text ---
     const rawDifference = Math.abs(finalBidderPoints - 60);
     const bidMultiplier = BID_MULTIPLIERS[bidType] || 1;
     const exchangeValue = rawDifference * bidMultiplier;
@@ -68,10 +67,8 @@ const RoundSummaryModal = ({
                 defenderNames={defenderNames}
                 defenderPoints={finalDefenderPoints}
             />
-            {/* --- MODIFICATION: Replaced the old text with the new calculation breakdown --- */}
             <div className="point-calculation-recap">
                 <span>Difference from Goal: <strong>{rawDifference}</strong> pts</span>
-                {/* --- THIS IS THE FIX --- */}
                 <span className="recap-divider">Ã—</span>
                 <span>Bid Multiplier: <strong>{bidMultiplier}x</strong> ({bidType})</span>
                 <span className="recap-divider">=</span>
@@ -128,80 +125,94 @@ const RoundSummaryModal = ({
         );
     };
 
+    const renderMainContent = () => {
+        if (drawOutcome) {
+            return (
+                <div className="summary-scores-container">
+                    {payouts && (
+                         <div className="forfeit-payout-section" style={{ backgroundColor: '#cfe2ff', borderColor: '#b6d4fe' }}>
+                            <h4 style={{ color: '#0a58ca' }}>Draw Payouts ({drawOutcome}):</h4>
+                            <ul className="forfeit-payout-list">
+                                {Object.entries(payouts).map(([pName, details]) => (
+                                    <li key={pName}>
+                                        <strong>{pName}:</strong> Received {details.totalReturn.toFixed(2)} tokens
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // Default content for a normal round end
+        return (
+            <>
+                {summaryData.insuranceDealWasMade ? (
+                    <div className="what-if-panel">
+                        <h4 className="what-if-title">How Points Would Have Been Calculated</h4>
+                        {pointsPanelContent}
+                    </div>
+                ) : (
+                    pointsPanelContent
+                )}
+                {insuranceAgreement && (
+                    <div className="insurance-deal-recap">
+                        <h4 className="recap-title">Insurance Deal Recap</h4>
+                        <p><strong>{insuranceAgreement.bidderPlayerName}</strong> (Bidder) asked for <strong>{insuranceAgreement.bidderRequirement}</strong> points.</p>
+                        <ul>
+                            {Object.entries(insuranceAgreement.defenderOffers).map(([name, offer]) => (
+                                <li key={name}><strong>{name}</strong> offered <strong>{offer}</strong> points.</li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+                {insuranceHindsight && (
+                    <div className="insurance-hindsight">
+                        <h4 className="hindsight-title">Insurance Hindsight</h4>
+                         {Object.entries(insuranceHindsight).map(([pName, data]) => (
+                            <p key={pName} className="hindsight-text">
+                                <strong>{pName}:</strong> Your decision <strong>{data.hindsightValue >= 0 ? 'saved' : 'wasted'} {Math.abs(data.hindsightValue)}</strong> points.
+                            </p>
+                        ))}
+                    </div>
+                )}
+                <div className="summary-scores-container">
+                    <h4>Updated Scores</h4>
+                    <ul className="summary-score-list">
+                        {Object.entries(finalScores).map(([name, score]) => (
+                           <li key={name}><strong>{name}:</strong> {score}</li>
+                        ))}
+                    </ul>
+                </div>
+            </>
+        );
+    };
+
     return (
         <div className="modal-overlay">
             <div className="summary-modal-content">
                 <div className="summary-main-area">
                     <h2>{isGameOver ? "Game Over" : "Round Over"}</h2>
                     <p className="summary-message">{isGameOver ? `Winner: ${gameWinner}` : message}</p>
+                    {renderMainContent()}
+                </div>
 
-                    {summaryData.insuranceDealWasMade ? (
-                        <div className="what-if-panel">
-                            <h4 className="what-if-title">How Points Would Have Been Calculated</h4>
-                            {pointsPanelContent}
-                        </div>
-                    ) : (
-                        pointsPanelContent
-                    )}
-                    
-                    {insuranceAgreement && (
-                        <div className="insurance-deal-recap">
-                            <h4 className="recap-title">Insurance Deal Recap</h4>
-                            <p><strong>{insuranceAgreement.bidderPlayerName}</strong> (Bidder) asked for <strong>{insuranceAgreement.bidderRequirement}</strong> points.</p>
-                            <ul>
-                                {Object.entries(insuranceAgreement.defenderOffers).map(([name, offer]) => (
-                                    <li key={name}><strong>{name}</strong> offered <strong>{offer}</strong> points.</li>
-                                ))}
-                            </ul>
-                        </div>
-                    )}
-
-                    {insuranceHindsight && (
-                        <div className="insurance-hindsight">
-                            <h4 className="hindsight-title">Insurance Hindsight</h4>
-                             {Object.entries(insuranceHindsight).map(([pName, data]) => (
-                                <p key={pName} className="hindsight-text">
-                                    <strong>{pName}:</strong> Your decision <strong>{data.hindsightValue >= 0 ? 'saved' : 'wasted'} {Math.abs(data.hindsightValue)}</strong> points.
-                                </p>
-                            ))}
-                        </div>
-                    )}
-
-                    <div className="summary-scores-container">
-                        <h4>Updated Scores</h4>
-                        <ul className="summary-score-list">
-                            {Object.entries(finalScores).map(([name, score]) => (
-                               <li key={name}><strong>{name}:</strong> {score}</li>
-                            ))}
-                        </ul>
-                        {payouts && (
-                             <div className="forfeit-payout-section">
-                                <h4>Forfeit Payouts:</h4>
-                                <ul className="forfeit-payout-list">
-                                    {Object.entries(payouts).map(([pName, details]) => (
-                                        <li key={pName}>
-                                            <strong>{pName}:</strong> Received {details.totalGain.toFixed(2)} tokens
-                                        </li>
-                                    ))}
-                                </ul>
+                {!drawOutcome && (
+                    <div className="summary-details-section">
+                        <button className="details-toggle" onClick={() => setDetailsVisible(!detailsVisible)}>
+                            {detailsVisible ? 'Hide Round Details' : 'Show Round Details'}
+                        </button>
+                        {detailsVisible && (
+                            <div className="details-content">
+                                <h4 style={{marginTop: '0px'}}>Trick Breakdown</h4>
+                                 <div className="scrollable-tricks">
+                                    {renderTrickDetails()}
+                                </div>
                             </div>
                         )}
                     </div>
-                </div>
-
-                <div className="summary-details-section">
-                    <button className="details-toggle" onClick={() => setDetailsVisible(!detailsVisible)}>
-                        {detailsVisible ? 'Hide Round Details' : 'Show Round Details'}
-                    </button>
-                    {detailsVisible && (
-                        <div className="details-content">
-                            <h4 style={{marginTop: '0px'}}>Trick Breakdown</h4>
-                             <div className="scrollable-tricks">
-                                {renderTrickDetails()}
-                            </div>
-                        </div>
-                    )}
-                </div>
+                )}
                 
                 <div className="summary-action-area">
                     {!isGameOver && playerId === dealerOfRoundId && (
@@ -214,7 +225,6 @@ const RoundSummaryModal = ({
                     )}
                     {isGameOver && (
                         <div className="game-over-actions">
-                             {/* --- THIS IS THE FIX --- */}
                              <button onClick={handleLeaveTable} className="game-button">
                                 Play Again
                             </button>
