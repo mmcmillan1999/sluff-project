@@ -1,5 +1,3 @@
-// backend/src/core/GameEngine.js
-
 const { SERVER_VERSION, BID_HIERARCHY, PLACEHOLDER_ID, deck, SUITS, BID_MULTIPLIERS } = require('./constants');
 const BotPlayer = require('./BotPlayer');
 const { shuffle } = require('../utils/shuffle');
@@ -253,34 +251,33 @@ class GameEngine {
     }
 
     reset() {
-        console.log(`[${this.tableId}] Game is being reset by 'Play Again' button.`);
+        console.log(`[${this.tableId}] Game is being reset.`);
+        const originalPlayers = { ...this.players };
+        this.state = "Waiting for Players";
+        this.players = {};
+        this.playerOrder = new PlayerList();
+        this.scores = {};
         this.gameStarted = false;
         this.gameId = null;
         this.playerMode = null;
+        this.dealer = null;
+        this.bots = {};
+        this._nextBotId = -1;
+        this.pendingBotAction = null;
         this._initializeNewRoundState();
-        for (const userId in this.players) {
-            if (this.players[userId].disconnected) {
-                console.log(`[${this.tableId}] Removing disconnected player ${this.players[userId].playerName} during reset.`);
-                this.playerOrder.remove(parseInt(userId, 10));
-                if (this.players[userId].isBot) {
-                    delete this.bots[userId];
+        for (const userId in originalPlayers) {
+            const playerInfo = originalPlayers[userId];
+            if (!playerInfo.disconnected) {
+                this.players[userId] = { ...playerInfo, isSpectator: false, socketId: playerInfo.socketId };
+                if (playerInfo.isBot) {
+                    this.bots[userId] = new BotPlayer(parseInt(userId,10), playerInfo.playerName, this);
                 }
-                delete this.players[userId];
+                this.scores[playerInfo.playerName] = 120;
+                this.playerOrder.add(parseInt(userId, 10));
             }
-        }
-        
-        this.scores = {};
-        for (const userId in this.players) {
-            const player = this.players[userId];
-            player.isSpectator = false;
-            this.scores[player.playerName] = 120;
         }
         this.playerMode = this.playerOrder.count;
         this.state = this.playerMode >= 3 ? "Ready to Start" : "Waiting for Players";
-        this.dealer = null;
-
-        console.log(`[${this.tableId}] Reset complete. State is now '${this.state}' with ${this.playerMode} players.`);
-
         return this._effects([{ type: 'BROADCAST_STATE' }, { type: 'UPDATE_LOBBY' }]);
     }
     
