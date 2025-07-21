@@ -277,6 +277,7 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
                 selfPlayerName={selfPlayerName}
                 playerId={playerId}
                 emitEvent={emitEvent}
+                handleLeaveTable={handleLeaveTable}
                 playerError={playerError}
             />
             

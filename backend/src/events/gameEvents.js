@@ -1,5 +1,3 @@
-// backend/src/events/gameEvents.js
-
 const jwt = require("jsonwebtoken");
 const transactionManager = require('../data/transactionManager');
 
@@ -102,8 +100,10 @@ const registerGameHandlers = (io, gameService) => {
                 const methodArgs = Object.keys(args).length > 0 ? [socket.user.id, args] : [socket.user.id];
                 engine[methodName](...methodArgs);
                 gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
+                gameService.io.emit('lobbyState', gameService.getLobbyState()); // Also update lobby
             }
         };
+        socket.on("removeBot", createDirectHandler('removeBot'));
         socket.on("forfeitGame", createDirectHandler('forfeitGame'));
         socket.on("resetGame", createDirectHandler('reset'));
         socket.on("updateInsuranceSetting", createDirectHandler('updateInsuranceSetting'));
