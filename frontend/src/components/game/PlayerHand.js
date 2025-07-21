@@ -27,10 +27,10 @@ const PlayerHand = ({
     emitEvent,
     renderCard
 }) => {
-    const [selectedDiscards, setSelectedDiscards] = useState([]);
+    const [, setSelectedDiscards] = useState([]);
     const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
-    const { state, hands, bidWinnerInfo, revealedWidowForFrog, trickTurnPlayerName, currentTrickCards, leadSuitCurrentTrick, trumpSuit, trumpBroken } = currentTableState;
+    const { state, hands, bidWinnerInfo, trickTurnPlayerName, currentTrickCards, leadSuitCurrentTrick, trumpSuit, trumpBroken } = currentTableState;
     const myHand = hands[selfPlayerName] || [];
 
     useEffect(() => {
@@ -44,12 +44,6 @@ const PlayerHand = ({
             setSelectedDiscards([]);
         }
     }, [state]);
-
-    const handleToggleFrogDiscard = useCallback((card) => {
-        setSelectedDiscards(prev =>
-            prev.includes(card) ? prev.filter(c => c !== card) : [...prev, card]
-        );
-    }, []);
 
     const handlePlayCard = useCallback((card) => {
         emitEvent("playCard", { card });
@@ -69,7 +63,7 @@ const PlayerHand = ({
 
     const myHandToDisplay = sortHandBySuit(myHand);
     const isMyTurnToPlay = state === "Playing Phase" && trickTurnPlayerName === selfPlayerName;
-    
+
     const isLeading = currentTrickCards.length === 0;
     const legalMoves = getLegalMoves(myHand, isLeading, leadSuitCurrentTrick, trumpSuit, trumpBroken);
 
@@ -82,28 +76,23 @@ const PlayerHand = ({
     let finalOverlapIllegal;
 
     if (N <= 6) {
-        // If 6 or fewer cards, don't overlap them.
         finalOverlapLegal = 0;
         finalOverlapIllegal = 0;
     } else {
         const legalCardCount = isMyTurnToPlay ? legalMoves.length : N;
         const illegalCardCount = N - legalCardCount;
-        
-        // Define base overlaps
-        const legalOverlap = 28;  // Legal cards are less overlapped
-        const illegalOverlap = 45; // Illegal cards are more overlapped
 
-        // Calculate the ideal width of the hand with these base overlaps
+        const legalOverlap = 28;
+        const illegalOverlap = 45;
+
         const totalWidth = (legalCardCount * (cardWidth - legalOverlap)) + (illegalCardCount * (cardWidth - illegalOverlap)) + (N > 0 ? (legalMoves.includes(myHandToDisplay[0]) ? legalOverlap : illegalOverlap) : 0);
 
         if (totalWidth > handAreaWidth) {
-            // If the hand is still too wide, calculate a reduction factor to make it fit
             const overflow = totalWidth - handAreaWidth;
             const perCardReduction = overflow / (N > 1 ? N - 1 : 1);
             finalOverlapLegal = legalOverlap + perCardReduction;
             finalOverlapIllegal = illegalOverlap + perCardReduction;
         } else {
-            // Use the comfortable base overlaps if there's enough space
             finalOverlapLegal = legalOverlap;
             finalOverlapIllegal = illegalOverlap;
         }
