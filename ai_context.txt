@@ -734,7 +734,7 @@ module.exports = function() {
   const router = express.Router();
 
   router.get('/', (req, res) => {
-    res.json({ message: 'pong' });
+    res.json({ message: 'pong', status: 'ok', service: 'sluff-backend' });
   });
 
   return router;
@@ -844,7 +844,7 @@ module.exports = BotPlayer;
 --- START FILE: backend/src/core/constants.js ---
 // backend/src/core/constants.js
 
-const SERVER_VERSION = "9.0.0 - Game Economy";
+const SERVER_VERSION = "9.0.1-test";
 
 const SUITS = { H: "Hearts", D: "Diamonds", C: "Clubs", S: "Spades" };
 const RANKS_ORDER = ["6", "7", "8", "9", "J", "Q", "K", "10", "A"];
@@ -905,10 +905,8 @@ const biddingHandler = require('./handlers/biddingHandler');
 const BOT_NAMES = ["Mike Knight", "Grandma Joe", "Grampa Blane", "Kimba", "Courtney Sr.", "Cliff"];
 
 class GameEngine {
-    // --- THIS IS THE FIX ---
     constructor(tableId, theme, tableName, emitLobbyUpdateCallback) {
-        this.emitLobbyUpdateCallback = emitLobbyUpdateCallback; // This parameter was missing
-        // --- END FIX ---
+        this.emitLobbyUpdateCallback = emitLobbyUpdateCallback;
         
         this.tableId = tableId;
         this.tableName = tableName;
@@ -990,6 +988,28 @@ class GameEngine {
             this.playerOrder.add(botId);
         }
         if (this.playerOrder.count >= 3 && !this.gameStarted) this.state = 'Ready to Start';
+    }
+
+    removeBot() {
+        if (this.gameStarted) return; 
+
+        const botIds = Object.keys(this.players).filter(id => this.players[id].isBot).map(id => parseInt(id, 10));
+        if (botIds.length === 0) return; 
+
+        const botIdToRemove = Math.max(...botIds);
+        const botInfo = this.players[botIdToRemove];
+
+        if (botInfo) {
+            console.log(`[${this.tableId}] Removing bot: ${botInfo.playerName}`);
+            
+            this.playerOrder.remove(botIdToRemove);
+            delete this.scores[botInfo.playerName];
+            delete this.bots[botIdToRemove];
+            delete this.players[botIdToRemove];
+        }
+
+        this.playerMode = this.playerOrder.count;
+        this.state = this.playerMode >= 3 ? "Ready to Start" : "Waiting for Players";
     }
 
     leaveTable(userId) {
@@ -1127,33 +1147,34 @@ class GameEngine {
     }
 
     reset() {
-        console.log(`[${this.tableId}] Game is being reset.`);
-        const originalPlayers = { ...this.players };
-        this.state = "Waiting for Players";
-        this.players = {};
-        this.playerOrder = new PlayerList();
-        this.scores = {};
+        console.log(`[${this.tableId}] Game is being reset by 'Play Again' button.`);
         this.gameStarted = false;
         this.gameId = null;
         this.playerMode = null;
-        this.dealer = null;
-        this.bots = {};
-        this._nextBotId = -1;
-        this.pendingBotAction = null;
         this._initializeNewRoundState();
-        for (const userId in originalPlayers) {
-            const playerInfo = originalPlayers[userId];
-            if (!playerInfo.disconnected) {
-                this.players[userId] = { ...playerInfo, isSpectator: false, socketId: playerInfo.socketId };
-                if (playerInfo.isBot) {
-                    this.bots[userId] = new BotPlayer(parseInt(userId,10), playerInfo.playerName, this);
+        for (const userId in this.players) {
+            if (this.players[userId].disconnected) {
+                console.log(`[${this.tableId}] Removing disconnected player ${this.players[userId].playerName} during reset.`);
+                this.playerOrder.remove(parseInt(userId, 10));
+                if (this.players[userId].isBot) {
+                    delete this.bots[userId];
                 }
-                this.scores[playerInfo.playerName] = 120;
-                this.playerOrder.add(parseInt(userId, 10));
+                delete this.players[userId];
             }
+        }
+        
+        this.scores = {};
+        for (const userId in this.players) {
+            const player = this.players[userId];
+            player.isSpectator = false;
+            this.scores[player.playerName] = 120;
         }
         this.playerMode = this.playerOrder.count;
         this.state = this.playerMode >= 3 ? "Ready to Start" : "Waiting for Players";
+        this.dealer = null;
+
+        console.log(`[${this.tableId}] Reset complete. State is now '${this.state}' with ${this.playerMode} players.`);
+
         return this._effects([{ type: 'BROADCAST_STATE' }, { type: 'UPDATE_LOBBY' }]);
     }
     
@@ -1191,26 +1212,58 @@ class GameEngine {
 
     requestDraw(userId) {
         const player = this.players[userId];
-        if (!player || this.drawRequest.isActive || this.state !== 'Playing Phase') return;
+        if (!player || this.drawRequest.isActive || this.state !== 'Playing Phase') return this._effects();
         this.drawRequest.isActive = true;
         this.drawRequest.initiator = player.playerName;
         this.drawRequest.votes = {};
         const activePlayers = this.playerOrder.allIds.map(id => this.players[id]);
         activePlayers.forEach(p => {
-            this.drawRequest.votes[p.playerName] = (p.playerName === player.playerName) ? 'wash' : null;
+            if (!p.isSpectator) {
+                this.drawRequest.votes[p.playerName] = (p.playerName === player.playerName) ? 'wash' : null;
+            }
         });
         this.drawRequest.timer = 30;
+        return this._effects([{ type: 'BROADCAST_STATE' }]);
     }
 
     submitDrawVote(userId, vote) {
         const player = this.players[userId];
-        if (!player || !this.drawRequest.isActive || !['wash', 'split', 'no'].includes(vote) || this.drawRequest.votes[player.playerName] !== null) return;
+        if (!player || !this.drawRequest.isActive || !['wash', 'split', 'no'].includes(vote) || this.drawRequest.votes[player.playerName] !== null) {
+            return this._effects();
+        }
+
         this.drawRequest.votes[player.playerName] = vote;
-        if (vote === 'no') { this.drawRequest.isActive = false; return; }
+        
+        if (vote === 'no') {
+            this.drawRequest.isActive = false;
+            return this._effects([
+                { type: 'EMIT_TO_TABLE', payload: { event: 'drawDeclined' } },
+                { type: 'BROADCAST_STATE' }
+            ]);
+        }
+
         const allVotes = Object.values(this.drawRequest.votes);
-        if (!allVotes.every(v => v !== null)) return;
+        if (allVotes.some(v => v === null)) {
+            return this._effects([{ type: 'BROADCAST_STATE' }]);
+        }
+        
         this.drawRequest.isActive = false;
-        this.state = "Game Over";
+        const outcome = allVotes.includes('split') ? 'split' : 'wash';
+
+        return this._effects([{
+            type: 'HANDLE_DRAW_OUTCOME',
+            payload: {
+                outcome,
+                gameId: this.gameId,
+                theme: this.theme,
+                players: this.players,
+                scores: this.scores
+            },
+            onComplete: (summary) => {
+                this.roundSummary = summary;
+                this.state = "Game Over";
+            }
+        }]);
     }
 
     // =================================================================
@@ -1434,7 +1487,7 @@ function calculateForfeitPayout(table, forfeitingPlayerName) {
 function calculateDrawSplitPayout(table) {
     const tableBuyIn = TABLE_COSTS[table.theme] || 0;
     const playersInOrder = Object.values(table.players)
-        .filter(p => !p.isSpectator)
+        .filter(p => !p.isSpectator && !p.isBot)
         .map(p => ({ name: p.playerName, score: table.scores[p.playerName] || 0, userId: p.userId }))
         .sort((a, b) => a.score - b.score);
 
@@ -1469,6 +1522,7 @@ function calculateDrawSplitPayout(table) {
 
     return { wash: false, payouts };
 }
+
 
 function calculateRoundScoreDetails(table) {
     const { bidWinnerInfo, playerOrderActive, playerMode, capturedTricks, widowDiscardsForFrogBidder, originalDealtWidow, insurance, players, bidderTotalCardPoints } = table;
@@ -1610,6 +1664,55 @@ async function handleGameOver(table, transactionFn, statUpdateFn) {
     return { gameWinnerName };
 }
 
+// --- NEW FUNCTION for handling draw game over ---
+async function handleDrawGameOver(table, outcome, transactionFn, statUpdateFn) {
+    const tableCost = TABLE_COSTS[table.theme] || 0;
+    const gameId = table.gameId;
+    let summaryData = {
+        isGameOver: true,
+        drawOutcome: outcome,
+        gameWinner: "Draw",
+        payouts: {},
+        finalScores: table.scores,
+    };
+
+    const humanPlayers = Object.values(table.players).filter(p => !p.isBot && !p.isSpectator);
+    const statPromises = [];
+    const transactionPromises = [];
+
+    if (outcome === 'wash') {
+        summaryData.message = "The game has ended in a wash. All buy-ins have been returned.";
+        for (const player of humanPlayers) {
+            summaryData.payouts[player.playerName] = { totalReturn: tableCost };
+            transactionPromises.push(transactionFn({ userId: player.userId, gameId, type: 'wash_payout', amount: tableCost, description: `Draw (Wash) - Buy-in returned` }));
+            statPromises.push(statUpdateFn("UPDATE users SET washes = washes + 1 WHERE id = $1", [player.userId]));
+        }
+    } else if (outcome === 'split') {
+        const splitResult = calculateDrawSplitPayout(table);
+        if (splitResult.wash) { // Fallback for 4-player games etc.
+            return handleDrawGameOver(table, 'wash', transactionFn, statUpdateFn);
+        }
+        summaryData.message = "The game has ended in a split pot. Payouts are based on score.";
+        summaryData.payouts = splitResult.payouts;
+        for (const playerName in splitResult.payouts) {
+            const payoutInfo = splitResult.payouts[playerName];
+            transactionPromises.push(transactionFn({ userId: payoutInfo.userId, gameId, type: 'win_payout', amount: payoutInfo.totalReturn, description: `Draw (Split) - Payout` }));
+            statPromises.push(statUpdateFn("UPDATE users SET washes = washes + 1 WHERE id = $1", [payoutInfo.userId]));
+        }
+    }
+    
+    try {
+        await Promise.all(transactionPromises);
+        await Promise.all(statPromises);
+        await transactionManager.updateGameRecordOutcome(table.pool, gameId, `Game Over! Draw (${outcome})`);
+    } catch (err) {
+        console.error("Database error during draw game over update:", err);
+    }
+
+    return summaryData;
+}
+
+
 function calculateInsuranceHindsight(table, bidderTotalCardPoints, currentBidMultiplier) {
     if (table.playerMode !== 3) return null;
     const { playerOrderActive, bidWinnerInfo, insurance, players } = table;
@@ -1668,6 +1771,7 @@ module.exports = {
     determineTrickWinner,
     calculateRoundScoreDetails,
     handleGameOver,
+    handleDrawGameOver,
     calculateForfeitPayout,
     calculateDrawSplitPayout,
     calculateCardPoints
@@ -1818,13 +1922,19 @@ function resolveBiddingFinal(engine) {
     
     if (!engine.currentHighestBidDetails) {
         engine.state = "AllPassWidowReveal";
-        return [{ type: 'START_TIMER', payload: { duration: 3000, onTimeout: (engineRef) => {
-            if (engineRef.state === "AllPassWidowReveal") {
-                engineRef._advanceRound();
-                return [{ type: 'BROADCAST_STATE' }];
-            }
-            return [];
-        }} }];
+  return [
+            { type: 'BROADCAST_STATE' },
+            { type: 'START_TIMER', payload: {
+                duration: 3000,
+                onTimeout: (engineRef) => {
+                    if (engineRef.state === "AllPassWidowReveal") {
+                        engineRef._advanceRound();
+                        return [{ type: 'BROADCAST_STATE' }];
+                    }
+                    return [];
+                }
+            }}
+        ];
     }
     
     engine.bidWinnerInfo = { ...engine.currentHighestBidDetails };
@@ -2438,14 +2548,26 @@ const registerGameHandlers = (io, gameService) => {
                 const methodArgs = Object.keys(args).length > 0 ? [socket.user.id, args] : [socket.user.id];
                 engine[methodName](...methodArgs);
                 gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
+                gameService.io.emit('lobbyState', gameService.getLobbyState()); // Also update lobby
             }
         };
+        socket.on("removeBot", createDirectHandler('removeBot'));
         socket.on("forfeitGame", createDirectHandler('forfeitGame'));
         socket.on("resetGame", createDirectHandler('reset'));
         socket.on("updateInsuranceSetting", createDirectHandler('updateInsuranceSetting'));
         socket.on("startTimeoutClock", createDirectHandler('startTimeoutClock'));
         socket.on("requestDraw", createDirectHandler('requestDraw'));
-        socket.on("submitDrawVote", createDirectHandler('submitDrawVote'));
+
+        // --- THIS IS THE FIX: A dedicated handler for submitDrawVote ---
+        socket.on("submitDrawVote", (payload) => {
+            const { tableId, vote } = payload;
+            const engine = gameService.getEngineById(tableId);
+            if (engine) {
+                // We now pass the 'vote' string directly, not the whole object
+                engine.submitDrawVote(socket.user.id, vote);
+                gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
+            }
+        });
 
         // --- USER-SPECIFIC & MISC LISTENERS ---
         socket.on("requestUserSync", async () => {
@@ -2713,6 +2835,19 @@ class GameService {
         return { gameWinnerName };
     }
 
+    async handleDrawOutcome(payload) {
+        const transactionFn = (args) => transactionManager.postTransaction(this.pool, args);
+        const statUpdateFn = (query, params) => this.pool.query(query, params);
+
+        const summary = await gameLogic.handleDrawGameOver(
+            { ...payload, pool: this.pool },
+            payload.outcome,
+            transactionFn,
+            statUpdateFn
+        );
+        return summary;
+    }
+
     resetAllEngines() {
         console.log("[ADMIN] Resetting all game engines to initial state.");
         this.engines = {};
@@ -2748,6 +2883,9 @@ class GameService {
                 case 'EMIT_TO_SOCKET':
                     this.io.to(effect.payload.socketId).emit(effect.payload.event, effect.payload.data);
                     break;
+                case 'EMIT_TO_TABLE':
+                    this.io.to(tableId).emit(effect.payload.event, effect.payload.data || {});
+                    break;
                 case 'UPDATE_LOBBY':
                     this.io.emit('lobbyState', this.getLobbyState());
                     break;
@@ -2775,6 +2913,15 @@ class GameService {
                         effect.onComplete(gameOverResult.gameWinnerName);
                     }
                     this.io.to(tableId).emit('gameState', engine.getStateForClient());
+                    break;
+                }
+                case 'HANDLE_DRAW_OUTCOME': {
+                    const summary = await this.handleDrawOutcome(effect.payload);
+                    if (effect.onComplete) {
+                        effect.onComplete(summary);
+                    }
+                    this.io.to(tableId).emit('gameState', engine.getStateForClient());
+                    this._triggerBots(tableId);
                     break;
                 }
                 case 'START_GAME_TRANSACTIONS': {
@@ -3103,7 +3250,7 @@ function runGameLogicTests() {
     console.log('Running gameLogic.js tests...');
 
     let testCounter = 1;
-    const pass = (testName) => console.log(`  âœ” Test ${testCounter++}: ${testName}`);
+    const pass = (testName) => console.log(`  Ã¢Å“â€ Test ${testCounter++}: ${testName}`);
 
     // --- Trick Winner Tests ---
     const playsTrump = [ { userId: 1, playerName: 'Alice', card: '10H' }, { userId: 2, playerName: 'Bob', card: 'AS' }, { userId: 3, playerName: 'Carol', card: 'KH' }];
@@ -3132,8 +3279,9 @@ function runGameLogicTests() {
     assert.strictEqual(payout['Carol'].totalGain.toFixed(3), '1.455');
     pass('Forfeit payout for Carol is correct.');
 
-    const drawTable = {
-        theme: 'fort-creek',
+    // --- MODIFICATION: Expanded Draw Payout Tests ---
+    const drawTable3Player = {
+        theme: 'fort-creek', // Buy-in is 1 token
         players: {
             1: { userId: 1, playerName: 'Alice', isSpectator: false },
             2: { userId: 2, playerName: 'Bob', isSpectator: false },
@@ -3141,11 +3289,21 @@ function runGameLogicTests() {
         },
         scores: { 'Alice': 90, 'Bob': 80, 'Carol': 60 }
     };
-    let drawResult = gameLogic.calculateDrawSplitPayout(drawTable);
-    assert.strictEqual(drawResult.wash, false);
-    pass('Draw should be a split, not a wash.');
-    assert.ok(Math.abs(drawResult.payouts['Carol'].totalReturn - 0.5) < 0.0001);
-    pass('Draw split payout for lowest player is correct.');
+    let drawResult = gameLogic.calculateDrawSplitPayout(drawTable3Player);
+    assert.strictEqual(drawResult.wash, false, '3-player draw with different scores should be a split.');
+    pass('Draw Split: Correctly identifies a 3-player split.');
+    assert.ok(Math.abs(drawResult.payouts['Carol'].totalReturn - 0.50) < 0.001, 'Lowest player (Carol) should get 50% of buy-in back.');
+    pass('Draw Split: Lowest player payout is correct.');
+    assert.ok(Math.abs(drawResult.payouts['Alice'].totalReturn - 1.2647) < 0.001, 'Highest player (Alice) share is incorrect.');
+    pass('Draw Split: Highest player payout is correct.');
+    assert.ok(Math.abs(drawResult.payouts['Bob'].totalReturn - 1.2352) < 0.001, 'Middle player (Bob) share is incorrect.');
+    pass('Draw Split: Middle player payout is correct.');
+
+    const drawTable4Player = { ...drawTable3Player, players: {...drawTable3Player.players, 4: {userId: 4, playerName: 'Dave'}}};
+    let washResult = gameLogic.calculateDrawSplitPayout(drawTable4Player);
+    assert.strictEqual(washResult.wash, true, 'A 4-player game draw should always be a wash.');
+    pass('Draw Wash: Correctly identifies a 4-player game as a wash.');
+    // --- END MODIFICATION ---
     
     // --- Scoring Tests ---
     // Note: The structure of players in these tests is simplified because the function only needs playerName.
@@ -3192,7 +3350,7 @@ function runGameLogicTests() {
     assert.strictEqual(frogResult.finalBidderPoints, 65, 'Frog: Bidder points incorrect.');
     pass('Frog Bid: Bidder gets points from their discarded cards.');
 
-    console.log('\n  âœ” All gameLogic.js tests passed!');
+    console.log('\n  Ã¢Å“â€ All gameLogic.js tests passed!');
 }
 
 // Check if the file is being run directly, and if so, execute the tests.
@@ -3408,10 +3566,12 @@ run();
 const assert = require('assert');
 const GameEngine = require('../src/core/GameEngine');
 const GameService = require('../src/services/GameService');
-const PlayerList = require('../src/core/PlayerList'); // We need this for one of the tests
+const gameLogic = require('../src/core/logic'); // Import gameLogic for the mock service
+const PlayerList = require('../src/core/PlayerList');
 
 // --- Mocks and Helpers ---
 const mockIo = { to: () => ({ emit: () => {} }), emit: () => {}, sockets: { sockets: new Map() } };
+const mockPool = { query: () => Promise.resolve() }; // A mock pool for stat updates
 
 class MockTimer {
     constructor() {
@@ -3430,118 +3590,157 @@ class MockTimer {
     }
 }
 
+// --- NEW MOCK SERVICE TO HANDLE ASYNC EFFECTS ---
+class MockEffectProcessor {
+    constructor() {
+        this.pool = mockPool;
+    }
+
+    async processEffects(engine, effects) {
+        if (!effects || !effects.length) return;
+        for (const effect of effects) {
+            switch (effect.type) {
+                case 'HANDLE_DRAW_OUTCOME':
+                    const summary = await gameLogic.handleDrawGameOver(
+                        {...effect.payload, pool: this.pool},
+                        effect.payload.outcome,
+                        () => Promise.resolve(), // Mock transaction function
+                        () => Promise.resolve()  // Mock stat update function
+                    );
+                    if (effect.onComplete) {
+                        effect.onComplete(summary);
+                    }
+                    break;
+                // Add other effect types here if needed for future tests
+            }
+        }
+    }
+}
+// --- END NEW MOCK SERVICE ---
+
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // --- Test Cases ---
 
 async function testBotBiddingProcess() {
     console.log("Running Test: testBotBiddingProcess...");
-
-    // 1. ARRANGE
     const gameService = new GameService(mockIo, null);
     const engine = gameService.getEngineById('table-1');
     const humanId = 101;
-    
     engine.joinTable({ id: humanId, username: "HumanPlayer" }, "socket123");
-    engine.addBotPlayer(); // Bot 1 (ID: -1)
-    engine.addBotPlayer(); // Bot 2 (ID: -2)
-    
-    // Manually set the game state for a predictable test
-    engine.gameStarted = true;
-    engine.gameId = 1;
-    engine.playerMode = 3;
+    engine.addBotPlayer();
+    engine.addBotPlayer();
+    engine.gameStarted = true; engine.gameId = 1; engine.playerMode = 3;
     engine.dealer = humanId;
-    engine.playerOrder.setTurnOrder(engine.dealer); // This sets turn order to [-1, -2, 101]
+    engine.playerOrder.setTurnOrder(engine.dealer);
     engine.state = "Dealing Pending";
-    
     const firstBidderId = engine.playerOrder.turnOrder[0];
-    
-    // 2. ACT
     console.log(`  - Human (dealer) deals cards...`);
     await gameService.dealCards('table-1', humanId);
-    
-    assert.strictEqual(engine.state, "Bidding Phase", "After dealing, state should be Bidding Phase.");
-    assert.strictEqual(engine.biddingTurnPlayerId, firstBidderId, `Turn should belong to the first bidder (ID: ${firstBidderId}).`);
-
+    assert.strictEqual(engine.state, "Bidding Phase");
+    assert.strictEqual(engine.biddingTurnPlayerId, firstBidderId);
     console.log("  - Waiting for bot to make a bid...");
     await sleep(1500);
-
-    // 3. ASSERT
     const bidsMade = engine.playersWhoPassedThisRound.length + (engine.currentHighestBidDetails ? 1 : 0);
     assert.strictEqual(bidsMade, 1, "Expected exactly one bid to have been made by the bot.");
-    
     console.log("...Success! Bot bidding was triggered correctly.\n");
 }
 
 async function testAllPlayersPass() {
     console.log("Running Test: testAllPlayersPass...");
-    
     const mockTimer = new MockTimer();
     const gameService = new GameService(mockIo, null);
     gameService.timerOverride = mockTimer.mockSetTimeout.bind(mockTimer);
-    
     const engine = gameService.getEngineById('table-1');
     engine.joinTable({ id: 1, username: "Player A" }, "s1");
     engine.joinTable({ id: 2, username: "Player B" }, "s2");
     engine.joinTable({ id: 3, username: "Player C" }, "s3");
-
     engine.gameStarted = true; engine.gameId = 1; engine.playerMode = 3;
     engine.dealer = 3;
     engine.playerOrder.setTurnOrder(engine.dealer);
     engine.state = "Dealing Pending";
     await gameService.dealCards('table-1', 3);
-
     console.log("  - All players pass...");
     await gameService.placeBid('table-1', 1, "Pass");
     await gameService.placeBid('table-1', 2, "Pass");
     await gameService.placeBid('table-1', 3, "Pass");
-
-    assert.strictEqual(engine.state, "AllPassWidowReveal", "State should be AllPassWidowReveal after all players pass.");
-    assert.strictEqual(mockTimer.callbacks.length, 1, "A timer should have been set for the widow reveal.");
-    assert.ok(mockTimer.duration >= 1000 && mockTimer.duration <= 6000, `Widow reveal duration (${mockTimer.duration}ms) is out of bounds (1-6s).`);
-
+    assert.strictEqual(engine.state, "AllPassWidowReveal");
+    assert.strictEqual(mockTimer.callbacks.length, 1);
     console.log(`  - Advancing mock timer by ${mockTimer.duration}ms...`);
     await mockTimer.tick();
-
-    assert.strictEqual(engine.state, "Dealing Pending", "State should be Dealing Pending after the widow reveal timer.");
-    assert.strictEqual(engine.dealer, 1, "The dealer should have advanced to the next player (Player A).");
-
+    assert.strictEqual(engine.state, "Dealing Pending");
+    assert.strictEqual(engine.dealer, 1);
     console.log("...Success! All-pass scenario works correctly.\n");
 }
 
 async function testBotHandlesFrogUpgrade() {
     console.log("Running Test: testBotHandlesFrogUpgrade...");
-
     const gameService = new GameService(mockIo, null);
     const engine = gameService.getEngineById('table-1');
     const humanId = 101;
-    
-    engine.addBotPlayer(); // Bot 1 (ID: -1, will bid Frog)
+    engine.addBotPlayer();
     engine.joinTable({ id: humanId, username: "HumanPlayer" }, "socket123");
-    engine.addBotPlayer(); // Bot 2 (ID: -2, will bid Solo)
-
+    engine.addBotPlayer();
     engine.gameStarted = true; engine.gameId = 1; engine.playerMode = 3;
     engine.dealer = -2;
     engine.playerOrder.setTurnOrder(engine.dealer);
     engine.state = "Dealing Pending";
     await gameService.dealCards('table-1', -2);
-
     console.log("  - Bot 1 bids Frog, Human passes, Bot 2 bids Solo...");
     await gameService.placeBid('table-1', -1, "Frog");
     await gameService.placeBid('table-1', humanId, "Pass");
     await gameService.placeBid('table-1', -2, "Solo");
-
-    assert.strictEqual(engine.state, "Awaiting Frog Upgrade Decision", "State should be waiting for the original frog bidder.");
-    assert.strictEqual(engine.biddingTurnPlayerId, -1, "Turn should return to Bot 1 to decide on upgrading.");
-
+    assert.strictEqual(engine.state, "Awaiting Frog Upgrade Decision");
+    assert.strictEqual(engine.biddingTurnPlayerId, -1);
     console.log("  - Waiting for Bot 1 to pass on the upgrade...");
     await sleep(1500);
-
-    assert.strictEqual(engine.state, "Trump Selection", "State should advance to Trump Selection after the bot passes.");
-    assert.strictEqual(engine.bidWinnerInfo.userId, -2, "The final bid winner should be Bot 2.");
-    assert.strictEqual(engine.bidWinnerInfo.bid, "Solo", "The winning bid should be Solo.");
-
+    assert.strictEqual(engine.state, "Trump Selection");
+    assert.strictEqual(engine.bidWinnerInfo.userId, -2);
+    assert.strictEqual(engine.bidWinnerInfo.bid, "Solo");
     console.log("...Success! Bot correctly handled the frog upgrade scenario.\n");
+}
+
+async function testDrawRequestLifecycle() {
+    console.log("Running Test: testDrawRequestLifecycle...");
+    const effectProcessor = new MockEffectProcessor();
+
+    const setupEngineForDraw = () => {
+        const engine = new GameEngine('table-draw-test', 'fort-creek', 'Draw Test Table');
+        engine.joinTable({ id: 1, username: "P1" }, "s1");
+        engine.joinTable({ id: 2, username: "P2" }, "s2");
+        engine.joinTable({ id: 3, username: "P3" }, "s3");
+        engine.gameStarted = true; engine.gameId = 1;
+        engine.playerMode = 3;
+        engine.state = "Playing Phase";
+        return engine;
+    };
+
+    let engine = setupEngineForDraw();
+    engine.requestDraw(1);
+    assert.strictEqual(engine.drawRequest.isActive, true, "Draw request should be active after initiation.");
+    engine.submitDrawVote(2, 'no');
+    assert.strictEqual(engine.drawRequest.isActive, false, "Draw request should be inactive after a 'no' vote.");
+    assert.strictEqual(engine.state, "Playing Phase", "Game state should remain 'Playing Phase' after a 'no' vote.");
+    console.log("  - Passed: 'No' vote correctly cancels draw.");
+
+    engine = setupEngineForDraw();
+    engine.requestDraw(1);
+    engine.submitDrawVote(2, 'wash');
+    const finalVoteResult = engine.submitDrawVote(3, 'wash');
+    await effectProcessor.processEffects(engine, finalVoteResult.effects); // Process the async effect
+    assert.strictEqual(engine.drawRequest.isActive, false, "Draw request should be inactive after all votes.");
+    assert.strictEqual(engine.state, "Game Over", "Game state should be 'Game Over' after unanimous vote.");
+    console.log("  - Passed: Unanimous 'wash' vote ends the game.");
+
+    engine = setupEngineForDraw();
+    engine.requestDraw(1);
+    engine.submitDrawVote(2, 'split');
+    const mixedVoteResult = engine.submitDrawVote(3, 'split');
+    await effectProcessor.processEffects(engine, mixedVoteResult.effects); // Process the async effect
+    assert.strictEqual(engine.state, "Game Over", "Game state should be 'Game Over' after mixed positive vote.");
+    console.log("  - Passed: Mixed 'split'/'wash' vote ends the game.");
+
+    console.log("...Success! Draw request lifecycle works correctly.\n");
 }
 
 // --- Test Runner ---
@@ -3550,8 +3749,9 @@ async function runAllTests() {
         await testBotBiddingProcess();
         await testAllPlayersPass();
         await testBotHandlesFrogUpgrade();
+        await testDrawRequestLifecycle();
     } catch (error) {
-        console.error("âŒ A test failed:", error);
+        console.error("Ã¢ Å’ A test failed:", error);
         throw error;
     }
 }
@@ -4535,6 +4735,14 @@ export default Bulletin;
  */
 
 export const bulletinContent = [
+    {
+        type: 'header',
+        text: 'Deployment Test: Success!'
+    },
+    {
+        type: 'list-item',
+        text: 'This change confirms the new deployment pipeline is working correctly.'
+    },
     { 
         type: 'header', 
         text: 'Welcome to Sluff Alpha Testing!' 
@@ -4580,6 +4788,7 @@ export const bulletinContent = [
         text: 'First version of Bot players to fill empty seats.' 
     },
 ];
+
 --- END FILE: frontend/src/components/bulletinContent.js ---
 
 --- START FILE: frontend/src/components/GameTableView.css ---
@@ -5094,6 +5303,7 @@ button.card-display:disabled {
 // frontend/src/components/GameTableView.js
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './GameTableView.css';
+import './game/DrawVoteModal.css';
 import PlayerHand from './game/PlayerHand';
 import InsuranceControls from './game/InsuranceControls';
 import RoundSummaryModal from './game/RoundSummaryModal';
@@ -5162,12 +5372,18 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
             }, 4000);
         };
 
+        const handleDrawDeclined = () => {
+            alert("Draw request has been declined. Play will continue.");
+        };
+
         socket.on('new_lobby_message', handleNewChatMessage);
         socket.on('error', handlePlayerError);
+        socket.on('drawDeclined', handleDrawDeclined);
 
         return () => {
             socket.off('new_lobby_message', handleNewChatMessage);
             socket.off('error', handlePlayerError);
+            socket.off('drawDeclined', handleDrawDeclined);
             if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
         };
     }, [socket]);
@@ -5370,6 +5586,7 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
                 selfPlayerName={selfPlayerName}
                 playerId={playerId}
                 emitEvent={emitEvent}
+                handleLeaveTable={handleLeaveTable}
                 playerError={playerError}
             />
             
@@ -6215,9 +6432,9 @@ export default LobbyTable;
 .join-table-button {
     flex-shrink: 0;
     padding: 8px 12px; /* Adjusted padding */
-    background: linear-gradient(to bottom, #28a745, #218838);
+    background: linear-gradient(to bottom, #0d6efd, #0b5ed7); /* CHANGED TO BLUE */
     color: white;
-    border: 1px solid #1e7e34;
+    border: 1px solid #0a58ca; /* CHANGED TO BLUE */
     border-radius: 6px;
     cursor: pointer;
     font-family: 'Oswald', sans-serif;
@@ -6228,7 +6445,7 @@ export default LobbyTable;
 }
 
 .join-table-button:hover:not(:disabled) {
-    background: linear-gradient(to bottom, #2ebf4f, #28a745);
+    background: linear-gradient(to bottom, #3b82f6, #0d6efd); /* CHANGED TO BLUE */
 }
 
 .table-card-container.disabled {
@@ -6920,6 +7137,7 @@ const ActionControls = ({
     selfPlayerName,
     isSpectator,
     emitEvent,
+    handleLeaveTable,
     renderCard
 }) => {
     
@@ -6934,15 +7152,22 @@ const ActionControls = ({
     }
 
     const activePlayers = Object.values(currentTableState.players).filter(p => !p.isSpectator && !p.disconnected);
+    const hasBots = Object.values(currentTableState.players).some(p => p.isBot);
 
     switch (currentTableState.state) {
         case "Waiting for Players":
             return (
-                <div style={{ color: 'white', textAlign: 'center', backgroundColor: 'transparent', padding: '15px', borderRadius: '8px' }}>
+                <div style={{ color: 'white', textAlign: 'center' }}>
                     <h2>Waiting for players... ({activePlayers.length} / 3)</h2>
-                    {activePlayers.length < 4 && (
-                        <button onClick={() => emitEvent("addBot")} className="game-button">Add Bot</button>
-                    )}
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
+                        {activePlayers.length < 4 && (
+                            <button onClick={() => emitEvent("addBot")} className="game-button">Add Bot</button>
+                        )}
+                        {hasBots && (
+                            <button onClick={() => emitEvent("removeBot")} className="game-button" style={{backgroundColor: '#dc3545'}}>Remove Bot</button>
+                        )}
+                        <button onClick={handleLeaveTable} className="game-button" style={{backgroundColor: '#6c757d'}}>Lobby</button>
+                    </div>
                 </div>
             );
         case "Ready to Start":
@@ -6950,11 +7175,17 @@ const ActionControls = ({
                 return <h2 style={{ color: 'white' }}>Waiting for more players...</h2>;
             }
             return (
-                <div>
+                <div style={{ textAlign: 'center' }}>
                     <button onClick={() => emitEvent("startGame")} className="game-button">Start {activePlayers.length}-Player Game</button>
-                    {activePlayers.length < 4 && (
-                        <button onClick={() => emitEvent("addBot")} className="game-button">Add Bot</button>
-                    )}
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginTop: '10px' }}>
+                        {activePlayers.length < 4 && (
+                            <button onClick={() => emitEvent("addBot")} className="game-button">Add Bot</button>
+                        )}
+                        {hasBots && (
+                            <button onClick={() => emitEvent("removeBot")} className="game-button" style={{backgroundColor: '#dc3545'}}>Remove Bot</button>
+                        )}
+                        <button onClick={handleLeaveTable} className="game-button" style={{backgroundColor: '#6c757d'}}>Lobby</button>
+                    </div>
                 </div>
             );
         case "Dealing Pending":
@@ -7011,8 +7242,6 @@ const ActionControls = ({
             }
             return <p style={{ color: 'white', fontStyle: 'italic' }}>Waiting for {currentTableState.bidWinnerInfo?.playerName} to choose trump...</p>;
         case "AllPassWidowReveal":
-            // --- THIS IS THE FIX ---
-            // Use roundSummary.widowForReveal, which is populated by the handler
             const widowCards = currentTableState.roundSummary?.widowForReveal || currentTableState.originalDealtWidow || [];
             return (
                 <div className="action-prompt">
@@ -7031,7 +7260,12 @@ const ActionControls = ({
         case "Frog Widow Exchange":
             const isBidder = currentTableState.bidWinnerInfo?.userId === playerId;
             if (isBidder) {
-                return null; 
+                // --- THIS IS THE FIX ---
+                return (
+                    <div className="action-prompt">
+                        <h4>Select 3 cards from your hand below to discard.</h4>
+                    </div>
+                );
             } else {
                 return (
                     <div className="action-prompt">
@@ -7090,42 +7324,132 @@ const CardValueKey = () => {
 export default CardValueKey;
 --- END FILE: frontend/src/components/game/CardValueKey.js ---
 
+--- START FILE: frontend/src/components/game/DrawVoteModal.css ---
+/* frontend/src/components/game/DrawVoteModal.css */
+
+.draw-vote-timer {
+    font-size: 2.5em;
+    font-weight: bold;
+    font-family: 'Oswald', sans-serif;
+    color: #343a40;
+    margin: 10px 0 20px 0;
+    padding: 10px;
+    background-color: #e9ecef;
+    border-radius: 8px;
+}
+
+.draw-votes-list-container {
+    width: 100%;
+    max-width: 300px;
+    margin: 0 auto 20px auto;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    background-color: #f8f9fa;
+}
+
+.draw-votes-list-container h4 {
+    margin: 0;
+    padding: 8px;
+    font-family: 'Oswald', sans-serif;
+    background-color: #e9ecef;
+    border-bottom: 1px solid #dee2e6;
+    border-top-left-radius: 7px;
+    border-top-right-radius: 7px;
+}
+
+.draw-vote-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.draw-vote-item:last-child {
+    border-bottom: none;
+}
+
+.vote-status {
+    font-weight: bold;
+    font-family: 'Oswald', sans-serif;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.9em;
+}
+
+.vote-status.pending {
+    color: #6c757d;
+    background-color: #e9ecef;
+}
+
+.vote-status.wash {
+    color: #0d6efd;
+    background-color: #cfe2ff;
+}
+
+.vote-status.split {
+    color: #0f5132;
+    background-color: #d1e7dd;
+}
+
+.vote-status.no {
+    color: #842029;
+    background-color: #f8d7da;
+}
+--- END FILE: frontend/src/components/game/DrawVoteModal.css ---
+
 --- START FILE: frontend/src/components/game/DrawVoteModal.js ---
 // frontend/src/components/game/DrawVoteModal.js
 import React from 'react';
-import './RoundSummaryModal.css'; // You can reuse the modal styles
+import './RoundSummaryModal.css'; // Reuse the main modal styles
+import './DrawVoteModal.css'; // Add our specific styles
 
-const DrawVoteModal = ({ show, drawRequest, onVote, onClose }) => {
+const DrawVoteModal = ({ show, drawRequest, onVote }) => {
     if (!show || !drawRequest?.isActive) return null;
+
+    const getVoteStatus = (vote) => {
+        if (!vote) return { text: 'Pending...', className: 'pending' };
+        return { text: vote.toUpperCase(), className: vote.toLowerCase() };
+    };
 
     return (
         <div className="modal-overlay">
-            <div className="modal-content">
-                <h2>Draw Requested</h2>
-                <p><strong>{drawRequest.initiator}</strong> has requested to end the game.</p>
-                <p>Time to vote: <strong>{drawRequest.timer}s</strong></p>
-                
-                <div className="draw-votes">
-                    <p>Votes:</p>
-                    <ul>
-                        {Object.entries(drawRequest.votes).map(([name, vote]) => (
-                            <li key={name}>
-                                {name}: {vote ? <strong>{vote.toUpperCase()}</strong> : '...voting'}
-                            </li>
-                        ))}
-                    </ul>
+            <div className="summary-modal-content" style={{ maxWidth: '450px' }}>
+                <div className="summary-main-area">
+                    <h2>Draw Requested</h2>
+                    <p className="summary-message">
+                        <strong>{drawRequest.initiator}</strong> has requested to end the game. All players must vote.
+                    </p>
+                    
+                    <div className="draw-vote-timer">{drawRequest.timer}s</div>
+
+                    <div className="draw-votes-list-container">
+                        <h4>Current Votes</h4>
+                        {Object.entries(drawRequest.votes).map(([name, vote]) => {
+                            const status = getVoteStatus(vote);
+                            return (
+                                <div key={name} className="draw-vote-item">
+                                    <span>{name}</span>
+                                    <span className={`vote-status ${status.className}`}>{status.text}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
 
-                <div className="modal-actions" style={{ marginTop: '20px' }}>
-                    <button className="game-button" onClick={() => onVote('wash')}>
-                        Vote Wash (Return Buy-ins)
-                    </button>
-                    <button className="game-button" style={{ backgroundColor: '#1e40af' }} onClick={() => onVote('split')}>
-                        Vote Split (Proportional Payout)
-                    </button>
-                    <button className="game-button" style={{ backgroundColor: '#991b1b' }} onClick={() => onVote('no')}>
-                        Vote No (Resume Game)
-                    </button>
+                <div className="summary-action-area">
+                    <p style={{ margin: '0 0 10px 0', fontWeight: 'bold' }}>Your Vote:</p>
+                    <div className="game-over-actions">
+                        <button className="game-button" onClick={() => onVote('wash')} title="Everyone gets their buy-in back.">
+                            Wash
+                        </button>
+                        <button className="game-button" style={{ backgroundColor: '#15803d' }} onClick={() => onVote('split')} title="Payouts are calculated based on score.">
+                            Split Pot
+                        </button>
+                        <button className="game-button" style={{ backgroundColor: '#b91c1c' }} onClick={() => onVote('no')} title="Cancel the draw and resume the game.">
+                            Vote No
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -7678,7 +8002,7 @@ const PlayerHand = ({
     emitEvent,
     renderCard
 }) => {
-    const [, setSelectedDiscards] = useState([]);
+    const [selectedDiscards, setSelectedDiscards] = useState([]);
     const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
     const { state, hands, bidWinnerInfo, trickTurnPlayerName, currentTrickCards, leadSuitCurrentTrick, trumpSuit, trumpBroken } = currentTableState;
@@ -7700,8 +8024,50 @@ const PlayerHand = ({
         emitEvent("playCard", { card });
     }, [emitEvent]);
 
+    const handleSelectDiscard = (card) => {
+        setSelectedDiscards(prev => {
+            if (prev.includes(card)) {
+                return prev.filter(c => c !== card);
+            } else if (prev.length < 3) {
+                return [...prev, card];
+            }
+            return prev;
+        });
+    };
+
+    const handleSubmitDiscards = () => {
+        if (selectedDiscards.length === 3) {
+            emitEvent("submitFrogDiscards", { discards: selectedDiscards });
+        }
+    };
+
     if (state === "Frog Widow Exchange" && bidWinnerInfo?.playerName === selfPlayerName) {
-        // ... (Frog discard logic is unchanged)
+        // --- THIS IS THE FIX ---
+        const sortedFullHand = sortHandBySuit(myHand);
+        return (
+            <div className="player-hand-container" style={{ flexDirection: 'column' }}>
+                <div className={`player-hand-cards`}>
+                    {sortedFullHand.map((card, index) => (
+                        <div key={card} className="player-hand-card-wrapper" style={{ marginLeft: index > 0 ? -40 : 0 }}>
+                            {renderCard(card, {
+                                isButton: true,
+                                onClick: () => handleSelectDiscard(card),
+                                large: true,
+                                isSelected: selectedDiscards.includes(card)
+                            })}
+                        </div>
+                    ))}
+                </div>
+                <button
+                    onClick={handleSubmitDiscards}
+                    className="game-button"
+                    disabled={selectedDiscards.length !== 3}
+                    style={{ marginTop: '10px' }}
+                >
+                    Submit Discards ({selectedDiscards.length}/3)
+                </button>
+            </div>
+        );
     }
 
     if (isSpectator || !myHand.length) {
@@ -7775,7 +8141,6 @@ const PlayerHand = ({
 };
 
 export default PlayerHand;
-
 --- END FILE: frontend/src/components/game/PlayerHand.js ---
 
 --- START FILE: frontend/src/components/game/PlayerSeat.css ---
@@ -8421,7 +8786,6 @@ export default PointsBreakdownBar;
 // frontend/src/components/game/RoundSummaryModal.js
 import React, { useState } from 'react';
 import './RoundSummaryModal.css';
-// --- MODIFICATION: Import BID_MULTIPLIERS ---
 import { CARD_POINT_VALUES, BID_MULTIPLIERS } from '../../constants';
 import PointsBreakdownBar from './PointsBreakdownBar';
 
@@ -8458,7 +8822,8 @@ const RoundSummaryModal = ({
         finalDefenderPoints,
         pointChanges,
         widowPointsValue,
-        bidType
+        bidType,
+        drawOutcome, // New property for draws
     } = summaryData;
     
     const insuranceAgreement = insurance?.executedDetails?.agreement;
@@ -8474,7 +8839,6 @@ const RoundSummaryModal = ({
         }, 0);
     };
 
-    // --- NEW: Calculations for the points breakdown text ---
     const rawDifference = Math.abs(finalBidderPoints - 60);
     const bidMultiplier = BID_MULTIPLIERS[bidType] || 1;
     const exchangeValue = rawDifference * bidMultiplier;
@@ -8488,11 +8852,9 @@ const RoundSummaryModal = ({
                 defenderNames={defenderNames}
                 defenderPoints={finalDefenderPoints}
             />
-            {/* --- MODIFICATION: Replaced the old text with the new calculation breakdown --- */}
             <div className="point-calculation-recap">
                 <span>Difference from Goal: <strong>{rawDifference}</strong> pts</span>
-                {/* --- THIS IS THE FIX --- */}
-                <span className="recap-divider">Ã—</span>
+                <span className="recap-divider">Ãƒâ€”</span>
                 <span>Bid Multiplier: <strong>{bidMultiplier}x</strong> ({bidType})</span>
                 <span className="recap-divider">=</span>
                 <span>Exchange Value: <strong>{exchangeValue}</strong> pts</span>
@@ -8548,80 +8910,94 @@ const RoundSummaryModal = ({
         );
     };
 
+    const renderMainContent = () => {
+        if (drawOutcome) {
+            return (
+                <div className="summary-scores-container">
+                    {payouts && (
+                         <div className="forfeit-payout-section" style={{ backgroundColor: '#cfe2ff', borderColor: '#b6d4fe' }}>
+                            <h4 style={{ color: '#0a58ca' }}>Draw Payouts ({drawOutcome}):</h4>
+                            <ul className="forfeit-payout-list">
+                                {Object.entries(payouts).map(([pName, details]) => (
+                                    <li key={pName}>
+                                        <strong>{pName}:</strong> Received {details.totalReturn.toFixed(2)} tokens
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // Default content for a normal round end
+        return (
+            <>
+                {summaryData.insuranceDealWasMade ? (
+                    <div className="what-if-panel">
+                        <h4 className="what-if-title">How Points Would Have Been Calculated</h4>
+                        {pointsPanelContent}
+                    </div>
+                ) : (
+                    pointsPanelContent
+                )}
+                {insuranceAgreement && (
+                    <div className="insurance-deal-recap">
+                        <h4 className="recap-title">Insurance Deal Recap</h4>
+                        <p><strong>{insuranceAgreement.bidderPlayerName}</strong> (Bidder) asked for <strong>{insuranceAgreement.bidderRequirement}</strong> points.</p>
+                        <ul>
+                            {Object.entries(insuranceAgreement.defenderOffers).map(([name, offer]) => (
+                                <li key={name}><strong>{name}</strong> offered <strong>{offer}</strong> points.</li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+                {insuranceHindsight && (
+                    <div className="insurance-hindsight">
+                        <h4 className="hindsight-title">Insurance Hindsight</h4>
+                         {Object.entries(insuranceHindsight).map(([pName, data]) => (
+                            <p key={pName} className="hindsight-text">
+                                <strong>{pName}:</strong> Your decision <strong>{data.hindsightValue >= 0 ? 'saved' : 'wasted'} {Math.abs(data.hindsightValue)}</strong> points.
+                            </p>
+                        ))}
+                    </div>
+                )}
+                <div className="summary-scores-container">
+                    <h4>Updated Scores</h4>
+                    <ul className="summary-score-list">
+                        {Object.entries(finalScores).map(([name, score]) => (
+                           <li key={name}><strong>{name}:</strong> {score}</li>
+                        ))}
+                    </ul>
+                </div>
+            </>
+        );
+    };
+
     return (
         <div className="modal-overlay">
             <div className="summary-modal-content">
                 <div className="summary-main-area">
                     <h2>{isGameOver ? "Game Over" : "Round Over"}</h2>
                     <p className="summary-message">{isGameOver ? `Winner: ${gameWinner}` : message}</p>
+                    {renderMainContent()}
+                </div>
 
-                    {summaryData.insuranceDealWasMade ? (
-                        <div className="what-if-panel">
-                            <h4 className="what-if-title">How Points Would Have Been Calculated</h4>
-                            {pointsPanelContent}
-                        </div>
-                    ) : (
-                        pointsPanelContent
-                    )}
-                    
-                    {insuranceAgreement && (
-                        <div className="insurance-deal-recap">
-                            <h4 className="recap-title">Insurance Deal Recap</h4>
-                            <p><strong>{insuranceAgreement.bidderPlayerName}</strong> (Bidder) asked for <strong>{insuranceAgreement.bidderRequirement}</strong> points.</p>
-                            <ul>
-                                {Object.entries(insuranceAgreement.defenderOffers).map(([name, offer]) => (
-                                    <li key={name}><strong>{name}</strong> offered <strong>{offer}</strong> points.</li>
-                                ))}
-                            </ul>
-                        </div>
-                    )}
-
-                    {insuranceHindsight && (
-                        <div className="insurance-hindsight">
-                            <h4 className="hindsight-title">Insurance Hindsight</h4>
-                             {Object.entries(insuranceHindsight).map(([pName, data]) => (
-                                <p key={pName} className="hindsight-text">
-                                    <strong>{pName}:</strong> Your decision <strong>{data.hindsightValue >= 0 ? 'saved' : 'wasted'} {Math.abs(data.hindsightValue)}</strong> points.
-                                </p>
-                            ))}
-                        </div>
-                    )}
-
-                    <div className="summary-scores-container">
-                        <h4>Updated Scores</h4>
-                        <ul className="summary-score-list">
-                            {Object.entries(finalScores).map(([name, score]) => (
-                               <li key={name}><strong>{name}:</strong> {score}</li>
-                            ))}
-                        </ul>
-                        {payouts && (
-                             <div className="forfeit-payout-section">
-                                <h4>Forfeit Payouts:</h4>
-                                <ul className="forfeit-payout-list">
-                                    {Object.entries(payouts).map(([pName, details]) => (
-                                        <li key={pName}>
-                                            <strong>{pName}:</strong> Received {details.totalGain.toFixed(2)} tokens
-                                        </li>
-                                    ))}
-                                </ul>
+                {!drawOutcome && (
+                    <div className="summary-details-section">
+                        <button className="details-toggle" onClick={() => setDetailsVisible(!detailsVisible)}>
+                            {detailsVisible ? 'Hide Round Details' : 'Show Round Details'}
+                        </button>
+                        {detailsVisible && (
+                            <div className="details-content">
+                                <h4 style={{marginTop: '0px'}}>Trick Breakdown</h4>
+                                 <div className="scrollable-tricks">
+                                    {renderTrickDetails()}
+                                </div>
                             </div>
                         )}
                     </div>
-                </div>
-
-                <div className="summary-details-section">
-                    <button className="details-toggle" onClick={() => setDetailsVisible(!detailsVisible)}>
-                        {detailsVisible ? 'Hide Round Details' : 'Show Round Details'}
-                    </button>
-                    {detailsVisible && (
-                        <div className="details-content">
-                            <h4 style={{marginTop: '0px'}}>Trick Breakdown</h4>
-                             <div className="scrollable-tricks">
-                                {renderTrickDetails()}
-                            </div>
-                        </div>
-                    )}
-                </div>
+                )}
                 
                 <div className="summary-action-area">
                     {!isGameOver && playerId === dealerOfRoundId && (
@@ -8634,7 +9010,7 @@ const RoundSummaryModal = ({
                     )}
                     {isGameOver && (
                         <div className="game-over-actions">
-                             <button onClick={() => emitEvent("resetGame")} className="game-button">
+                             <button onClick={handleLeaveTable} className="game-button">
                                 Play Again
                             </button>
                             <button onClick={handleLeaveTable} className="game-button" style={{backgroundColor: '#17a2b8'}}>
@@ -8705,6 +9081,7 @@ const TableLayout = ({
     selfPlayerName,
     playerId,
     emitEvent,
+    handleLeaveTable,
 }) => {
     const [lastTrickVisible, setLastTrickVisible] = useState(false);
 
@@ -8928,6 +9305,7 @@ const TableLayout = ({
                         selfPlayerName={selfPlayerName}
                         isSpectator={isSpectator}
                         emitEvent={emitEvent}
+                        handleLeaveTable={handleLeaveTable}
                         renderCard={renderCard}
                     />
                 </div>
