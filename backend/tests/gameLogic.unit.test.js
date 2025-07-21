@@ -8,7 +8,7 @@ function runGameLogicTests() {
     console.log('Running gameLogic.js tests...');
 
     let testCounter = 1;
-    const pass = (testName) => console.log(`  ✔ Test ${testCounter++}: ${testName}`);
+    const pass = (testName) => console.log(`  âœ” Test ${testCounter++}: ${testName}`);
 
     // --- Trick Winner Tests ---
     const playsTrump = [ { userId: 1, playerName: 'Alice', card: '10H' }, { userId: 2, playerName: 'Bob', card: 'AS' }, { userId: 3, playerName: 'Carol', card: 'KH' }];
@@ -37,8 +37,9 @@ function runGameLogicTests() {
     assert.strictEqual(payout['Carol'].totalGain.toFixed(3), '1.455');
     pass('Forfeit payout for Carol is correct.');
 
-    const drawTable = {
-        theme: 'fort-creek',
+    // --- MODIFICATION: Expanded Draw Payout Tests ---
+    const drawTable3Player = {
+        theme: 'fort-creek', // Buy-in is 1 token
         players: {
             1: { userId: 1, playerName: 'Alice', isSpectator: false },
             2: { userId: 2, playerName: 'Bob', isSpectator: false },
@@ -46,11 +47,21 @@ function runGameLogicTests() {
         },
         scores: { 'Alice': 90, 'Bob': 80, 'Carol': 60 }
     };
-    let drawResult = gameLogic.calculateDrawSplitPayout(drawTable);
-    assert.strictEqual(drawResult.wash, false);
-    pass('Draw should be a split, not a wash.');
-    assert.ok(Math.abs(drawResult.payouts['Carol'].totalReturn - 0.5) < 0.0001);
-    pass('Draw split payout for lowest player is correct.');
+    let drawResult = gameLogic.calculateDrawSplitPayout(drawTable3Player);
+    assert.strictEqual(drawResult.wash, false, '3-player draw with different scores should be a split.');
+    pass('Draw Split: Correctly identifies a 3-player split.');
+    assert.ok(Math.abs(drawResult.payouts['Carol'].totalReturn - 0.50) < 0.001, 'Lowest player (Carol) should get 50% of buy-in back.');
+    pass('Draw Split: Lowest player payout is correct.');
+    assert.ok(Math.abs(drawResult.payouts['Alice'].totalReturn - 1.2647) < 0.001, 'Highest player (Alice) share is incorrect.');
+    pass('Draw Split: Highest player payout is correct.');
+    assert.ok(Math.abs(drawResult.payouts['Bob'].totalReturn - 1.2352) < 0.001, 'Middle player (Bob) share is incorrect.');
+    pass('Draw Split: Middle player payout is correct.');
+
+    const drawTable4Player = { ...drawTable3Player, players: {...drawTable3Player.players, 4: {userId: 4, playerName: 'Dave'}}};
+    let washResult = gameLogic.calculateDrawSplitPayout(drawTable4Player);
+    assert.strictEqual(washResult.wash, true, 'A 4-player game draw should always be a wash.');
+    pass('Draw Wash: Correctly identifies a 4-player game as a wash.');
+    // --- END MODIFICATION ---
     
     // --- Scoring Tests ---
     // Note: The structure of players in these tests is simplified because the function only needs playerName.
@@ -97,7 +108,7 @@ function runGameLogicTests() {
     assert.strictEqual(frogResult.finalBidderPoints, 65, 'Frog: Bidder points incorrect.');
     pass('Frog Bid: Bidder gets points from their discarded cards.');
 
-    console.log('\n  ✔ All gameLogic.js tests passed!');
+    console.log('\n  âœ” All gameLogic.js tests passed!');
 }
 
 // Check if the file is being run directly, and if so, execute the tests.

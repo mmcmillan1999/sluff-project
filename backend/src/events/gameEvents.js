@@ -1,3 +1,5 @@
+// backend/src/events/gameEvents.js
+
 const jwt = require("jsonwebtoken");
 const transactionManager = require('../data/transactionManager');
 
@@ -109,7 +111,17 @@ const registerGameHandlers = (io, gameService) => {
         socket.on("updateInsuranceSetting", createDirectHandler('updateInsuranceSetting'));
         socket.on("startTimeoutClock", createDirectHandler('startTimeoutClock'));
         socket.on("requestDraw", createDirectHandler('requestDraw'));
-        socket.on("submitDrawVote", createDirectHandler('submitDrawVote'));
+
+        // --- THIS IS THE FIX: A dedicated handler for submitDrawVote ---
+        socket.on("submitDrawVote", (payload) => {
+            const { tableId, vote } = payload;
+            const engine = gameService.getEngineById(tableId);
+            if (engine) {
+                // We now pass the 'vote' string directly, not the whole object
+                engine.submitDrawVote(socket.user.id, vote);
+                gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
+            }
+        });
 
         // --- USER-SPECIFIC & MISC LISTENERS ---
         socket.on("requestUserSync", async () => {

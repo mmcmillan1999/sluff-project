@@ -1,0 +1,71 @@
+/* frontend/src/components/game/DrawVoteModal.css */
+
+.draw-vote-timer {
+    font-size: 2.5em;
+    font-weight: bold;
+    font-family: 'Oswald', sans-serif;
+    color: #343a40;
+    margin: 10px 0 20px 0;
+    padding: 10px;
+    background-color: #e9ecef;
+    border-radius: 8px;
+}
+
+.draw-votes-list-container {
+    width: 100%;
+    max-width: 300px;
+    margin: 0 auto 20px auto;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    background-color: #f8f9fa;
+}
+
+.draw-votes-list-container h4 {
+    margin: 0;
+    padding: 8px;
+    font-family: 'Oswald', sans-serif;
+    background-color: #e9ecef;
+    border-bottom: 1px solid #dee2e6;
+    border-top-left-radius: 7px;
+    border-top-right-radius: 7px;
+}
+
+.draw-vote-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.draw-vote-item:last-child {
+    border-bottom: none;
+}
+
+.vote-status {
+    font-weight: bold;
+    font-family: 'Oswald', sans-serif;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.9em;
+}
+
+.vote-status.pending {
+    color: #6c757d;
+    background-color: #e9ecef;
+}
+
+.vote-status.wash {
+    color: #0d6efd;
+    background-color: #cfe2ff;
+}
+
+.vote-status.split {
+    color: #0f5132;
+    background-color: #d1e7dd;
+}
+
+.vote-status.no {
+    color: #842029;
+    background-color: #f8d7da;
+}
