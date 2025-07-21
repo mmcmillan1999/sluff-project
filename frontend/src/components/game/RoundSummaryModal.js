@@ -72,7 +72,7 @@ const RoundSummaryModal = ({
             <div className="point-calculation-recap">
                 <span>Difference from Goal: <strong>{rawDifference}</strong> pts</span>
                 {/* --- THIS IS THE FIX --- */}
-                <span className="recap-divider">×</span>
+                <span className="recap-divider">Ã—</span>
                 <span>Bid Multiplier: <strong>{bidMultiplier}x</strong> ({bidType})</span>
                 <span className="recap-divider">=</span>
                 <span>Exchange Value: <strong>{exchangeValue}</strong> pts</span>
@@ -214,7 +214,8 @@ const RoundSummaryModal = ({
                     )}
                     {isGameOver && (
                         <div className="game-over-actions">
-                             <button onClick={() => emitEvent("resetGame")} className="game-button">
+                             {/* --- THIS IS THE FIX --- */}
+                             <button onClick={handleLeaveTable} className="game-button">
                                 Play Again
                             </button>
                             <button onClick={handleLeaveTable} className="game-button" style={{backgroundColor: '#17a2b8'}}>
