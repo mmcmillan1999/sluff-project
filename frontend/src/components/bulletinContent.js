@@ -25,7 +25,7 @@ export const bulletinContent = [
     },
     { 
         type: 'paragraph', 
-        text: 'Thank you for trying out the game. Your feedback is greatly appreciated as we work to make this the best experience possible.' 
+        text: 'better ways to log bugs coming.' 
     },
     { 
         type: 'header', 
