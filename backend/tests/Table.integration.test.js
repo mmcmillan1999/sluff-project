@@ -137,12 +137,57 @@ async function testBotHandlesFrogUpgrade() {
     console.log("...Success! Bot correctly handled the frog upgrade scenario.\n");
 }
 
+// --- NEW TEST SUITE FOR DRAW VOTING ---
+async function testDrawRequestLifecycle() {
+    console.log("Running Test: testDrawRequestLifecycle...");
+
+    const setupEngineForDraw = () => {
+        const engine = new GameEngine('table-draw-test', 'fort-creek', 'Draw Test Table');
+        engine.joinTable({ id: 1, username: "P1" }, "s1");
+        engine.joinTable({ id: 2, username: "P2" }, "s2");
+        engine.joinTable({ id: 3, username: "P3" }, "s3");
+        engine.gameStarted = true;
+        engine.playerMode = 3;
+        engine.state = "Playing Phase";
+        return engine;
+    };
+
+    // Test Case 1: A 'no' vote cancels the draw.
+    let engine = setupEngineForDraw();
+    engine.requestDraw(1); // P1 requests draw
+    assert.strictEqual(engine.drawRequest.isActive, true, "Draw request should be active after initiation.");
+    engine.submitDrawVote(2, 'no'); // P2 votes no
+    assert.strictEqual(engine.drawRequest.isActive, false, "Draw request should be inactive after a 'no' vote.");
+    assert.strictEqual(engine.state, "Playing Phase", "Game state should remain 'Playing Phase' after a 'no' vote.");
+    console.log("  - Passed: 'No' vote correctly cancels draw.");
+
+    // Test Case 2: A unanimous 'wash' vote ends the game.
+    engine = setupEngineForDraw();
+    engine.requestDraw(1); // P1 requests draw (auto-votes 'wash')
+    engine.submitDrawVote(2, 'wash');
+    engine.submitDrawVote(3, 'wash');
+    assert.strictEqual(engine.drawRequest.isActive, false, "Draw request should be inactive after all votes.");
+    assert.strictEqual(engine.state, "Game Over", "Game state should be 'Game Over' after unanimous vote.");
+    console.log("  - Passed: Unanimous 'wash' vote ends the game.");
+
+    // Test Case 3: A mixed 'split'/'wash' vote ends the game.
+    engine = setupEngineForDraw();
+    engine.requestDraw(1); // P1 requests draw (auto-votes 'wash')
+    engine.submitDrawVote(2, 'split');
+    engine.submitDrawVote(3, 'split');
+    assert.strictEqual(engine.state, "Game Over", "Game state should be 'Game Over' after mixed positive vote.");
+    console.log("  - Passed: Mixed 'split'/'wash' vote ends the game.");
+
+    console.log("...Success! Draw request lifecycle works correctly.\n");
+}
+
 // --- Test Runner ---
 async function runAllTests() {
     try {
         await testBotBiddingProcess();
         await testAllPlayersPass();
         await testBotHandlesFrogUpgrade();
+        await testDrawRequestLifecycle(); // Added new test suite
     } catch (error) {
         console.error("â Œ A test failed:", error);
         throw error;
