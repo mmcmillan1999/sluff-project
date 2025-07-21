@@ -10,22 +10,44 @@ const gameLogic = require('../logic');
 function calculateRoundScores(engine) {
     const effects = [];
     
-    // --- THIS IS THE CRITICAL LOGIC ---
-    // Calculate the total points including the widow before calling the details function.
+    // --- THIS IS THE FIX ---
+    // The logic to assign widow points now correctly checks the winner of the last trick.
+    
     const bidType = engine.bidWinnerInfo.bid;
     let widowPoints = 0;
+    
+    // First, determine the value of the widow based on the bid type.
     if (bidType === "Frog") {
         widowPoints = gameLogic.calculateCardPoints(engine.widowDiscardsForFrogBidder);
     } else if (bidType === "Solo" || bidType === "Heart Solo") {
         widowPoints = gameLogic.calculateCardPoints(engine.originalDealtWidow);
     }
-    const bidderTotalCardPoints = engine.bidderCardPoints + widowPoints;
-    // --- END CRITICAL LOGIC ---
 
-    // Now, we pass the complete engine state, INCLUDING the calculated total, to the logic function.
-        const roundData = gameLogic.calculateRoundScoreDetails({
+    // Now, assign those points to the correct team.
+    if (bidType === "Frog") {
+        // In a Frog bid, the widow points always belong to the bidder.
+        engine.bidderCardPoints += widowPoints;
+    } else if (bidType === "Solo" || bidType === "Heart Solo") {
+        // For Solo bids, the winner of the LAST trick gets the widow.
+        const lastTrickWinnerName = engine.lastCompletedTrick?.winnerName;
+        const bidderName = engine.bidWinnerInfo.playerName;
+        
+        if (lastTrickWinnerName === bidderName) {
+            // If the bidder won the last trick, they get the widow points.
+            engine.bidderCardPoints += widowPoints;
+        } else {
+            // If a defender won the last trick, the defenders get the widow points.
+            engine.defenderCardPoints += widowPoints;
+        }
+    }
+
+    // The rest of the function now receives the CORRECTLY assigned totals.
+    const bidderTotalCardPoints = engine.bidderCardPoints;
+    // --- END FIX ---
+
+    const roundData = gameLogic.calculateRoundScoreDetails({
         ...engine,
-        bidderTotalCardPoints,
+        bidderTotalCardPoints, // This value is now correctly calculated
         playerOrderActive: engine.playerOrder.turnOrder
     });
 
@@ -43,11 +65,12 @@ function calculateRoundScores(engine) {
         effects.push({
             type: 'HANDLE_GAME_OVER',
             payload: {
-                playerOrderActive: engine.playerOrder.turnOrder,
                 scores: engine.scores,
                 theme: engine.theme,
                 gameId: engine.gameId,
-                players: engine.players
+                players: engine.players,
+                // Pass playerOrderActive to handleGameOver
+                playerOrderActive: engine.playerOrder.turnOrder.map(id => engine.players[id]),
             },
             onComplete: (gameWinnerName) => {
                 engine.roundSummary.gameWinner = gameWinnerName;
