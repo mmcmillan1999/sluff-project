@@ -11,6 +11,14 @@
  */
 
 export const bulletinContent = [
+    {
+        type: 'header',
+        text: 'Deployment Test: Success!'
+    },
+    {
+        type: 'list-item',
+        text: 'This change confirms the new deployment pipeline is working correctly.'
+    },
     { 
         type: 'header', 
         text: 'Welcome to Sluff Alpha Testing!' 

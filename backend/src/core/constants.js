@@ -1,6 +1,6 @@
 // backend/src/core/constants.js
 
-const SERVER_VERSION = "9.0.0 - Game Economy";
+const SERVER_VERSION = "9.0.1-test";
 
 const SUITS = { H: "Hearts", D: "Diamonds", C: "Clubs", S: "Spades" };
 const RANKS_ORDER = ["6", "7", "8", "9", "J", "Q", "K", "10", "A"];

@@ -1,3 +1,4 @@
+--- START FILE: README.md ---
 # Sluff Project Monorepo
 
 ## Overview
@@ -23,3 +24,36 @@ The project uses a GitFlow-style branching model with two primary environments:
     *   **Backend:** Deployed on Render at `sluff-backend.onrender.com`.
 
 Both environments connect to the same production PostgreSQL database.
+
+---
+## Render Deployment Settings
+
+### Staging / Pilot (`sluff-backend-pilot`)
+*   **Service URL:** `https://sluff-backend-pilot.onrender.com`
+*   **Repository Branch:** `stage`
+*   **Build & Deploy:**
+    *   **Root Directory:** `backend`
+    *   **Build Command:** `npm install`
+    *   **Start Command:** `npm start`
+*   **Environment Variables:**
+    *   `CLIENT_ORIGIN`: `https://sluff-pilot.netlify.app`
+    *   `DATABASE_URL`: `[hidden in Render]`
+    *   `JWT_SECRET`: `[hidden in Render]`
+    *   `AI_SECRET_KEY`: `[hidden in Render]`
+    *   `ADMIN_SECRET`: `[hidden in Render]`
+
+### Production (`sluff-backend`)
+*   **Service URL:** `https://sluff-backend.onrender.com`
+*   **Repository Branch:** `main`
+*   **Build & Deploy:**
+    *   **Root Directory:** `backend`
+    *   **Build Command:** `npm install`
+    *   **Start Command:** `npm start`
+*   **Environment Variables:**
+    *   `CLIENT_ORIGIN`: `https://sluff.netlify.app`
+    *   `DATABASE_URL`: `[hidden in Render]`
+    *   `JWT_SECRET`: `[hidden in Render]`
+    *   `AI_SECRET_KEY`: `[hidden in Render]`
+    *   `ADMIN_SECRET`: `[hidden in Render]`
+
+--- END FILE: README.md ---
