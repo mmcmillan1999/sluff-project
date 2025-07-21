@@ -19,6 +19,7 @@ const createFeedbackRoutes = require('./api/feedback');
 const createChatRoutes = require('./api/chat');
 const createDbTables = require('./data/createTables');
 const createAiRoutes = require('./api/ai'); // Added import
+const createPingRoutes = require('./api/ping');
 
 // --- Basic Server Setup ---
 const app = express();
@@ -62,6 +63,10 @@ server.listen(PORT, async () => {
     // --- MODIFICATION: Initialize and use the AI router ---
     const aiRouter = createAiRoutes(pool, gameService);
     app.use('/api/ai', aiRouter);
+
+        // --- NEW ROUTE: Simple ping endpoint ---
+    const pingRouter = createPingRoutes();
+    app.use('/api/ping', pingRouter);
 
   } catch (err) {
     console.error("❌ DATABASE CONNECTION FAILED:", err);
