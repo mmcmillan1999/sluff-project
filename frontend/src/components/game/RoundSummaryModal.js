@@ -71,7 +71,8 @@ const RoundSummaryModal = ({
             {/* --- MODIFICATION: Replaced the old text with the new calculation breakdown --- */}
             <div className="point-calculation-recap">
                 <span>Difference from Goal: <strong>{rawDifference}</strong> pts</span>
-                <span className="recap-divider">Ã—</span>
+                {/* --- THIS IS THE FIX --- */}
+                <span className="recap-divider">×</span>
                 <span>Bid Multiplier: <strong>{bidMultiplier}x</strong> ({bidType})</span>
                 <span className="recap-divider">=</span>
                 <span>Exchange Value: <strong>{exchangeValue}</strong> pts</span>
