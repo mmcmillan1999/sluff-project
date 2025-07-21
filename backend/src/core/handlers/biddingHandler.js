@@ -75,13 +75,19 @@ function resolveBiddingFinal(engine) {
     
     if (!engine.currentHighestBidDetails) {
         engine.state = "AllPassWidowReveal";
-        return [{ type: 'START_TIMER', payload: { duration: 3000, onTimeout: (engineRef) => {
-            if (engineRef.state === "AllPassWidowReveal") {
-                engineRef._advanceRound();
-                return [{ type: 'BROADCAST_STATE' }];
-            }
-            return [];
-        }} }];
+  return [
+            { type: 'BROADCAST_STATE' },
+            { type: 'START_TIMER', payload: {
+                duration: 3000,
+                onTimeout: (engineRef) => {
+                    if (engineRef.state === "AllPassWidowReveal") {
+                        engineRef._advanceRound();
+                        return [{ type: 'BROADCAST_STATE' }];
+                    }
+                    return [];
+                }
+            }}
+        ];
     }
     
     engine.bidWinnerInfo = { ...engine.currentHighestBidDetails };
