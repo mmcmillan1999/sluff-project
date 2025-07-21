@@ -20,7 +20,8 @@ class GameService {
                 const tableId = `table-${tableCounter}`;
                 const tableNumber = i + 1;
                 const tableName = `${theme.name} #${tableNumber}`;
-                this.engines[tableId] = new GameEngine(tableId, theme.id, tableName);
+                const emitLobbyUpdateCallback = () => this.io.emit('lobbyState', this.getLobbyState());
+                this.engines[tableId] = new GameEngine(tableId, theme.id, tableName, emitLobbyUpdateCallback);
                 tableCounter++;
             }
         });
@@ -79,49 +80,78 @@ class GameService {
         await this._performAction(tableId, (engine) => engine.requestNextRound(userId));
     }
     
+    // --- REFACTORED METHOD TO HANDLE ALL PAYOUT SCENARIOS ---
     async handleGameOver(payload) {
         let gameWinnerName = "N/A";
-        const { playerOrderActive, scores, theme, gameId, players } = payload;
+        const { scores, theme, gameId, players } = payload;
         const tableCost = TABLE_COSTS[theme] || 0;
+        const transactionPromises = [];
+        const statPromises = [];
 
-        try {
-            const finalPlayerScores = playerOrderActive
-                .map(id => players[id])
-                .filter(p => p && !p.isBot)
-                .map(p => ({ name: p.playerName, score: scores[p.playerName], userId: p.userId }))
-                .sort((a, b) => b.score - a.score);
-            
-            if (finalPlayerScores.length === 3) {
-                const [p1, p2, p3] = finalPlayerScores;
-                if (p1.score > p2.score && p2.score > p3.score) {
-                    gameWinnerName = p1.name;
-                    await transactionManager.postTransaction(this.pool, { userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 2, description: `Win and Payout from ${p3.name}` });
-                    await this.pool.query("UPDATE users SET wins = wins + 1 WHERE id = $1", [p1.userId]);
-                    await transactionManager.postTransaction(this.pool, { userId: p2.userId, gameId, type: 'wash_payout', amount: tableCost, description: `Wash - Buy-in returned` });
-                    await this.pool.query("UPDATE users SET washes = washes + 1 WHERE id = $1", [p2.userId]);
-                    await this.pool.query("UPDATE users SET losses = losses + 1 WHERE id = $1", [p3.userId]);
-                }
-                else if (p1.score === p2.score && p2.score > p3.score) {
-                    gameWinnerName = `${p1.name} & ${p2.name}`;
-                    await transactionManager.postTransaction(this.pool, { userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 1.5, description: `Win (tie) - Split payout from ${p3.name}` });
-                    await transactionManager.postTransaction(this.pool, { userId: p2.userId, gameId, type: 'win_payout', amount: tableCost * 1.5, description: `Win (tie) - Split payout from ${p3.name}` });
-                    await this.pool.query("UPDATE users SET wins = wins + 1 WHERE id = ANY($1::int[])", [[p1.userId, p2.userId]]);
-                    await this.pool.query("UPDATE users SET losses = losses + 1 WHERE id = $1", [p3.userId]);
-                }
-                else if (p1.score > p2.score && p2.score === p3.score) {
-                    gameWinnerName = p1.name;
-                    await transactionManager.postTransaction(this.pool, { userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 3, description: `Win - Collects full pot` });
-                    await this.pool.query("UPDATE users SET wins = wins + 1 WHERE id = $1", [p1.userId]);
-                    await this.pool.query("UPDATE users SET losses = losses + 1 WHERE id = ANY($1::int[])", [[p2.userId, p3.userId]]);
-                }
-                else {
-                    gameWinnerName = "3-Way Tie";
-                    for (const p of finalPlayerScores) {
-                        await transactionManager.postTransaction(this.pool, { userId: p.userId, gameId, type: 'wash_payout', amount: tableCost, description: `3-Way Tie - Buy-in returned` });
-                        await this.pool.query("UPDATE users SET washes = washes + 1 WHERE id = $1", [p.userId]);
-                    }
-                }
+        const finalHumanScores = Object.values(players)
+            .filter(p => p && !p.isBot && !p.isSpectator)
+            .map(p => ({ name: p.playerName, score: scores[p.playerName], userId: p.userId }))
+            .sort((a, b) => b.score - a.score);
+
+        const transactionFn = (args) => transactionPromises.push(transactionManager.postTransaction(this.pool, args));
+        const statUpdateFn = (query, params) => statPromises.push(this.pool.query(query, params));
+
+        if (finalHumanScores.length === 1) {
+            const winner = finalHumanScores[0];
+            gameWinnerName = winner.name;
+            const totalPot = Object.values(players).filter(p => !p.isSpectator).length * tableCost;
+            transactionFn({ userId: winner.userId, gameId, type: 'win_payout', amount: totalPot, description: `Win - Collects full pot` });
+            statUpdateFn("UPDATE users SET wins = wins + 1 WHERE id = $1", [winner.userId]);
+        
+        } else if (finalHumanScores.length === 2) {
+            const [p1, p2] = finalHumanScores;
+            if (p1.score > p2.score) {
+                gameWinnerName = p1.name;
+                transactionFn({ userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 2, description: `Win and Payout` });
+                statUpdateFn("UPDATE users SET wins = wins + 1 WHERE id = $1", [p1.userId]);
+                statUpdateFn("UPDATE users SET losses = losses + 1 WHERE id = $1", [p2.userId]);
+            } else { // Tie score
+                gameWinnerName = `${p1.name} & ${p2.name}`;
+                transactionFn({ userId: p1.userId, gameId, type: 'wash_payout', amount: tableCost, description: `Tie - Buy-in returned` });
+                transactionFn({ userId: p2.userId, gameId, type: 'wash_payout', amount: tableCost, description: `Tie - Buy-in returned` });
+                statUpdateFn("UPDATE users SET washes = washes + 1 WHERE id = ANY($1::int[])", [[p1.userId, p2.userId]]);
             }
+        
+        } else if (finalHumanScores.length === 3) {
+            const [p1, p2, p3] = finalHumanScores;
+            if (p1.score > p2.score && p2.score > p3.score) {
+                gameWinnerName = p1.name;
+                transactionFn({ userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 2, description: `Win and Payout from ${p3.name}` });
+                statUpdateFn("UPDATE users SET wins = wins + 1 WHERE id = $1", [p1.userId]);
+                transactionFn({ userId: p2.userId, gameId, type: 'wash_payout', amount: tableCost, description: `Wash - Buy-in returned` });
+                statUpdateFn("UPDATE users SET washes = washes + 1 WHERE id = $1", [p2.userId]);
+                statUpdateFn("UPDATE users SET losses = losses + 1 WHERE id = $1", [p3.userId]);
+            }
+            else if (p1.score === p2.score && p2.score > p3.score) {
+                gameWinnerName = `${p1.name} & ${p2.name}`;
+                transactionFn({ userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 1.5, description: `Win (tie) - Split payout from ${p3.name}` });
+                transactionFn({ userId: p2.userId, gameId, type: 'win_payout', amount: tableCost * 1.5, description: `Win (tie) - Split payout from ${p3.name}` });
+                statUpdateFn("UPDATE users SET wins = wins + 1 WHERE id = ANY($1::int[])", [[p1.userId, p2.userId]]);
+                statUpdateFn("UPDATE users SET losses = losses + 1 WHERE id = $1", [p3.userId]);
+            }
+            else if (p1.score > p2.score && p2.score === p3.score) {
+                gameWinnerName = p1.name;
+                transactionFn({ userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 3, description: `Win - Collects full pot` });
+                statUpdateFn("UPDATE users SET wins = wins + 1 WHERE id = $1", [p1.userId]);
+                statUpdateFn("UPDATE users SET losses = losses + 1 WHERE id = ANY($1::int[])", [[p2.userId, p3.userId]]);
+            }
+            else { // 3-way tie
+                gameWinnerName = "3-Way Tie";
+                finalHumanScores.forEach(p => {
+                    transactionFn({ userId: p.userId, gameId, type: 'wash_payout', amount: tableCost, description: `3-Way Tie - Buy-in returned` });
+                    statUpdateFn("UPDATE users SET washes = washes + 1 WHERE id = $1", [p.userId]);
+                });
+            }
+        }
+        
+        try {
+            await Promise.all(transactionPromises);
+            await Promise.all(statPromises);
             await transactionManager.updateGameRecordOutcome(this.pool, gameId, `Game Over! Winner: ${gameWinnerName}`);
         } catch(err) {
             console.error("Database error during game over update:", err);
