@@ -23,7 +23,11 @@ function calculateRoundScores(engine) {
     // --- END CRITICAL LOGIC ---
 
     // Now, we pass the complete engine state, INCLUDING the calculated total, to the logic function.
-    const roundData = gameLogic.calculateRoundScoreDetails({ ...engine, bidderTotalCardPoints });
+        const roundData = gameLogic.calculateRoundScoreDetails({
+        ...engine,
+        bidderTotalCardPoints,
+        playerOrderActive: engine.playerOrder.turnOrder
+    });
 
     for (const playerName in roundData.pointChanges) {
         if (engine.scores[playerName] !== undefined) {
@@ -38,8 +42,8 @@ function calculateRoundScores(engine) {
     if (isGameOver) {
         effects.push({
             type: 'HANDLE_GAME_OVER',
-            payload: { 
-                playerOrderActive: engine.playerOrderActive,
+            payload: {
+                playerOrderActive: engine.playerOrder.turnOrder,
                 scores: engine.scores,
                 theme: engine.theme,
                 gameId: engine.gameId,
