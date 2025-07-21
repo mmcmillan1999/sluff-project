@@ -8,6 +8,7 @@ const ActionControls = ({
     selfPlayerName,
     isSpectator,
     emitEvent,
+    handleLeaveTable,
     renderCard
 }) => {
     
@@ -22,15 +23,22 @@ const ActionControls = ({
     }
 
     const activePlayers = Object.values(currentTableState.players).filter(p => !p.isSpectator && !p.disconnected);
+    const hasBots = Object.values(currentTableState.players).some(p => p.isBot);
 
     switch (currentTableState.state) {
         case "Waiting for Players":
             return (
-                <div style={{ color: 'white', textAlign: 'center', backgroundColor: 'transparent', padding: '15px', borderRadius: '8px' }}>
+                <div style={{ color: 'white', textAlign: 'center' }}>
                     <h2>Waiting for players... ({activePlayers.length} / 3)</h2>
-                    {activePlayers.length < 4 && (
-                        <button onClick={() => emitEvent("addBot")} className="game-button">Add Bot</button>
-                    )}
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
+                        {activePlayers.length < 4 && (
+                            <button onClick={() => emitEvent("addBot")} className="game-button">Add Bot</button>
+                        )}
+                        {hasBots && (
+                            <button onClick={() => emitEvent("removeBot")} className="game-button" style={{backgroundColor: '#dc3545'}}>Remove Bot</button>
+                        )}
+                        <button onClick={handleLeaveTable} className="game-button" style={{backgroundColor: '#6c757d'}}>Lobby</button>
+                    </div>
                 </div>
             );
         case "Ready to Start":
@@ -38,11 +46,17 @@ const ActionControls = ({
                 return <h2 style={{ color: 'white' }}>Waiting for more players...</h2>;
             }
             return (
-                <div>
+                <div style={{ textAlign: 'center' }}>
                     <button onClick={() => emitEvent("startGame")} className="game-button">Start {activePlayers.length}-Player Game</button>
-                    {activePlayers.length < 4 && (
-                        <button onClick={() => emitEvent("addBot")} className="game-button">Add Bot</button>
-                    )}
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginTop: '10px' }}>
+                        {activePlayers.length < 4 && (
+                            <button onClick={() => emitEvent("addBot")} className="game-button">Add Bot</button>
+                        )}
+                        {hasBots && (
+                            <button onClick={() => emitEvent("removeBot")} className="game-button" style={{backgroundColor: '#dc3545'}}>Remove Bot</button>
+                        )}
+                        <button onClick={handleLeaveTable} className="game-button" style={{backgroundColor: '#6c757d'}}>Lobby</button>
+                    </div>
                 </div>
             );
         case "Dealing Pending":
@@ -99,8 +113,6 @@ const ActionControls = ({
             }
             return <p style={{ color: 'white', fontStyle: 'italic' }}>Waiting for {currentTableState.bidWinnerInfo?.playerName} to choose trump...</p>;
         case "AllPassWidowReveal":
-            // --- THIS IS THE FIX ---
-            // Use roundSummary.widowForReveal, which is populated by the handler
             const widowCards = currentTableState.roundSummary?.widowForReveal || currentTableState.originalDealtWidow || [];
             return (
                 <div className="action-prompt">
@@ -119,7 +131,12 @@ const ActionControls = ({
         case "Frog Widow Exchange":
             const isBidder = currentTableState.bidWinnerInfo?.userId === playerId;
             if (isBidder) {
-                return null; 
+                // --- THIS IS THE FIX ---
+                return (
+                    <div className="action-prompt">
+                        <h4>Select 3 cards from your hand below to discard.</h4>
+                    </div>
+                );
             } else {
                 return (
                     <div className="action-prompt">

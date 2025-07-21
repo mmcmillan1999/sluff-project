@@ -102,14 +102,26 @@ const registerGameHandlers = (io, gameService) => {
                 const methodArgs = Object.keys(args).length > 0 ? [socket.user.id, args] : [socket.user.id];
                 engine[methodName](...methodArgs);
                 gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
+                gameService.io.emit('lobbyState', gameService.getLobbyState()); // Also update lobby
             }
         };
+        socket.on("removeBot", createDirectHandler('removeBot'));
         socket.on("forfeitGame", createDirectHandler('forfeitGame'));
         socket.on("resetGame", createDirectHandler('reset'));
         socket.on("updateInsuranceSetting", createDirectHandler('updateInsuranceSetting'));
         socket.on("startTimeoutClock", createDirectHandler('startTimeoutClock'));
         socket.on("requestDraw", createDirectHandler('requestDraw'));
-        socket.on("submitDrawVote", createDirectHandler('submitDrawVote'));
+
+        // --- THIS IS THE FIX: A dedicated handler for submitDrawVote ---
+        socket.on("submitDrawVote", (payload) => {
+            const { tableId, vote } = payload;
+            const engine = gameService.getEngineById(tableId);
+            if (engine) {
+                // We now pass the 'vote' string directly, not the whole object
+                engine.submitDrawVote(socket.user.id, vote);
+                gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
+            }
+        });
 
         // --- USER-SPECIFIC & MISC LISTENERS ---
         socket.on("requestUserSync", async () => {

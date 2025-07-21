@@ -81,7 +81,7 @@ function calculateForfeitPayout(table, forfeitingPlayerName) {
 function calculateDrawSplitPayout(table) {
     const tableBuyIn = TABLE_COSTS[table.theme] || 0;
     const playersInOrder = Object.values(table.players)
-        .filter(p => !p.isSpectator)
+        .filter(p => !p.isSpectator && !p.isBot)
         .map(p => ({ name: p.playerName, score: table.scores[p.playerName] || 0, userId: p.userId }))
         .sort((a, b) => a.score - b.score);
 
@@ -116,6 +116,7 @@ function calculateDrawSplitPayout(table) {
 
     return { wash: false, payouts };
 }
+
 
 function calculateRoundScoreDetails(table) {
     const { bidWinnerInfo, playerOrderActive, playerMode, capturedTricks, widowDiscardsForFrogBidder, originalDealtWidow, insurance, players, bidderTotalCardPoints } = table;
@@ -257,6 +258,55 @@ async function handleGameOver(table, transactionFn, statUpdateFn) {
     return { gameWinnerName };
 }
 
+// --- NEW FUNCTION for handling draw game over ---
+async function handleDrawGameOver(table, outcome, transactionFn, statUpdateFn) {
+    const tableCost = TABLE_COSTS[table.theme] || 0;
+    const gameId = table.gameId;
+    let summaryData = {
+        isGameOver: true,
+        drawOutcome: outcome,
+        gameWinner: "Draw",
+        payouts: {},
+        finalScores: table.scores,
+    };
+
+    const humanPlayers = Object.values(table.players).filter(p => !p.isBot && !p.isSpectator);
+    const statPromises = [];
+    const transactionPromises = [];
+
+    if (outcome === 'wash') {
+        summaryData.message = "The game has ended in a wash. All buy-ins have been returned.";
+        for (const player of humanPlayers) {
+            summaryData.payouts[player.playerName] = { totalReturn: tableCost };
+            transactionPromises.push(transactionFn({ userId: player.userId, gameId, type: 'wash_payout', amount: tableCost, description: `Draw (Wash) - Buy-in returned` }));
+            statPromises.push(statUpdateFn("UPDATE users SET washes = washes + 1 WHERE id = $1", [player.userId]));
+        }
+    } else if (outcome === 'split') {
+        const splitResult = calculateDrawSplitPayout(table);
+        if (splitResult.wash) { // Fallback for 4-player games etc.
+            return handleDrawGameOver(table, 'wash', transactionFn, statUpdateFn);
+        }
+        summaryData.message = "The game has ended in a split pot. Payouts are based on score.";
+        summaryData.payouts = splitResult.payouts;
+        for (const playerName in splitResult.payouts) {
+            const payoutInfo = splitResult.payouts[playerName];
+            transactionPromises.push(transactionFn({ userId: payoutInfo.userId, gameId, type: 'win_payout', amount: payoutInfo.totalReturn, description: `Draw (Split) - Payout` }));
+            statPromises.push(statUpdateFn("UPDATE users SET washes = washes + 1 WHERE id = $1", [payoutInfo.userId]));
+        }
+    }
+    
+    try {
+        await Promise.all(transactionPromises);
+        await Promise.all(statPromises);
+        await transactionManager.updateGameRecordOutcome(table.pool, gameId, `Game Over! Draw (${outcome})`);
+    } catch (err) {
+        console.error("Database error during draw game over update:", err);
+    }
+
+    return summaryData;
+}
+
+
 function calculateInsuranceHindsight(table, bidderTotalCardPoints, currentBidMultiplier) {
     if (table.playerMode !== 3) return null;
     const { playerOrderActive, bidWinnerInfo, insurance, players } = table;
@@ -315,6 +365,7 @@ module.exports = {
     determineTrickWinner,
     calculateRoundScoreDetails,
     handleGameOver,
+    handleDrawGameOver,
     calculateForfeitPayout,
     calculateDrawSplitPayout,
     calculateCardPoints

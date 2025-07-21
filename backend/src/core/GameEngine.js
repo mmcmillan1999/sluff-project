@@ -11,10 +11,8 @@ const biddingHandler = require('./handlers/biddingHandler');
 const BOT_NAMES = ["Mike Knight", "Grandma Joe", "Grampa Blane", "Kimba", "Courtney Sr.", "Cliff"];
 
 class GameEngine {
-    // --- THIS IS THE FIX ---
     constructor(tableId, theme, tableName, emitLobbyUpdateCallback) {
-        this.emitLobbyUpdateCallback = emitLobbyUpdateCallback; // This parameter was missing
-        // --- END FIX ---
+        this.emitLobbyUpdateCallback = emitLobbyUpdateCallback;
         
         this.tableId = tableId;
         this.tableName = tableName;
@@ -96,6 +94,28 @@ class GameEngine {
             this.playerOrder.add(botId);
         }
         if (this.playerOrder.count >= 3 && !this.gameStarted) this.state = 'Ready to Start';
+    }
+
+    removeBot() {
+        if (this.gameStarted) return; 
+
+        const botIds = Object.keys(this.players).filter(id => this.players[id].isBot).map(id => parseInt(id, 10));
+        if (botIds.length === 0) return; 
+
+        const botIdToRemove = Math.max(...botIds);
+        const botInfo = this.players[botIdToRemove];
+
+        if (botInfo) {
+            console.log(`[${this.tableId}] Removing bot: ${botInfo.playerName}`);
+            
+            this.playerOrder.remove(botIdToRemove);
+            delete this.scores[botInfo.playerName];
+            delete this.bots[botIdToRemove];
+            delete this.players[botIdToRemove];
+        }
+
+        this.playerMode = this.playerOrder.count;
+        this.state = this.playerMode >= 3 ? "Ready to Start" : "Waiting for Players";
     }
 
     leaveTable(userId) {
@@ -233,33 +253,34 @@ class GameEngine {
     }
 
     reset() {
-        console.log(`[${this.tableId}] Game is being reset.`);
-        const originalPlayers = { ...this.players };
-        this.state = "Waiting for Players";
-        this.players = {};
-        this.playerOrder = new PlayerList();
-        this.scores = {};
+        console.log(`[${this.tableId}] Game is being reset by 'Play Again' button.`);
         this.gameStarted = false;
         this.gameId = null;
         this.playerMode = null;
-        this.dealer = null;
-        this.bots = {};
-        this._nextBotId = -1;
-        this.pendingBotAction = null;
         this._initializeNewRoundState();
-        for (const userId in originalPlayers) {
-            const playerInfo = originalPlayers[userId];
-            if (!playerInfo.disconnected) {
-                this.players[userId] = { ...playerInfo, isSpectator: false, socketId: playerInfo.socketId };
-                if (playerInfo.isBot) {
-                    this.bots[userId] = new BotPlayer(parseInt(userId,10), playerInfo.playerName, this);
+        for (const userId in this.players) {
+            if (this.players[userId].disconnected) {
+                console.log(`[${this.tableId}] Removing disconnected player ${this.players[userId].playerName} during reset.`);
+                this.playerOrder.remove(parseInt(userId, 10));
+                if (this.players[userId].isBot) {
+                    delete this.bots[userId];
                 }
-                this.scores[playerInfo.playerName] = 120;
-                this.playerOrder.add(parseInt(userId, 10));
+                delete this.players[userId];
             }
+        }
+        
+        this.scores = {};
+        for (const userId in this.players) {
+            const player = this.players[userId];
+            player.isSpectator = false;
+            this.scores[player.playerName] = 120;
         }
         this.playerMode = this.playerOrder.count;
         this.state = this.playerMode >= 3 ? "Ready to Start" : "Waiting for Players";
+        this.dealer = null;
+
+        console.log(`[${this.tableId}] Reset complete. State is now '${this.state}' with ${this.playerMode} players.`);
+
         return this._effects([{ type: 'BROADCAST_STATE' }, { type: 'UPDATE_LOBBY' }]);
     }
     
@@ -297,26 +318,58 @@ class GameEngine {
 
     requestDraw(userId) {
         const player = this.players[userId];
-        if (!player || this.drawRequest.isActive || this.state !== 'Playing Phase') return;
+        if (!player || this.drawRequest.isActive || this.state !== 'Playing Phase') return this._effects();
         this.drawRequest.isActive = true;
         this.drawRequest.initiator = player.playerName;
         this.drawRequest.votes = {};
         const activePlayers = this.playerOrder.allIds.map(id => this.players[id]);
         activePlayers.forEach(p => {
-            this.drawRequest.votes[p.playerName] = (p.playerName === player.playerName) ? 'wash' : null;
+            if (!p.isSpectator) {
+                this.drawRequest.votes[p.playerName] = (p.playerName === player.playerName) ? 'wash' : null;
+            }
         });
         this.drawRequest.timer = 30;
+        return this._effects([{ type: 'BROADCAST_STATE' }]);
     }
 
     submitDrawVote(userId, vote) {
         const player = this.players[userId];
-        if (!player || !this.drawRequest.isActive || !['wash', 'split', 'no'].includes(vote) || this.drawRequest.votes[player.playerName] !== null) return;
+        if (!player || !this.drawRequest.isActive || !['wash', 'split', 'no'].includes(vote) || this.drawRequest.votes[player.playerName] !== null) {
+            return this._effects();
+        }
+
         this.drawRequest.votes[player.playerName] = vote;
-        if (vote === 'no') { this.drawRequest.isActive = false; return; }
+        
+        if (vote === 'no') {
+            this.drawRequest.isActive = false;
+            return this._effects([
+                { type: 'EMIT_TO_TABLE', payload: { event: 'drawDeclined' } },
+                { type: 'BROADCAST_STATE' }
+            ]);
+        }
+
         const allVotes = Object.values(this.drawRequest.votes);
-        if (!allVotes.every(v => v !== null)) return;
+        if (allVotes.some(v => v === null)) {
+            return this._effects([{ type: 'BROADCAST_STATE' }]);
+        }
+        
         this.drawRequest.isActive = false;
-        this.state = "Game Over";
+        const outcome = allVotes.includes('split') ? 'split' : 'wash';
+
+        return this._effects([{
+            type: 'HANDLE_DRAW_OUTCOME',
+            payload: {
+                outcome,
+                gameId: this.gameId,
+                theme: this.theme,
+                players: this.players,
+                scores: this.scores
+            },
+            onComplete: (summary) => {
+                this.roundSummary = summary;
+                this.state = "Game Over";
+            }
+        }]);
     }
 
     // =================================================================

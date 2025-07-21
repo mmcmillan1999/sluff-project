@@ -1,6 +1,7 @@
 // frontend/src/components/GameTableView.js
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './GameTableView.css';
+import './game/DrawVoteModal.css';
 import PlayerHand from './game/PlayerHand';
 import InsuranceControls from './game/InsuranceControls';
 import RoundSummaryModal from './game/RoundSummaryModal';
@@ -69,12 +70,18 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
             }, 4000);
         };
 
+        const handleDrawDeclined = () => {
+            alert("Draw request has been declined. Play will continue.");
+        };
+
         socket.on('new_lobby_message', handleNewChatMessage);
         socket.on('error', handlePlayerError);
+        socket.on('drawDeclined', handleDrawDeclined);
 
         return () => {
             socket.off('new_lobby_message', handleNewChatMessage);
             socket.off('error', handlePlayerError);
+            socket.off('drawDeclined', handleDrawDeclined);
             if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
         };
     }, [socket]);
@@ -277,6 +284,7 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
                 selfPlayerName={selfPlayerName}
                 playerId={playerId}
                 emitEvent={emitEvent}
+                handleLeaveTable={handleLeaveTable}
                 playerError={playerError}
             />
             

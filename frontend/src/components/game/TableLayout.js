@@ -14,6 +14,7 @@ const TableLayout = ({
     selfPlayerName,
     playerId,
     emitEvent,
+    handleLeaveTable,
 }) => {
     const [lastTrickVisible, setLastTrickVisible] = useState(false);
 
@@ -237,6 +238,7 @@ const TableLayout = ({
                         selfPlayerName={selfPlayerName}
                         isSpectator={isSpectator}
                         emitEvent={emitEvent}
+                        handleLeaveTable={handleLeaveTable}
                         renderCard={renderCard}
                     />
                 </div>

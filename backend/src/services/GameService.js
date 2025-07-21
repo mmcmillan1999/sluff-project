@@ -130,6 +130,19 @@ class GameService {
         return { gameWinnerName };
     }
 
+    async handleDrawOutcome(payload) {
+        const transactionFn = (args) => transactionManager.postTransaction(this.pool, args);
+        const statUpdateFn = (query, params) => this.pool.query(query, params);
+
+        const summary = await gameLogic.handleDrawGameOver(
+            { ...payload, pool: this.pool },
+            payload.outcome,
+            transactionFn,
+            statUpdateFn
+        );
+        return summary;
+    }
+
     resetAllEngines() {
         console.log("[ADMIN] Resetting all game engines to initial state.");
         this.engines = {};
@@ -165,6 +178,9 @@ class GameService {
                 case 'EMIT_TO_SOCKET':
                     this.io.to(effect.payload.socketId).emit(effect.payload.event, effect.payload.data);
                     break;
+                case 'EMIT_TO_TABLE':
+                    this.io.to(tableId).emit(effect.payload.event, effect.payload.data || {});
+                    break;
                 case 'UPDATE_LOBBY':
                     this.io.emit('lobbyState', this.getLobbyState());
                     break;
@@ -192,6 +208,15 @@ class GameService {
                         effect.onComplete(gameOverResult.gameWinnerName);
                     }
                     this.io.to(tableId).emit('gameState', engine.getStateForClient());
+                    break;
+                }
+                case 'HANDLE_DRAW_OUTCOME': {
+                    const summary = await this.handleDrawOutcome(effect.payload);
+                    if (effect.onComplete) {
+                        effect.onComplete(summary);
+                    }
+                    this.io.to(tableId).emit('gameState', engine.getStateForClient());
+                    this._triggerBots(tableId);
                     break;
                 }
                 case 'START_GAME_TRANSACTIONS': {
