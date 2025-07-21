@@ -27,7 +27,7 @@ const PlayerHand = ({
     emitEvent,
     renderCard
 }) => {
-    const [, setSelectedDiscards] = useState([]);
+    const [selectedDiscards, setSelectedDiscards] = useState([]);
     const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
     const { state, hands, bidWinnerInfo, trickTurnPlayerName, currentTrickCards, leadSuitCurrentTrick, trumpSuit, trumpBroken } = currentTableState;
@@ -49,8 +49,50 @@ const PlayerHand = ({
         emitEvent("playCard", { card });
     }, [emitEvent]);
 
+    const handleSelectDiscard = (card) => {
+        setSelectedDiscards(prev => {
+            if (prev.includes(card)) {
+                return prev.filter(c => c !== card);
+            } else if (prev.length < 3) {
+                return [...prev, card];
+            }
+            return prev;
+        });
+    };
+
+    const handleSubmitDiscards = () => {
+        if (selectedDiscards.length === 3) {
+            emitEvent("submitFrogDiscards", { discards: selectedDiscards });
+        }
+    };
+
     if (state === "Frog Widow Exchange" && bidWinnerInfo?.playerName === selfPlayerName) {
-        // ... (Frog discard logic is unchanged)
+        // --- THIS IS THE FIX ---
+        const sortedFullHand = sortHandBySuit(myHand);
+        return (
+            <div className="player-hand-container" style={{ flexDirection: 'column' }}>
+                <div className={`player-hand-cards`}>
+                    {sortedFullHand.map((card, index) => (
+                        <div key={card} className="player-hand-card-wrapper" style={{ marginLeft: index > 0 ? -40 : 0 }}>
+                            {renderCard(card, {
+                                isButton: true,
+                                onClick: () => handleSelectDiscard(card),
+                                large: true,
+                                isSelected: selectedDiscards.includes(card)
+                            })}
+                        </div>
+                    ))}
+                </div>
+                <button
+                    onClick={handleSubmitDiscards}
+                    className="game-button"
+                    disabled={selectedDiscards.length !== 3}
+                    style={{ marginTop: '10px' }}
+                >
+                    Submit Discards ({selectedDiscards.length}/3)
+                </button>
+            </div>
+        );
     }
 
     if (isSpectator || !myHand.length) {

@@ -131,7 +131,12 @@ const ActionControls = ({
         case "Frog Widow Exchange":
             const isBidder = currentTableState.bidWinnerInfo?.userId === playerId;
             if (isBidder) {
-                return null; 
+                // --- THIS IS THE FIX ---
+                return (
+                    <div className="action-prompt">
+                        <h4>Select 3 cards from your hand below to discard.</h4>
+                    </div>
+                );
             } else {
                 return (
                     <div className="action-prompt">
