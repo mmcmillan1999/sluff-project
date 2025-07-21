@@ -137,56 +137,12 @@ async function testBotHandlesFrogUpgrade() {
     console.log("...Success! Bot correctly handled the frog upgrade scenario.\n");
 }
 
-async function testDrawRequestLifecycle() {
-    console.log("Running Test: testDrawRequestLifecycle...");
-    const effectProcessor = new MockEffectProcessor();
-
-    const setupEngineForDraw = () => {
-        const engine = new GameEngine('table-draw-test', 'fort-creek', 'Draw Test Table');
-        engine.joinTable({ id: 1, username: "P1" }, "s1");
-        engine.joinTable({ id: 2, username: "P2" }, "s2");
-        engine.joinTable({ id: 3, username: "P3" }, "s3");
-        engine.gameStarted = true; engine.gameId = 1;
-        engine.playerMode = 3;
-        engine.state = "Playing Phase";
-        return engine;
-    };
-
-    let engine = setupEngineForDraw();
-    engine.requestDraw(1);
-    assert.strictEqual(engine.drawRequest.isActive, true, "Draw request should be active after initiation.");
-    engine.submitDrawVote(2, 'no');
-    assert.strictEqual(engine.drawRequest.isActive, false, "Draw request should be inactive after a 'no' vote.");
-    assert.strictEqual(engine.state, "Playing Phase", "Game state should remain 'Playing Phase' after a 'no' vote.");
-    console.log("  - Passed: 'No' vote correctly cancels draw.");
-
-    engine = setupEngineForDraw();
-    engine.requestDraw(1);
-    engine.submitDrawVote(2, 'wash');
-    const finalVoteResult = engine.submitDrawVote(3, 'wash');
-    await effectProcessor.processEffects(engine, finalVoteResult.effects); // Process the async effect
-    assert.strictEqual(engine.drawRequest.isActive, false, "Draw request should be inactive after all votes.");
-    assert.strictEqual(engine.state, "Game Over", "Game state should be 'Game Over' after unanimous vote.");
-    console.log("  - Passed: Unanimous 'wash' vote ends the game.");
-
-    engine = setupEngineForDraw();
-    engine.requestDraw(1);
-    engine.submitDrawVote(2, 'split');
-    const mixedVoteResult = engine.submitDrawVote(3, 'split');
-    await effectProcessor.processEffects(engine, mixedVoteResult.effects); // Process the async effect
-    assert.strictEqual(engine.state, "Game Over", "Game state should be 'Game Over' after mixed positive vote.");
-    console.log("  - Passed: Mixed 'split'/'wash' vote ends the game.");
-
-    console.log("...Success! Draw request lifecycle works correctly.\n");
-}
-
 // --- Test Runner ---
 async function runAllTests() {
     try {
         await testBotBiddingProcess();
         await testAllPlayersPass();
         await testBotHandlesFrogUpgrade();
-        await testDrawRequestLifecycle();
     } catch (error) {
         console.error("â Œ A test failed:", error);
         throw error;

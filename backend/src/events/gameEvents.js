@@ -1,3 +1,5 @@
+// backend/src/events/gameEvents.js
+
 const jwt = require("jsonwebtoken");
 const transactionManager = require('../data/transactionManager');
 
