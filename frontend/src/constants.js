@@ -7,7 +7,7 @@
 
 // Card and Suit Definitions
 export const SUITS_MAP = { H: "Hearts", D: "Diamonds", C: "Clubs", S: "Spades" };
-// --- MODIFICATION: Restored correct UTF-8 characters for suit symbols ---
+// --- FIX: Corrected UTF-8 characters for suit symbols ---
 export const SUIT_SYMBOLS = { H: '♥', D: '♦', C: '♣', S: '♠' };
 export const SUIT_COLORS = { H: 'crimson', D: 'crimson', C: 'black', S: 'black' };
 export const SUIT_BACKGROUNDS = { H: 'mistyrose', D: 'lightyellow', C: 'palegreen', S: 'lightgrey' };

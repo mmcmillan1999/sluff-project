@@ -1,9 +1,10 @@
+// frontend/src/components/LobbyView.js
+
 import React, { useState, useEffect } from 'react';
 import './LobbyView.css';
 import Bulletin from './Bulletin';
 import LobbyTableCard from './LobbyTableCard';
 import LobbyChat from './LobbyChat';
-
 import { getLobbyChatHistory } from '../services/api';
 
 const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowAdmin, errorMessage, emitEvent, socket }) => {
@@ -12,11 +13,10 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
     const [showMenu, setShowMenu] = useState(false);
     const [tablesExpanded, setTablesExpanded] = useState(true);
     const [bulletinExpanded, setBulletinExpanded] = useState(true);
-    const [chatLogExpanded, setChatLogExpanded] = useState(true);
     const [chatMessages, setChatMessages] = useState([]);
 
     useEffect(() => {
-        getLobbyChatHistory()
+        getLobbyChatHistory(50)
             .then(setChatMessages)
             .catch(err => {
                 console.error('Failed to load lobby chat history:', err);
@@ -104,7 +104,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
             <main className="lobby-main">
                 <div className="collapsible-section">
                     <h3 className="section-header" onClick={() => setTablesExpanded(!tablesExpanded)}>
-                        Game Tables {tablesExpanded ? <>â†“</> : <>â‡’</>}
+                        Game Tables {tablesExpanded ? '▼' : '►'}
                     </h3>
                     {tablesExpanded && (
                         <div className="table-grid">
@@ -123,22 +123,19 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
                 
                 <div className="collapsible-section">
                     <h3 className="section-header" onClick={() => setBulletinExpanded(!bulletinExpanded)}>
-                        Bulletin {bulletinExpanded ? <>â†“</> : <>â‡’</>}
+                        Bulletin {bulletinExpanded ? '▼' : '►'}
                     </h3>
                     {bulletinExpanded && <Bulletin />}
                 </div>
             </main>
 
             <LobbyChat
-                chatLogExpanded={chatLogExpanded}
-                onToggleChatLog={() => setChatLogExpanded(prev => !prev)}
                 socket={socket}
                 messages={chatMessages}
             />
             
-            {/* --- NEW: Added a footer for server info --- */}
             <footer className="lobby-footer">
-                <span>Server URL: {process.env.REACT_APP_SERVER_URL}</span>
+                <span>Server: {process.env.REACT_APP_SERVER_URL || 'wss://sluff-backend.onrender.com'}</span>
                 <span>Version: {serverVersion}</span>
             </footer>
         </div>

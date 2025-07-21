@@ -1,10 +1,7 @@
-import React, { useEffect } from 'react';
+// frontend/src/components/game/ActionControls.js
+import React from 'react';
 import { BID_HIERARCHY } from '../../constants';
 
-/**
- * Renders the main interactive element in the center of the table,
- * such as bidding controls, dealing buttons, or turn indicators.
- */
 const ActionControls = ({
     currentTableState,
     playerId,
@@ -13,23 +10,7 @@ const ActionControls = ({
     emitEvent,
     renderCard
 }) => {
-
-    useEffect(() => {
-        const socket = currentTableState.socket; 
-        if (!socket) return;
-
-        const handleGameStartError = (data) => {
-            alert(`Could not start game: ${data.message}`);
-        };
-
-        socket.on('gameStartError', handleGameStartError);
-
-        return () => {
-            socket.off('gameStartError', handleGameStartError);
-        };
-    }, [currentTableState.socket]);
-
-
+    
     const getPlayerNameByUserId = (targetPlayerId) => {
         if (!currentTableState?.players || !targetPlayerId) return String(targetPlayerId);
         const player = Object.values(currentTableState.players).find(p => p.userId === targetPlayerId);
@@ -52,26 +33,23 @@ const ActionControls = ({
                     )}
                 </div>
             );
-
         case "Ready to Start":
             if (activePlayers.length < 3) {
                 return <h2 style={{ color: 'white' }}>Waiting for more players...</h2>;
             }
             return (
                 <div>
-                    <button onClick={() => emitEvent("startGame", { tableId: currentTableState.tableId })} className="game-button">Start {activePlayers.length}-Player Game</button>
+                    <button onClick={() => emitEvent("startGame")} className="game-button">Start {activePlayers.length}-Player Game</button>
                     {activePlayers.length < 4 && (
                         <button onClick={() => emitEvent("addBot")} className="game-button">Add Bot</button>
                     )}
                 </div>
             );
-
         case "Dealing Pending":
             if (playerId === currentTableState.dealer) {
                 return <button onClick={() => emitEvent("dealCards")} className="game-button">Deal Cards</button>;
             }
             return <p style={{ color: 'white', fontStyle: 'italic' }}>Waiting for {getPlayerNameByUserId(currentTableState.dealer)} to deal...</p>;
-
         case "Bidding Phase":
             if (currentTableState.biddingTurnPlayerName === selfPlayerName) {
                 const bids = BID_HIERARCHY;
@@ -92,7 +70,6 @@ const ActionControls = ({
                 );
             }
             return <p style={{ color: 'white', fontStyle: 'italic' }}>Waiting for {currentTableState.biddingTurnPlayerName} to bid...</p>;
-
         case "Awaiting Frog Upgrade Decision":
             if (currentTableState.biddingTurnPlayerName === selfPlayerName) {
                 return (
@@ -104,7 +81,6 @@ const ActionControls = ({
                 );
             }
             return <p style={{ color: 'white', fontStyle: 'italic' }}>Waiting for {currentTableState.biddingTurnPlayerName} to decide...</p>;
-
         case "Trump Selection":
             if (currentTableState.bidWinnerInfo?.userId === playerId) {
                 return (
@@ -122,24 +98,24 @@ const ActionControls = ({
                 );
             }
             return <p style={{ color: 'white', fontStyle: 'italic' }}>Waiting for {currentTableState.bidWinnerInfo?.playerName} to choose trump...</p>;
-
         case "AllPassWidowReveal":
+            // --- THIS IS THE FIX ---
+            // Use roundSummary.widowForReveal, which is populated by the handler
+            const widowCards = currentTableState.roundSummary?.widowForReveal || currentTableState.originalDealtWidow || [];
             return (
                 <div className="action-prompt">
                     <h4>All players passed. Revealing the widow...</h4>
                     <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginTop: '10px' }}>
-                        {(currentTableState.originalDealtWidow || []).map((card, index) => renderCard(card, { key: index, large: true }))}
+                        {widowCards.map((card, index) => renderCard(card, { key: index, large: true }))}
                     </div>
                 </div>
             );
-
         case "Playing Phase":
         case "TrickCompleteLinger":
             if (currentTableState.trickTurnPlayerName === selfPlayerName) {
                 return <p style={{ color: 'limegreen', fontWeight: 'bold', fontSize: '1.2em', textShadow: '1px 1px 2px black' }}>Your Turn!</p>;
             }
             return <p style={{ color: 'white', fontStyle: 'italic' }}>Waiting for {currentTableState.trickTurnPlayerName}...</p>;
-        
         case "Frog Widow Exchange":
             const isBidder = currentTableState.bidWinnerInfo?.userId === playerId;
             if (isBidder) {
@@ -157,7 +133,6 @@ const ActionControls = ({
                     </div>
                 );
             }
-
         default:
             return <p style={{ color: 'white' }}>{currentTableState.state}</p>;
     }

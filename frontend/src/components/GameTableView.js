@@ -1,8 +1,6 @@
 // frontend/src/components/GameTableView.js
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-
 import './GameTableView.css';
-
 import PlayerHand from './game/PlayerHand';
 import InsuranceControls from './game/InsuranceControls';
 import RoundSummaryModal from './game/RoundSummaryModal';
@@ -13,18 +11,15 @@ import InsurancePrompt from './game/InsurancePrompt';
 import IosPwaPrompt from './game/IosPwaPrompt';
 import DrawVoteModal from './game/DrawVoteModal';
 import LobbyChat from './LobbyChat';
-
 import { getLobbyChatHistory } from '../services/api';
 import { SUITS_MAP, SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS } from '../constants';
 
-const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLogout, errorMessage, emitEvent, playSound, socket }) => {
+const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLogout, emitEvent, playSound, socket }) => {
     const [seatAssignments, setSeatAssignments] = useState({ self: null, opponentLeft: null, opponentRight: null });
     const [showRoundSummaryModal, setShowRoundSummaryModal] = useState(false);
     const [showInsurancePrompt, setShowInsurancePrompt] = useState(false);
     const [showGameMenu, setShowGameMenu] = useState(false);
-    // --- FIX: Removed unused variables ---
-    // const [isFullscreen, setIsFullscreen] = useState(false); 
-    const [showIosPrompt, setShowIosPrompt] = useState(false);
+    const [showIosPwaPrompt, setShowIosPwaPrompt] = useState(false);
     const [showDrawVote, setShowDrawVote] = useState(false);
     const [chatOpen, setChatOpen] = useState(false);
     const [unreadChat, setUnreadChat] = useState(0);
@@ -44,7 +39,7 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
     const selfPlayerName = selfPlayerInTable?.playerName;
     
     useEffect(() => {
-        getLobbyChatHistory()
+        getLobbyChatHistory(50)
             .then(setChatMessages)
             .catch(err => {
                 console.error('Failed to load chat history:', err);
@@ -151,16 +146,6 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
         if (state === 'Bidding Phase' && gameStateRef.current === 'Dealing Pending') playSound('cardDeal');
         gameStateRef.current = state;
     }, [currentTableState, selfPlayerName, isSpectator, playSound]);
-
-    const isIos = () => /iPhone|iPad|iPod/i.test(navigator.userAgent);
-    
-    useEffect(() => {
-        if (!isIos()) {
-            // const handleFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
-            // document.addEventListener('fullscreenchange', handleFullscreenChange);
-            // return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-        }
-    }, []);
     
     if (!currentTableState) {
         return <div>Loading table...</div>;
@@ -175,9 +160,11 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
         setChatOpen(false);
     };
 
-    const renderCard = (cardString, { isButton = false, onClick = null, disabled = false, isSelected = false, small = false, large = false, isFaceDown = false, style: customStyle = {} } = {}) => {
-        const width = large ? '65px' : (small ? '30px' : '45px');
-        const height = large ? '90px' : (small ? '50px' : '70px');
+    const renderCard = (cardString, options = {}) => {
+        const { isButton = false, onClick = null, disabled = false, isSelected = false, small = false, large = false, isFaceDown = false, style: customStyle = {}, className = '' } = options;
+
+        const width = large ? '65px' : (small ? '37.5px' : '45px');
+        const height = large ? '85px' : (small ? '50px' : '70px');
 
         if (isFaceDown) {
             return (
@@ -189,19 +176,7 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
 
         if (!cardString) {
             return (
-                <div 
-                    className="card-placeholder" 
-                    style={{ 
-                        width, 
-                        height, 
-                        border: '2px dashed rgba(0, 0, 0, 0.2)', 
-                        margin: '3px', 
-                        display: 'inline-block', 
-                        borderRadius: '4px', 
-                        backgroundColor: 'transparent',
-                        boxSizing: 'border-box' 
-                    }}>
-                </div>
+                <div className="card-placeholder" style={{ width, height, margin: '3px', ...customStyle }}></div>
             );
         }
         
@@ -209,16 +184,24 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
         const suit = cardString.slice(-1);
         const symbol = SUIT_SYMBOLS[suit] || suit;
         const color = SUIT_COLORS[suit] || 'black';
-        const backgroundColor = SUIT_BACKGROUNDS[suit] || 'white';
-        let borderStyle = isSelected ? '3px solid royalblue' : '1px solid #777';
-        const baseFontSize = large ? '1.3em' : (small ? '0.8em' : '1em');
-        const style = { padding: large ? '10px' : (small ? '4px' : '8px'), border: borderStyle, borderRadius: '4px', backgroundColor: isSelected ? 'lightblue' : backgroundColor, color: color, margin: '3px', minWidth: width, height, textAlign: 'center', fontWeight: 'bold', fontSize: baseFontSize, cursor: isButton && !disabled ? 'pointer' : 'default', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', ...customStyle };
+        const backgroundColor = isSelected ? 'lightblue' : (SUIT_BACKGROUNDS[suit] || 'white');
 
-        const symbolStyle = { fontSize: '125%' };
-        const cardContent = <>{rank !== '?' && rank}<span style={symbolStyle}>{symbol}</span></>;
+        const cardClasses = ['card-display', className].filter(Boolean).join(' ');
+        const cardContent = <>{rank !== '?' && rank}<span className="card-symbol">{symbol}</span></>;
 
-        if (isButton) return (<button key={cardString} onClick={onClick} disabled={disabled} style={style}>{cardContent}</button>);
-        return (<span key={cardString} style={{ ...style, display: 'inline-flex' }}>{cardContent}</span>);
+        const style = { 
+            backgroundColor, 
+            color, 
+            minWidth: width, 
+            height,
+            fontSize: large ? '1.2em' : (small ? '0.8em' : '1em'),
+            ...customStyle
+        };
+        
+        if (isButton) {
+            return (<button onClick={onClick} disabled={disabled} style={style} className={cardClasses}>{cardContent}</button>);
+        }
+        return (<span style={style} className={cardClasses}>{cardContent}</span>);
     };
 
     const handleForfeit = () => {
@@ -268,7 +251,7 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
                 onVote={(vote) => emitEvent("submitDrawVote", { vote })}
             />
 
-            <IosPwaPrompt show={showIosPrompt} onClose={() => setShowIosPrompt(false)} />
+            <IosPwaPrompt show={showIosPwaPrompt} onClose={() => setShowIosPwaPrompt(false)} />
 
             <RoundSummaryModal
                 summaryData={currentTableState.roundSummary}
@@ -342,7 +325,12 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
                         setTouchStartX(null);
                     }}
                 >
-                    <button className="chat-close-button" onClick={closeChatWindow} aria-label="Close chat window">Ã—</button>
+                    <button className="chat-close-button" onClick={closeChatWindow} aria-label="Close chat window">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
                     <LobbyChat
                         socket={socket}
                         messages={chatMessages}

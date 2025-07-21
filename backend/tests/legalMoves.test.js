@@ -1,10 +1,13 @@
+// backend/tests/legalMoves.test.js
+
 const assert = require('assert');
-const { getLegalMoves } = require('../game/legalMoves');
+// --- PATH CORRECTION ---
+const { getLegalMoves } = require('../src/core/legalMoves');
 
 function runLegalMovesTests() {
     console.log('Running legalMoves.js tests...');
     let testCounter = 1;
-    const pass = (testName) => console.log(`  \u2713 Test ${testCounter++}: ${testName}`);
+    const pass = (testName) => console.log(`  ✔ Test ${testCounter++}: ${testName}`);
 
     // Scenario 1: Must Follow Suit
     let hand = ['7D', '8D', '9S', '10C'];
@@ -42,7 +45,13 @@ function runLegalMovesTests() {
     assert.deepStrictEqual(legal.sort(), hand.sort());
     pass('Can lead any card once trump is broken.');
 
-    console.log('  \u2713 All legalMoves.js tests passed!');
+    console.log('  ✔ All legalMoves.js tests passed!');
 }
 
-runLegalMovesTests();
+// Check if the file is being run directly, and if so, execute the tests.
+if (require.main === module) {
+    runLegalMovesTests();
+}
+
+// Export the function in case the test runner wants to call it.
+module.exports = runLegalMovesTests;

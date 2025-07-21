@@ -1,9 +1,11 @@
+// frontend/src/services/api.js
+
 /**
  * Centralized API service module.
  * Handles all HTTP communication with the backend, providing a clean interface for components.
  */
 
-const SERVER_URL = "https://sluff-backend.onrender.com";
+const SERVER_URL = process.env.REACT_APP_SERVER_URL || "https://sluff-backend.onrender.com";
 
 /**
  * A generic, configured fetch request helper.
@@ -19,7 +21,6 @@ const configuredFetch = async (endpoint, method, body = null, requiresAuth = tru
     if (requiresAuth) {
         const token = localStorage.getItem("sluff_token");
         if (!token) {
-            // This immediate throw can be caught by the calling function
             throw new Error("Authentication token not found.");
         }
         headers['Authorization'] = `Bearer ${token}`;
@@ -55,7 +56,6 @@ export const register = async (username, email, password) => {
     if (!response.ok) {
         throw new Error(data.message || 'Failed to register');
     }
-    // Register doesn't return data to the app, so we just check for success
     return;
 };
 
@@ -74,7 +74,6 @@ export const getLeaderboard = async () => {
 
 export const generateSchema = async () => {
     const response = await configuredFetch('/api/admin/generate-schema', 'POST');
-    // This endpoint returns plain text, not JSON
     const responseText = await response.text();
     if (!response.ok) {
         throw new Error(responseText);
@@ -84,8 +83,8 @@ export const generateSchema = async () => {
 
 // --- Lobby Chat Service Calls ---
 
-export const getLobbyChatHistory = async () => {
-    const response = await configuredFetch('/api/chat', 'GET');
+export const getLobbyChatHistory = async (limit = 50) => {
+    const response = await configuredFetch(`/api/chat?limit=${limit}`, 'GET');
     const data = await response.json();
     if (!response.ok) {
         throw new Error(data.message || 'Failed to fetch chat history.');
