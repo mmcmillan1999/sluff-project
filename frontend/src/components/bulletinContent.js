@@ -13,7 +13,7 @@
 export const bulletinContent = [
     {
         type: 'header',
-        text: 'Deployment Test: Success!'
+        text: 'Deployment Test: Success! 2.0'
     },
     {
         type: 'list-item',
