@@ -18,8 +18,12 @@ const createAdminRoutes = require('./api/admin');
 const createFeedbackRoutes = require('./api/feedback');
 const createChatRoutes = require('./api/chat');
 const createDbTables = require('./data/createTables');
-const createAiRoutes = require('./api/ai'); // Added import
+const createAiRoutes = require('./api/ai');
 const createPingRoutes = require('./api/ping');
+
+// --- NEW: Insurance Handler ---
+const insuranceHandler = require('./core/handlers/insuranceHandler');
+
 
 // --- Basic Server Setup ---
 const app = express();
@@ -52,8 +56,18 @@ server.listen(PORT, async () => {
 
     // 3. Register Network Handlers
     registerGameHandlers(io, gameService);
+
+    // 4. Register Insurance Handler
+    io.on('connection', (socket) => {
+      socket.on('updateInsuranceSetting', ({ tableId, settingType, value }) => {
+        const engine = gameService.getEngineById(tableId);
+        insuranceHandler.updateInsuranceSetting(engine, socket.user.id, settingType, value);
+        io.to(tableId).emit('gameState', engine.getStateForClient());
+        io.emit('lobbyState', gameService.getLobbyState());
+      });
+    });
     
-    // 4. Register API Routes
+    // 5. Register API Routes
     app.use('/api/auth', createAuthRoutes(pool, bcrypt, jwt, io));
     app.use('/api/leaderboard', createLeaderboardRoutes(pool));
     app.use('/api/admin', createAdminRoutes(pool, jwt));
@@ -64,7 +78,7 @@ server.listen(PORT, async () => {
     const aiRouter = createAiRoutes(pool, gameService);
     app.use('/api/ai', aiRouter);
 
-        // --- NEW ROUTE: Simple ping endpoint ---
+    // --- NEW ROUTE: Simple ping endpoint ---
     const pingRouter = createPingRoutes();
     app.use('/api/ping', pingRouter);
 
