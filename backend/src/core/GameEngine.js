@@ -121,13 +121,19 @@ class GameEngine {
     leaveTable(userId) {
         if (!this.players[userId]) return;
         const playerInfo = this.players[userId];
-        const safeLeaveStates = ["Waiting for Players", "Ready to Start", "Game Over"];
-        if (safeLeaveStates.includes(this.state) || playerInfo.isSpectator) {
+        const safeLeaveStates = ["Waiting for Players", "Ready to Start"];
+        
+        // --- THIS IS FIX #1: REJOIN LOGIC ---
+        // If a game has started (has an ID), leaving should ALWAYS just disconnect the player,
+        // allowing them to rejoin, even if the state is "Game Over".
+        if (this.gameId) {
+            this.disconnectPlayer(userId);
+        } 
+        // If the game hasn't started yet, it's safe to remove them completely.
+        else if (safeLeaveStates.includes(this.state) || playerInfo.isSpectator) {
             delete this.players[userId];
             if (playerInfo.isBot) delete this.bots[userId];
             this.playerOrder.remove(userId);
-        } else if (this.gameId && this.gameStarted) {
-            this.disconnectPlayer(userId);
         }
     }
     
@@ -430,7 +436,14 @@ class GameEngine {
             this.insurance.bidMultiplier = multiplier;
             this.insurance.bidderPlayerName = this.bidWinnerInfo.playerName;
             this.insurance.bidderRequirement = 120 * multiplier;
-            const defenders = this.playerOrder.turnOrder.map(id => this.players[id].playerName).filter(pName => pName !== this.bidWinnerInfo.playerName);
+            
+            // --- THIS IS FIX #2: INSURANCE COUNTER ---
+            // This is a more robust way to get the list of defender names.
+            const allPlayerNames = Object.values(this.players)
+                .filter(p => !p.isSpectator)
+                .map(p => p.playerName);
+            const defenders = allPlayerNames.filter(name => name !== this.bidWinnerInfo.playerName);
+
             defenders.forEach(defName => { this.insurance.defenderOffers[defName] = -60 * multiplier; });
         }
     }
