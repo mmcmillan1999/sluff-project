@@ -37,7 +37,6 @@ function runGameLogicTests() {
     assert.strictEqual(payout['Carol'].totalGain.toFixed(3), '1.455');
     pass('Forfeit payout for Carol is correct.');
 
-    // --- MODIFICATION: Expanded Draw Payout Tests ---
     const drawTable3Player = {
         theme: 'fort-creek', // Buy-in is 1 token
         players: {
@@ -61,12 +60,10 @@ function runGameLogicTests() {
     let washResult = gameLogic.calculateDrawSplitPayout(drawTable4Player);
     assert.strictEqual(washResult.wash, true, 'A 4-player game draw should always be a wash.');
     pass('Draw Wash: Correctly identifies a 4-player game as a wash.');
-    // --- END MODIFICATION ---
     
     // --- Scoring Tests ---
-    // Note: The structure of players in these tests is simplified because the function only needs playerName.
     const mockScoringTable = {
-        playerOrderActive: [1, 2, 3], // These are now user IDs, not names
+        playerOrderActive: [1, 2, 3], 
         playerMode: 3,
         players: { 1: { playerName: 'Alice' }, 2: { playerName: 'Bob' }, 3: { playerName: 'Carol' } },
         insurance: { dealExecuted: false, defenderOffers: {} },
@@ -88,11 +85,11 @@ function runGameLogicTests() {
     assert.strictEqual(failResult3Player.pointChanges['ScoreAbsorber'], 20);
     pass('3-player ScoreAbsorber points correct.');
     
+    // --- THIS IS THE OLD WIDOW LOGIC TEST ---
     const widowPts = 15;
-    const mockWidow = ['AC', 'KC'];
-    const mockDiscards = ['AD', 'KD'];
+    const mockWidow = ['AC', 'KC']; // Worth 11 + 4 = 15 points
     const baseTrickPoints = 50;
-    
+
     const hsWinTable = { ...mockScoringTable, bidWinnerInfo: { playerName: 'Alice', bid: 'Heart Solo' }, originalDealtWidow: mockWidow, bidderTotalCardPoints: baseTrickPoints + widowPts };
     let hsWinResult = gameLogic.calculateRoundScoreDetails(hsWinTable);
     assert.strictEqual(hsWinResult.finalBidderPoints, 65, 'HS Win: Bidder points incorrect.');
@@ -103,18 +100,18 @@ function runGameLogicTests() {
     assert.strictEqual(soloResult.finalBidderPoints, 65, 'Solo: Bidder points incorrect.');
     pass('Solo Bid: Widow points go to bidder.');
 
+    // --- THIS IS THE NEW TEST CASE ---
+    const mockDiscards = ['AD', 'KD']; // Worth 11 + 4 = 15 points
     const frogTable = { ...mockScoringTable, bidWinnerInfo: { playerName: 'Alice', bid: 'Frog' }, widowDiscardsForFrogBidder: mockDiscards, bidderTotalCardPoints: baseTrickPoints + widowPts };
     let frogResult = gameLogic.calculateRoundScoreDetails(frogTable);
     assert.strictEqual(frogResult.finalBidderPoints, 65, 'Frog: Bidder points incorrect.');
     pass('Frog Bid: Bidder gets points from their discarded cards.');
-
+    
     console.log('\n  âœ” All gameLogic.js tests passed!');
 }
 
-// Check if the file is being run directly, and if so, execute the tests.
 if (require.main === module) {
     runGameLogicTests();
 }
 
-// Export the function in case the test runner wants to call it.
 module.exports = runGameLogicTests;

@@ -13,11 +13,11 @@
 export const bulletinContent = [
     {
         type: 'header',
-        text: 'Deployment Test: Success!'
+        text: 'Deployment Test: Success! 2.0'
     },
     {
         type: 'list-item',
-        text: 'This change confirms the new deployment pipeline is working correctly.'
+        text: 'This change confirms the new deployment pipeline is working correctly. 2.0'
     },
     { 
         type: 'header', 
@@ -25,7 +25,7 @@ export const bulletinContent = [
     },
     { 
         type: 'paragraph', 
-        text: 'Thank you for trying out the game. Your feedback is greatly appreciated as we work to make this the best experience possible.' 
+        text: 'better ways to log bugs coming.' 
     },
     { 
         type: 'header', 
