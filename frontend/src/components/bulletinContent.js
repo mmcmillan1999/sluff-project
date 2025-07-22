@@ -17,7 +17,7 @@ export const bulletinContent = [
     },
     {
         type: 'list-item',
-        text: 'This change confirms the new deployment pipeline is working correctly.'
+        text: 'This change confirms the new deployment pipeline is working correctly. 2.0'
     },
     { 
         type: 'header', 
