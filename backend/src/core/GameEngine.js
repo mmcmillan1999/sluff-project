@@ -260,10 +260,16 @@ class GameEngine {
 
     reset() {
         console.log(`[${this.tableId}] Game is being reset by 'Play Again' button.`);
+
+        // --- NEW, SAFER RESET LOGIC ---
+
+        // 1. Reset game-specific state, but keep player list intact for now.
         this.gameStarted = false;
         this.gameId = null;
         this.playerMode = null;
-        this._initializeNewRoundState();
+        this._initializeNewRoundState(); // This clears all round-related data.
+
+        // 2. Remove any players who disconnected during the game.
         for (const userId in this.players) {
             if (this.players[userId].disconnected) {
                 console.log(`[${this.tableId}] Removing disconnected player ${this.players[userId].playerName} during reset.`);
@@ -275,14 +281,19 @@ class GameEngine {
             }
         }
         
+        // 3. Reset scores and status for all remaining players.
         this.scores = {};
         for (const userId in this.players) {
             const player = this.players[userId];
-            player.isSpectator = false;
+            player.isSpectator = false; // Everyone is an active player now.
             this.scores[player.playerName] = 120;
         }
+
+        // 4. Update the final table state.
         this.playerMode = this.playerOrder.count;
         this.state = this.playerMode >= 3 ? "Ready to Start" : "Waiting for Players";
+
+        // Reset dealer to null. A new dealer will be picked in startGame().
         this.dealer = null;
 
         console.log(`[${this.tableId}] Reset complete. State is now '${this.state}' with ${this.playerMode} players.`);
