@@ -8,6 +8,8 @@ import GameTableView from "./components/GameTableView.js";
 import LeaderboardView from "./components/LeaderboardView.js";
 import MercyWindow from "./components/MercyWindow.js";
 import AdminView from "./components/AdminView.js";
+import FeedbackModal from "./components/FeedbackModal.js";
+import { submitFeedback } from "./services/api.js";
 import "./components/AdminView.css";
 import { useSounds } from "./hooks/useSounds.js";
 
@@ -28,6 +30,8 @@ function App() {
     const [serverVersion, setServerVersion] = useState('');
     const [showMercyWindow, setShowMercyWindow] = useState(false);
     const { playSound, enableSound } = useSounds();
+    const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+    const [feedbackGameContext, setFeedbackGameContext] = useState(null);
 
     const handleLogout = useCallback(() => {
         localStorage.removeItem("sluff_token");
@@ -40,29 +44,31 @@ function App() {
     }, []);
 
     const handleHardReset = () => {
-        const confirmReset = window.confirm(
-            "SERVER RESET WARNING:\n\nThis will boot ALL players from ALL tables, reset ALL in-progress games, and force everyone to log in again. This action cannot be undone.\n\nAre you sure you want to proceed?"
-        );
-        if (confirmReset) {
-            const question = "?What is Matthew's childhood Nickname and ranch phone number? Enter this format Nickname_XXXXXXXXXX";
-            const secret = prompt(question);
-            if (secret) {
-                socket.emit("hardResetServer", { secret });
-            }
+        if (window.confirm("SERVER RESET WARNING:\n\nThis will boot ALL players from ALL tables, reset ALL in-progress games, and force everyone to log in again. This action cannot be undone.\n\nAre you sure you want to proceed?")) {
+            // Note: The backend admin check is now sufficient. The secret prompt is removed for a cleaner experience.
+            socket.emit("hardResetServer", {});
         }
     };
 
     const handleResetAllTokens = () => {
-        const confirmReset = window.confirm(
-            "TOKEN RESET WARNING:\n\nThis will reset the token balance for ALL players on the server to the default amount (8). This is useful for starting a new season or testing period.\n\nAre you sure you want to proceed?"
-        );
-        if (confirmReset) {
-            const question = "Childhood Friend, Make of first car last 4 SSN Mom's maiden name\n\nFormat = Friend_Make_XXXX_Maiden";
-            const secret = prompt(question);
-            if (secret) {
-                socket.emit("resetAllTokens", { secret });
-            }
+        if (window.confirm("TOKEN RESET WARNING:\n\nThis will reset the token balance for ALL players on the server to the default amount (8). This is useful for starting a new season or testing period.\n\nAre you sure you want to proceed?")) {
+            // This event is not yet implemented on the backend, but we can leave the handler here.
+            socket.emit("resetAllTokens", {});
         }
+    };
+    
+    const handleOpenFeedbackModal = (context = null) => {
+        setFeedbackGameContext(context);
+        setShowFeedbackModal(true);
+    };
+
+    const handleCloseFeedbackModal = () => {
+        setShowFeedbackModal(false);
+        setFeedbackGameContext(null); 
+    };
+
+    const handleSubmitFeedback = async (feedbackData) => {
+        await submitFeedback(feedbackData);
     };
 
     const handleRequestFreeToken = () => {
@@ -232,6 +238,13 @@ function App() {
                 emitEvent={emitEvent}
             />
 
+            <FeedbackModal
+                show={showFeedbackModal}
+                onClose={handleCloseFeedbackModal}
+                onSubmit={handleSubmitFeedback}
+                gameContext={feedbackGameContext}
+            />
+
             {(() => {
                 switch (view) {
                     case 'lobby':
@@ -241,13 +254,13 @@ function App() {
                             serverVersion={serverVersion}
                             handleJoinTable={handleJoinTable}
                             handleLogout={handleLogout}
-                            handleHardReset={handleHardReset}
                             handleRequestFreeToken={handleRequestFreeToken}
                             handleShowLeaderboard={() => setView('leaderboard')}
                             handleShowAdmin={handleShowAdmin}
                             errorMessage={errorMessage}
                             emitEvent={emitEvent}
                             socket={socket}
+                            handleOpenFeedbackModal={handleOpenFeedbackModal}
                         />;
                     case 'gameTable':
                         return currentTableState ?
@@ -256,12 +269,12 @@ function App() {
                                     playerId={user.id}
                                     currentTableState={currentTableState}
                                     handleLeaveTable={handleLeaveTable}
-                                    // --- MODIFICATION: Pass handleLogout down ---
                                     handleLogout={handleLogout}
                                     errorMessage={errorMessage}
                                     emitEvent={emitEvent}
                                     playSound={playSound}
                                     socket={socket}
+                                    handleOpenFeedbackModal={handleOpenFeedbackModal}
                                 />
                             ) : (
                                 <div>Loading table...</div>
@@ -276,7 +289,9 @@ function App() {
                     case 'admin':
                         return <AdminView
                             onReturnToLobby={handleReturnToLobby}
-                            emitEvent={emitEvent}
+                            // --- PASS THE HANDLERS AS PROPS ---
+                            handleHardReset={handleHardReset}
+                            handleResetAllTokens={handleResetAllTokens}
                         />;
                     default:
                         setView('lobby');
