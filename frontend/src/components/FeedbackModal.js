@@ -87,7 +87,7 @@ const FeedbackModal = ({ show, onClose, onSubmit, gameContext }) => {
                                     disabled={isSubmitting}
                                 />
                                 <label htmlFor="include-gamestate-checkbox">
-                                    Include current game state in this report (helps with debugging)
+                                    Include details about the current game state, such as player progress and settings, in this report (this helps with debugging).
                                 </label>
                             </div>
                         )}
