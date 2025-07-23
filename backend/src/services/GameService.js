@@ -80,13 +80,17 @@ class GameService {
         await this._performAction(tableId, (engine) => engine.requestNextRound(userId));
     }
     
-    // --- REFACTORED METHOD TO HANDLE ALL PAYOUT SCENARIOS ---
     async handleGameOver(payload) {
         let gameWinnerName = "N/A";
         const { scores, theme, gameId, players } = payload;
         const tableCost = TABLE_COSTS[theme] || 0;
         const transactionPromises = [];
         const statPromises = [];
+
+        // --- NEW: Object to hold payout descriptions ---
+        const payoutDetails = {};
+
+        const totalActivePlayers = Object.values(players).filter(p => !p.isSpectator).length;
 
         const finalHumanScores = Object.values(players)
             .filter(p => p && !p.isBot && !p.isSpectator)
@@ -99,25 +103,39 @@ class GameService {
         if (finalHumanScores.length === 1) {
             const winner = finalHumanScores[0];
             gameWinnerName = winner.name;
-            const totalPot = Object.values(players).filter(p => !p.isSpectator).length * tableCost;
+            const totalPot = totalActivePlayers * tableCost;
             transactionFn({ userId: winner.userId, gameId, type: 'win_payout', amount: totalPot, description: `Win - Collects full pot` });
             statUpdateFn("UPDATE users SET wins = wins + 1 WHERE id = $1", [winner.userId]);
+            payoutDetails[winner.userId] = `You won and collected the full pot of ${totalPot.toFixed(2)} tokens!`;
         
         } else if (finalHumanScores.length === 2) {
             const [p1, p2] = finalHumanScores;
-            if (p1.score > p2.score) {
+            if (totalActivePlayers === 3) {
                 gameWinnerName = p1.name;
                 transactionFn({ userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 2, description: `Win and Payout` });
                 statUpdateFn("UPDATE users SET wins = wins + 1 WHERE id = $1", [p1.userId]);
                 statUpdateFn("UPDATE users SET losses = losses + 1 WHERE id = $1", [p2.userId]);
-            } else { // Tie score
-                gameWinnerName = `${p1.name} & ${p2.name}`;
-                transactionFn({ userId: p1.userId, gameId, type: 'wash_payout', amount: tableCost, description: `Tie - Buy-in returned` });
-                transactionFn({ userId: p2.userId, gameId, type: 'wash_payout', amount: tableCost, description: `Tie - Buy-in returned` });
-                statUpdateFn("UPDATE users SET washes = washes + 1 WHERE id = ANY($1::int[])", [[p1.userId, p2.userId]]);
+                payoutDetails[p1.userId] = `You finished 1st, winning ${tableCost.toFixed(2)} tokens!`;
+                payoutDetails[p2.userId] = `You finished last and lost your buy-in of ${tableCost.toFixed(2)} tokens.`;
+            } else { 
+                if (p1.score > p2.score) {
+                    gameWinnerName = p1.name;
+                    transactionFn({ userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 2, description: `Win and Payout` });
+                    statUpdateFn("UPDATE users SET wins = wins + 1 WHERE id = $1", [p1.userId]);
+                    statUpdateFn("UPDATE users SET losses = losses + 1 WHERE id = $1", [p2.userId]);
+                    payoutDetails[p1.userId] = `You won, earning ${tableCost.toFixed(2)} tokens!`;
+                    payoutDetails[p2.userId] = `You lost your buy-in of ${tableCost.toFixed(2)} tokens.`;
+                } else { 
+                    gameWinnerName = `${p1.name} & ${p2.name}`;
+                    transactionFn({ userId: p1.userId, gameId, type: 'wash_payout', amount: tableCost, description: `Tie - Buy-in returned` });
+                    transactionFn({ userId: p2.userId, gameId, type: 'wash_payout', amount: tableCost, description: `Tie - Buy-in returned` });
+                    statUpdateFn("UPDATE users SET washes = washes + 1 WHERE id = ANY($1::int[])", [[p1.userId, p2.userId]]);
+                    payoutDetails[p1.userId] = "You tied! Your buy-in was returned.";
+                    payoutDetails[p2.userId] = "You tied! Your buy-in was returned.";
+                }
             }
         
-        } else if (finalHumanScores.length === 3) {
+        } else if (totalActivePlayers === 3 && finalHumanScores.length === 3) {
             const [p1, p2, p3] = finalHumanScores;
             if (p1.score > p2.score && p2.score > p3.score) {
                 gameWinnerName = p1.name;
@@ -126,6 +144,9 @@ class GameService {
                 transactionFn({ userId: p2.userId, gameId, type: 'wash_payout', amount: tableCost, description: `Wash - Buy-in returned` });
                 statUpdateFn("UPDATE users SET washes = washes + 1 WHERE id = $1", [p2.userId]);
                 statUpdateFn("UPDATE users SET losses = losses + 1 WHERE id = $1", [p3.userId]);
+                payoutDetails[p1.userId] = `You finished 1st and won ${tableCost.toFixed(2)} tokens from ${p3.name}!`;
+                payoutDetails[p2.userId] = `You finished 2nd. Your buy-in was returned.`;
+                payoutDetails[p3.userId] = `You finished last and lost your buy-in of ${tableCost.toFixed(2)} tokens.`;
             }
             else if (p1.score === p2.score && p2.score > p3.score) {
                 gameWinnerName = `${p1.name} & ${p2.name}`;
@@ -133,18 +154,25 @@ class GameService {
                 transactionFn({ userId: p2.userId, gameId, type: 'win_payout', amount: tableCost * 1.5, description: `Win (tie) - Split payout from ${p3.name}` });
                 statUpdateFn("UPDATE users SET wins = wins + 1 WHERE id = ANY($1::int[])", [[p1.userId, p2.userId]]);
                 statUpdateFn("UPDATE users SET losses = losses + 1 WHERE id = $1", [p3.userId]);
+                payoutDetails[p1.userId] = `You tied for 1st, splitting the winnings for a net gain of ${(tableCost * 0.5).toFixed(2)} tokens!`;
+                payoutDetails[p2.userId] = `You tied for 1st, splitting the winnings for a net gain of ${(tableCost * 0.5).toFixed(2)} tokens!`;
+                payoutDetails[p3.userId] = `You finished last and lost your buy-in of ${tableCost.toFixed(2)} tokens.`;
             }
             else if (p1.score > p2.score && p2.score === p3.score) {
                 gameWinnerName = p1.name;
                 transactionFn({ userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 3, description: `Win - Collects full pot` });
                 statUpdateFn("UPDATE users SET wins = wins + 1 WHERE id = $1", [p1.userId]);
                 statUpdateFn("UPDATE users SET losses = losses + 1 WHERE id = ANY($1::int[])", [[p2.userId, p3.userId]]);
+                payoutDetails[p1.userId] = `You won and collected the full pot of ${(tableCost * 3).toFixed(2)} tokens!`;
+                payoutDetails[p2.userId] = `You tied for last and lost your buy-in of ${tableCost.toFixed(2)} tokens.`;
+                payoutDetails[p3.userId] = `You tied for last and lost your buy-in of ${tableCost.toFixed(2)} tokens.`;
             }
-            else { // 3-way tie
+            else { 
                 gameWinnerName = "3-Way Tie";
                 finalHumanScores.forEach(p => {
                     transactionFn({ userId: p.userId, gameId, type: 'wash_payout', amount: tableCost, description: `3-Way Tie - Buy-in returned` });
                     statUpdateFn("UPDATE users SET washes = washes + 1 WHERE id = $1", [p.userId]);
+                    payoutDetails[p.userId] = "3-Way Tie! Your buy-in was returned.";
                 });
             }
         }
@@ -157,7 +185,8 @@ class GameService {
             console.error("Database error during game over update:", err);
         }
 
-        return { gameWinnerName };
+        // --- MODIFICATION: Return the details object ---
+        return { gameWinnerName, payoutDetails };
     }
 
     async handleDrawOutcome(payload) {
@@ -235,7 +264,9 @@ class GameService {
                 case 'HANDLE_GAME_OVER': {
                     const gameOverResult = await this.handleGameOver(effect.payload);
                     if (effect.onComplete) {
-                        effect.onComplete(gameOverResult.gameWinnerName);
+                        // --- MODIFICATION: Update the round summary with the new details ---
+                        engine.roundSummary.gameWinner = gameOverResult.gameWinnerName;
+                        engine.roundSummary.payoutDetails = gameOverResult.payoutDetails;
                     }
                     this.io.to(tableId).emit('gameState', engine.getStateForClient());
                     break;

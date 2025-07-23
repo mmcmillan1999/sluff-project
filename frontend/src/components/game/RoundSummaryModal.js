@@ -32,13 +32,15 @@ const RoundSummaryModal = ({
         widowForReveal,
         insuranceHindsight,
         allTricks,
-        payouts,
         finalBidderPoints,
         finalDefenderPoints,
         pointChanges,
         widowPointsValue,
         bidType,
-        drawOutcome, // New property for draws
+        drawOutcome,
+        // --- NEW: Destructure the payout details ---
+        payouts, // This is for draws
+        payoutDetails // This is for game over
     } = summaryData;
     
     const insuranceAgreement = insurance?.executedDetails?.agreement;
@@ -58,6 +60,9 @@ const RoundSummaryModal = ({
     const bidMultiplier = BID_MULTIPLIERS[bidType] || 1;
     const exchangeValue = rawDifference * bidMultiplier;
 
+    // --- NEW: Get the specific payout message for the current user ---
+    const myPayoutMessage = isGameOver && payoutDetails ? payoutDetails[playerId] : null;
+
     const pointsPanelContent = (
         <div className="summary-points-section">
             <h4>Points Captured</h4>
@@ -69,7 +74,7 @@ const RoundSummaryModal = ({
             />
             <div className="point-calculation-recap">
                 <span>Difference from Goal: <strong>{rawDifference}</strong> pts</span>
-                <span className="recap-divider">Ã—</span>
+                <span className="recap-divider">×</span>
                 <span>Bid Multiplier: <strong>{bidMultiplier}x</strong> ({bidType})</span>
                 <span className="recap-divider">=</span>
                 <span>Exchange Value: <strong>{exchangeValue}</strong> pts</span>
@@ -195,6 +200,14 @@ const RoundSummaryModal = ({
                 <div className="summary-main-area">
                     <h2>{isGameOver ? "Game Over" : "Round Over"}</h2>
                     <p className="summary-message">{isGameOver ? `Winner: ${gameWinner}` : message}</p>
+
+                    {/* --- NEW: Display the personal payout message --- */}
+                    {myPayoutMessage && (
+                        <div style={{ padding: '10px', backgroundColor: '#e0eafc', border: '1px solid #c4d5f5', borderRadius: '8px', marginBottom: '15px' }}>
+                            <p style={{ margin: 0, fontWeight: 'bold', color: '#0d6efd' }}>{myPayoutMessage}</p>
+                        </div>
+                    )}
+
                     {renderMainContent()}
                 </div>
 
@@ -225,7 +238,7 @@ const RoundSummaryModal = ({
                     )}
                     {isGameOver && (
                         <div className="game-over-actions">
-                             <button onClick={handleLeaveTable} className="game-button">
+                             <button onClick={() => emitEvent("resetGame")} className="game-button">
                                 Play Again
                             </button>
                             <button onClick={handleLeaveTable} className="game-button" style={{backgroundColor: '#17a2b8'}}>
