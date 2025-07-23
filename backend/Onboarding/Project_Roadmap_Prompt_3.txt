@@ -2,87 +2,72 @@
  * Sluff: Project Roadmap & Feature Plan
  * =======================================
  * KEY:
- * [x] - Fully Implemented: The feature is complete, from UI to backend logic.
- * [P] - Partially Implemented: Significant parts of the feature are complete but not fully functional.
- * [ ] - Not Started: Little to no code has been written for this feature.
+ * [x] - Fully Implemented
+ * [P] - Partially Implemented
+ * [!] - NEW/PRIORITY: Recently added or reprioritized task.
+ * [ ] - Not Started
  */
 
 ---
 
-### PHASE 1: Workable Local Prototype
-*Goal: Establish the fundamental game logic and rules in a local, non-networked environment.*
+### PHASE 1 & 2: Complete
+*These phases are considered complete and stable.*
 
-- [x] **Core Rule Implementation:** Code the basic logic for card dealing, bidding, trick-taking, and scoring.
-- [x] **State Management:** Create a system to manage the state of a single game instance.
-
----
-
-### PHASE 2: Functional Web-Based Playable Game
-*Goal: Transition the local prototype to a multiplayer web application with a basic user interface.*
-
-- [x] **Client/Server Architecture:** Set up the initial React frontend and Node.js backend with WebSocket communication.
-- [x] **Multiplayer Lobby:** Implement a basic lobby system to allow multiple players to join a game table.
-- [x] **User Authentication:** Add persistent user accounts with registration and login.
-- [x] **Transaction Ledger:** Implement a robust, transaction-based system for managing player tokens.
+- [x] **Core Rule Implementation**
+- [x] **State Management**
+- [x] **Client/Server Architecture**
+- [x] **Multiplayer Lobby**
+- [x] **User Authentication**
+- [x] **Transaction Ledger**
 
 ---
 
-### PHASE 3: Alpha Testing with Real Users
-*Goal: Address critical bugs, complete core logic, and deliver key features for family tournament play.*
+### PHASE 3: Alpha - Robustness & Core Experience
+*Goal: Solidify the game loop, fix critical bugs, and make the game stable and fair for testers.*
 
-- [ ] **Table Reset Logic:** Fix the bug preventing a table from correctly resetting to a "waiting for players" state after a round concludes. (NOTE: The `resetGame` event and `table.reset()` method exist, but are considered faulty).
-- [x] **Forfeit & Disconnect Logic:**
-    - [x] Implement the three possible outcomes for a mutual draw request.
-    - [x] Finalize the logic for proportional token distribution when a player forfeits.
+- [!] **Correct 3-Player Payouts:** Implement the correct net-zero token exchange for standard games (Winner: +2x, Middle: +1x, Loser: 0x).
+- [!] **Bot Insurance Logic (v1):** Implement baseline AI logic for participating in the 3-player insurance phase.
+- [ ] **Table Reset on Player Departure:** Fix the bug where a table with bots does not resolve correctly after a human player leaves.
 - [P] **Turn Timer for Inactive Players:**
-    - [x] A 2-minute forfeit timer for *disconnected* players is implemented and can be triggered from the UI.
-    - [ ] A timer for *AFK (still connected)* players who fail to take their turn has not been implemented.
-- [x] **AI Player Implementation:**
-    - [x] Create a baseline AI player that can join a game and make legal moves.
-    - [x] AI strategy includes intelligent bidding based on hand strength and strategic card play (e.g., playing high to win, playing low to sluff).
+    - [x] A 2-minute forfeit timer for *disconnected* players is implemented.
+    - [!] A timer for *AFK (still connected)* players who fail to take their turn has not been implemented.
+- [P] **AI Player Implementation:**
+    - [x] AI can join a game and make legal moves (bidding, playing cards).
+    - [!] Bots need logic to respond to "Offer Draw" requests.
+- [P] **In-App Feedback Tool:**
+    - [x] Backend API (`/api/feedback`) and database table are fully implemented.
+    - [!] Frontend UI to submit feedback needs to be created.
 - [ ] **User Account & Security:**
-    - [ ] Account Recovery: Implement a "Forgot Password" system via email.
-    - [ ] Email Confirmation: Require new users to confirm their email address upon registration.
-- [ ] **Enhanced Card Play Experience:** Overhaul the card playing mechanic to allow players to drag and drop their selected card onto the play area.
-- [x] **Visible Widow & Trump Puck:**
-    - [x] Display the face-down Widow pile on the game table.
-    - [x] Add a visual indicator ("puck") to the table that changes appearance once the trump suit has been broken.
+    - [ ] Account Recovery: Implement a "Forgot Password" system.
+- [ ] **Enhanced Card Play Experience:** Overhaul the card playing mechanic to allow drag-and-drop.
 - [P] **Expanded Sound Effects:**
     - [x] Sounds for turnAlert, cardPlay, trickWin, and cardDeal are implemented.
     - [ ] Sounds for trump played, card sluffed, and a round-win celebration are missing.
-- [P] **In-App Feedback Tool:**
-    - [x] Backend API (`/api/feedback`) and database table are fully implemented.
-    - [ ] Frontend UI to submit feedback has not been created.
 
 ---
 
 ### PHASE 4: Beta - Polish & Player Engagement
 *Goal: Transform the game from a functional app into a polished, engaging experience.*
 
+- [x] **New Player Onboarding:** (Low-stakes "Learner Tables" are implemented).
+- [P] **Community & Chat:**
+    - [x] Persistent chat window is implemented.
+    - [!] Implement a `/who` command to list all currently logged-in users.
+    - [ ] Implement in-game "chat bubbles" that appear above a player's seat.
 - [ ] **Card Art & Animation:**
     - [ ] Commission or create unique, high-quality art for the card faces and backs.
     - [ ] Implement a smooth card dealing animation.
-    - [ ] Add a "flipping" animation when a card is played.
 - [ ] **Mobile-First UI Overhaul:** Conduct a thorough review and redesign of all UI components for a seamless mobile experience.
-- [x] **New Player Onboarding:**
-    - [x] Create low-stakes "Learner Tables" (`miss-pauls-academy` theme).
-    - [ ] Implement an in-game "Cheat Sheet" window showing points captured, cards played, etc.
-- [x] **Community & Chat:**
-    - [x] Add a persistent chat window to the lobby and in-game view.
-    - [ ] Implement in-game "chat bubbles" that appear above a player's seat.
-- [ ] **Tournament Mode (v1):**
-    - [ ] Develop a system for creating and managing multi-round tournaments.
+- [ ] **Tournament Mode (v1):** Develop a system for creating and managing multi-round tournaments.
 - [ ] **Private Rooms:** Allow players to create password-protected tables.
 - [ ] **Advanced Player Statistics:** Create a dedicated profile screen for detailed player stats.
 
 ---
 
 ### PHASE 5: Live Game - Monetization & Long-Term Growth
-*Goal: Implement features to support a live, revenue-generating game and foster a long-term player community.*
+*Goal: Implement features to support a live, revenue-generating game.*
 
 - [ ] **Rewarded Ads:** Replace the "Mercy Token" system with a standard rewarded video ad.
 - [ ] **Cosmetic In-App Purchases:** Sell unique card backs, table themes, etc.
-- [ ] **Battle Pass / Seasonal System:** Introduce a seasonal pass to unlock exclusive cosmetic rewards.
-- [ ] **Seasonal Leaderboards:** Implement weekly/monthly leaderboards with rewards.
 - [ ] **Smart AI (Machine Learning):** Begin collecting game data to train a more advanced AI.
 - [ ] **Interactive Tutorial:** Create a guided, playable tutorial for new users.

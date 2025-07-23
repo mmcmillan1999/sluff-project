@@ -100,3 +100,15 @@ export const sendLobbyChatMessage = async (message) => {
     }
     return data;
 };
+
+// --- NEW: Feedback Service Calls ---
+
+export const submitFeedback = async (feedbackData) => {
+    // The configuredFetch helper handles authentication by default.
+    const response = await configuredFetch('/api/feedback', 'POST', feedbackData);
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.message || 'Failed to submit feedback.');
+    }
+    return data; // Returns the success message from the server, e.g., { message: '...' }
+};

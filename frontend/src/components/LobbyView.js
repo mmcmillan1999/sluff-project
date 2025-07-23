@@ -7,7 +7,7 @@ import LobbyTableCard from './LobbyTableCard';
 import LobbyChat from './LobbyChat';
 import { getLobbyChatHistory } from '../services/api';
 
-const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowAdmin, errorMessage, emitEvent, socket }) => {
+const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowAdmin, errorMessage, emitEvent, socket, handleOpenFeedbackModal }) => {
     
     const [activeTab, setActiveTab] = useState('');
     const [showMenu, setShowMenu] = useState(false);
@@ -54,11 +54,12 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
 
     const LobbyMenu = () => (
         <div className="lobby-menu-popup">
-            <button onClick={() => { handleRequestFreeToken(); setShowMenu(false); }} className="lobby-menu-button">Free Token</button>
-            <button onClick={() => { emitEvent("requestUserSync"); setShowMenu(false); }} className="lobby-menu-button">Sync Profile</button>
             <button onClick={() => { handleShowLeaderboard(); setShowMenu(false); }} className="lobby-menu-button">Leaderboard</button>
-            <button onClick={() => { handleLogout(); setShowMenu(false); }} className="lobby-menu-button">Logout</button>
+            <button onClick={() => { handleOpenFeedbackModal(); setShowMenu(false); }} className="lobby-menu-button">Submit Feedback</button>
+            <button onClick={() => { handleRequestFreeToken(); setShowMenu(false); }} className="lobby-menu-button">Request Free Token</button>
+            <button onClick={() => { emitEvent("requestUserSync"); setShowMenu(false); }} className="lobby-menu-button">Sync Profile</button>
             {user?.is_admin && <button onClick={() => { handleShowAdmin(); setShowMenu(false); }} className="lobby-menu-button admin">Admin Panel</button>}
+            <button onClick={() => { handleLogout(); setShowMenu(false); }} className="lobby-menu-button logout">Logout</button>
         </div>
     );
 

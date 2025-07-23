@@ -8,6 +8,10 @@ import GameTableView from "./components/GameTableView.js";
 import LeaderboardView from "./components/LeaderboardView.js";
 import MercyWindow from "./components/MercyWindow.js";
 import AdminView from "./components/AdminView.js";
+// --- NEW IMPORTS ---
+import FeedbackModal from "./components/FeedbackModal.js";
+import { submitFeedback } from "./services/api.js";
+// --- END NEW IMPORTS ---
 import "./components/AdminView.css";
 import { useSounds } from "./hooks/useSounds.js";
 
@@ -28,6 +32,9 @@ function App() {
     const [serverVersion, setServerVersion] = useState('');
     const [showMercyWindow, setShowMercyWindow] = useState(false);
     const { playSound, enableSound } = useSounds();
+    // --- NEW STATE FOR FEEDBACK MODAL ---
+    const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+    const [feedbackGameContext, setFeedbackGameContext] = useState(null);
 
     const handleLogout = useCallback(() => {
         localStorage.removeItem("sluff_token");
@@ -64,6 +71,25 @@ function App() {
             }
         }
     };
+    
+    // --- NEW HANDLERS FOR FEEDBACK MODAL ---
+    const handleOpenFeedbackModal = (context = null) => {
+        setFeedbackGameContext(context);
+        setShowFeedbackModal(true);
+    };
+
+    const handleCloseFeedbackModal = () => {
+        setShowFeedbackModal(false);
+        setFeedbackGameContext(null); // Clear context on close
+    };
+
+    const handleSubmitFeedback = async (feedbackData) => {
+        // The API function will throw an error on failure, which will be
+        // caught by the FeedbackModal component's internal state.
+        await submitFeedback(feedbackData);
+    };
+    // --- END NEW HANDLERS ---
+
 
     const handleRequestFreeToken = () => {
         if (user && parseFloat(user.tokens) >= 5) {
@@ -232,6 +258,14 @@ function App() {
                 emitEvent={emitEvent}
             />
 
+            {/* --- NEW: RENDER THE MODAL --- */}
+            <FeedbackModal
+                show={showFeedbackModal}
+                onClose={handleCloseFeedbackModal}
+                onSubmit={handleSubmitFeedback}
+                gameContext={feedbackGameContext}
+            />
+
             {(() => {
                 switch (view) {
                     case 'lobby':
@@ -241,13 +275,14 @@ function App() {
                             serverVersion={serverVersion}
                             handleJoinTable={handleJoinTable}
                             handleLogout={handleLogout}
-                            handleHardReset={handleHardReset}
                             handleRequestFreeToken={handleRequestFreeToken}
                             handleShowLeaderboard={() => setView('leaderboard')}
                             handleShowAdmin={handleShowAdmin}
                             errorMessage={errorMessage}
                             emitEvent={emitEvent}
                             socket={socket}
+                            // --- NEW: Pass the handler down ---
+                            handleOpenFeedbackModal={handleOpenFeedbackModal}
                         />;
                     case 'gameTable':
                         return currentTableState ?
@@ -256,12 +291,13 @@ function App() {
                                     playerId={user.id}
                                     currentTableState={currentTableState}
                                     handleLeaveTable={handleLeaveTable}
-                                    // --- MODIFICATION: Pass handleLogout down ---
                                     handleLogout={handleLogout}
                                     errorMessage={errorMessage}
                                     emitEvent={emitEvent}
                                     playSound={playSound}
                                     socket={socket}
+                                    // --- NEW: Pass the handler down ---
+                                    handleOpenFeedbackModal={handleOpenFeedbackModal}
                                 />
                             ) : (
                                 <div>Loading table...</div>

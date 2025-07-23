@@ -1,0 +1,129 @@
+/* frontend/src/components/FeedbackModal.css */
+
+.feedback-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.75);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1100; /* Ensure it's on top of other content */
+    backdrop-filter: blur(4px);
+}
+
+.feedback-modal-content {
+    background: #333;
+    color: #e0e0e0;
+    padding: 25px;
+    border-radius: 8px;
+    border: 1px solid #555;
+    width: 90%;
+    max-width: 500px;
+    font-family: 'Merriweather', serif;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+}
+
+.feedback-modal-content h3 {
+    font-family: 'Oswald', sans-serif;
+    color: #ffc107; /* Gold accent */
+    margin: 0 0 5px 0;
+    font-size: 1.5em;
+}
+
+.feedback-modal-subtitle {
+    margin: 0 0 15px 0;
+    color: #b0b0b0;
+    font-size: 0.9em;
+}
+
+.feedback-modal-textarea {
+    width: 100%;
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid #666;
+    background-color: #2c2c2c;
+    color: #f5f5f5;
+    font-size: 1em;
+    font-family: 'Merriweather', serif;
+    resize: vertical;
+    box-sizing: border-box; /* Important for padding and width */
+}
+
+.feedback-modal-textarea:focus {
+    outline: none;
+    border-color: #ffc107;
+}
+
+.feedback-modal-checkbox-container {
+    margin-top: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.9em;
+}
+
+.feedback-modal-checkbox-container input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.feedback-modal-actions {
+    margin-top: 20px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.feedback-modal-button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 5px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 1em;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.feedback-modal-button.primary {
+    background-color: #007bff;
+    color: white;
+}
+
+.feedback-modal-button.primary:hover:not(:disabled) {
+    background-color: #0056b3;
+}
+
+.feedback-modal-button.secondary {
+    background-color: #6c757d;
+    color: white;
+}
+
+.feedback-modal-button.secondary:hover:not(:disabled) {
+    background-color: #5a6268;
+}
+
+.feedback-modal-button:disabled {
+    background-color: #555;
+    cursor: not-allowed;
+}
+
+.feedback-modal-error {
+    color: #f87171;
+    margin: 10px 0 0 0;
+    text-align: center;
+    font-weight: bold;
+}
+
+.feedback-modal-result {
+    text-align: center;
+}
+
+.feedback-modal-result p {
+    margin: 15px 0;
+    font-size: 1.1em;
+    color: #90ee90; /* Light green for success */
+}

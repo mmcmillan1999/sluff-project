@@ -167,8 +167,48 @@
     padding: 10px;
     z-index: 110;
     box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-    width: 150px;
+    width: 200px; /* Increased width for new button */
+    display: flex;
+    flex-direction: column;
+    gap: 5px; /* Add space between buttons */
 }
+
+/* --- NEW STYLES FOR MENU BUTTONS --- */
+.lobby-menu-button {
+    width: 100%;
+    padding: 8px 12px;
+    text-align: left;
+    background-color: #333;
+    color: #e0e0e0;
+    border: 1px solid #444;
+    border-radius: 4px;
+    font-family: 'Oswald', sans-serif;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.lobby-menu-button:hover {
+    background-color: #444;
+    border-color: #666;
+}
+
+.lobby-menu-button.admin {
+    background-color: #a02c2c;
+    border-color: #c82333;
+}
+.lobby-menu-button.admin:hover {
+    background-color: #c82333;
+}
+
+.lobby-menu-button.logout {
+    background-color: #5a6268;
+    border-color: #6c757d;
+}
+.lobby-menu-button.logout:hover {
+    background-color: #6c757d;
+}
+/* --- END NEW STYLES --- */
+
 
 .lobby-footer {
     padding: 4px 20px;
@@ -190,4 +230,3 @@
         top: calc(100% + 5px);
     }
 }
-

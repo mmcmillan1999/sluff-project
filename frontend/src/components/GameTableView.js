@@ -15,7 +15,7 @@ import LobbyChat from './LobbyChat';
 import { getLobbyChatHistory } from '../services/api';
 import { SUITS_MAP, SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS } from '../constants';
 
-const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLogout, emitEvent, playSound, socket }) => {
+const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLogout, emitEvent, playSound, socket, handleOpenFeedbackModal }) => {
     const [seatAssignments, setSeatAssignments] = useState({ self: null, opponentLeft: null, opponentRight: null });
     const [showRoundSummaryModal, setShowRoundSummaryModal] = useState(false);
     const [showInsurancePrompt, setShowInsurancePrompt] = useState(false);
@@ -88,7 +88,7 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
 
     useEffect(() => {
         if (!showGameMenu) return;
-        const timer = setTimeout(() => setShowGameMenu(false), 3000);
+        const timer = setTimeout(() => setShowGameMenu(false), 5000); // Increased timeout for menu
         return () => clearTimeout(timer);
     }, [showGameMenu]);
     
@@ -229,12 +229,23 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
             </div>
             <div className="game-menu-actions">
                 <button 
-                    onClick={() => emitEvent("requestDraw")}
+                    onClick={() => { emitEvent("requestDraw"); setShowGameMenu(false); }}
                     className="game-button"
                     disabled={currentTableState.state !== 'Playing Phase'}
                     style={{backgroundColor: '#1d4ed8'}}
                 >
                     Request Draw
+                </button>
+                {/* --- NEW FEEDBACK BUTTON --- */}
+                <button 
+                    onClick={() => {
+                        handleOpenFeedbackModal(currentTableState);
+                        setShowGameMenu(false);
+                    }}
+                    className="game-button"
+                    style={{backgroundColor: '#ffc107', color: '#000'}}
+                >
+                    Submit Feedback
                 </button>
                 <button onClick={handleForfeit} className="game-button" style={{backgroundColor: '#dc3545'}}>Forfeit Game</button>
                 <button onClick={handleLeaveTable} className="game-button">Lobby</button>
