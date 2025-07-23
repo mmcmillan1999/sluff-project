@@ -2,65 +2,40 @@
 
 /**
  * This file holds the content for the lobby bulletin.
- * To update the bulletin, simply edit the text in the 'content' array.
- * 
- * Supported types:
- * - 'header': A main title for a section.
- * - 'paragraph': A regular block of text.
- * - 'list-item': An item in a bulleted list.
+ * To update the bulletin, simply edit the text in this array.
  */
 
 export const bulletinContent = [
     {
         type: 'header',
-        text: 'Deployment Test: Success!'
+        text: 'Welcome to Alpha Testing!'
+    },
+    {
+        type: 'paragraph',
+        text: 'Your feedback is crucial for improving the game. Thank you for your help!'
+    },
+    {
+        type: 'header',
+        text: 'Latest Update: In-App Feedback'
     },
     {
         type: 'list-item',
-        text: 'This change confirms the new deployment pipeline is working correctly. 2.0'
+        text: 'You can now submit feedback directly from the Lobby Menu or the in-game Hamburger Menu (☰).'
     },
-    { 
-        type: 'header', 
-        text: 'Welcome to Sluff Alpha Testing!' 
+    {
+        type: 'list-item',
+        text: 'Submitting from a game will automatically include debug data to help us fix bugs faster.'
     },
-    { 
-        type: 'paragraph', 
-        text: 'better ways to log bugs coming.' 
+    {
+        type: 'header',
+        text: 'What\'s Next?'
     },
-    { 
-        type: 'header', 
-        text: 'Recent Changes' 
+    {
+        type: 'list-item',
+        text: 'Correcting 3-player game payouts to be net-zero.'
     },
-    { 
-        type: 'list-item', 
-        text: 'Added "Offer Draw" logic for ending games.' 
-    },
-    { 
-        type: 'list-item', 
-        text: 'Improved insurance panel buttons for more intuitive dealing.' 
-    },
-    { 
-        type: 'list-item', 
-        text: 'Fixed several bugs related to token calculation after a game finishes.' 
-    },
-    { 
-        type: 'header', 
-        text: 'On Deck' 
-    },
-    { 
-        type: 'list-item', 
-        text: 'A "Training Table" with lower stakes and UI helpers for new players.' 
-    },
-    { 
-        type: 'list-item', 
-        text: 'Improved backend logic for more detailed win/loss/forfeit tracking.' 
-    },
-    { 
-        type: 'list-item', 
-        text: 'An in-game tool for submitting feedback directly.' 
-    },
-    { 
-        type: 'list-item', 
-        text: 'First version of Bot players to fill empty seats.' 
+    {
+        type: 'list-item',
+        text: 'Teaching the Bots how to play the Insurance game!'
     },
 ];
