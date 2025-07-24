@@ -28,12 +28,14 @@ function handleFrogUpgrade(engine, userId, bid) {
     return resolveBiddingFinal(engine);
 }
 
+// --- REWRITTEN BID HANDLING LOGIC ---
 function handleNormalBid(engine, userId, bid) {
     if (!BID_HIERARCHY.includes(bid) || engine.playersWhoPassedThisRound.includes(userId)) return [];
     
     const currentHighestBidIndex = engine.currentHighestBidDetails ? BID_HIERARCHY.indexOf(engine.currentHighestBidDetails.bid) : -1;
     if (bid !== "Pass" && BID_HIERARCHY.indexOf(bid) <= currentHighestBidIndex) return [];
     
+    // Process the player's bid
     if (bid !== "Pass") {
         const player = engine.players[userId];
         engine.currentHighestBidDetails = { userId, playerName: player.playerName, bid };
@@ -41,41 +43,54 @@ function handleNormalBid(engine, userId, bid) {
         if (bid === "Frog" && !engine.originalFrogBidderId) {
             engine.originalFrogBidderId = userId;
         }
-        
-        if (bid === "Solo" && engine.originalFrogBidderId && userId !== engine.originalFrogBidderId) {
-            engine.state = "Awaiting Frog Upgrade Decision";
-            engine.biddingTurnPlayerId = engine.originalFrogBidderId;
-            return [{ type: 'BROADCAST_STATE' }];
-        }
     } else {
         engine.playersWhoPassedThisRound.push(userId);
     }
     
-    const activeBidders = engine.playerOrder.turnOrder.filter(id => !engine.playersWhoPassedThisRound.includes(id));
-    if ((engine.currentHighestBidDetails && activeBidders.length <= 1) || activeBidders.length === 0) {
-        engine.biddingTurnPlayerId = null;
-        return resolveBiddingFinal(engine); // No frog upgrade check needed here
-    }
+    // Determine who is next
+    const turnOrder = engine.playerOrder.turnOrder;
+    const currentBidderIndex = turnOrder.indexOf(userId);
+    let nextBidderId = null;
 
-    const currentBidderIndex = engine.playerOrder.turnOrder.indexOf(userId);
-    for (let i = 1; i < engine.playerOrder.turnOrder.length; i++) {
-        const nextBidderId = engine.playerOrder.turnOrder[(currentBidderIndex + i) % engine.playerOrder.turnOrder.length];
-        if (!engine.playersWhoPassedThisRound.includes(nextBidderId)) {
-            engine.biddingTurnPlayerId = nextBidderId;
-            return [{ type: 'BROADCAST_STATE' }];
+    for (let i = 1; i < turnOrder.length; i++) {
+        const potentialNextId = turnOrder[(currentBidderIndex + i) % turnOrder.length];
+        if (!engine.playersWhoPassedThisRound.includes(potentialNextId)) {
+            nextBidderId = potentialNextId;
+            break;
         }
     }
     
-    return resolveBiddingFinal(engine);
+    // Check for end-of-bidding conditions
+    const activeBidders = turnOrder.filter(id => !engine.playersWhoPassedThisRound.includes(id));
+    
+    // Condition 1: Solo was bid, and the only remaining active bidder is the original Frog bidder.
+    const soloIsHighest = engine.currentHighestBidDetails?.bid === "Solo";
+    const frogBidderIsLast = activeBidders.length === 1 && activeBidders[0] === engine.originalFrogBidderId;
+
+    if (soloIsHighest && frogBidderIsLast) {
+        engine.state = "Awaiting Frog Upgrade Decision";
+        engine.biddingTurnPlayerId = engine.originalFrogBidderId;
+        return [{ type: 'BROADCAST_STATE' }];
+    }
+
+    // Condition 2: Bidding is over naturally (everyone else has passed or only one bidder left).
+    if (activeBidders.length <= 1) {
+        engine.biddingTurnPlayerId = null;
+        return resolveBiddingFinal(engine);
+    }
+
+    // Condition 3: Continue to the next player.
+    engine.biddingTurnPlayerId = nextBidderId;
+    return [{ type: 'BROADCAST_STATE' }];
 }
 
+
 function resolveBiddingFinal(engine) {
-    engine.originalFrogBidderId = null;
-    engine.soloBidMadeAfterFrog = false;
+    engine.originalFrogBidderId = null; // Clear the frog bidder state for the next round
     
     if (!engine.currentHighestBidDetails) {
         engine.state = "AllPassWidowReveal";
-  return [
+        return [
             { type: 'BROADCAST_STATE' },
             { type: 'START_TIMER', payload: {
                 duration: 3000,

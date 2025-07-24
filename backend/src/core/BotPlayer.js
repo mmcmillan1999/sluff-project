@@ -70,7 +70,8 @@ class BotPlayer {
         return proposedCard;
     }
 
-    makeBid() {
+    // --- RENAMED for clarity ---
+    decideBid() {
         const hand = this.engine.hands[this.playerName] || [];
         const { points, suits } = this._analyzeHand(hand);
         let potentialBid = "Pass";
@@ -89,6 +90,17 @@ class BotPlayer {
 
         if (potentialBidLevel > currentBidLevel) {
             return potentialBid;
+        }
+        return "Pass";
+    }
+
+    // --- NEW METHOD for upgrade decision ---
+    decideFrogUpgrade() {
+        const hand = this.engine.hands[this.playerName] || [];
+        const { points, suits } = this._analyzeHand(hand);
+        // A simple check: if the hand is very strong in hearts, take the upgrade.
+        if (suits.H >= 5 && points > 35) {
+            return "Heart Solo";
         }
         return "Pass";
     }
@@ -144,12 +156,10 @@ class BotPlayer {
             let strategicOffer;
             if (projectedDefenderLoss > 0) {
                 const baseOffer = Math.round((projectedDefenderLoss * 1.05) / 5) * 5;
-                // --- THIS IS THE FIX: Make defender more stingy ---
                 strategicOffer = baseOffer + 20; 
             } else {
                 const projectedDefenderWinnings = -projectedDefenderLoss;
                 const baseOffer = -Math.round((projectedDefenderWinnings / 2) / 5) * 5;
-                // --- THIS IS THE FIX: Make defender more stingy ---
                 strategicOffer = baseOffer + 20; 
             }
 

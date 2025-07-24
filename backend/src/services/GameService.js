@@ -277,16 +277,14 @@ class GameService {
         }
     }
 
-    // --- REWRITTEN BOT TRIGGER LOGIC ---
-    _triggerBots(tableId) {
+  _triggerBots(tableId) {
         const engine = this.getEngineById(tableId);
         if (!engine || engine.pendingBotAction) return;
 
-        // A single bot should take a single action per trigger. This prevents race conditions.
         let actionTaken = false;
 
         for (const botId in engine.bots) {
-            if (actionTaken) break; // Only allow one bot to act at a time.
+            if (actionTaken) break;
 
             const bot = engine.bots[botId];
             const botUserId = bot.userId;
@@ -298,7 +296,7 @@ class GameService {
             const insuranceDelay = 3000;
 
             const scheduleAction = (actionFn, delay, ...args) => {
-                actionTaken = true; // Mark that an action is being scheduled
+                actionTaken = true;
                 engine.pendingBotAction = setTimeout(() => {
                     engine.pendingBotAction = null;
                     actionFn.call(this, tableId, botUserId, ...args);
@@ -311,10 +309,11 @@ class GameService {
             } else if (engine.state === 'Awaiting Next Round Trigger' && engine.roundSummary?.dealerOfRoundId == botUserId) {
                 scheduleAction(this.requestNextRound, roundEndDelay);
             } else if (engine.state === 'Bidding Phase' && engine.biddingTurnPlayerId == botUserId) {
-                const bid = bot.makeBid();
+                const bid = bot.decideBid(); // Use new method name
                 scheduleAction(this.placeBid, standardDelay, bid);
             } else if (engine.state === 'Awaiting Frog Upgrade Decision' && engine.biddingTurnPlayerId == botUserId) {
-                scheduleAction(this.placeBid, standardDelay, "Pass");
+                const bid = bot.decideFrogUpgrade(); // Use new smart upgrade logic
+                scheduleAction(this.placeBid, standardDelay, bid);
             } else if (engine.state === 'Trump Selection' && engine.bidWinnerInfo?.userId == botUserId && !engine.trumpSuit) {
                 const suit = bot.chooseTrump();
                 scheduleAction(this.chooseTrump, standardDelay, suit);
@@ -329,13 +328,9 @@ class GameService {
             }
         }
 
-        // --- Priority 2: Background "Thinking" Actions (like Insurance) ---
-        // This runs *after* the main loop to avoid blocking game flow.
-        // It also doesn't set actionTaken, allowing multiple bots to think at once if needed.
         if (!actionTaken && engine.state === 'Playing Phase' && engine.insurance.isActive && !engine.insurance.dealExecuted) {
             for (const botId in engine.bots) {
                 const bot = engine.bots[botId];
-                // Give each bot its own short timer to make an insurance decision
                 setTimeout(() => {
                     const decision = bot.makeInsuranceDecision();
                     if (decision) {
@@ -343,7 +338,7 @@ class GameService {
                         this.io.to(tableId).emit('gameState', engine.getStateForClient());
                         this.io.emit('lobbyState', this.getLobbyState());
                     }
-                }, 500); // A very short delay for near-instant "thinking"
+                }, 500);
             }
         }
     }
