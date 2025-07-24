@@ -30,6 +30,7 @@
     align-items: center;
     background: radial-gradient(circle, #424242, #212121);
     padding: 5px;
+    overflow: hidden;
 }
 
 .table-oval {
@@ -119,13 +120,21 @@
     font-size: 1.1em;
 }
 
-/* --- MODIFICATION FOR DESKTOP & HORIZONTAL --- */
-.score-progress-container {
+
+/* --- MODIFICATION: Default positioning for Desktop & Horizontal Phone --- */
+.progress-bar-container {
     position: absolute;
-    top: 15px; /* Default to top */
-    width: 220px; /* Default width */
-    left: 50%;
-    transform: translateX(-50%);
+    top: 15px; /* Position at the top by default */
+    z-index: 15;
+}
+.defender-progress-container {
+    left: 18%; /* Pushed in from the edge */
+}
+.bidder-progress-container {
+    right: 18%; /* Pushed in from the edge */
+}
+.score-progress-container {
+    width: 220px; /* Slightly narrower for desktop */
     background-color: rgba(0, 0, 0, 0.6);
     padding: 5px 8px;
     border-radius: 8px;
@@ -133,10 +142,6 @@
     text-align: center;
     font-family: 'Oswald', sans-serif;
     border: 1px solid rgba(255, 255, 255, 0.1);
-}
-.trick-pile .score-progress-container {
-    bottom: 0; /* Override for piles */
-    top: auto;
 }
 /* --- END MODIFICATION --- */
 
@@ -233,7 +238,6 @@
     transform: translateY(-50%) rotate(-45deg);
     box-shadow: 0 0 5px black;
 }
-
 
 .last-trick-tab-container {
     position: absolute;
@@ -362,18 +366,20 @@ button.card-display:disabled {
         bottom: 20vh;
     }
 
-    /* --- FINAL FIX for Vertical Phone --- */
-    .trick-pile .score-progress-container {
-        position: fixed; /* Position relative to viewport */
-        bottom: 17vh; /* Move it down */
-        width: 140px; /* Make it wider */
+    /* --- MODIFICATION: Vertical Phone specific layout for progress bars --- */
+    .progress-bar-container {
+        position: fixed;
+        bottom: 17vh; /* Lower on the screen */
+        top: auto; /* Unset the default top value */
     }
-    .defender-pile .score-progress-container {
-        left: 10px;
-        transform: none;
+    .defender-progress-container {
+        left: 1px;
     }
-    .bidder-pile .score-progress-container {
-        right: 10px;
-        transform: none;
+    .bidder-progress-container {
+        right: 1px;
+        left: auto;
+    }
+    .progress-bar-container .score-progress-container {
+        width: 140px; /* 5% wider than 130px is ~137, 140 is a good round number */
     }
 }
