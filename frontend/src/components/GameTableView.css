@@ -521,23 +521,21 @@ button.card-display:disabled {
 @media (orientation: portrait) {
     .table-oval { border-radius: 50px; }
 
-    /* --- THE DEFINITIVE FIX --- */
     .player-seat-left, .player-seat-right {
-        /* Reset transform and set fixed position */
         transform: none;
-        top: 25%; /* Position them higher on the table */
-        width: 160px; /* Give them a fixed width */
+        top: 25%;
+        width: 160px;
     }
 
     .player-seat-left {
-        left: -60px; /* Position part of the seat "off the side" of the oval */
+        left: -60px;
     }
     .player-seat-right {
-        right: -60px; /* Position part of the seat "off the side" of the oval */
+        right: -60px;
     }
 
     .player-seat-left .player-seat, .player-seat-right .player-seat {
-        transform-origin: center; /* The key to the whole fix: rotate around the center */
+        transform-origin: center;
     }
     
     .player-seat-left .player-seat {
@@ -548,7 +546,6 @@ button.card-display:disabled {
     }
     
     .player-seat-left .puck, .player-seat-right .puck {
-        /* Reposition pucks relative to their rotated parents */
         top: 50%;
         transform: translateY(-50%);
     }
@@ -556,12 +553,8 @@ button.card-display:disabled {
     .player-seat-left .dealer-puck { right: -14px; }
     .player-seat-left .role-puck { left: -14px; }
 
-    .player-seat-right .dealer-puck { left: -14px; /* Note the change from right to left */ }
-    .player-seat-right .role-puck { right: -14px; /* Note the change from left to right */ }
-    /* --- END THE FIX --- */
-
-
-    .trick-pile-container { bottom: 15%; }
+    .player-seat-right .dealer-puck { left: -14px; }
+    .player-seat-right .role-puck { right: -14px; }
 
     .last-trick-tab-container { 
         top: auto;
@@ -585,6 +578,28 @@ button.card-display:disabled {
         display: flex;
         align-items: center;
         gap: 10px;
+    }
+
+    /* --- THIS IS THE NEW CODE --- */
+    .defender-pile, .bidder-pile {
+        bottom: 20px;
+        transform: translateX(0);
+    }
+
+    .defender-pile {
+        left: 10px;
+    }
+
+    .bidder-pile {
+        right: 10px;
+        left: auto;
+    }
+    
+    .defender-pile .score-progress-container, 
+    .bidder-pile .score-progress-container {
+        width: 130px;
+        left: 0;
+        transform: translateX(0);
     }
 }
 
