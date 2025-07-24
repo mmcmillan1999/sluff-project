@@ -19,7 +19,6 @@ const TableLayout = ({
 }) => {
     const [lastTrickVisible, setLastTrickVisible] = useState(false);
 
-    // --- FIX: All render helper functions are now correctly included in this file ---
     const renderPlayedCardsOnTable = () => {
         const isLingerState = currentTableState.state === 'TrickCompleteLinger';
         const cardsToDisplay = isLingerState ? currentTableState.lastCompletedTrick.cards : currentTableState.currentTrickCards;
@@ -231,7 +230,8 @@ const TableLayout = ({
                     <PlayerSeat playerName={seatAssignments.self} currentTableState={currentTableState} isSelf={true} emitEvent={emitEvent} />
                 </div>
 
-                {renderPlayedcardsOnTable()}
+                {/* --- FIX: Corrected typo from renderPlayedcardsOnTable to renderPlayedCardsOnTable --- */}
+                {renderPlayedCardsOnTable()}
                 
                 <div style={{ position: 'absolute', top: '15%', left: '50%', transform: 'translateX(-50%)', zIndex: 10, width: '80%', textAlign: 'center' }}>
                     <ActionControls
