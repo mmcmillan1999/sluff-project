@@ -1,7 +1,7 @@
 // backend/src/core/BotPlayer.js
 
 const gameLogic = require('./logic');
-const { RANKS_ORDER, BID_HIERARCHY } = require('./constants');
+const { RANKS_ORDER, BID_HIERARCHY, BID_MULTIPLIERS } = require('./constants');
 const { getLegalMoves } = require('./legalMoves');
 
 const getRankValue = (card) => RANKS_ORDER.indexOf(gameLogic.getRank(card));
@@ -25,6 +25,7 @@ class BotPlayer {
         const hand = this.engine.hands[this.playerName] || [];
         const { points, suits } = this._analyzeHand(hand);
         let potentialBid = "Pass";
+
         if ((points > 30 && suits.H >= 5) || (points > 40 && suits.H >= 4)) {
             potentialBid = "Heart Solo";
         } else if ((points > 30 && (suits.S >= 5 || suits.C >= 5 || suits.D >= 5)) || (points > 40 && (suits.S >= 4 || suits.C >= 4 || suits.D >= 4))) {
@@ -32,9 +33,11 @@ class BotPlayer {
         } else if ((points > 30 && suits.H >= 4) || (points > 40 && suits.H >= 3)) {
             potentialBid = "Frog";
         }
+
         const currentBidDetails = this.engine.currentHighestBidDetails;
         const currentBidLevel = currentBidDetails ? BID_HIERARCHY.indexOf(currentBidDetails.bid) : -1;
         const potentialBidLevel = BID_HIERARCHY.indexOf(potentialBid);
+
         if (potentialBidLevel > currentBidLevel) {
             return potentialBid;
         }
@@ -61,39 +64,6 @@ class BotPlayer {
         return sortedHand.slice(0, 3);
     }
 
-    // --- NEW METHOD: Bot Insurance Logic ---
-    decideInitialInsurance() {
-        if (!this.engine.insurance.isActive) return null;
-
-        const isBidder = this.engine.bidWinnerInfo.userId === this.userId;
-        const hand = this.engine.hands[this.playerName] || [];
-        const { points, suits } = this._analyzeHand(hand);
-        const trumpSuit = this.engine.trumpSuit;
-        const trumpCount = suits[trumpSuit] || 0;
-        const multiplier = this.engine.insurance.bidMultiplier;
-
-        if (isBidder) {
-            let value;
-            if (points > 35 && trumpCount >= 5) { // Strong Hand
-                value = Math.round(80 * multiplier);
-            } else if (points < 25 || trumpCount <= 3) { // Weak Hand
-                value = Math.round(40 * multiplier);
-            } else { // Average Hand
-                value = Math.round(60 * multiplier);
-            }
-            return { settingType: 'bidderRequirement', value };
-        } else { // Is Defender
-            const highTrump = hand.filter(c => gameLogic.getSuit(c) === trumpSuit && ['A', '10', 'K'].includes(gameLogic.getRank(c)));
-            let value;
-            if (highTrump.length >= 2) { // Strong Defensive Hand
-                value = Math.round(-20 * multiplier);
-            } else { // Weak Defensive Hand
-                value = Math.round(-40 * multiplier);
-            }
-            return { settingType: 'defenderOffer', value };
-        }
-    }
-
     playCard() {
         const hand = this.engine.hands[this.playerName];
         if (!hand || hand.length === 0) return null;
@@ -104,23 +74,8 @@ class BotPlayer {
 
         legalPlays.sort((a, b) => getRankValue(a) - getRankValue(b));
         let cardToPlay;
-
         if (isLeading) {
-            // --- NEW "NAKED 10" LOGIC ---
-            const bestCard = legalPlays[legalPlays.length - 1];
-            if (gameLogic.getRank(bestCard) === '10' && legalPlays.length > 1) {
-                const suitOf10 = gameLogic.getSuit(bestCard);
-                const aceOfSuit = 'A' + suitOf10;
-                if (!this.engine.allCardsPlayedThisRound.includes(aceOfSuit)) {
-                    // The Ace is still out, and we have other options. Don't lead the 10.
-                    cardToPlay = legalPlays[legalPlays.length - 2]; // Play the next-best card
-                } else {
-                    cardToPlay = bestCard; // Ace is gone, 10 is safe to lead
-                }
-            } else {
-                cardToPlay = bestCard; // Default behavior
-            }
-            // --- END NEW LOGIC ---
+            cardToPlay = legalPlays[legalPlays.length - 1];
         } else {
             const winningPlays = legalPlays.filter(myCard => {
                 const potentialTrick = [...this.engine.currentTrickCards, { card: myCard, userId: this.userId }];
@@ -135,6 +90,44 @@ class BotPlayer {
             }
         }
         return cardToPlay;
+    }
+
+    // --- NEW METHOD FOR INSURANCE LOGIC ---
+    makeInsuranceDecision() {
+        const { insurance, bidWinnerInfo, hands, bidderCardPoints } = this.engine;
+        const bidMultiplier = BID_MULTIPLIERS[bidWinnerInfo.bid] || 1;
+        const isBidder = this.playerName === bidWinnerInfo.playerName;
+        const numberOfOpponents = this.engine.playerOrder.count - 1;
+
+        if (isBidder) {
+            const myHand = hands[this.playerName] || [];
+            const pointsInHand = gameLogic.calculateCardPoints(myHand);
+            const maxPossibleScore = bidderCardPoints + pointsInHand;
+
+            if (maxPossibleScore < 60) {
+                const guaranteedLoss = 60 - maxPossibleScore;
+                const pointExchange = guaranteedLoss * bidMultiplier * numberOfOpponents;
+                // Calculate the strategic ask: slightly better than the worst-case loss
+                const strategicAsk = Math.round((-pointExchange * 1.05) / 5) * 5; // Add 5% buffer and round to nearest 5
+                
+                // Only update if the new ask is better (less negative) than the current one
+                if (strategicAsk > insurance.bidderRequirement) {
+                    return { settingType: 'bidderRequirement', value: strategicAsk };
+                }
+            }
+            // If confident or current ask is better, do nothing.
+            return null;
+        } else { // Is a Defender
+            // Simple baseline logic: offer a standard amount if they haven't made a deal yet.
+            const currentOffer = insurance.defenderOffers[this.playerName];
+            const standardOffer = -30 * bidMultiplier;
+            
+            // Only make an offer if the current one is the default (worse) value
+            if (currentOffer < standardOffer) {
+                 return { settingType: 'defenderOffer', value: standardOffer };
+            }
+            return null;
+        }
     }
 }
 

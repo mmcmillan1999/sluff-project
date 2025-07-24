@@ -32,7 +32,7 @@ export const bulletinContent = [
     },
     {
         type: 'list-item',
-        text: 'Correcting 3-player game payouts to be net-zero.'
+        text: 'Bots are a little bit smarter now, be careful!'
     },
     {
         type: 'list-item',

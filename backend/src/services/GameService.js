@@ -80,7 +80,6 @@ class GameService {
         await this._performAction(tableId, (engine) => engine.requestNextRound(userId));
     }
     
-    // --- COMPLETELY REWRITTEN AND CORRECTED PAYOUT LOGIC ---
     async handleGameOver(payload) {
         const { scores, theme, gameId, players } = payload;
         const tableCost = TABLE_COSTS[theme] || 0;
@@ -91,7 +90,6 @@ class GameService {
         const transactionFn = (args) => transactionPromises.push(transactionManager.postTransaction(this.pool, args));
         const statUpdateFn = (query, params) => statPromises.push(this.pool.query(query, params));
 
-        // 1. Get the final ranking of ALL players, including bots. This is the source of truth.
         const finalRankings = Object.values(players)
             .filter(p => !p.isSpectator)
             .map(p => ({ ...p, score: scores[p.playerName] || 0 }))
@@ -100,11 +98,9 @@ class GameService {
         const winners = finalRankings.filter(p => p.score === finalRankings[0].score);
         const gameWinnerName = winners.map(w => w.playerName).join(' & ');
         
-        // 2. Apply payout logic based on the number of players at the table.
         if (finalRankings.length === 3) {
             const [p1, p2, p3] = finalRankings;
 
-            // Scenario: Clear 1st, 2nd, 3rd
             if (p1.score > p2.score && p2.score > p3.score) {
                 if (!p1.isBot) {
                     transactionFn({ userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 2, description: `Win and Payout from ${p3.playerName}` });
@@ -121,7 +117,6 @@ class GameService {
                     payoutDetails[p3.userId] = `You finished last and lost your buy-in of ${tableCost.toFixed(2)} tokens.`;
                 }
             }
-            // Scenario: Tie for 1st
             else if (p1.score === p2.score && p2.score > p3.score) {
                 if (!p1.isBot) {
                     transactionFn({ userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 1.5, description: `Win (tie) - Split payout from ${p3.playerName}` });
@@ -138,7 +133,6 @@ class GameService {
                     payoutDetails[p3.userId] = `You finished last and lost your buy-in of ${tableCost.toFixed(2)} tokens.`;
                 }
             }
-            // Scenario: Tie for 2nd/Last
             else if (p1.score > p2.score && p2.score === p3.score) {
                 if (!p1.isBot) {
                     transactionFn({ userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 3, description: `Win - Collects full pot` });
@@ -154,7 +148,6 @@ class GameService {
                     payoutDetails[p3.userId] = `You tied for last and lost your buy-in of ${tableCost.toFixed(2)} tokens.`;
                 }
             }
-            // Scenario: 3-Way Tie
             else {
                 finalRankings.forEach(p => {
                     if (!p.isBot) {
@@ -295,6 +288,7 @@ class GameService {
             const standardDelay = 1000;
             const playDelay = 1200;
             const roundEndDelay = 8000;
+            const insuranceDelay = 2500; // --- NEW: Delay for insurance thinking
 
             const makeMove = (actionServiceFn, ...args) => {
                 const delay = 
@@ -334,6 +328,19 @@ class GameService {
                 if (card) {
                     return makeMove(this.playCard, card);
                 }
+            }
+            // --- NEW: Trigger for bot insurance decision ---
+            if (engine.state === 'Playing Phase' && engine.insurance.isActive && !engine.insurance.dealExecuted) {
+                engine.pendingBotAction = setTimeout(() => {
+                    engine.pendingBotAction = null;
+                    const decision = bot.makeInsuranceDecision();
+                    if (decision) {
+                        engine.updateInsuranceSetting(bot.userId, decision.settingType, decision.value);
+                        this.io.to(tableId).emit('gameState', engine.getStateForClient());
+                        this.io.emit('lobbyState', this.getLobbyState());
+                    }
+                }, isCourtney ? insuranceDelay * 2 : insuranceDelay);
+                return; // Prevent other actions from being scheduled
             }
         }
     }
