@@ -1,5 +1,27 @@
 /* frontend/src/components/game/TableLayout.css */
 
+@keyframes pulsing-glow {
+    0% { box-shadow: 0 0 5px #ffcc00; }
+    50% { box-shadow: 0 0 20px #ffcc00; }
+    100% { box-shadow: 0 0 5px #ffcc00; }
+}
+
+.game-button {
+    padding: 8px 16px;
+    font-family: 'Oswald', sans-serif;
+    background: linear-gradient(to bottom, #5c6bc0, #3f51b5);
+    color: white;
+    border: 1px solid #303f9f;
+    border-radius: 5px;
+    cursor: pointer;
+    margin: 5px;
+}
+
+.game-button:disabled {
+    background: #9e9e9e;
+    cursor: not-allowed;
+}
+
 .game-table {
     flex-grow: 1;
     position: relative;
@@ -8,7 +30,6 @@
     align-items: center;
     background: radial-gradient(circle, #424242, #212121);
     padding: 5px;
-    overflow: hidden;
 }
 
 .table-oval {
@@ -22,84 +43,337 @@
     box-shadow: inset 0 0 25px rgba(0,0,0,0.5);
 }
 
-/* --- DEFAULT (DESKTOP) LAYOUT --- */
+.player-seat-left {
+    position: absolute;
+    top: 50%;
+    left: 20px;
+    transform: translateY(-50%);
+    z-index: 10;
+}
 
-.player-seat-left { position: absolute; top: 50%; left: 20px; transform: translateY(-50%); z-index: 10; }
-.player-seat-right { position: absolute; top: 50%; right: 20px; transform: translateY(-50%); z-index: 10; }
-.player-seat-bottom { position: absolute; bottom: 5%; left: 50%; transform: translateX(-50%); z-index: 10; }
+.player-seat-right {
+    position: absolute;
+    top: 50%;
+    right: 20px;
+    transform: translateY(-50%);
+    z-index: 10;
+}
 
-.widow-display-container { position: absolute; top: 20px; left: 20px; z-index: 5; }
-.trump-indicator-puck { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 20; }
-.action-message-container { position: absolute; top: 15%; left: 50%; transform: translateX(-50%); z-index: 10; width: 80%; text-align: center; }
+.player-seat-bottom {
+    position: absolute;
+    bottom: 5%;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+}
 
-.trick-pile-container { position: absolute; bottom: 1%; z-index: 5; }
+.card-back-container {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #1a1a1a;
+    border: 1px solid #888;
+    border-radius: 4px;
+    box-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+    padding: 5px;
+    box-sizing: border-box;
+}
+
+.card-back-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    transform: rotate(-70deg);
+}
+
+.trick-pile-container {
+    position: absolute;
+    bottom: .1%;
+    z-index: 5;
+    width: auto;
+}
 .defender-pile { left: 15%; }
 .bidder-pile { right: 15%; }
 
-.progress-bar-container { position: absolute; top: 15px; z-index: 15; }
-.defender-progress-container { left: 18%; }
-.bidder-progress-container { right: 18%; }
+.trick-pile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+}
+.trick-pile-cards {
+    position: relative;
+    height: 67.5px;
+    width: 48.75px;
+    margin-bottom: 5px;
+}
+.trick-pile-card-wrapper {
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+.trick-pile-label {
+    color: white;
+    font-family: 'Oswald', sans-serif;
+    text-shadow: 1px 1px 2px black;
+    font-size: 1.1em;
+}
 
-/* --- PORTRAIT MODE OVERRIDES --- */
-@media (orientation: portrait) {
-    .table-oval { border-radius: 50px; }
+/* --- MODIFICATION FOR DESKTOP & HORIZONTAL --- */
+.score-progress-container {
+    position: absolute;
+    top: 15px; /* Default to top */
+    width: 220px; /* Default width */
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.6);
+    padding: 5px 8px;
+    border-radius: 8px;
+    color: white;
+    text-align: center;
+    font-family: 'Oswald', sans-serif;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.trick-pile .score-progress-container {
+    bottom: 0; /* Override for piles */
+    top: auto;
+}
+/* --- END MODIFICATION --- */
 
-    /* Reposition elements based on the grid */
-    .player-seat-left { top: 50%; left: 5px; transform: translateY(-50%); }
-    .player-seat-right { top: 50%; right: 5px; transform: translateY(-50%); }
-    .player-seat-bottom { bottom: 8%; }
 
-    .widow-display-container { top: 5%; left: 5%; }
-    .trump-indicator-puck { top: 5%; }
-    .action-message-container { top: 18%; }
+.score-progress-label {
+    font-size: 0.9em;
+    margin-bottom: 4px;
+    text-shadow: 1px 1px 1px black;
+    white-space: nowrap;
+}
 
-    .trick-pile-container { bottom: 20%; z-index: 11; }
-    .defender-pile { left: 15%; }
-    .bidder-pile { right: 15%; }
+.score-progress-bar-background {
+    width: 100%;
+    height: 12px;
+    background-color: #333;
+    border-radius: 5px;
+    border: 1px solid #555;
+    overflow: hidden;
+}
 
-    .progress-bar-container { top: auto; bottom: 18%; }
-    .defender-progress-container { left: 15%; }
-    .bidder-progress-container { right: 15%; }
-    .progress-bar-container .score-progress-container { width: 140px; }
+.score-progress-bar-foreground {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s ease-in-out;
+}
+
+.widow-display-container {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.widow-pile {
+    display: flex;
+    position: relative;
+    height: 67.5px;
+}
+
+.widow-pile-card-wrapper {
+    margin-right: -37.5px;
+}
+
+.widow-pile-label {
+    color: white;
+    font-family: 'Oswald', sans-serif;
+    text-shadow: 1px 1px 2px black;
+    margin-top: 5px;
+}
+
+@keyframes attention-glow {
+    0% { box-shadow: 0 0 8px #ff4d4d; }
+    50% { box-shadow: 0 0 25px #ff4d4d; }
+    100% { box-shadow: 0 0 8px #ff4d4d; }
+}
+
+.trump-indicator-puck {
+    position: absolute;
+    top: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    width: 40px;
+    height: 40px;
+    background-color: rgba(0, 0, 0, 0.5);
+    border: 2px solid #ccc;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8em;
+    color: white;
+    cursor: help;
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+.trump-indicator-puck.broken {
+    border-color: #ff4d4d;
+    animation: attention-glow 1.5s infinite;
+}
+
+.trump-indicator-puck.broken::after {
+    content: '';
+    position: absolute;
+    left: -10%;
+    top: 50%;
+    width: 120%;
+    height: 4px;
+    background-color: #ff4d4d;
+    transform: translateY(-50%) rotate(-45deg);
+    box-shadow: 0 0 5px black;
 }
 
 
-/* --- SHARED STYLES --- */
+.last-trick-tab-container {
+    position: absolute;
+    top: 50%;
+    z-index: 25;
+}
+.last-trick-tab-container.defender { 
+    left: 10px; 
+    transform: translateY(-50%) rotate(-90deg);
+    transform-origin: left top;
+}
+.last-trick-tab-container.bidder { 
+    right: 10px;
+    transform: translateY(-50%) rotate(90deg);
+    transform-origin: right top;
+}
 
-.trick-pile, .widow-display-container { display: flex; flex-direction: column; align-items: center; }
-.trick-pile-cards, .widow-pile { position: relative; height: 67.5px; }
-.trick-pile-cards { width: 48.75px; margin-bottom: 5px; }
-.widow-pile { display: flex; }
-.trick-pile-card-wrapper, .widow-pile-card-wrapper { position: absolute; top: 0; left: 0; }
-.widow-pile-card-wrapper { margin-left: -15px; } /* Overlap widow cards */
-.trick-pile-label, .widow-pile-label { color: white; font-family: 'Oswald', sans-serif; text-shadow: 1px 1px 2px black; }
-.trick-pile-label { font-size: 1.1em; }
-.widow-pile-label { margin-top: 5px; }
+.last-trick-tab {
+    background-color: #333;
+    color: #fff;
+    border: 1px solid #555;
+    border-radius: 4px 4px 0 0;
+    padding: 5px 10px;
+    font-size: 1em;
+    cursor: pointer;
+}
 
-.score-progress-container { width: 220px; background-color: rgba(0, 0, 0, 0.6); padding: 5px 8px; border-radius: 8px; color: white; text-align: center; font-family: 'Oswald', sans-serif; border: 1px solid rgba(255, 255, 255, 0.1); }
-.score-progress-label { font-size: 0.9em; margin-bottom: 4px; text-shadow: 1px 1px 1px black; white-space: nowrap; }
-.score-progress-bar-background { width: 100%; height: 12px; background-color: #333; border-radius: 5px; border: 1px solid #555; overflow: hidden; }
-.score-progress-bar-foreground { height: 100%; border-radius: 4px; transition: width 0.5s ease-in-out; }
-
-.card-back-container { display: inline-flex; justify-content: center; align-items: center; background-color: #1a1a1a; border: 1px solid #888; border-radius: 4px; box-shadow: 1px 1px 3px rgba(0,0,0,0.5); padding: 5px; box-sizing: border-box; }
-.card-back-image { width: 100%; height: 100%; object-fit: contain; }
-
-.last-trick-tab-container { position: absolute; top: 50%; z-index: 25; }
-.last-trick-tab-container.defender { left: 10px; transform: translateY(-50%) rotate(-90deg); transform-origin: left top; }
-.last-trick-tab-container.bidder { right: 10px; transform: translateY(-50%) rotate(90deg); transform-origin: right top; }
-.last-trick-tab { background-color: #333; color: #fff; border: 1px solid #555; border-radius: 4px 4px 0 0; padding: 5px 10px; font-size: 1em; cursor: pointer; }
-.last-trick-overlay-container { position: absolute; bottom: 25%; z-index: 26; background-color: rgba(0,0,0,0.7); padding: 5px 8px; border-radius: 8px; text-align: center; transition: all 0.5s ease-in-out; }
+.last-trick-overlay-container {
+    position: absolute;
+    bottom: 25%;
+    z-index: 26;
+    background-color: rgba(0,0,0,0.7);
+    padding: 5px 8px;
+    border-radius: 8px;
+    text-align: center;
+    transition: all 0.5s ease-in-out;
+}
 .last-trick-overlay-container.defender { left: 5%; }
 .last-trick-overlay-container.bidder { right: 5%; }
-.last-trick-header { margin: 0 0 5px 0; font-size: 0.7em; color: #e0e0e0; }
-.last-trick-cards { display: flex; gap: 2px; }
 
-.card-display { border: 1px solid #777; border-radius: 6px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2); display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; text-align: left; padding: 4px; box-sizing: border-box; }
-button.card-display { cursor: pointer; }
-button.card-display:disabled { cursor: not-allowed; }
-.card-symbol { font-size: 150%; line-height: 1; margin-top: 2px; }
+.last-trick-header {
+    margin: 0 0 5px 0;
+    font-size: 0.7em;
+    color: #e0e0e0;
+}
+.last-trick-cards {
+    display: flex;
+    gap: 2px;
+}
 
-@keyframes attention-glow { 0% { box-shadow: 0 0 8px #ff4d4d; } 50% { box-shadow: 0 0 25px #ff4d4d; } 100% { box-shadow: 0 0 8px #ff4d4d; } }
-.trump-indicator-puck { width: 40px; height: 40px; background-color: rgba(0, 0, 0, 0.5); border: 2px solid #ccc; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.8em; color: white; cursor: help; transition: all 0.3s ease; overflow: hidden; }
-.trump-indicator-puck.broken { border-color: #ff4d4d; animation: attention-glow 1.5s infinite; }
-.trump-indicator-puck.broken::after { content: ''; position: absolute; left: -10%; top: 50%; width: 120%; height: 4px; background-color: #ff4d4d; transform: translateY(-50%) rotate(-45deg); box-shadow: 0 0 5px black; }
+.card-display {
+    border: 1px solid #777;
+    border-radius: 6px;
+    font-weight: bold;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    text-align: left;
+    padding: 4px;
+    box-sizing: border-box;
+}
+
+button.card-display {
+    cursor: pointer;
+    align-items: flex-start !important;
+    justify-content: flex-start !important;
+    text-align: left !important;
+}
+
+button.card-display:disabled {
+    cursor: not-allowed;
+}
+
+.card-symbol {
+    font-size: 150%;
+    line-height: 1;
+    margin-top: 2px;
+}
+
+@media (orientation: portrait) {
+    .table-oval { border-radius: 50px; }
+
+    .player-seat-left, .player-seat-right {
+        transform: none;
+        top: 25%;
+        width: 160px;
+    }
+
+    .player-seat-left {
+        left: -60px;
+    }
+    .player-seat-right {
+        right: -60px;
+    }
+
+    .player-seat-left .player-seat, .player-seat-right .player-seat {
+        transform-origin: center;
+    }
+    
+    .player-seat-left .player-seat {
+        transform: rotate(90deg);
+    }
+    .player-seat-right .player-seat {
+        transform: rotate(-90deg);
+    }
+    
+    .player-seat-left .puck, .player-seat-right .puck {
+        top: 50%;
+        transform: translateY(-50%);
+    }
+
+    .player-seat-left .dealer-puck { right: -14px; }
+    .player-seat-left .role-puck { left: -14px; }
+
+    .player-seat-right .dealer-puck { left: -14px; }
+    .player-seat-right .role-puck { right: -14px; }
+
+    .last-trick-tab-container { 
+        top: auto;
+        bottom: 25%;
+    }
+    
+    .trick-pile-container {
+        bottom: 20vh;
+    }
+
+    /* --- FINAL FIX for Vertical Phone --- */
+    .trick-pile .score-progress-container {
+        position: fixed; /* Position relative to viewport */
+        bottom: 17vh; /* Move it down */
+        width: 140px; /* Make it wider */
+    }
+    .defender-pile .score-progress-container {
+        left: 10px;
+        transform: none;
+    }
+    .bidder-pile .score-progress-container {
+        right: 10px;
+        transform: none;
+    }
+}

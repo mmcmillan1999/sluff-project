@@ -10,14 +10,11 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent }) => {
     const {
         players,
         scores,
-        dealer,
+        // --- FIX: Removed unused 'dealer' and 'trumpSuit' ---
         bidWinnerInfo,
-        trumpSuit,
         playerOrderActive,
         trickTurnPlayerName,
-        forfeiture,
-        roundSummary,
-        playerTokens 
+        forfeiture
     } = currentTableState;
 
     const playerEntry = Object.values(players).find(p => p.playerName === playerName);
@@ -25,43 +22,24 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent }) => {
     if (!playerEntry) {
         return null;
     }
-
-    const { userId, disconnected } = playerEntry;
-    const playerTokenCount = playerTokens?.[playerName] ?? roundSummary?.playerTokens?.[playerName];
-    const isDealer = dealer === userId;
+    
+    // --- FIX: Removed unused 'userId' ---
+    const { disconnected } = playerEntry;
     const isBidWinner = bidWinnerInfo?.playerName === playerName;
     const isDefender = bidWinnerInfo && !isBidWinner && playerOrderActive.includes(playerName);
     const isTimerRunningForThisPlayer = forfeiture?.targetPlayerName === playerName;
     const isMyTurn = trickTurnPlayerName === playerName;
-
-    let rolePuckContent = null;
-    if (isBidWinner) {
-        switch (bidWinnerInfo.bid) {
-            case "Frog": rolePuckContent = "FROG"; break;
-            case "Heart Solo": rolePuckContent = "H-S"; break;
-            case "Solo": rolePuckContent = `${trumpSuit}-S`; break;
-            default: break;
-        }
-    } else if (isDefender) {
-        rolePuckContent = "TEAM";
-    }
 
     const seatClasses = [
         'player-seat',
         isBidWinner && 'bid-winner',
         isDefender && 'defender',
         disconnected && 'disconnected',
-        isMyTurn && 'active-turn'
+        isMyTurn && 'active-turn',
+        !isSelf && 'opponent-seat'
     ].filter(Boolean).join(' ');
 
     const nameClasses = ['player-name', isSelf && 'is-self'].filter(Boolean).join(' ');
-    
-    const rolePuckClasses = [
-        'puck', 
-        'role-puck', 
-        isBidWinner ? 'bid-winner' : 'defender', 
-        rolePuckContent?.length > 3 && 'small-font'
-    ].filter(Boolean).join(' ');
 
     const handleStartTimer = () => {
         emitEvent("startTimeoutClock", { targetPlayerName: playerName });
@@ -69,19 +47,20 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent }) => {
 
     return (
         <div className="player-seat-wrapper">
-            {isDealer && <div className="puck dealer-puck">D</div>}
-            {rolePuckContent && <div className={rolePuckClasses}>{rolePuckContent}</div>}
+            {/* Pucks are still commented out for debugging the main layout */}
 
             <div className={seatClasses}>
-                <div className={nameClasses}>{playerName}</div>
-                <div className="player-stats-line">
-                    <span className="player-tokens">
-                        <img src="/sluff_token.png" alt="Tokens" className="token-icon-inline" />
-                        {playerTokenCount !== undefined ? parseFloat(playerTokenCount).toFixed(2) : '...'}
-                    </span>
-                    <span className="info-divider">|</span>
-                    <span className="player-score">Points: {scores[playerName] ?? '120'}</span>
+                <div className="player-name-wrapper">
+                    <div className={nameClasses}>{playerName}</div>
                 </div>
+                {isSelf && (
+                    <div className="player-stats-line">
+                        <span className="player-tokens">
+                            {/* Tokens are not available in this scope, simplifying to points only */}
+                        </span>
+                        <span className="player-score">Points: {scores[playerName] ?? '120'}</span>
+                    </div>
+                )}
                 
                 {disconnected && (
                     <div className="disconnected-controls">

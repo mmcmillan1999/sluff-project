@@ -32,19 +32,15 @@ const TableLayout = ({
             const cardInfo = (cardsToDisplay || []).find(c => c.playerName === pName);
             return renderCard(cardInfo?.card, { large: true });
         };
-        
-        // --- MODIFIED: Updated inline styles to match the grid layout ---
+
         return (
             <>
-                {/* South Card (Yours) */}
-                <div style={{ position: 'absolute', bottom: '30%', left: '50%', transform: 'translateX(-50%)' }}>
+                <div style={{ position: 'absolute', bottom: '25%', left: '50%', transform: 'translateX(-50%)' }}>
                     {getPlayedCardForPlayer(seatAssignments.self)}
                 </div>
-                {/* West Card (Left Opponent) */}
                 <div style={{ position: 'absolute', top: '50%', left: '25%', transform: 'translateY(-50%)' }}>
                     {getPlayedCardForPlayer(seatAssignments.opponentLeft)}
                 </div>
-                {/* East Card (Right Opponent) */}
                 <div style={{ position: 'absolute', top: '50%', right: '25%', transform: 'translateY(-50%)' }}>
                     {getPlayedCardForPlayer(seatAssignments.opponentRight)}
                 </div>
@@ -126,6 +122,7 @@ const TableLayout = ({
         );
     };
 
+    // --- NEW: Standalone function to render only the progress bars ---
     const renderProgressBars = () => {
         const { theme, state, bidWinnerInfo, bidderCardPoints, defenderCardPoints } = currentTableState;
         if (!bidWinnerInfo || theme !== 'miss-pauls-academy' || state !== 'Playing Phase') {
@@ -243,9 +240,7 @@ const TableLayout = ({
 
                 {renderPlayedCardsOnTable()}
                 
-                {renderProgressBars()}
-
-                <div className="action-message-container">
+                <div style={{ position: 'absolute', top: '15%', left: '50%', transform: 'translateX(-50%)', zIndex: 10, width: '80%', textAlign: 'center' }}>
                     <ActionControls
                         currentTableState={currentTableState}
                         playerId={playerId}
@@ -257,6 +252,8 @@ const TableLayout = ({
                     />
                 </div>
             </div>
+            {/* --- NEW: Render progress bars outside the oval --- */}
+            {renderProgressBars()}
         </main>
     );
 };
