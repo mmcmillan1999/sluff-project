@@ -9,6 +9,7 @@ import LeaderboardView from "./components/LeaderboardView.js";
 import MercyWindow from "./components/MercyWindow.js";
 import AdminView from "./components/AdminView.js";
 import FeedbackModal from "./components/FeedbackModal.js";
+import FeedbackView from "./components/FeedbackView.js";
 import { submitFeedback } from "./services/api.js";
 import "./components/AdminView.css";
 import { useSounds } from "./hooks/useSounds.js";
@@ -45,14 +46,12 @@ function App() {
 
     const handleHardReset = () => {
         if (window.confirm("SERVER RESET WARNING:\n\nThis will boot ALL players from ALL tables, reset ALL in-progress games, and force everyone to log in again. This action cannot be undone.\n\nAre you sure you want to proceed?")) {
-            // Note: The backend admin check is now sufficient. The secret prompt is removed for a cleaner experience.
             socket.emit("hardResetServer", {});
         }
     };
 
     const handleResetAllTokens = () => {
         if (window.confirm("TOKEN RESET WARNING:\n\nThis will reset the token balance for ALL players on the server to the default amount (8). This is useful for starting a new season or testing period.\n\nAre you sure you want to proceed?")) {
-            // This event is not yet implemented on the backend, but we can leave the handler here.
             socket.emit("resetAllTokens", {});
         }
     };
@@ -257,6 +256,7 @@ function App() {
                             handleRequestFreeToken={handleRequestFreeToken}
                             handleShowLeaderboard={() => setView('leaderboard')}
                             handleShowAdmin={handleShowAdmin}
+                            handleShowFeedback={() => setView('feedback')}
                             errorMessage={errorMessage}
                             emitEvent={emitEvent}
                             socket={socket}
@@ -286,10 +286,14 @@ function App() {
                             handleResetAllTokens={handleResetAllTokens}
                             handleShowAdmin={handleShowAdmin}
                         />;
+                    case 'feedback':
+                        return <FeedbackView
+                            user={user}
+                            onReturnToLobby={handleReturnToLobby}
+                        />;
                     case 'admin':
                         return <AdminView
                             onReturnToLobby={handleReturnToLobby}
-                            // --- PASS THE HANDLERS AS PROPS ---
                             handleHardReset={handleHardReset}
                             handleResetAllTokens={handleResetAllTokens}
                         />;
