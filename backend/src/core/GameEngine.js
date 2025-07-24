@@ -336,7 +336,9 @@ class GameEngine {
         if (!player || !this.drawRequest.isActive || !['wash', 'split', 'no'].includes(vote) || this.drawRequest.votes[player.playerName] !== null) {
             return this._effects();
         }
+
         this.drawRequest.votes[player.playerName] = vote;
+        
         if (vote === 'no') {
             this.drawRequest.isActive = false;
             return this._effects([
@@ -344,12 +346,15 @@ class GameEngine {
                 { type: 'BROADCAST_STATE' }
             ]);
         }
+
         const allVotes = Object.values(this.drawRequest.votes);
         if (allVotes.some(v => v === null)) {
             return this._effects([{ type: 'BROADCAST_STATE' }]);
         }
+        
         this.drawRequest.isActive = false;
         const outcome = allVotes.includes('split') ? 'split' : 'wash';
+
         return this._effects([{
             type: 'HANDLE_DRAW_OUTCOME',
             payload: {
@@ -366,10 +371,6 @@ class GameEngine {
         }]);
     }
 
-    // =================================================================
-    // --- HELPER METHODS ---
-    // =================================================================
-
     _initializeNewRoundState() {
         this.hands = {}; this.widow = []; this.originalDealtWidow = [];
         this.biddingTurnPlayerId = null; this.currentHighestBidDetails = null; this.playersWhoPassedThisRound = [];
@@ -377,8 +378,6 @@ class GameEngine {
         this.trickTurnPlayerId = null; this.trickLeaderId = null; this.currentTrickCards = []; this.leadSuitCurrentTrick = null; this.lastCompletedTrick = null; this.tricksPlayedCount = 0; this.capturedTricks = {}; this.roundSummary = null; 
         this.insurance = { isActive: false, bidMultiplier: null, bidderPlayerName: null, bidderRequirement: 0, defenderOffers: {}, dealExecuted: false, executedDetails: null };
         this.forfeiture = { targetPlayerName: null, timeLeft: null }; this.drawRequest = { isActive: false, initiator: null, votes: {}, timer: null };
-        // --- NEW: Track all cards played in a round ---
-        this.allCardsPlayedThisRound = [];
         Object.values(this.players).forEach(p => {
             if (p.playerName && this.scores[p.playerName] !== undefined) {
                 this.capturedTricks[p.playerName] = [];
@@ -423,14 +422,7 @@ class GameEngine {
 
             defenders.forEach(defName => { this.insurance.defenderOffers[defName] = -60 * multiplier; });
 
-            // --- NEW: Trigger bots to set their initial insurance values ---
-            for (const botId in this.bots) {
-                const bot = this.bots[botId];
-                const decision = bot.decideInitialInsurance();
-                if (decision) {
-                    this.updateInsuranceSetting(bot.userId, decision.settingType, decision.value);
-                }
-            }
+            // --- THIS IS THE FIX: The faulty block of code that was calling a non-existent function has been removed ---
         }
     }
     
@@ -458,8 +450,6 @@ class GameEngine {
             playerOrderActive: activeTurnOrder.map(id => this.players[id]?.playerName).filter(Boolean),
             dealer: this.dealer, hands: this.hands, widow: this.widow, originalDealtWidow: this.originalDealtWidow, scores: this.scores, currentHighestBidDetails: this.currentHighestBidDetails, bidWinnerInfo: this.bidWinnerInfo, gameStarted: this.gameStarted, trumpSuit: this.trumpSuit, currentTrickCards: this.currentTrickCards, tricksPlayedCount: this.tricksPlayedCount, leadSuitCurrentTrick: this.leadSuitCurrentTrick, trumpBroken: this.trumpBroken, capturedTricks: this.capturedTricks, roundSummary: this.roundSummary, lastCompletedTrick: this.lastCompletedTrick, playersWhoPassedThisRound: this.playersWhoPassedThisRound.map(id => this.players[id]?.playerName), playerMode: this.playerMode, serverVersion: this.serverVersion, insurance: this.insurance, forfeiture: this.forfeiture, drawRequest: this.drawRequest, originalFrogBidderId: this.originalFrogBidderId, soloBidMadeAfterFrog: this.soloBidMadeAfterFrog, revealedWidowForFrog: this.revealedWidowForFrog, widowDiscardsForFrogBidder: this.widowDiscardsForFrogBidder,
             bidderCardPoints: this.bidderCardPoints, defenderCardPoints: this.defenderCardPoints,
-            // --- NEW: Send the list of played cards to the client/bots ---
-            allCardsPlayedThisRound: this.allCardsPlayedThisRound,
         };
         state.biddingTurnPlayerName = this.players[this.biddingTurnPlayerId]?.playerName;
         state.trickTurnPlayerName = this.players[this.trickTurnPlayerId]?.playerName;
