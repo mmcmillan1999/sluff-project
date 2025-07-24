@@ -11,7 +11,7 @@
     border-radius: 8px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
     min-width: 150px;
-    border: 2px solid #ccc; /* Default border */
+    border: 2px solid #ccc;
     white-space: nowrap;
     display: flex;
     flex-direction: column;
@@ -24,7 +24,7 @@
     font-size: 1.1em;
 }
 .player-name.is-self {
-    color: #15803d; /* Dark Green */
+    color: #15803d;
 }
 
 .player-stats-line {
@@ -42,13 +42,11 @@
     color: #aaa;
 }
 
-/* State & Role Borders */
 .player-seat.disconnected { border-color: red; }
 .player-seat.bid-winner { border-color: #ffc107; }
 .player-seat.defender { border-color: #0d6efd; }
 .player-seat.active-turn { animation: pulsing-glow 1.5s infinite; }
 
-/* Puck Styles */
 .puck {
     position: absolute;
     top: -12px;
@@ -70,7 +68,6 @@
 .role-puck.defender { background-color: #0d6efd; color: white; }
 .role-puck.small-font { font-size: 0.6em; }
 
-/* Disconnected Controls */
 .disconnected-controls { margin-top: 5px; }
 .start-timer-button {
     padding: 4px 8px;
@@ -84,7 +81,6 @@
 }
 .timeout-display { font-weight: bold; color: #dc3545; font-size: 0.9em; }
 
-/* Token and Score Styles */
 .player-tokens, .player-score { font-weight: bold; display: flex; align-items: center; }
 .player-tokens { color: #b45309; }
 .player-score { color: #444; }
@@ -112,24 +108,43 @@
     100% { opacity: 0; transform: translate(-50%, 10px); }
 }
 
-/* --- NEW LOGIC FOR PORTRAIT MODE OPPONENTS --- */
+/* --- FINAL, SIMPLIFIED LOGIC FOR PORTRAIT MODE OPPONENTS --- */
 @media (orientation: portrait) {
     .opponent-seat {
-        flex-direction: row; /* Arrange items horizontally */
-        width: 45px;         /* Fixed width */
-        height: 150px;       /* Fixed height */
-        padding: 8px 4px;
-        justify-content: space-around;
+        /* Remove fixed dimensions and padding */
+        width: auto;
+        height: auto;
+        padding: 0;
+        /* Make the background and border invisible */
+        background-color: transparent;
+        border: none;
+        box-shadow: none;
+        /* Position the container itself; its only child will be the name */
+        position: absolute;
+        top: 50%;
     }
 
     .opponent-seat .player-name-wrapper {
-        writing-mode: vertical-rl; /* This is the key: vertical text */
-        transform: rotate(180deg);   /* Flips it to read top-to-bottom */
-        text-align: center;
-        flex-grow: 1; /* Allow it to take up space */
+        /* This is the key: vertical text writing mode */
+        writing-mode: vertical-rl;
+        padding: 8px 4px; /* Give the text some padding */
+        background-color: rgba(255, 255, 255, 0.9);
+        border: 2px solid #ccc;
+        border-radius: 8px;
     }
 
-    .opponent-seat .player-stats-line {
-        flex-direction: column; /* Stack stats vertically */
+    /* Target left and right seats specifically */
+    .player-seat-left .opponent-seat {
+        left: 0;
+        transform: translateY(-50%) rotate(180deg); /* Rotate the whole container to flip text direction */
+    }
+
+    .player-seat-right .opponent-seat {
+        right: 0;
+        transform: translateY(-50%);
+    }
+
+    .player-seat-right .opponent-seat .player-name-wrapper {
+        transform: rotate(180deg); /* Counter-rotate the text inside the right seat */
     }
 }

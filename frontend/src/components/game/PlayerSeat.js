@@ -15,9 +15,7 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent }) => {
         trumpSuit,
         playerOrderActive,
         trickTurnPlayerName,
-        forfeiture,
-        roundSummary,
-        playerTokens 
+        forfeiture
     } = currentTableState;
 
     const playerEntry = Object.values(players).find(p => p.playerName === playerName);
@@ -27,7 +25,6 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent }) => {
     }
 
     const { userId, disconnected } = playerEntry;
-    const playerTokenCount = playerTokens?.[playerName] ?? roundSummary?.playerTokens?.[playerName];
     const isDealer = dealer === userId;
     const isBidWinner = bidWinnerInfo?.playerName === playerName;
     const isDefender = bidWinnerInfo && !isBidWinner && playerOrderActive.includes(playerName);
@@ -52,7 +49,7 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent }) => {
         isDefender && 'defender',
         disconnected && 'disconnected',
         isMyTurn && 'active-turn',
-        !isSelf && 'opponent-seat' // Special class for opponents
+        !isSelf && 'opponent-seat'
     ].filter(Boolean).join(' ');
 
     const nameClasses = ['player-name', isSelf && 'is-self'].filter(Boolean).join(' ');
@@ -70,22 +67,23 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent }) => {
 
     return (
         <div className="player-seat-wrapper">
-            {isDealer && <div className="puck dealer-puck">D</div>}
-            {rolePuckContent && <div className={rolePuckClasses}>{rolePuckContent}</div>}
+            {/* --- TEMPORARILY HIDE PUCKS for simpler debugging --- */}
+            {/* {isDealer && <div className="puck dealer-puck">D</div>}
+            {rolePuckContent && <div className={rolePuckClasses}>{rolePuckContent}</div>} */}
 
             <div className={seatClasses}>
-                {/* --- STRUCTURAL CHANGE: Wrap name for targeted rotation --- */}
                 <div className="player-name-wrapper">
                     <div className={nameClasses}>{playerName}</div>
                 </div>
-                <div className="player-stats-line">
-                    <span className="player-tokens">
-                        <img src="/sluff_token.png" alt="Tokens" className="token-icon-inline" />
-                        {playerTokenCount !== undefined ? parseFloat(playerTokenCount).toFixed(2) : '...'}
-                    </span>
-                    <span className="info-divider">|</span>
-                    <span className="player-score">Points: {scores[playerName] ?? '120'}</span>
-                </div>
+                {/* --- TEMPORARILY HIDE STATS for simpler debugging --- */}
+                {isSelf && (
+                    <div className="player-stats-line">
+                        <span className="player-tokens">
+                            {/* Tokens are not available in this scope, simplifying to points only */}
+                        </span>
+                        <span className="player-score">Points: {scores[playerName] ?? '120'}</span>
+                    </div>
+                )}
                 
                 {disconnected && (
                     <div className="disconnected-controls">
