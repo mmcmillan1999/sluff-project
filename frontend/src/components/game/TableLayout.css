@@ -30,7 +30,6 @@
     align-items: center;
     background: radial-gradient(circle, #424242, #212121);
     padding: 5px;
-    overflow: hidden;
 }
 
 .table-oval {
@@ -120,21 +119,12 @@
     font-size: 1.1em;
 }
 
-
-/* --- MODIFICATION: Default positioning for Desktop & Horizontal Phone --- */
-.progress-bar-container {
-    position: absolute;
-    top: 15px; /* Position at the top by default */
-    z-index: 15;
-}
-.defender-progress-container {
-    left: 18%; /* Pushed in from the edge */
-}
-.bidder-progress-container {
-    right: 18%; /* Pushed in from the edge */
-}
 .score-progress-container {
-    width: 220px; /* Slightly narrower for desktop */
+    position: absolute;
+    top: 15px;
+    width: 220px;
+    left: 50%;
+    transform: translateX(-50%);
     background-color: rgba(0, 0, 0, 0.6);
     padding: 5px 8px;
     border-radius: 8px;
@@ -143,7 +133,10 @@
     font-family: 'Oswald', sans-serif;
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
-/* --- END MODIFICATION --- */
+.trick-pile .score-progress-container {
+    bottom: 0;
+    top: auto;
+}
 
 
 .score-progress-label {
@@ -238,6 +231,7 @@
     transform: translateY(-50%) rotate(-45deg);
     box-shadow: 0 0 5px black;
 }
+
 
 .last-trick-tab-container {
     position: absolute;
@@ -366,20 +360,9 @@ button.card-display:disabled {
         bottom: 20vh;
     }
 
-    /* --- MODIFICATION: Vertical Phone specific layout for progress bars --- */
     .progress-bar-container {
-        position: fixed;
-        bottom: 17vh; /* Lower on the screen */
-        top: auto; /* Unset the default top value */
-    }
-    .defender-progress-container {
-        left: 1px;
-    }
-    .bidder-progress-container {
-        right: 1px;
-        left: auto;
-    }
-    .progress-bar-container .score-progress-container {
-        width: 140px; /* 5% wider than 130px is ~137, 140 is a good round number */
+        /* --- THE FIX --- */
+        bottom: 22vh; /* Increased from 17vh to move it up */
+        top: auto;
     }
 }
