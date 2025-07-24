@@ -25,23 +25,12 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent }) => {
     }
 
     const { userId, disconnected } = playerEntry;
-    const isDealer = dealer === userId;
     const isBidWinner = bidWinnerInfo?.playerName === playerName;
     const isDefender = bidWinnerInfo && !isBidWinner && playerOrderActive.includes(playerName);
     const isTimerRunningForThisPlayer = forfeiture?.targetPlayerName === playerName;
     const isMyTurn = trickTurnPlayerName === playerName;
 
-    let rolePuckContent = null;
-    if (isBidWinner) {
-        switch (bidWinnerInfo.bid) {
-            case "Frog": rolePuckContent = "FROG"; break;
-            case "Heart Solo": rolePuckContent = "H-S"; break;
-            case "Solo": rolePuckContent = `${trumpSuit}-S`; break;
-            default: break;
-        }
-    } else if (isDefender) {
-        rolePuckContent = "TEAM";
-    }
+    // --- FIX: Removed unused variables 'isDealer' and 'rolePuckClasses' ---
 
     const seatClasses = [
         'player-seat',
@@ -53,13 +42,6 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent }) => {
     ].filter(Boolean).join(' ');
 
     const nameClasses = ['player-name', isSelf && 'is-self'].filter(Boolean).join(' ');
-    
-    const rolePuckClasses = [
-        'puck', 
-        'role-puck', 
-        isBidWinner ? 'bid-winner' : 'defender', 
-        rolePuckContent?.length > 3 && 'small-font'
-    ].filter(Boolean).join(' ');
 
     const handleStartTimer = () => {
         emitEvent("startTimeoutClock", { targetPlayerName: playerName });
@@ -67,15 +49,12 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent }) => {
 
     return (
         <div className="player-seat-wrapper">
-            {/* --- TEMPORARILY HIDE PUCKS for simpler debugging --- */}
-            {/* {isDealer && <div className="puck dealer-puck">D</div>}
-            {rolePuckContent && <div className={rolePuckClasses}>{rolePuckContent}</div>} */}
+            {/* Pucks are still commented out for debugging the main layout */}
 
             <div className={seatClasses}>
                 <div className="player-name-wrapper">
                     <div className={nameClasses}>{playerName}</div>
                 </div>
-                {/* --- TEMPORARILY HIDE STATS for simpler debugging --- */}
                 {isSelf && (
                     <div className="player-stats-line">
                         <span className="player-tokens">
