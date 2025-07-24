@@ -43,7 +43,8 @@ const RoundSummaryModal = ({
         lastCompletedTrick
     } = summaryData;
     
-    const insuranceAgreement = insurance?.executedDetails?.agreement;
+    // --- THIS IS THE FIX: The unused variable below has been removed ---
+    // const insuranceAgreement = insurance?.executedDetails?.agreement;
     
     const bidderName = bidWinnerInfo?.playerName || 'Bidder';
     const defenderNames = playerOrderActive?.filter(name => name !== bidderName) || ['Defenders'];
@@ -167,7 +168,6 @@ const RoundSummaryModal = ({
                     pointsPanelContent
                 )}
                 
-                {/* --- MODIFICATION: Display final insurance state regardless of deal --- */}
                 {insurance && insurance.bidMultiplier && (
                     <div className="insurance-deal-recap">
                         <h4 className="recap-title">
