@@ -43,9 +43,6 @@ const RoundSummaryModal = ({
         lastCompletedTrick
     } = summaryData;
     
-    // --- THIS IS THE FIX: The unused variable below has been removed ---
-    // const insuranceAgreement = insurance?.executedDetails?.agreement;
-    
     const bidderName = bidWinnerInfo?.playerName || 'Bidder';
     const defenderNames = playerOrderActive?.filter(name => name !== bidderName) || ['Defenders'];
 
@@ -111,6 +108,7 @@ const RoundSummaryModal = ({
             </div>
         ) : null;
         
+        // --- THIS IS THE FIX for the white screen crash ---
         const TrickRow = ({ trick }) => (
             <div key={`trick-${trick.trickNumber}`} className="trick-detail-row">
                 <span className="trick-number">Trick {trick.trickNumber}:</span>
@@ -121,16 +119,25 @@ const RoundSummaryModal = ({
             </div>
         );
 
+        const bidderTricks = Object.values(allTricks).flat().filter(trick => trick.winnerName === bidderName);
+        const defenderTricks = Object.values(allTricks).flat().filter(trick => trick.winnerName !== bidderName);
+        
+        const allPlayerTricks = Object.values(allTricks).flat();
+        const bidderTricksForDisplay = allPlayerTricks.filter(trick => Object.values(allTricks[bidderName] || []).some(t => t.trickNumber === trick.trickNumber));
+        const defenderTricksForDisplay = allPlayerTricks.filter(trick => !bidderTricksForDisplay.includes(trick));
+
+        const getTricksByPlayer = (playerName) => allTricks[playerName] || [];
+
         return (
             <div className="trick-breakdown-details">
                 <div className="team-trick-section">
                     <h4>Bidder Total ({bidderName}): {bidderTotal} pts</h4>
-                     {Object.entries(allTricks).filter(([pName]) => pName === bidderName).flatMap(([_, tricks]) => tricks).map(trick => <TrickRow key={trick.trickNumber} trick={trick} />)}
+                     {getTricksByPlayer(bidderName).map(trick => <TrickRow key={trick.trickNumber} trick={trick} />)}
                     {bidderWonWidow && widowRowJsx}
                 </div>
                 <div className="team-trick-section">
                     <h4>Defender Total ({defenderNames.join(', ')}): {defenderTotal} pts</h4>
-                     {Object.entries(allTricks).filter(([pName]) => pName !== bidderName).flatMap(([_, tricks]) => tricks).map(trick => <TrickRow key={trick.trickNumber} trick={trick} />)}
+                     {defenderNames.flatMap(name => getTricksByPlayer(name)).map(trick => <TrickRow key={trick.trickNumber} trick={trick} />)}
                     {!bidderWonWidow && widowRowJsx}
                 </div>
             </div>

@@ -21,14 +21,10 @@ class BotPlayer {
         return { points, suits };
     }
 
-    // --- NEW HELPER FUNCTION FOR CARD SELECTION ---
     _getBestCardToPlay(legalCards, isLeading) {
-        // This function contains the original, simple logic
         if (isLeading) {
-            // Original Logic: Play the highest ranking legal card
             return legalCards.sort((a, b) => getRankValue(b) - getRankValue(a))[0];
         } else {
-            // Original Logic: Try to win, otherwise sluff low
             const winningPlays = legalCards.filter(myCard => {
                 const potentialTrick = [...this.engine.currentTrickCards, { card: myCard, userId: this.userId }];
                 const winner = gameLogic.determineTrickWinner(potentialTrick, this.engine.leadSuitCurrentTrick, this.engine.trumpSuit);
@@ -36,10 +32,8 @@ class BotPlayer {
             });
 
             if (winningPlays.length > 0) {
-                // Play highest card to win
                 return winningPlays.sort((a, b) => getRankValue(b) - getRankValue(a))[0];
             } else {
-                // Sluff lowest card
                 return legalCards.sort((a, b) => getRankValue(a) - getRankValue(b))[0];
             }
         }
@@ -53,10 +47,8 @@ class BotPlayer {
         let legalPlays = getLegalMoves(hand, isLeading, this.engine.leadSuitCurrentTrick, this.engine.trumpSuit, this.engine.trumpBroken);
         if (legalPlays.length === 0) return null;
 
-        // --- Step 1: Get the bot's initial "greedy" decision ---
         let proposedCard = this._getBestCardToPlay([...legalPlays], isLeading);
 
-        // --- Step 2: The Final Safety Check ---
         if (gameLogic.getRank(proposedCard) === '10') {
             const suit = gameLogic.getSuit(proposedCard);
             const aceOfSuit = 'A' + suit;
@@ -65,21 +57,16 @@ class BotPlayer {
                 .flat()
                 .flatMap(trick => trick.cards);
             
-            // Check if the Ace is potentially in an opponent's hand
             const isAceUnaccountedFor = !hand.includes(aceOfSuit) && !allPlayedCards.includes(aceOfSuit);
 
             if (isAceUnaccountedFor) {
-                // DANGER! The 10 is unsafe. Re-evaluate.
-                // Exclude the risky 10 from the legal moves and get the next-best option.
                 const saferPlays = legalPlays.filter(card => card !== proposedCard);
                 if (saferPlays.length > 0) {
                     proposedCard = this._getBestCardToPlay(saferPlays, isLeading);
                 }
-                // If the 10 was the ONLY legal play, the bot is forced to play it anyway.
             }
         }
 
-        // --- Step 3: Play the final, vetted card ---
         return proposedCard;
     }
 
@@ -126,51 +113,44 @@ class BotPlayer {
         return sortedHand.slice(0, 3);
     }
 
-    // --- REWRITTEN "TAPERING CONFIDENCE" INSURANCE LOGIC ---
     makeInsuranceDecision() {
         const { insurance, bidWinnerInfo, hands, bidderCardPoints, tricksPlayedCount } = this.engine;
         const bidMultiplier = BID_MULTIPLIERS[bidWinnerInfo.bid] || 1;
         const isBidder = this.playerName === bidWinnerInfo.playerName;
         const numberOfOpponents = this.engine.playerOrder.count - 1;
 
-        // 1. Calculate the Tapering "Certainty Factor"
-        const certaintyFactor = tricksPlayedCount / 10.0; // Ranges from 0.0 to 1.0
+        const certaintyFactor = tricksPlayedCount / 10.0;
         const projectionFactor = 1.0 - certaintyFactor;
 
-        // 2. Calculate the Bidder's Max Possible Score (Certainty)
         const bidderHand = hands[bidWinnerInfo.playerName] || [];
         const bidderPointsInHand = gameLogic.calculateCardPoints(bidderHand);
         const bidderMaxScore = bidderCardPoints + bidderPointsInHand;
 
-        // 3. Calculate the Projected Final Score
         const GOAL = 60;
         const projectedFinalScore = (GOAL * projectionFactor) + (bidderMaxScore * certaintyFactor);
 
-        // 4. Determine Action Based on Role
         if (isBidder) {
             const projectedSurplus = projectedFinalScore - GOAL;
             const projectedPointExchange = projectedSurplus * bidMultiplier * numberOfOpponents;
-            
-            // The bot asks for what it expects to win. If it expects to lose, this will be a negative number (an offer).
-            const strategicAsk = Math.round(projectedPointExchange / 5) * 5; // Round to nearest 5
+            const strategicAsk = Math.round(projectedPointExchange / 5) * 5;
 
-            // Only update if the new ask is different from the current one
             if (strategicAsk !== insurance.bidderRequirement) {
                 return { settingType: 'bidderRequirement', value: strategicAsk };
             }
         } else { // Is a Defender
             const projectedSurplus = projectedFinalScore - GOAL;
-            // From the defender's perspective, a positive surplus for the bidder is a loss for them.
             const projectedDefenderLoss = projectedSurplus * bidMultiplier;
             
             let strategicOffer;
             if (projectedDefenderLoss > 0) {
-                // If expecting to lose, offer to pay a slight premium to cap losses
-                strategicOffer = Math.round((projectedDefenderLoss * 1.05) / 5) * 5;
+                const baseOffer = Math.round((projectedDefenderLoss * 1.05) / 5) * 5;
+                // --- THIS IS THE FIX: Make defender more stingy ---
+                strategicOffer = baseOffer + 20; 
             } else {
-                // If expecting to win, offer to give up half the winnings for a sure thing
                 const projectedDefenderWinnings = -projectedDefenderLoss;
-                strategicOffer = -Math.round((projectedDefenderWinnings / 2) / 5) * 5;
+                const baseOffer = -Math.round((projectedDefenderWinnings / 2) / 5) * 5;
+                // --- THIS IS THE FIX: Make defender more stingy ---
+                strategicOffer = baseOffer + 20; 
             }
 
             if (strategicOffer !== insurance.defenderOffers[this.playerName]) {
@@ -178,7 +158,7 @@ class BotPlayer {
             }
         }
         
-        return null; // No change needed
+        return null;
     }
 }
 
