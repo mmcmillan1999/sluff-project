@@ -89,13 +89,12 @@
 .player-tokens { color: #b45309; }
 .player-score { color: #444; }
 
-/* --- NEW STYLES FOR THE ERROR TOOLTIP --- */
 .player-error-tooltip {
     position: absolute;
-    bottom: -35px; /* Position it below the player seat */
+    bottom: -35px;
     left: 50%;
     transform: translateX(-50%);
-    background-color: #b91c1c; /* Dark red */
+    background-color: #b91c1c;
     color: white;
     padding: 6px 12px;
     border-radius: 6px;
@@ -111,4 +110,26 @@
     10% { opacity: 1; transform: translate(-50%, 0); }
     90% { opacity: 1; transform: translate(-50%, 0); }
     100% { opacity: 0; transform: translate(-50%, 10px); }
+}
+
+/* --- NEW LOGIC FOR PORTRAIT MODE OPPONENTS --- */
+@media (orientation: portrait) {
+    .opponent-seat {
+        flex-direction: row; /* Arrange items horizontally */
+        width: 45px;         /* Fixed width */
+        height: 150px;       /* Fixed height */
+        padding: 8px 4px;
+        justify-content: space-around;
+    }
+
+    .opponent-seat .player-name-wrapper {
+        writing-mode: vertical-rl; /* This is the key: vertical text */
+        transform: rotate(180deg);   /* Flips it to read top-to-bottom */
+        text-align: center;
+        flex-grow: 1; /* Allow it to take up space */
+    }
+
+    .opponent-seat .player-stats-line {
+        flex-direction: column; /* Stack stats vertically */
+    }
 }

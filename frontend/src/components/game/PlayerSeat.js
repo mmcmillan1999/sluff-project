@@ -51,7 +51,8 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent }) => {
         isBidWinner && 'bid-winner',
         isDefender && 'defender',
         disconnected && 'disconnected',
-        isMyTurn && 'active-turn'
+        isMyTurn && 'active-turn',
+        !isSelf && 'opponent-seat' // Special class for opponents
     ].filter(Boolean).join(' ');
 
     const nameClasses = ['player-name', isSelf && 'is-self'].filter(Boolean).join(' ');
@@ -73,7 +74,10 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent }) => {
             {rolePuckContent && <div className={rolePuckClasses}>{rolePuckContent}</div>}
 
             <div className={seatClasses}>
-                <div className={nameClasses}>{playerName}</div>
+                {/* --- STRUCTURAL CHANGE: Wrap name for targeted rotation --- */}
+                <div className="player-name-wrapper">
+                    <div className={nameClasses}>{playerName}</div>
+                </div>
                 <div className="player-stats-line">
                     <span className="player-tokens">
                         <img src="/sluff_token.png" alt="Tokens" className="token-icon-inline" />
