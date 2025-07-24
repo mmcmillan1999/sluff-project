@@ -384,6 +384,9 @@ class GameEngine {
             }
         });
         this.bidderCardPoints = 0; this.defenderCardPoints = 0;
+        // --- THIS IS THE FIX ---
+        // Initialize the array that was causing the crash in playHandler.js
+        this.allCardsPlayedThisRound = [];
     }
     
     _clearForfeitTimer() {
@@ -421,8 +424,6 @@ class GameEngine {
             const defenders = allPlayerNames.filter(name => name !== this.bidWinnerInfo.playerName);
 
             defenders.forEach(defName => { this.insurance.defenderOffers[defName] = -60 * multiplier; });
-
-            // --- THIS IS THE FIX: The faulty block of code that was calling a non-existent function has been removed ---
         }
     }
     

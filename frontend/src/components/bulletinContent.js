@@ -8,7 +8,7 @@
 export const bulletinContent = [
     {
         type: 'header',
-        text: 'Welcome to Alpha Testing!!!'
+        text: 'Welcome to Alpha Testing!!!!'
     },
     {
         type: 'paragraph',
