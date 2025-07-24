@@ -380,7 +380,6 @@
     text-align: center;
 }
 
-/* --- NEW and REFINED Game Menu Styles --- */
 .game-menu-popup {
     position: absolute;
     bottom: calc(100% + 10px);
@@ -392,10 +391,10 @@
     z-index: 1010;
     box-shadow: 0 -4px 12px rgba(0,0,0,0.5);
     color: white;
-    width: 250px; /* Standardized width */
+    width: 250px; 
     display: flex;
     flex-direction: column;
-    gap: 10px; /* Creates space between elements */
+    gap: 10px;
 }
 
 .game-menu-popup h3 {
@@ -425,7 +424,7 @@
 
 .game-menu-actions {
     display: flex;
-    flex-direction: column; /* Stack buttons vertically */
+    flex-direction: column; 
     gap: 8px;
 }
 
@@ -472,7 +471,6 @@
     border-color: #c82333;
     color: white;
 }
-/* --- END NEW Styles --- */
 
 .hamburger-btn {
     background: none;
@@ -522,6 +520,18 @@ button.card-display:disabled {
 
 @media (orientation: portrait) {
     .table-oval { border-radius: 50px; }
+
+    /* --- THIS IS THE FIX --- */
+    /* Override desktop positioning for opponent seat CONTAINERS in portrait mode */
+    .player-seat-left {
+        left: 15px; /* Use a fixed pixel value to anchor to the edge */
+        transform: translateY(-50%); /* Keep vertical centering */
+    }
+    .player-seat-right {
+        right: 15px; /* Use a fixed pixel value to anchor to the edge */
+        transform: translateY(-50%); /* Keep vertical centering */
+    }
+    /* --- END THE FIX --- */
 
     .player-seat-left .player-seat {
         transform: rotate(90deg);
