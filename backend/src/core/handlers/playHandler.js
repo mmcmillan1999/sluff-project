@@ -48,9 +48,6 @@ function resolveTrick(engine) {
     const winnerInfo = gameLogic.determineTrickWinner(engine.currentTrickCards, engine.leadSuitCurrentTrick, engine.trumpSuit);
     engine.lastCompletedTrick = { cards: [...engine.currentTrickCards], winnerName: winnerInfo.playerName };
     
-    // --- NEW: Add the just-played cards to our round tracker ---
-    engine.allCardsPlayedThisRound.push(...engine.currentTrickCards.map(p => p.card));
-    
     const trickPoints = gameLogic.calculateCardPoints(engine.lastCompletedTrick.cards.map(p => p.card));
     const winnerIsBidder = winnerInfo.playerName === engine.bidWinnerInfo.playerName;
     if (winnerIsBidder) {
@@ -63,7 +60,14 @@ function resolveTrick(engine) {
     engine.trickLeaderId = winnerInfo.userId;
     const winnerName = winnerInfo.playerName;
     if (winnerName && !engine.capturedTricks[winnerName]) { engine.capturedTricks[winnerName] = []; }
-    if (winnerName) { engine.capturedTricks[winnerName].push(engine.currentTrickCards.map(p => p.card)); }
+    if (winnerName) {
+        // --- THIS IS THE FIX: Add winnerName to the trick object ---
+        engine.capturedTricks[winnerName].push({
+            trickNumber: engine.tricksPlayedCount,
+            cards: engine.currentTrickCards.map(p => p.card),
+            winnerName: winnerName 
+        });
+    }
     
     if (engine.tricksPlayedCount === 11) {
         return scoringHandler.calculateRoundScores(engine);

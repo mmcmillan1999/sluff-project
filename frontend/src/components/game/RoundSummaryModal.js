@@ -118,19 +118,20 @@ const RoundSummaryModal = ({
             </div>
         );
 
-        const getTricksByPlayer = (playerName) => allTricks[playerName] || [];
+        // --- THIS IS THE FIX: A much simpler and more robust way to get the tricks ---
+        const bidderTricks = allTricks[bidderName] || [];
+        const defenderTricks = defenderNames.flatMap(name => allTricks[name] || []);
 
         return (
             <div className="trick-breakdown-details">
                 <div className="team-trick-section">
                     <h4>Bidder Total ({bidderName}): {bidderTotal} pts</h4>
-                     {getTricksByPlayer(bidderName).map(trick => <TrickRow key={trick.trickNumber} trick={trick} />)}
+                     {bidderTricks.map(trick => <TrickRow key={trick.trickNumber} trick={trick} />)}
                     {bidderWonWidow && widowRowJsx}
                 </div>
                 <div className="team-trick-section">
                     <h4>Defender Total ({defenderNames.join(', ')}): {defenderTotal} pts</h4>
-                     {/* --- THIS IS THE FIX: Removed the extra .map() call --- */}
-                     {defenderNames.flatMap(name => getTricksByPlayer(name)).map(trick => <TrickRow key={trick.trickNumber} trick={trick} />)}
+                     {defenderTricks.map(trick => <TrickRow key={trick.trickNumber} trick={trick} />)}
                     {!bidderWonWidow && widowRowJsx}
                 </div>
             </div>
