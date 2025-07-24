@@ -39,7 +39,8 @@ const RoundSummaryModal = ({
         bidType,
         drawOutcome,
         payouts,
-        payoutDetails
+        payoutDetails,
+        lastCompletedTrick
     } = summaryData;
     
     const insuranceAgreement = insurance?.executedDetails?.agreement;
@@ -91,50 +92,46 @@ const RoundSummaryModal = ({
     
     const renderTrickDetails = () => {
         if (!allTricks) return null;
-        let trickCounter = 1;
 
         const bidderTotal = finalBidderPoints;
         const defenderTotal = finalDefenderPoints;
 
-        // --- NEW LOGIC: Determine who won the widow to display it correctly ---
-        // This mirrors the backend logic from scoringHandler.js
         const bidderWonWidow = 
             (bidType === 'Frog') || 
-            ((bidType === 'Solo' || bidType === 'Heart Solo') && summaryData.lastCompletedTrick?.winnerName === bidderName);
+            ((bidType === 'Solo' || bidType === 'Heart Solo') && lastCompletedTrick?.winnerName === bidderName);
 
+        // --- MODIFICATION: Use renderCard for the widow ---
         const widowRowJsx = widowPointsValue > 0 ? (
             <div className="trick-detail-row widow-row">
                 <span className="trick-number">Widow:</span>
-                <span className="trick-cards">{widowForReveal.join(', ')}</span>
+                <div className="trick-cards" style={{ display: 'flex', gap: '2px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    {widowForReveal.map((card, i) => renderCard(card, { key: `widow-${i}`, small: true }))}
+                </div>
                 <span className="trick-points">({widowPointsValue} pts)</span>
             </div>
         ) : null;
-        // --- END NEW LOGIC ---
         
+        // --- MODIFICATION: Use renderCard for the tricks ---
+        const TrickRow = ({ trick }) => (
+            <div key={`trick-${trick.trickNumber}`} className="trick-detail-row">
+                <span className="trick-number">Trick {trick.trickNumber}:</span>
+                <div className="trick-cards" style={{ display: 'flex', gap: '2px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    {trick.cards.map((card, i) => renderCard(card, { key: `trickcard-${trick.trickNumber}-${i}`, small: true }))}
+                </div>
+                <span className="trick-points">({calculateCardPoints(trick.cards)} pts)</span>
+            </div>
+        );
+
         return (
             <div className="trick-breakdown-details">
                 <div className="team-trick-section">
                     <h4>Bidder Total ({bidderName}): {bidderTotal} pts</h4>
-                     {Object.entries(allTricks).filter(([pName]) => pName === bidderName).flatMap(([_, tricks]) => tricks).map((trick, i) => (
-                        <div key={`bidder-trick-${i}`} className="trick-detail-row">
-                            <span className="trick-number">Trick {trickCounter++}:</span>
-                            <span className="trick-cards">{trick.join(', ')}</span>
-                            <span className="trick-points">({calculateCardPoints(trick)} pts)</span>
-                        </div>
-                    ))}
-                    {/* --- MODIFICATION: Conditionally render the widow row --- */}
+                     {Object.entries(allTricks).filter(([pName]) => pName === bidderName).flatMap(([_, tricks]) => tricks).map(trick => <TrickRow key={trick.trickNumber} trick={trick} />)}
                     {bidderWonWidow && widowRowJsx}
                 </div>
                 <div className="team-trick-section">
                     <h4>Defender Total ({defenderNames.join(', ')}): {defenderTotal} pts</h4>
-                     {Object.entries(allTricks).filter(([pName]) => pName !== bidderName).flatMap(([_, tricks]) => tricks).map((trick, i) => (
-                        <div key={`defender-trick-${i}`} className="trick-detail-row">
-                            <span className="trick-number">Trick {trickCounter++}:</span>
-                            <span className="trick-cards">{trick.join(', ')}</span>
-                            <span className="trick-points">({calculateCardPoints(trick)} pts)</span>
-                        </div>
-                    ))}
-                    {/* --- MODIFICATION: Conditionally render the widow row --- */}
+                     {Object.entries(allTricks).filter(([pName]) => pName !== bidderName).flatMap(([_, tricks]) => tricks).map(trick => <TrickRow key={trick.trickNumber} trick={trick} />)}
                     {!bidderWonWidow && widowRowJsx}
                 </div>
             </div>
