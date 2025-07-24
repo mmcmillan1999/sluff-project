@@ -28,14 +28,17 @@ function handleFrogUpgrade(engine, userId, bid) {
     return resolveBiddingFinal(engine);
 }
 
-// --- REWRITTEN BID HANDLING LOGIC ---
+// --- NEW, STABLE, AND CORRECT BID HANDLING LOGIC ---
 function handleNormalBid(engine, userId, bid) {
+    // 1. GATHER FACTS & VALIDATE
+    // ===========================
     if (!BID_HIERARCHY.includes(bid) || engine.playersWhoPassedThisRound.includes(userId)) return [];
     
     const currentHighestBidIndex = engine.currentHighestBidDetails ? BID_HIERARCHY.indexOf(engine.currentHighestBidDetails.bid) : -1;
     if (bid !== "Pass" && BID_HIERARCHY.indexOf(bid) <= currentHighestBidIndex) return [];
     
-    // Process the player's bid
+    // 2. APPLY THE CURRENT PLAYER'S ACTION
+    // =====================================
     if (bid !== "Pass") {
         const player = engine.players[userId];
         engine.currentHighestBidDetails = { userId, playerName: player.playerName, bid };
@@ -46,47 +49,45 @@ function handleNormalBid(engine, userId, bid) {
     } else {
         engine.playersWhoPassedThisRound.push(userId);
     }
-    
-    // Determine who is next
-    const turnOrder = engine.playerOrder.turnOrder;
-    const currentBidderIndex = turnOrder.indexOf(userId);
-    let nextBidderId = null;
 
-    for (let i = 1; i < turnOrder.length; i++) {
-        const potentialNextId = turnOrder[(currentBidderIndex + i) % turnOrder.length];
-        if (!engine.playersWhoPassedThisRound.includes(potentialNextId)) {
-            nextBidderId = potentialNextId;
-            break;
-        }
+    // 3. DETERMINE THE NEXT STATE
+    // =============================
+    const turnOrder = engine.playerOrder.turnOrder;
+    const activeBidders = turnOrder.filter(id => !engine.playersWhoPassedThisRound.includes(id));
+
+    // Outcome 1: Bidding is completely over.
+    if (activeBidders.length <= 1) {
+        engine.biddingTurnPlayerId = null;
+        return resolveBiddingFinal(engine);
     }
     
-    // Check for end-of-bidding conditions
-    const activeBidders = turnOrder.filter(id => !engine.playersWhoPassedThisRound.includes(id));
-    
-    // Condition 1: Solo was bid, and the only remaining active bidder is the original Frog bidder.
+    // Outcome 2: A Solo was just bid, and the Frog bidder is the ONLY one left to act.
     const soloIsHighest = engine.currentHighestBidDetails?.bid === "Solo";
-    const frogBidderIsLast = activeBidders.length === 1 && activeBidders[0] === engine.originalFrogBidderId;
-
-    if (soloIsHighest && frogBidderIsLast) {
+    const frogBidderIsOnlyRemainingPlayer = activeBidders.length === 1 && activeBidders[0] === engine.originalFrogBidderId;
+    if (soloIsHighest && frogBidderIsOnlyRemainingPlayer) {
         engine.state = "Awaiting Frog Upgrade Decision";
         engine.biddingTurnPlayerId = engine.originalFrogBidderId;
         return [{ type: 'BROADCAST_STATE' }];
     }
 
-    // Condition 2: Bidding is over naturally (everyone else has passed or only one bidder left).
-    if (activeBidders.length <= 1) {
-        engine.biddingTurnPlayerId = null;
-        return resolveBiddingFinal(engine);
+    // Outcome 3: Bidding continues to the next player in line.
+    const currentBidderIndex = turnOrder.indexOf(userId);
+    for (let i = 1; i <= turnOrder.length; i++) {
+        const nextBidderId = turnOrder[(currentBidderIndex + i) % turnOrder.length];
+        if (!engine.playersWhoPassedThisRound.includes(nextBidderId)) {
+            engine.biddingTurnPlayerId = nextBidderId;
+            return [{ type: 'BROADCAST_STATE' }];
+        }
     }
 
-    // Condition 3: Continue to the next player.
-    engine.biddingTurnPlayerId = nextBidderId;
-    return [{ type: 'BROADCAST_STATE' }];
+    // Fallback: If something unexpected happens, end the bidding safely.
+    engine.biddingTurnPlayerId = null;
+    return resolveBiddingFinal(engine);
 }
 
 
 function resolveBiddingFinal(engine) {
-    engine.originalFrogBidderId = null; // Clear the frog bidder state for the next round
+    engine.originalFrogBidderId = null; 
     
     if (!engine.currentHighestBidDetails) {
         engine.state = "AllPassWidowReveal";
