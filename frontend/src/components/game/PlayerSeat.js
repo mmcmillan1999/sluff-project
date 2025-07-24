@@ -10,9 +10,8 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent }) => {
     const {
         players,
         scores,
-        dealer,
+        // --- FIX: Removed unused 'dealer' and 'trumpSuit' ---
         bidWinnerInfo,
-        trumpSuit,
         playerOrderActive,
         trickTurnPlayerName,
         forfeiture
@@ -23,14 +22,13 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent }) => {
     if (!playerEntry) {
         return null;
     }
-
-    const { userId, disconnected } = playerEntry;
+    
+    // --- FIX: Removed unused 'userId' ---
+    const { disconnected } = playerEntry;
     const isBidWinner = bidWinnerInfo?.playerName === playerName;
     const isDefender = bidWinnerInfo && !isBidWinner && playerOrderActive.includes(playerName);
     const isTimerRunningForThisPlayer = forfeiture?.targetPlayerName === playerName;
     const isMyTurn = trickTurnPlayerName === playerName;
-
-    // --- FIX: Removed unused variables 'isDealer' and 'rolePuckClasses' ---
 
     const seatClasses = [
         'player-seat',
