@@ -81,10 +81,8 @@ const TableLayout = ({
     };
     
     const renderTrickTallyPiles = () => {
-        const { theme, state, capturedTricks, bidWinnerInfo, playerOrderActive, bidderCardPoints, defenderCardPoints } = currentTableState;
+        const { capturedTricks, bidWinnerInfo, playerOrderActive } = currentTableState;
         if (!bidWinnerInfo) return null;
-
-        const isLearnerTable = theme === 'miss-pauls-academy';
         
         const bidderName = bidWinnerInfo.playerName;
         const bidderTricksCount = capturedTricks[bidderName]?.length || 0;
@@ -95,7 +93,7 @@ const TableLayout = ({
             return acc;
         }, 0);
 
-        const TrickPile = ({ count, label, children }) => (
+        const TrickPile = ({ count, label }) => (
             <div className="trick-pile">
                 <div className="trick-pile-cards">
                     {count === 0 ? (
@@ -109,33 +107,43 @@ const TableLayout = ({
                     )}
                 </div>
                 <span className="trick-pile-label">{label}: {count}</span>
-                {children}
             </div>
         );
 
         return (
             <>
                 <div className="trick-pile-container defender-pile">
-                    <TrickPile count={defenderTricksCount} label="Defenders">
-                        {isLearnerTable && state === 'Playing Phase' &&
-                            <ScoreProgressBar 
-                                currentPoints={defenderCardPoints} 
-                                opponentPoints={bidderCardPoints}
-                                barColor="linear-gradient(to right, #3b82f6, #60a5fa)"
-                            />
-                        }
-                    </TrickPile>
+                    <TrickPile count={defenderTricksCount} label="Defenders" />
                 </div>
                 <div className="trick-pile-container bidder-pile">
-                    <TrickPile count={bidderTricksCount} label="Bidder">
-                        {isLearnerTable && state === 'Playing Phase' &&
-                            <ScoreProgressBar 
-                                currentPoints={bidderCardPoints} 
-                                opponentPoints={defenderCardPoints}
-                                barColor="linear-gradient(to right, #f59e0b, #facc15)"
-                            />
-                        }
-                    </TrickPile>
+                    <TrickPile count={bidderTricksCount} label="Bidder" />
+                </div>
+            </>
+        );
+    };
+
+    // --- NEW: Standalone function to render only the progress bars ---
+    const renderProgressBars = () => {
+        const { theme, state, bidWinnerInfo, bidderCardPoints, defenderCardPoints } = currentTableState;
+        if (!bidWinnerInfo || theme !== 'miss-pauls-academy' || state !== 'Playing Phase') {
+            return null;
+        }
+
+        return (
+            <>
+                <div className="progress-bar-container defender-progress-container">
+                    <ScoreProgressBar 
+                        currentPoints={defenderCardPoints} 
+                        opponentPoints={bidderCardPoints}
+                        barColor="linear-gradient(to right, #3b82f6, #60a5fa)"
+                    />
+                </div>
+                <div className="progress-bar-container bidder-progress-container">
+                    <ScoreProgressBar 
+                        currentPoints={bidderCardPoints} 
+                        opponentPoints={defenderCardPoints}
+                        barColor="linear-gradient(to right, #f59e0b, #facc15)"
+                    />
                 </div>
             </>
         );
@@ -230,7 +238,6 @@ const TableLayout = ({
                     <PlayerSeat playerName={seatAssignments.self} currentTableState={currentTableState} isSelf={true} emitEvent={emitEvent} />
                 </div>
 
-                {/* --- FIX: Corrected typo from renderPlayedcardsOnTable to renderPlayedCardsOnTable --- */}
                 {renderPlayedCardsOnTable()}
                 
                 <div style={{ position: 'absolute', top: '15%', left: '50%', transform: 'translateX(-50%)', zIndex: 10, width: '80%', textAlign: 'center' }}>
@@ -245,6 +252,8 @@ const TableLayout = ({
                     />
                 </div>
             </div>
+            {/* --- NEW: Render progress bars outside the oval --- */}
+            {renderProgressBars()}
         </main>
     );
 };

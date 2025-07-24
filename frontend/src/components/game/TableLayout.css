@@ -30,6 +30,7 @@
     align-items: center;
     background: radial-gradient(circle, #424242, #212121);
     padding: 5px;
+    overflow: hidden; /* Prevent scrollbars from the oval */
 }
 
 .table-oval {
@@ -119,11 +120,19 @@
     font-size: 1.1em;
 }
 
+/* --- NEW: Standalone Progress Bar Containers --- */
+.progress-bar-container {
+    position: absolute; /* Relative to .game-table */
+    bottom: 18vh;
+    z-index: 15;
+}
+.defender-progress-container {
+    left: 15%;
+}
+.bidder-progress-container {
+    right: 15%;
+}
 .score-progress-container {
-    position: absolute;
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
     width: 240px;
     background-color: rgba(0, 0, 0, 0.6);
     padding: 5px 8px;
@@ -133,6 +142,8 @@
     font-family: 'Oswald', sans-serif;
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
+/* --- END NEW --- */
+
 
 .score-progress-label {
     font-size: 0.9em;
@@ -350,14 +361,23 @@ button.card-display:disabled {
         bottom: 25%;
     }
     
-    /* --- THE CORRECTED AND SIMPLIFIED FIX --- */
     .trick-pile-container {
-        /* This positions the entire pile (cards + bar) */
-        bottom: 20vh; /* Position it 20% from the bottom of the screen */
+        bottom: 20vh;
     }
 
-    .score-progress-container {
-        /* This positions the bar relative to its parent pile */
-        width: 140px; /* Narrow the progress bar */
+    /* --- NEW CSS FOR DECOUPLED PROGRESS BARS --- */
+    .progress-bar-container {
+        position: absolute;
+        bottom: 18vh;
+        z-index: 15;
+    }
+    .defender-progress-container {
+        left: 10px;
+    }
+    .bidder-progress-container {
+        right: 10px;
+    }
+    .progress-bar-container .score-progress-container {
+        width: 130px;
     }
 }
