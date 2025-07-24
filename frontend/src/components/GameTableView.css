@@ -53,16 +53,14 @@
     background-color: #004d00;
     border-radius: 150px;
     border: 10px solid #3e2723;
-    /* --- CRITICAL CHANGE: Make this a positioning context --- */
     position: relative;
     box-shadow: inset 0 0 25px rgba(0,0,0,0.5);
 }
 
-/* --- MODIFIED: Position seats relative to the .table-oval --- */
 .player-seat-left {
     position: absolute;
     top: 50%;
-    left: 20px; /* Anchor to the left edge of the oval */
+    left: 20px;
     transform: translateY(-50%);
     z-index: 10;
 }
@@ -70,12 +68,10 @@
 .player-seat-right {
     position: absolute;
     top: 50%;
-    right: 20px; /* Anchor to the right edge of the oval */
+    right: 20px;
     transform: translateY(-50%);
     z-index: 10;
 }
-/* --- END MODIFICATION --- */
-
 
 .player-seat-bottom {
     position: absolute;
@@ -525,13 +521,45 @@ button.card-display:disabled {
 @media (orientation: portrait) {
     .table-oval { border-radius: 50px; }
 
-    /* Portrait mode keeps the rotation, but the containers are already positioned correctly now */
+    /* --- THE DEFINITIVE FIX --- */
+    .player-seat-left, .player-seat-right {
+        /* Reset transform and set fixed position */
+        transform: none;
+        top: 25%; /* Position them higher on the table */
+        width: 160px; /* Give them a fixed width */
+    }
+
+    .player-seat-left {
+        left: -60px; /* Position part of the seat "off the side" of the oval */
+    }
+    .player-seat-right {
+        right: -60px; /* Position part of the seat "off the side" of the oval */
+    }
+
+    .player-seat-left .player-seat, .player-seat-right .player-seat {
+        transform-origin: center; /* The key to the whole fix: rotate around the center */
+    }
+    
     .player-seat-left .player-seat {
         transform: rotate(90deg);
     }
     .player-seat-right .player-seat {
         transform: rotate(-90deg);
     }
+    
+    .player-seat-left .puck, .player-seat-right .puck {
+        /* Reposition pucks relative to their rotated parents */
+        top: 50%;
+        transform: translateY(-50%);
+    }
+
+    .player-seat-left .dealer-puck { right: -14px; }
+    .player-seat-left .role-puck { left: -14px; }
+
+    .player-seat-right .dealer-puck { left: -14px; /* Note the change from right to left */ }
+    .player-seat-right .role-puck { right: -14px; /* Note the change from left to right */ }
+    /* --- END THE FIX --- */
+
 
     .trick-pile-container { bottom: 15%; }
 
