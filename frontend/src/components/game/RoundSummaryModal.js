@@ -118,7 +118,6 @@ const RoundSummaryModal = ({
             </div>
         );
 
-        // --- THIS IS THE FIX: The unused variables from the previous attempt have been removed ---
         const getTricksByPlayer = (playerName) => allTricks[playerName] || [];
 
         return (
@@ -130,6 +129,7 @@ const RoundSummaryModal = ({
                 </div>
                 <div className="team-trick-section">
                     <h4>Defender Total ({defenderNames.join(', ')}): {defenderTotal} pts</h4>
+                     {/* --- THIS IS THE FIX: Removed the extra .map() call --- */}
                      {defenderNames.flatMap(name => getTricksByPlayer(name)).map(trick => <TrickRow key={trick.trickNumber} trick={trick} />)}
                     {!bidderWonWidow && widowRowJsx}
                 </div>
