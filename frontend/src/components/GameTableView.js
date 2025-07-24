@@ -13,7 +13,8 @@ import IosPwaPrompt from './game/IosPwaPrompt';
 import DrawVoteModal from './game/DrawVoteModal';
 import LobbyChat from './LobbyChat';
 import { getLobbyChatHistory } from '../services/api';
-import { SUITS_MAP, SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS } from '../constants';
+// --- FIX: Removed unused SUITS_MAP import ---
+import { SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS } from '../constants';
 
 const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLogout, emitEvent, playSound, socket, handleOpenFeedbackModal }) => {
     const [seatAssignments, setSeatAssignments] = useState({ self: null, opponentLeft: null, opponentRight: null });
