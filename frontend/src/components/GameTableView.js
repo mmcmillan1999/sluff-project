@@ -223,32 +223,27 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
             <h3>{currentTableState.tableName}</h3>
             <div className="game-menu-info">
                 <p><strong>State:</strong> {currentTableState?.state || "N/A"}</p>
-                <p><strong>Mode:</strong> {currentTableState?.playerMode ? `${currentTableState.playerMode}-Player` : "N/A"}</p>
-                <p><strong>Trump:</strong> {currentTableState?.trumpSuit ? SUITS_MAP[currentTableState.trumpSuit] : "N/A"}</p>
                 <p><strong>Bid:</strong> {currentTableState?.bidWinnerInfo?.bid || "N/A"} {currentTableState?.bidWinnerInfo?.playerName && ` by ${currentTableState.bidWinnerInfo.playerName}`}</p>
             </div>
             <div className="game-menu-actions">
-                <button 
-                    onClick={() => { emitEvent("requestDraw"); setShowGameMenu(false); }}
-                    className="game-button"
-                    disabled={currentTableState.state !== 'Playing Phase'}
-                    style={{backgroundColor: '#1d4ed8'}}
-                >
-                    Request Draw
-                </button>
-                {/* --- NEW FEEDBACK BUTTON --- */}
+                <button onClick={handleLeaveTable} className="game-menu-button secondary">Back to Lobby</button>
                 <button 
                     onClick={() => {
                         handleOpenFeedbackModal(currentTableState);
                         setShowGameMenu(false);
                     }}
-                    className="game-button"
-                    style={{backgroundColor: '#ffc107', color: '#000'}}
+                    className="game-menu-button feedback"
                 >
                     Submit Feedback
                 </button>
-                <button onClick={handleForfeit} className="game-button" style={{backgroundColor: '#dc3545'}}>Forfeit Game</button>
-                <button onClick={handleLeaveTable} className="game-button">Lobby</button>
+                <button 
+                    onClick={() => { emitEvent("requestDraw"); setShowGameMenu(false); }}
+                    className="game-menu-button primary"
+                    disabled={currentTableState.state !== 'Playing Phase'}
+                >
+                    Request Draw
+                </button>
+                <button onClick={handleForfeit} className="game-menu-button danger">Forfeit Game</button>
             </div>
         </div>
     );
