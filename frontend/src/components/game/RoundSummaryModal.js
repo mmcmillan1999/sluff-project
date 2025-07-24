@@ -100,7 +100,6 @@ const RoundSummaryModal = ({
             (bidType === 'Frog') || 
             ((bidType === 'Solo' || bidType === 'Heart Solo') && lastCompletedTrick?.winnerName === bidderName);
 
-        // --- MODIFICATION: Use renderCard for the widow ---
         const widowRowJsx = widowPointsValue > 0 ? (
             <div className="trick-detail-row widow-row">
                 <span className="trick-number">Widow:</span>
@@ -111,7 +110,6 @@ const RoundSummaryModal = ({
             </div>
         ) : null;
         
-        // --- MODIFICATION: Use renderCard for the tricks ---
         const TrickRow = ({ trick }) => (
             <div key={`trick-${trick.trickNumber}`} className="trick-detail-row">
                 <span className="trick-number">Trick {trick.trickNumber}:</span>
@@ -168,17 +166,24 @@ const RoundSummaryModal = ({
                 ) : (
                     pointsPanelContent
                 )}
-                {insuranceAgreement && (
+                
+                {/* --- MODIFICATION: Display final insurance state regardless of deal --- */}
+                {insurance && insurance.bidMultiplier && (
                     <div className="insurance-deal-recap">
-                        <h4 className="recap-title">Insurance Deal Recap</h4>
-                        <p><strong>{insuranceAgreement.bidderPlayerName}</strong> (Bidder) asked for <strong>{insuranceAgreement.bidderRequirement}</strong> points.</p>
+                        <h4 className="recap-title">
+                            {summaryData.insuranceDealWasMade ? "Insurance Deal Recap" : "Final Insurance State (No Deal)"}
+                        </h4>
+                        <p>
+                            <strong>{insurance.bidderPlayerName}</strong> (Bidder) required <strong>{insurance.bidderRequirement}</strong> points.
+                        </p>
                         <ul>
-                            {Object.entries(insuranceAgreement.defenderOffers).map(([name, offer]) => (
+                            {Object.entries(insurance.defenderOffers).map(([name, offer]) => (
                                 <li key={name}><strong>{name}</strong> offered <strong>{offer}</strong> points.</li>
                             ))}
                         </ul>
                     </div>
                 )}
+                
                 {insuranceHindsight && (
                     <div className="insurance-hindsight">
                         <h4 className="hindsight-title">Insurance Hindsight</h4>
@@ -189,6 +194,7 @@ const RoundSummaryModal = ({
                         ))}
                     </div>
                 )}
+
                 <div className="summary-scores-container">
                     <h4>Updated Scores</h4>
                     <ul className="summary-score-list">

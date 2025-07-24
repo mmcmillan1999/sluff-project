@@ -92,9 +92,9 @@ class BotPlayer {
         return cardToPlay;
     }
 
-    // --- NEW METHOD FOR INSURANCE LOGIC ---
+    // --- UPDATED INSURANCE LOGIC ---
     makeInsuranceDecision() {
-        const { insurance, bidWinnerInfo, hands, bidderCardPoints } = this.engine;
+        const { insurance, bidWinnerInfo, hands, bidderCardPoints, defenderCardPoints } = this.engine;
         const bidMultiplier = BID_MULTIPLIERS[bidWinnerInfo.bid] || 1;
         const isBidder = this.playerName === bidWinnerInfo.playerName;
         const numberOfOpponents = this.engine.playerOrder.count - 1;
@@ -107,24 +107,41 @@ class BotPlayer {
             if (maxPossibleScore < 60) {
                 const guaranteedLoss = 60 - maxPossibleScore;
                 const pointExchange = guaranteedLoss * bidMultiplier * numberOfOpponents;
-                // Calculate the strategic ask: slightly better than the worst-case loss
-                const strategicAsk = Math.round((-pointExchange * 1.05) / 5) * 5; // Add 5% buffer and round to nearest 5
+                const strategicAsk = Math.round((-pointExchange * 1.05) / 5) * 5; 
                 
-                // Only update if the new ask is better (less negative) than the current one
                 if (strategicAsk > insurance.bidderRequirement) {
                     return { settingType: 'bidderRequirement', value: strategicAsk };
                 }
             }
-            // If confident or current ask is better, do nothing.
             return null;
         } else { // Is a Defender
-            // Simple baseline logic: offer a standard amount if they haven't made a deal yet.
-            const currentOffer = insurance.defenderOffers[this.playerName];
-            const standardOffer = -30 * bidMultiplier;
-            
-            // Only make an offer if the current one is the default (worse) value
-            if (currentOffer < standardOffer) {
-                 return { settingType: 'defenderOffer', value: standardOffer };
+            const bidderHand = hands[bidWinnerInfo.playerName] || [];
+            const bidderPointsInHand = gameLogic.calculateCardPoints(bidderHand);
+            const bidderMaxScore = bidderCardPoints + bidderPointsInHand;
+
+            // If bidder is likely to fail
+            if (bidderMaxScore < 60) {
+                const shortfall = 60 - bidderMaxScore;
+                const totalWinningsForDefense = shortfall * bidMultiplier * numberOfOpponents;
+                const myShareOfWinnings = totalWinningsForDefense / numberOfOpponents;
+                
+                // Offer to give up half of the expected winnings for a sure thing
+                const strategicOffer = -Math.round((myShareOfWinnings / 2) / 5) * 5; // Round to nearest 5
+
+                if (strategicOffer < insurance.defenderOffers[this.playerName]) {
+                    return { settingType: 'defenderOffer', value: strategicOffer };
+                }
+            } else { // If bidder is likely to succeed
+                const surplus = bidderMaxScore - 60;
+                const totalLossesForDefense = surplus * bidMultiplier * numberOfOpponents;
+                const myShareOfLosses = totalLossesForDefense / numberOfOpponents;
+
+                // Offer to pay a premium (e.g., 5%) on top of expected losses to cap them
+                const strategicOffer = Math.round((myShareOfLosses * 1.05) / 5) * 5;
+
+                 if (strategicOffer > insurance.defenderOffers[this.playerName]) {
+                    return { settingType: 'defenderOffer', value: strategicOffer };
+                }
             }
             return null;
         }
