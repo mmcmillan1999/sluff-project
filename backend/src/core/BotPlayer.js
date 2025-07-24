@@ -3,6 +3,8 @@
 const gameLogic = require('./logic');
 const { RANKS_ORDER, BID_HIERARCHY, BID_MULTIPLIERS, CARD_POINT_VALUES } = require('./constants');
 const { getLegalMoves } = require('./legalMoves');
+// --- NEW: Import the insurance strategy ---
+const { calculateInsuranceMove } = require('./bot-strategies/InsuranceStrategy');
 
 const getRankValue = (card) => RANKS_ORDER.indexOf(gameLogic.getRank(card));
 
@@ -32,37 +34,27 @@ class BotPlayer {
         let cardToPlay;
 
         if (isLeading) {
-            // --- REWRITTEN AND CORRECTED LEAD LOGIC ---
             const allPastTricks = Object.values(this.engine.capturedTricks).flat();
             const allPlayedCards = allPastTricks.flatMap(trick => trick.cards);
-
-            // Create a function to check if an Ace is gone
             const isAceGone = (suit) => allPlayedCards.includes('A' + suit);
 
-            // 1. Best move: Play an Ace
             const aces = legalPlays.filter(card => gameLogic.getRank(card) === 'A');
             if (aces.length > 0) {
                 cardToPlay = aces[0];
             } else {
-                // 2. Good move: Play a "safe" 10 (Ace is gone)
                 const safeTens = legalPlays.filter(card => gameLogic.getRank(card) === '10' && isAceGone(gameLogic.getSuit(card)));
                 if (safeTens.length > 0) {
                     cardToPlay = safeTens[0];
                 } else {
-                    // 3. Safe move: Play junk (non-point cards)
                     const junkCards = legalPlays.filter(card => CARD_POINT_VALUES[gameLogic.getRank(card)] === 0);
                     if (junkCards.length > 0) {
-                        // Play the lowest junk card
                         cardToPlay = junkCards.sort((a, b) => getRankValue(a) - getRankValue(b))[0];
                     } else {
-                        // 4. Last resort: Lead the lowest-value point card (minimizing risk)
-                        // This avoids leading with a naked 10 if a King, Queen, or Jack is available.
                         cardToPlay = legalPlays.sort((a, b) => CARD_POINT_VALUES[gameLogic.getRank(a)] - CARD_POINT_VALUES[gameLogic.getRank(b)])[0];
                     }
                 }
             }
         } else {
-            // --- UNCHANGED FOLLOW LOGIC ---
             const winningPlays = legalPlays.filter(myCard => {
                 const potentialTrick = [...this.engine.currentTrickCards, { card: myCard, userId: this.userId }];
                 const winner = gameLogic.determineTrickWinner(potentialTrick, this.engine.leadSuitCurrentTrick, this.engine.trumpSuit);
@@ -130,53 +122,10 @@ class BotPlayer {
         return sortedHand.slice(0, 3);
     }
 
+    // --- REFACTORED: This method now calls the external strategy ---
     makeInsuranceDecision() {
-        const { insurance, bidWinnerInfo, hands, bidderCardPoints, tricksPlayedCount } = this.engine;
-        const bidMultiplier = BID_MULTIPLIERS[bidWinnerInfo.bid] || 1;
-        const isBidder = this.playerName === bidWinnerInfo.playerName;
-        const numberOfOpponents = this.engine.playerOrder.count - 1;
-
-        const certaintyFactor = tricksPlayedCount / 10.0;
-        const projectionFactor = 1.0 - certaintyFactor;
-
-        const bidderHand = hands[bidWinnerInfo.playerName] || [];
-        const bidderPointsInHand = gameLogic.calculateCardPoints(bidderHand);
-        const bidderMaxScore = bidderCardPoints + bidderPointsInHand;
-
-        const GOAL = 60;
-        const projectedFinalScore = (GOAL * projectionFactor) + (bidderMaxScore * certaintyFactor);
-
-        if (isBidder) {
-            const projectedSurplus = projectedFinalScore - GOAL;
-            const projectedPointExchange = projectedSurplus * bidMultiplier * numberOfOpponents;
-            const strategicAsk = Math.round(projectedPointExchange / 5) * 5;
-
-            if (strategicAsk !== insurance.bidderRequirement) {
-                return { settingType: 'bidderRequirement', value: strategicAsk };
-            }
-        } else { // Is a Defender
-            const projectedSurplus = projectedFinalScore - GOAL;
-            const projectedDefenderLoss = projectedSurplus * bidMultiplier;
-            
-            // --- THIS IS THE FIX: Make defender more stingy ---
-            const stingyFactor = 15 * bidMultiplier;
-
-            let strategicOffer;
-            if (projectedDefenderLoss > 0) {
-                const baseOffer = Math.round((projectedDefenderLoss * 1.05) / 5) * 5;
-                strategicOffer = baseOffer + stingyFactor; 
-            } else {
-                const projectedDefenderWinnings = -projectedDefenderLoss;
-                const baseOffer = -Math.round((projectedDefenderWinnings / 2) / 5) * 5;
-                strategicOffer = baseOffer + stingyFactor; 
-            }
-
-            if (strategicOffer !== insurance.defenderOffers[this.playerName]) {
-                return { settingType: 'defenderOffer', value: strategicOffer };
-            }
-        }
-        
-        return null;
+        // 'this.engine' is the full game state, 'this' is the bot instance
+        return calculateInsuranceMove(this.engine, this);
     }
 }
 
