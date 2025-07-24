@@ -7,7 +7,7 @@ import LobbyTableCard from './LobbyTableCard';
 import LobbyChat from './LobbyChat';
 import { getLobbyChatHistory } from '../services/api';
 
-// --- FIX: Corrected typo from handleShowFeedack to handleShowFeedback ---
+// --- FINAL FIX: Ensured ALL prop names in the signature are correct ---
 const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowAdmin, handleShowFeedback, errorMessage, emitEvent, socket, handleOpenFeedbackModal }) => {
     
     const [activeTab, setActiveTab] = useState('');
