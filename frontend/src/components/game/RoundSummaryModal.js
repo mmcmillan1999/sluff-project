@@ -108,7 +108,6 @@ const RoundSummaryModal = ({
             </div>
         ) : null;
         
-        // --- THIS IS THE FIX for the white screen crash ---
         const TrickRow = ({ trick }) => (
             <div key={`trick-${trick.trickNumber}`} className="trick-detail-row">
                 <span className="trick-number">Trick {trick.trickNumber}:</span>
@@ -119,13 +118,7 @@ const RoundSummaryModal = ({
             </div>
         );
 
-        const bidderTricks = Object.values(allTricks).flat().filter(trick => trick.winnerName === bidderName);
-        const defenderTricks = Object.values(allTricks).flat().filter(trick => trick.winnerName !== bidderName);
-        
-        const allPlayerTricks = Object.values(allTricks).flat();
-        const bidderTricksForDisplay = allPlayerTricks.filter(trick => Object.values(allTricks[bidderName] || []).some(t => t.trickNumber === trick.trickNumber));
-        const defenderTricksForDisplay = allPlayerTricks.filter(trick => !bidderTricksForDisplay.includes(trick));
-
+        // --- THIS IS THE FIX: The unused variables from the previous attempt have been removed ---
         const getTricksByPlayer = (playerName) => allTricks[playerName] || [];
 
         return (
