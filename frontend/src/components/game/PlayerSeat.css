@@ -108,43 +108,25 @@
     100% { opacity: 0; transform: translate(-50%, 10px); }
 }
 
-/* --- FINAL, SIMPLIFIED LOGIC FOR PORTRAIT MODE OPPONENTS --- */
+/* --- NEW: Portrait styles for opponent seats --- */
 @media (orientation: portrait) {
     .opponent-seat {
-        /* Remove fixed dimensions and padding */
-        width: auto;
-        height: auto;
-        padding: 0;
-        /* Make the background and border invisible */
-        background-color: transparent;
-        border: none;
-        box-shadow: none;
-        /* Position the container itself; its only child will be the name */
-        position: absolute;
-        top: 50%;
+        flex-direction: column;
+        width: 45px;
+        height: 170px; /* Taller and thinner */
+        padding: 8px 4px;
+        justify-content: center;
     }
 
     .opponent-seat .player-name-wrapper {
-        /* This is the key: vertical text writing mode */
-        writing-mode: vertical-rl;
-        padding: 8px 4px; /* Give the text some padding */
-        background-color: rgba(255, 255, 255, 0.9);
-        border: 2px solid #ccc;
-        border-radius: 8px;
+        writing-mode: vertical-rl; /* Vertical text */
+        transform: rotate(180deg);   /* Read top-to-bottom */
+        text-align: center;
     }
 
-    /* Target left and right seats specifically */
-    .player-seat-left .opponent-seat {
-        left: 0;
-        transform: translateY(-50%) rotate(180deg); /* Rotate the whole container to flip text direction */
-    }
-
-    .player-seat-right .opponent-seat {
-        right: 0;
-        transform: translateY(-50%);
-    }
-
-    .player-seat-right .opponent-seat .player-name-wrapper {
-        transform: rotate(180deg); /* Counter-rotate the text inside the right seat */
+    .opponent-seat .player-stats-line {
+        writing-mode: vertical-rl; /* Vertical text */
+        transform: rotate(180deg);   /* Read top-to-bottom */
+        margin-top: 8px; /* Space between name and stats */
     }
 }
