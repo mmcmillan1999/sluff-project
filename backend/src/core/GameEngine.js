@@ -123,13 +123,9 @@ class GameEngine {
         const playerInfo = this.players[userId];
         const safeLeaveStates = ["Waiting for Players", "Ready to Start"];
         
-        // --- THIS IS FIX #1: REJOIN LOGIC ---
-        // If a game has started (has an ID), leaving should ALWAYS just disconnect the player,
-        // allowing them to rejoin, even if the state is "Game Over".
         if (this.gameId) {
             this.disconnectPlayer(userId);
         } 
-        // If the game hasn't started yet, it's safe to remove them completely.
         else if (safeLeaveStates.includes(this.state) || playerInfo.isSpectator) {
             delete this.players[userId];
             if (playerInfo.isBot) delete this.bots[userId];
@@ -260,16 +256,10 @@ class GameEngine {
 
     reset() {
         console.log(`[${this.tableId}] Game is being reset by 'Play Again' button.`);
-
-        // --- NEW, SAFER RESET LOGIC ---
-
-        // 1. Reset game-specific state, but keep player list intact for now.
         this.gameStarted = false;
         this.gameId = null;
         this.playerMode = null;
-        this._initializeNewRoundState(); // This clears all round-related data.
-
-        // 2. Remove any players who disconnected during the game.
+        this._initializeNewRoundState(); 
         for (const userId in this.players) {
             if (this.players[userId].disconnected) {
                 console.log(`[${this.tableId}] Removing disconnected player ${this.players[userId].playerName} during reset.`);
@@ -280,24 +270,16 @@ class GameEngine {
                 delete this.players[userId];
             }
         }
-        
-        // 3. Reset scores and status for all remaining players.
         this.scores = {};
         for (const userId in this.players) {
             const player = this.players[userId];
-            player.isSpectator = false; // Everyone is an active player now.
+            player.isSpectator = false;
             this.scores[player.playerName] = 120;
         }
-
-        // 4. Update the final table state.
         this.playerMode = this.playerOrder.count;
         this.state = this.playerMode >= 3 ? "Ready to Start" : "Waiting for Players";
-
-        // Reset dealer to null. A new dealer will be picked in startGame().
         this.dealer = null;
-
         console.log(`[${this.tableId}] Reset complete. State is now '${this.state}' with ${this.playerMode} players.`);
-
         return this._effects([{ type: 'BROADCAST_STATE' }, { type: 'UPDATE_LOBBY' }]);
     }
     
@@ -354,9 +336,7 @@ class GameEngine {
         if (!player || !this.drawRequest.isActive || !['wash', 'split', 'no'].includes(vote) || this.drawRequest.votes[player.playerName] !== null) {
             return this._effects();
         }
-
         this.drawRequest.votes[player.playerName] = vote;
-        
         if (vote === 'no') {
             this.drawRequest.isActive = false;
             return this._effects([
@@ -364,15 +344,12 @@ class GameEngine {
                 { type: 'BROADCAST_STATE' }
             ]);
         }
-
         const allVotes = Object.values(this.drawRequest.votes);
         if (allVotes.some(v => v === null)) {
             return this._effects([{ type: 'BROADCAST_STATE' }]);
         }
-        
         this.drawRequest.isActive = false;
         const outcome = allVotes.includes('split') ? 'split' : 'wash';
-
         return this._effects([{
             type: 'HANDLE_DRAW_OUTCOME',
             payload: {
@@ -400,6 +377,8 @@ class GameEngine {
         this.trickTurnPlayerId = null; this.trickLeaderId = null; this.currentTrickCards = []; this.leadSuitCurrentTrick = null; this.lastCompletedTrick = null; this.tricksPlayedCount = 0; this.capturedTricks = {}; this.roundSummary = null; 
         this.insurance = { isActive: false, bidMultiplier: null, bidderPlayerName: null, bidderRequirement: 0, defenderOffers: {}, dealExecuted: false, executedDetails: null };
         this.forfeiture = { targetPlayerName: null, timeLeft: null }; this.drawRequest = { isActive: false, initiator: null, votes: {}, timer: null };
+        // --- NEW: Track all cards played in a round ---
+        this.allCardsPlayedThisRound = [];
         Object.values(this.players).forEach(p => {
             if (p.playerName && this.scores[p.playerName] !== undefined) {
                 this.capturedTricks[p.playerName] = [];
@@ -437,14 +416,21 @@ class GameEngine {
             this.insurance.bidderPlayerName = this.bidWinnerInfo.playerName;
             this.insurance.bidderRequirement = 120 * multiplier;
             
-            // --- THIS IS FIX #2: INSURANCE COUNTER ---
-            // This is a more robust way to get the list of defender names.
             const allPlayerNames = Object.values(this.players)
                 .filter(p => !p.isSpectator)
                 .map(p => p.playerName);
             const defenders = allPlayerNames.filter(name => name !== this.bidWinnerInfo.playerName);
 
             defenders.forEach(defName => { this.insurance.defenderOffers[defName] = -60 * multiplier; });
+
+            // --- NEW: Trigger bots to set their initial insurance values ---
+            for (const botId in this.bots) {
+                const bot = this.bots[botId];
+                const decision = bot.decideInitialInsurance();
+                if (decision) {
+                    this.updateInsuranceSetting(bot.userId, decision.settingType, decision.value);
+                }
+            }
         }
     }
     
@@ -472,6 +458,8 @@ class GameEngine {
             playerOrderActive: activeTurnOrder.map(id => this.players[id]?.playerName).filter(Boolean),
             dealer: this.dealer, hands: this.hands, widow: this.widow, originalDealtWidow: this.originalDealtWidow, scores: this.scores, currentHighestBidDetails: this.currentHighestBidDetails, bidWinnerInfo: this.bidWinnerInfo, gameStarted: this.gameStarted, trumpSuit: this.trumpSuit, currentTrickCards: this.currentTrickCards, tricksPlayedCount: this.tricksPlayedCount, leadSuitCurrentTrick: this.leadSuitCurrentTrick, trumpBroken: this.trumpBroken, capturedTricks: this.capturedTricks, roundSummary: this.roundSummary, lastCompletedTrick: this.lastCompletedTrick, playersWhoPassedThisRound: this.playersWhoPassedThisRound.map(id => this.players[id]?.playerName), playerMode: this.playerMode, serverVersion: this.serverVersion, insurance: this.insurance, forfeiture: this.forfeiture, drawRequest: this.drawRequest, originalFrogBidderId: this.originalFrogBidderId, soloBidMadeAfterFrog: this.soloBidMadeAfterFrog, revealedWidowForFrog: this.revealedWidowForFrog, widowDiscardsForFrogBidder: this.widowDiscardsForFrogBidder,
             bidderCardPoints: this.bidderCardPoints, defenderCardPoints: this.defenderCardPoints,
+            // --- NEW: Send the list of played cards to the client/bots ---
+            allCardsPlayedThisRound: this.allCardsPlayedThisRound,
         };
         state.biddingTurnPlayerName = this.players[this.biddingTurnPlayerId]?.playerName;
         state.trickTurnPlayerName = this.players[this.trickTurnPlayerId]?.playerName;
