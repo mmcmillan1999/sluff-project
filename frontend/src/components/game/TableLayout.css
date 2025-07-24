@@ -1,9 +1,15 @@
 /* frontend/src/components/game/TableLayout.css */
 
-@keyframes pulsing-glow {
-    0% { box-shadow: 0 0 5px #ffcc00; }
-    50% { box-shadow: 0 0 20px #ffcc00; }
-    100% { box-shadow: 0 0 5px #ffcc00; }
+@keyframes trick-pile-glow-blue {
+    0% { box-shadow: 0 0 6px #60a5fa; }
+    50% { box-shadow: 0 0 24px #3b82f6; }
+    100% { box-shadow: 0 0 6px #60a5fa; }
+}
+
+@keyframes trick-pile-glow-gold {
+    0% { box-shadow: 0 0 6px #facc15; }
+    50% { box-shadow: 0 0 24px #f59e0b; }
+    100% { box-shadow: 0 0 6px #facc15; }
 }
 
 .game-button {
@@ -91,9 +97,43 @@
     bottom: .1%;
     z-index: 5;
     width: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    transition: transform 0.2s ease-in-out;
 }
+
+.trick-pile-container:hover {
+    transform: translateY(-5px);
+}
+
 .defender-pile { left: 15%; }
 .bidder-pile { right: 15%; }
+
+.trick-pile-base {
+    padding: 5px 15px;
+    border-radius: 8px;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+    transition: box-shadow 0.3s;
+}
+
+.trick-pile-base.defender-base {
+    background-color: #1e3a8a; /* Dark Blue */
+    border: 1px solid #60a5fa; /* Light Blue */
+}
+
+.trick-pile-base.bidder-base {
+    background-color: #b45309; /* Dark Gold/Orange */
+    border: 1px solid #facc15; /* Light Gold/Yellow */
+}
+
+.trick-pile-base.pulsating-blue {
+    animation: trick-pile-glow-blue 1.5s infinite;
+}
+.trick-pile-base.pulsating-gold {
+    animation: trick-pile-glow-gold 1.5s infinite;
+}
 
 .trick-pile {
     display: flex;
@@ -112,11 +152,14 @@
     top: 0;
     left: 0;
 }
-.trick-pile-label {
+
+.pile-label {
     color: white;
     font-family: 'Oswald', sans-serif;
     text-shadow: 1px 1px 2px black;
-    font-size: 1.1em;
+    font-size: 0.9em;
+    margin-top: 5px;
+    text-align: center;
 }
 
 .score-progress-container {
@@ -233,32 +276,6 @@
 }
 
 
-.last-trick-tab-container {
-    position: absolute;
-    top: 50%;
-    z-index: 25;
-}
-.last-trick-tab-container.defender { 
-    left: 10px; 
-    transform: translateY(-50%) rotate(-90deg);
-    transform-origin: left top;
-}
-.last-trick-tab-container.bidder { 
-    right: 10px;
-    transform: translateY(-50%) rotate(90deg);
-    transform-origin: right top;
-}
-
-.last-trick-tab {
-    background-color: #333;
-    color: #fff;
-    border: 1px solid #555;
-    border-radius: 4px 4px 0 0;
-    padding: 5px 10px;
-    font-size: 1em;
-    cursor: pointer;
-}
-
 .last-trick-overlay-container {
     position: absolute;
     bottom: 25%;
@@ -350,19 +367,13 @@ button.card-display:disabled {
 
     .player-seat-right .dealer-puck { left: -14px; }
     .player-seat-right .role-puck { right: -14px; }
-
-    .last-trick-tab-container { 
-        top: auto;
-        bottom: 25%;
-    }
     
     .trick-pile-container {
         bottom: 20vh;
     }
 
     .progress-bar-container {
-        /* --- THE FIX --- */
-        bottom: 22vh; /* Increased from 17vh to move it up */
+        bottom: 22vh; 
         top: auto;
     }
 }

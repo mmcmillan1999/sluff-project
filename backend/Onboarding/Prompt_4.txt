@@ -24,6 +24,8 @@ Seek Clarity on Ambiguity: I am relatively new to coding. If my instructions are
 
 Provide Complete Files: Whenever you are asked to write or modify code, please provide the complete file, even for a single-line change. Do not provide snippets for me to place. This helps avoid integration errors.
 
+Do Not Replicate Context Markers: The `--- START FILE: [path] ---` and `--- END FILE: [path] ---` markers in the context files are part of the tooling I use to provide you with the project's source code. They are for your parsing convenience only. **You must never include these markers in your code output.** When I ask for a file, provide only the raw code content.
+
 Acknowledge and Confirm: Before you provide a solution, briefly acknowledge the key goals of my prompt to confirm your understanding.
 
 If you understand and agree to these rules of engagement, please let me know that you are ready for your first real instruction of the day.

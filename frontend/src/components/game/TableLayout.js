@@ -1,5 +1,5 @@
 // frontend/src/components/game/TableLayout.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ScoreProgressBar from './ScoreProgressBar';
 import './KeyAndModal.css';
 import './TableLayout.css'; 
@@ -16,8 +16,36 @@ const TableLayout = ({
     playerId,
     emitEvent,
     handleLeaveTable,
+    playSound,
 }) => {
     const [lastTrickVisible, setLastTrickVisible] = useState(false);
+    const lastTrickTimerRef = React.useRef(null);
+
+    useEffect(() => {
+        return () => {
+            if (lastTrickTimerRef.current) {
+                clearTimeout(lastTrickTimerRef.current);
+            }
+        };
+    }, []);
+
+    const handleTrickPileClick = (clickedPile) => {
+        const { lastCompletedTrick, bidWinnerInfo } = currentTableState;
+        if (!lastCompletedTrick || !bidWinnerInfo) return;
+
+        const winnerIsBidder = lastCompletedTrick.winnerName === bidWinnerInfo.playerName;
+        const clickedWinnerPile = (clickedPile === 'bidder' && winnerIsBidder) || (clickedPile === 'defender' && !winnerIsBidder);
+
+        if (clickedWinnerPile) {
+            if (lastTrickTimerRef.current) clearTimeout(lastTrickTimerRef.current);
+            setLastTrickVisible(true);
+            lastTrickTimerRef.current = setTimeout(() => {
+                setLastTrickVisible(false);
+            }, 3000); // Show for 3 seconds
+        } else {
+            playSound('no_peaking_cheater');
+        }
+    };
 
     const renderPlayedCardsOnTable = () => {
         const isLingerState = currentTableState.state === 'TrickCompleteLinger';
@@ -35,7 +63,7 @@ const TableLayout = ({
 
         return (
             <>
-                <div style={{ position: 'absolute', bottom: '25%', left: '50%', transform: 'translateX(-50%)' }}>
+                <div style={{ position: 'absolute', bottom: '30%', left: '50%', transform: 'translateX(-50%)' }}>
                     {getPlayedCardForPlayer(seatAssignments.self)}
                 </div>
                 <div style={{ position: 'absolute', top: '50%', left: '25%', transform: 'translateY(-50%)' }}>
@@ -48,52 +76,41 @@ const TableLayout = ({
         );
     };
 
-    const renderLastTrickDisplay = () => {
+    const renderLastTrickOverlay = () => {
         const { lastCompletedTrick, bidWinnerInfo } = currentTableState;
-        if (!lastCompletedTrick || !bidWinnerInfo) {
+        if (!lastTrickVisible || !lastCompletedTrick || !bidWinnerInfo) {
             return null;
         }
-
+    
         const winnerIsBidder = lastCompletedTrick.winnerName === bidWinnerInfo.playerName;
-        const tabContainerClass = `last-trick-tab-container ${winnerIsBidder ? 'bidder' : 'defender'}`;
         const overlayContainerClass = `last-trick-overlay-container ${winnerIsBidder ? 'bidder' : 'defender'}`;
-
+    
         return (
-            <>
-                <div className={tabContainerClass}>
-                    <button className="last-trick-tab" onClick={() => setLastTrickVisible(!lastTrickVisible)}>
-                        Last Trick
-                    </button>
+            <div className={overlayContainerClass}>
+                <h4 className="last-trick-header">Last Trick (won by {lastCompletedTrick.winnerName})</h4>
+                <div className="last-trick-cards">
+                    {lastCompletedTrick.cards.map(play => (
+                        renderCard(play.card, { key: play.card, small: true })
+                    ))}
                 </div>
-
-                {lastTrickVisible && (
-                     <div className={overlayContainerClass}>
-                        <h4 className="last-trick-header">Last Trick (won by {lastCompletedTrick.winnerName})</h4>
-                        <div className="last-trick-cards">
-                            {lastCompletedTrick.cards.map(play => (
-                                renderCard(play.card, { key: play.card, small: true })
-                            ))}
-                        </div>
-                    </div>
-                )}
-            </>
+            </div>
         );
     };
     
     const renderTrickTallyPiles = () => {
-        const { capturedTricks, bidWinnerInfo, playerOrderActive } = currentTableState;
+        const { capturedTricks, bidWinnerInfo, playerOrderActive, lastCompletedTrick } = currentTableState;
         if (!bidWinnerInfo) return null;
         
         const bidderName = bidWinnerInfo.playerName;
+        const defenderNames = playerOrderActive.filter(name => name !== bidderName);
         const bidderTricksCount = capturedTricks[bidderName]?.length || 0;
-        const defenderTricksCount = playerOrderActive.reduce((acc, pName) => {
-            if (pName !== bidderName) {
-                return acc + (capturedTricks[pName]?.length || 0);
-            }
-            return acc;
-        }, 0);
+        const defenderTricksCount = defenderNames.reduce((acc, pName) => acc + (capturedTricks[pName]?.length || 0), 0);
 
-        const TrickPile = ({ count, label }) => (
+        const lastWinnerName = lastCompletedTrick?.winnerName;
+        const bidderWonLast = lastWinnerName === bidderName;
+        const defenderWonLast = lastWinnerName && !bidderWonLast;
+
+        const TrickPile = ({ count }) => (
             <div className="trick-pile">
                 <div className="trick-pile-cards">
                     {count === 0 ? (
@@ -106,23 +123,33 @@ const TableLayout = ({
                         ))
                     )}
                 </div>
-                <span className="trick-pile-label">{label}: {count}</span>
             </div>
         );
 
         return (
             <>
-                <div className="trick-pile-container defender-pile">
-                    <TrickPile count={defenderTricksCount} label="Defenders" />
+                <div className="trick-pile-container defender-pile" onClick={() => handleTrickPileClick('defender')}>
+                    <div className={`trick-pile-base defender-base ${defenderWonLast ? 'pulsating-blue' : ''}`}>
+                        <TrickPile count={defenderTricksCount} />
+                        <div className="pile-label">
+                            Team ({defenderTricksCount})<br/>
+                            {defenderNames.join(', ')}
+                        </div>
+                    </div>
                 </div>
-                <div className="trick-pile-container bidder-pile">
-                    <TrickPile count={bidderTricksCount} label="Bidder" />
+                <div className="trick-pile-container bidder-pile" onClick={() => handleTrickPileClick('bidder')}>
+                    <div className={`trick-pile-base bidder-base ${bidderWonLast ? 'pulsating-gold' : ''}`}>
+                        <TrickPile count={bidderTricksCount} />
+                        <div className="pile-label">
+                            Bidder ({bidderTricksCount})<br/>
+                            {bidderName}
+                        </div>
+                    </div>
                 </div>
             </>
         );
     };
 
-    // --- NEW: Standalone function to render only the progress bars ---
     const renderProgressBars = () => {
         const { theme, state, bidWinnerInfo, bidderCardPoints, defenderCardPoints } = currentTableState;
         if (!bidWinnerInfo || theme !== 'miss-pauls-academy' || state !== 'Playing Phase') {
@@ -232,7 +259,7 @@ const TableLayout = ({
                 {renderWidowDisplay()}
                 {renderTrumpIndicatorPuck()}
                 {renderTrickTallyPiles()}
-                {renderLastTrickDisplay()}
+                {renderLastTrickOverlay()}
 
                 <div className="player-seat-bottom">
                     <PlayerSeat playerName={seatAssignments.self} currentTableState={currentTableState} isSelf={true} emitEvent={emitEvent} />
@@ -240,7 +267,7 @@ const TableLayout = ({
 
                 {renderPlayedCardsOnTable()}
                 
-                <div style={{ position: 'absolute', top: '15%', left: '50%', transform: 'translateX(-50%)', zIndex: 10, width: '80%', textAlign: 'center' }}>
+                <div className="action-message-container">
                     <ActionControls
                         currentTableState={currentTableState}
                         playerId={playerId}
@@ -252,7 +279,6 @@ const TableLayout = ({
                     />
                 </div>
             </div>
-            {/* --- NEW: Render progress bars outside the oval --- */}
             {renderProgressBars()}
         </main>
     );

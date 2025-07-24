@@ -130,26 +130,22 @@ const ActionControls = ({
             return <p style={{ color: 'white', fontStyle: 'italic' }}>Waiting for {currentTableState.trickTurnPlayerName}...</p>;
         case "Frog Widow Exchange":
             const isBidder = currentTableState.bidWinnerInfo?.userId === playerId;
-            if (isBidder) {
-                // --- THIS IS THE FIX ---
-                return (
-                    <div className="action-prompt">
-                        <h4>Select 3 cards from your hand below to discard.</h4>
+            const revealedWidow = currentTableState.revealedWidowForFrog || [];
+            
+            // --- MODIFICATION: Both bidders and defenders see the revealed widow ---
+            return (
+                <div className="action-prompt">
+                    <h4 style={{marginBottom: '10px'}}>
+                        {isBidder ? "You received these cards from the Widow:" : "Revealed Widow (Frog)"}
+                    </h4>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
+                        {revealedWidow.map((card, index) => renderCard(card, { key: `widow-${index}`, large: true }))}
                     </div>
-                );
-            } else {
-                return (
-                    <div className="action-prompt">
-                        <h4 style={{marginBottom: '10px'}}>Revealed Widow (Frog)</h4>
-                        <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
-                            {(currentTableState.revealedWidowForFrog || []).map((card, index) => renderCard(card, { key: `widow-${index}`, large: true }))}
-                        </div>
-                        <p style={{ color: 'white', fontStyle: 'italic', marginTop: '15px' }}>
-                            {currentTableState.bidWinnerInfo?.playerName} is exchanging cards...
-                        </p>
-                    </div>
-                );
-            }
+                    <p style={{ color: 'white', fontStyle: 'italic', marginTop: '15px' }}>
+                        {isBidder ? "Select 3 cards from your hand below to discard." : `${currentTableState.bidWinnerInfo?.playerName} is exchanging cards...`}
+                    </p>
+                </div>
+            );
         default:
             return <p style={{ color: 'white' }}>{currentTableState.state}</p>;
     }

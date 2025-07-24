@@ -10,6 +10,7 @@ export const useSounds = () => {
             cardPlay: new Audio('/Sounds/card_play.mp3'),
             trickWin: new Audio('/Sounds/trick_win.mp3'),
             cardDeal: new Audio('/Sounds/card_dealing_10s_v3.mp3'),
+            no_peaking_cheater: new Audio('/Sounds/no_peaking_cheater.mp3'), // ADDED THIS LINE
         };
         Object.values(sounds.current).forEach(sound => {
             sound.load();

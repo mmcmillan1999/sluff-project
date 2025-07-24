@@ -13,7 +13,6 @@ import IosPwaPrompt from './game/IosPwaPrompt';
 import DrawVoteModal from './game/DrawVoteModal';
 import LobbyChat from './LobbyChat';
 import { getLobbyChatHistory } from '../services/api';
-// --- FIX: Removed unused SUITS_MAP import ---
 import { SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS } from '../constants';
 
 const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLogout, emitEvent, playSound, socket, handleOpenFeedbackModal }) => {
@@ -293,6 +292,7 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
                 emitEvent={emitEvent}
                 handleLeaveTable={handleLeaveTable}
                 playerError={playerError}
+                playSound={playSound}
             />
             
             <footer className="game-footer">
