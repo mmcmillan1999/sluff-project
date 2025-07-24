@@ -21,56 +21,63 @@ class BotPlayer {
         return { points, suits };
     }
 
-    _getBestCardToPlay(legalCards, isLeading) {
+    playCard() {
+        const hand = this.engine.hands[this.playerName];
+        if (!hand || hand.length === 0) return null;
+
+        const isLeading = this.engine.currentTrickCards.length === 0;
+        const legalPlays = getLegalMoves(hand, isLeading, this.engine.leadSuitCurrentTrick, this.engine.trumpSuit, this.engine.trumpBroken);
+        if (legalPlays.length === 0) return null;
+
+        let cardToPlay;
+
         if (isLeading) {
-            return legalCards.sort((a, b) => getRankValue(b) - getRankValue(a))[0];
+            // --- REWRITTEN AND CORRECTED LEAD LOGIC ---
+            const allPastTricks = Object.values(this.engine.capturedTricks).flat();
+            const allPlayedCards = allPastTricks.flatMap(trick => trick.cards);
+
+            // Create a function to check if an Ace is gone
+            const isAceGone = (suit) => allPlayedCards.includes('A' + suit);
+
+            // 1. Best move: Play an Ace
+            const aces = legalPlays.filter(card => gameLogic.getRank(card) === 'A');
+            if (aces.length > 0) {
+                cardToPlay = aces[0];
+            } else {
+                // 2. Good move: Play a "safe" 10 (Ace is gone)
+                const safeTens = legalPlays.filter(card => gameLogic.getRank(card) === '10' && isAceGone(gameLogic.getSuit(card)));
+                if (safeTens.length > 0) {
+                    cardToPlay = safeTens[0];
+                } else {
+                    // 3. Safe move: Play junk (non-point cards)
+                    const junkCards = legalPlays.filter(card => CARD_POINT_VALUES[gameLogic.getRank(card)] === 0);
+                    if (junkCards.length > 0) {
+                        // Play the lowest junk card
+                        cardToPlay = junkCards.sort((a, b) => getRankValue(a) - getRankValue(b))[0];
+                    } else {
+                        // 4. Last resort: Lead the lowest-value point card (minimizing risk)
+                        // This avoids leading with a naked 10 if a King, Queen, or Jack is available.
+                        cardToPlay = legalPlays.sort((a, b) => CARD_POINT_VALUES[gameLogic.getRank(a)] - CARD_POINT_VALUES[gameLogic.getRank(b)])[0];
+                    }
+                }
+            }
         } else {
-            const winningPlays = legalCards.filter(myCard => {
+            // --- UNCHANGED FOLLOW LOGIC ---
+            const winningPlays = legalPlays.filter(myCard => {
                 const potentialTrick = [...this.engine.currentTrickCards, { card: myCard, userId: this.userId }];
                 const winner = gameLogic.determineTrickWinner(potentialTrick, this.engine.leadSuitCurrentTrick, this.engine.trumpSuit);
                 return winner.userId === this.userId;
             });
 
             if (winningPlays.length > 0) {
-                return winningPlays.sort((a, b) => getRankValue(b) - getRankValue(a))[0];
+                cardToPlay = winningPlays.sort((a, b) => getRankValue(b) - getRankValue(a))[0];
             } else {
-                return legalCards.sort((a, b) => getRankValue(a) - getRankValue(b))[0];
+                cardToPlay = legalPlays.sort((a, b) => getRankValue(a) - getRankValue(b))[0];
             }
         }
+        return cardToPlay;
     }
 
-    playCard() {
-        const hand = this.engine.hands[this.playerName];
-        if (!hand || hand.length === 0) return null;
-
-        const isLeading = this.engine.currentTrickCards.length === 0;
-        let legalPlays = getLegalMoves(hand, isLeading, this.engine.leadSuitCurrentTrick, this.engine.trumpSuit, this.engine.trumpBroken);
-        if (legalPlays.length === 0) return null;
-
-        let proposedCard = this._getBestCardToPlay([...legalPlays], isLeading);
-
-        if (gameLogic.getRank(proposedCard) === '10') {
-            const suit = gameLogic.getSuit(proposedCard);
-            const aceOfSuit = 'A' + suit;
-
-            const allPlayedCards = Object.values(this.engine.capturedTricks)
-                .flat()
-                .flatMap(trick => trick.cards);
-            
-            const isAceUnaccountedFor = !hand.includes(aceOfSuit) && !allPlayedCards.includes(aceOfSuit);
-
-            if (isAceUnaccountedFor) {
-                const saferPlays = legalPlays.filter(card => card !== proposedCard);
-                if (saferPlays.length > 0) {
-                    proposedCard = this._getBestCardToPlay(saferPlays, isLeading);
-                }
-            }
-        }
-
-        return proposedCard;
-    }
-
-    // --- RENAMED for clarity ---
     decideBid() {
         const hand = this.engine.hands[this.playerName] || [];
         const { points, suits } = this._analyzeHand(hand);
@@ -94,11 +101,9 @@ class BotPlayer {
         return "Pass";
     }
 
-    // --- NEW METHOD for upgrade decision ---
     decideFrogUpgrade() {
         const hand = this.engine.hands[this.playerName] || [];
         const { points, suits } = this._analyzeHand(hand);
-        // A simple check: if the hand is very strong in hearts, take the upgrade.
         if (suits.H >= 5 && points > 35) {
             return "Heart Solo";
         }
@@ -153,14 +158,17 @@ class BotPlayer {
             const projectedSurplus = projectedFinalScore - GOAL;
             const projectedDefenderLoss = projectedSurplus * bidMultiplier;
             
+            // --- THIS IS THE FIX: Make defender more stingy ---
+            const stingyFactor = 15 * bidMultiplier;
+
             let strategicOffer;
             if (projectedDefenderLoss > 0) {
                 const baseOffer = Math.round((projectedDefenderLoss * 1.05) / 5) * 5;
-                strategicOffer = baseOffer + 20; 
+                strategicOffer = baseOffer + stingyFactor; 
             } else {
                 const projectedDefenderWinnings = -projectedDefenderLoss;
                 const baseOffer = -Math.round((projectedDefenderWinnings / 2) / 5) * 5;
-                strategicOffer = baseOffer + 20; 
+                strategicOffer = baseOffer + stingyFactor; 
             }
 
             if (strategicOffer !== insurance.defenderOffers[this.playerName]) {
