@@ -39,10 +39,9 @@ const RoundSummaryModal = ({
         bidType,
         drawOutcome,
         payouts,
-        payoutDetails
+        payoutDetails,
+        lastCompletedTrick
     } = summaryData;
-    
-    const insuranceAgreement = insurance?.executedDetails?.agreement;
     
     const bidderName = bidWinnerInfo?.playerName || 'Bidder';
     const defenderNames = playerOrderActive?.filter(name => name !== bidderName) || ['Defenders'];
@@ -73,6 +72,7 @@ const RoundSummaryModal = ({
             <div className="point-calculation-recap">
                 <span>Difference from Goal: <strong>{rawDifference}</strong> pts</span>
                 <span className="recap-divider">×</span>
+                <span className="recap-divider">×</span>
                 <span>Bid Multiplier: <strong>{bidMultiplier}x</strong> ({bidType})</span>
                 <span className="recap-divider">=</span>
                 <span>Exchange Value: <strong>{exchangeValue}</strong> pts</span>
@@ -90,50 +90,48 @@ const RoundSummaryModal = ({
     
     const renderTrickDetails = () => {
         if (!allTricks) return null;
-        let trickCounter = 1;
 
         const bidderTotal = finalBidderPoints;
         const defenderTotal = finalDefenderPoints;
 
-        // --- NEW LOGIC: Determine who won the widow to display it correctly ---
-        // This mirrors the backend logic from scoringHandler.js
         const bidderWonWidow = 
             (bidType === 'Frog') || 
-            ((bidType === 'Solo' || bidType === 'Heart Solo') && summaryData.lastCompletedTrick?.winnerName === bidderName);
+            ((bidType === 'Solo' || bidType === 'Heart Solo') && lastCompletedTrick?.winnerName === bidderName);
 
         const widowRowJsx = widowPointsValue > 0 ? (
             <div className="trick-detail-row widow-row">
                 <span className="trick-number">Widow:</span>
-                <span className="trick-cards">{widowForReveal.join(', ')}</span>
+                <div className="trick-cards" style={{ display: 'flex', gap: '2px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    {widowForReveal.map((card, i) => renderCard(card, { key: `widow-${i}`, small: true }))}
+                </div>
                 <span className="trick-points">({widowPointsValue} pts)</span>
             </div>
         ) : null;
-        // --- END NEW LOGIC ---
         
+        const TrickRow = ({ trick }) => (
+            <div key={`trick-${trick.trickNumber}`} className="trick-detail-row">
+                <span className="trick-number">Trick {trick.trickNumber}:</span>
+                <div className="trick-cards" style={{ display: 'flex', gap: '2px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    {trick.cards.map((card, i) => renderCard(card, { key: `trickcard-${trick.trickNumber}-${i}`, small: true }))}
+                </div>
+                <span className="trick-points">({calculateCardPoints(trick.cards)} pts)</span>
+            </div>
+        );
+
+        // --- THIS IS THE FIX: A much simpler and more robust way to get the tricks ---
+        const bidderTricks = allTricks[bidderName] || [];
+        const defenderTricks = defenderNames.flatMap(name => allTricks[name] || []);
+
         return (
             <div className="trick-breakdown-details">
                 <div className="team-trick-section">
                     <h4>Bidder Total ({bidderName}): {bidderTotal} pts</h4>
-                     {Object.entries(allTricks).filter(([pName]) => pName === bidderName).flatMap(([_, tricks]) => tricks).map((trick, i) => (
-                        <div key={`bidder-trick-${i}`} className="trick-detail-row">
-                            <span className="trick-number">Trick {trickCounter++}:</span>
-                            <span className="trick-cards">{trick.join(', ')}</span>
-                            <span className="trick-points">({calculateCardPoints(trick)} pts)</span>
-                        </div>
-                    ))}
-                    {/* --- MODIFICATION: Conditionally render the widow row --- */}
+                     {bidderTricks.map(trick => <TrickRow key={trick.trickNumber} trick={trick} />)}
                     {bidderWonWidow && widowRowJsx}
                 </div>
                 <div className="team-trick-section">
                     <h4>Defender Total ({defenderNames.join(', ')}): {defenderTotal} pts</h4>
-                     {Object.entries(allTricks).filter(([pName]) => pName !== bidderName).flatMap(([_, tricks]) => tricks).map((trick, i) => (
-                        <div key={`defender-trick-${i}`} className="trick-detail-row">
-                            <span className="trick-number">Trick {trickCounter++}:</span>
-                            <span className="trick-cards">{trick.join(', ')}</span>
-                            <span className="trick-points">({calculateCardPoints(trick)} pts)</span>
-                        </div>
-                    ))}
-                    {/* --- MODIFICATION: Conditionally render the widow row --- */}
+                     {defenderTricks.map(trick => <TrickRow key={trick.trickNumber} trick={trick} />)}
                     {!bidderWonWidow && widowRowJsx}
                 </div>
             </div>
@@ -170,17 +168,23 @@ const RoundSummaryModal = ({
                 ) : (
                     pointsPanelContent
                 )}
-                {insuranceAgreement && (
+                
+                {insurance && insurance.bidMultiplier && (
                     <div className="insurance-deal-recap">
-                        <h4 className="recap-title">Insurance Deal Recap</h4>
-                        <p><strong>{insuranceAgreement.bidderPlayerName}</strong> (Bidder) asked for <strong>{insuranceAgreement.bidderRequirement}</strong> points.</p>
+                        <h4 className="recap-title">
+                            {summaryData.insuranceDealWasMade ? "Insurance Deal Recap" : "Final Insurance State (No Deal)"}
+                        </h4>
+                        <p>
+                            <strong>{insurance.bidderPlayerName}</strong> (Bidder) required <strong>{insurance.bidderRequirement}</strong> points.
+                        </p>
                         <ul>
-                            {Object.entries(insuranceAgreement.defenderOffers).map(([name, offer]) => (
+                            {Object.entries(insurance.defenderOffers).map(([name, offer]) => (
                                 <li key={name}><strong>{name}</strong> offered <strong>{offer}</strong> points.</li>
                             ))}
                         </ul>
                     </div>
                 )}
+                
                 {insuranceHindsight && (
                     <div className="insurance-hindsight">
                         <h4 className="hindsight-title">Insurance Hindsight</h4>
@@ -191,6 +195,7 @@ const RoundSummaryModal = ({
                         ))}
                     </div>
                 )}
+
                 <div className="summary-scores-container">
                     <h4>Updated Scores</h4>
                     <ul className="summary-score-list">

@@ -2,52 +2,36 @@
 
 const gameLogic = require('../logic');
 
-/**
- * Calculates the scores at the end of a round and prepares the summary.
- * @param {GameEngine} engine - The instance of the game engine.
- * @returns {Array} An array of effects to be executed.
- */
 function calculateRoundScores(engine) {
     const effects = [];
-    
-    // --- THIS IS THE FIX ---
-    // The logic to assign widow points now correctly checks the winner of the last trick.
     
     const bidType = engine.bidWinnerInfo.bid;
     let widowPoints = 0;
     
-    // First, determine the value of the widow based on the bid type.
     if (bidType === "Frog") {
         widowPoints = gameLogic.calculateCardPoints(engine.widowDiscardsForFrogBidder);
     } else if (bidType === "Solo" || bidType === "Heart Solo") {
         widowPoints = gameLogic.calculateCardPoints(engine.originalDealtWidow);
     }
 
-    // Now, assign those points to the correct team.
     if (bidType === "Frog") {
-        // In a Frog bid, the widow points always belong to the bidder.
         engine.bidderCardPoints += widowPoints;
     } else if (bidType === "Solo" || bidType === "Heart Solo") {
-        // For Solo bids, the winner of the LAST trick gets the widow.
         const lastTrickWinnerName = engine.lastCompletedTrick?.winnerName;
         const bidderName = engine.bidWinnerInfo.playerName;
         
         if (lastTrickWinnerName === bidderName) {
-            // If the bidder won the last trick, they get the widow points.
             engine.bidderCardPoints += widowPoints;
         } else {
-            // If a defender won the last trick, the defenders get the widow points.
             engine.defenderCardPoints += widowPoints;
         }
     }
 
-    // The rest of the function now receives the CORRECTLY assigned totals.
     const bidderTotalCardPoints = engine.bidderCardPoints;
-    // --- END FIX ---
 
     const roundData = gameLogic.calculateRoundScoreDetails({
         ...engine,
-        bidderTotalCardPoints, // This value is now correctly calculated
+        bidderTotalCardPoints,
         playerOrderActive: engine.playerOrder.turnOrder
     });
 
@@ -69,12 +53,8 @@ function calculateRoundScores(engine) {
                 theme: engine.theme,
                 gameId: engine.gameId,
                 players: engine.players,
-                // Pass playerOrderActive to handleGameOver
                 playerOrderActive: engine.playerOrder.turnOrder.map(id => engine.players[id]),
             },
-            onComplete: (gameWinnerName) => {
-                engine.roundSummary.gameWinner = gameWinnerName;
-            }
         });
     }
 
@@ -94,6 +74,8 @@ function calculateRoundScores(engine) {
         pointChanges: roundData.pointChanges,
         widowPointsValue: roundData.widowPointsValue,
         bidType: roundData.bidType,
+        // --- THIS IS THE CRITICAL FIX FOR WIDOW DISPLAY ---
+        lastCompletedTrick: engine.lastCompletedTrick 
     };
 
     effects.push({ type: 'SYNC_PLAYER_TOKENS', payload: { playerIds: Object.keys(engine.players) } });

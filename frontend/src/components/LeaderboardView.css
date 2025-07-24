@@ -42,7 +42,7 @@
     gap: 10px;
 }
 
-.back-button, .admin-button {
+.back-button, .admin-button, .view-toggle-button {
     padding: 6px 14px;
     font-family: 'Oswald', sans-serif;
     color: white;
@@ -52,7 +52,6 @@
     font-size: 0.9em;
 }
 
-/* --- MODIFICATION: Specific styles for the icon button --- */
 .refresh-button {
     background-color: #007bff;
     padding: 4px;
@@ -72,6 +71,13 @@
 
 .back-button {
     background: #6c757d;
+}
+
+/* --- NEW CLASS FOR THE TOGGLE BUTTON --- */
+.view-toggle-button {
+    background: #17a2b8; /* A teal color to differentiate it */
+    min-width: 90px; /* Give it a fixed width to prevent layout shifts */
+    text-align: center;
 }
 
 .admin-button {
@@ -112,7 +118,6 @@
     background-color: #444;
     border-radius: 8px;
     overflow: hidden;
-    /* --- MODIFICATION: Use fixed layout for predictable columns --- */
     table-layout: fixed;
 }
 
@@ -123,21 +128,18 @@
 
 .leaderboard-table th,
 .leaderboard-table td {
-    /* --- MODIFICATION: Tighter padding --- */
     padding: 10px 8px;
     text-align: left;
     border-bottom: 1px solid #555;
     vertical-align: middle;
 }
 
-/* --- MODIFICATION: Set specific widths for all columns --- */
 .leaderboard-table .rank-col { width: 12%; }
 .leaderboard-table .username-col { width: 35%; }
 .leaderboard-table .rotated-header { width: 12%; }
 .leaderboard-table .tokens-col { width: 17%; }
 
 .leaderboard-table td.username-cell {
-    /* These styles handle the truncation */
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -151,7 +153,6 @@
     height: 40px; 
     vertical-align: bottom;
     padding-bottom: 8px;
-    /* --- MODIFICATION: Un-rotate the non-rotated headers --- */
     transform: none;
 }
 
@@ -159,14 +160,12 @@
     text-align: left;
     white-space: nowrap;
     vertical-align: middle;
-    /* --- MODIFICATION: Make space for rotated text --- */
     height: 60px;
     padding-left: 20px;
 }
 
 .leaderboard-table th.rotated-header span {
     display: inline-block;
-    /* --- MODIFICATION: Adjusted rotation and origin for better alignment --- */
     transform: rotate(-55deg);
     transform-origin: 0 50%;
     width: 30px; 
@@ -206,35 +205,3 @@
     justify-content: flex-end;
     gap: 10px;
 }
-
-.card-display {
-    padding: 8px;
-    border: 1px solid #777;
-    border-radius: 6px;
-    text-align: center;
-    font-weight: bold;
-    display: inline-flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    cursor: default;
-}
-
-.card-display.illegal-move {
-    filter: grayscale(80%) brightness(0.8);
-    cursor: not-allowed;
-}
-
-button.card-display {
-    cursor: pointer;
-}
-
-button.card-display:disabled {
-    cursor: not-allowed;
-}
-
-.card-symbol {
-    font-size: 125%;
-}
-/* frontend/src/components/LeaderboardView.css */

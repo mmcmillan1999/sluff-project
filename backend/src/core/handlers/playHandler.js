@@ -33,8 +33,6 @@ function playCard(engine, userId, card) {
     if (isLeading) engine.leadSuitCurrentTrick = playedSuit;
     if (playedSuit === engine.trumpSuit) engine.trumpBroken = true;
     
-    // --- THIS IS THE FIX ---
-    // Use the new PlayerList object and its properties
     const expectedCardsInTrick = engine.playerOrder.count;
     if (engine.currentTrickCards.length === expectedCardsInTrick) {
         return resolveTrick(engine);
@@ -62,7 +60,14 @@ function resolveTrick(engine) {
     engine.trickLeaderId = winnerInfo.userId;
     const winnerName = winnerInfo.playerName;
     if (winnerName && !engine.capturedTricks[winnerName]) { engine.capturedTricks[winnerName] = []; }
-    if (winnerName) { engine.capturedTricks[winnerName].push(engine.currentTrickCards.map(p => p.card)); }
+    if (winnerName) {
+        // --- THIS IS THE FIX: Add winnerName to the trick object ---
+        engine.capturedTricks[winnerName].push({
+            trickNumber: engine.tricksPlayedCount,
+            cards: engine.currentTrickCards.map(p => p.card),
+            winnerName: winnerName 
+        });
+    }
     
     if (engine.tricksPlayedCount === 11) {
         return scoringHandler.calculateRoundScores(engine);

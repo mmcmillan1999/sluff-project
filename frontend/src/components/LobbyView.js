@@ -7,7 +7,7 @@ import LobbyTableCard from './LobbyTableCard';
 import LobbyChat from './LobbyChat';
 import { getLobbyChatHistory } from '../services/api';
 
-const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowAdmin, errorMessage, emitEvent, socket, handleOpenFeedbackModal }) => {
+const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowAdmin, handleShowFeedback, errorMessage, emitEvent, socket, handleOpenFeedbackModal }) => {
     
     const [activeTab, setActiveTab] = useState('');
     const [showMenu, setShowMenu] = useState(false);
@@ -55,6 +55,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
     const LobbyMenu = () => (
         <div className="lobby-menu-popup">
             <button onClick={() => { handleShowLeaderboard(); setShowMenu(false); }} className="lobby-menu-button">Leaderboard</button>
+            <button onClick={() => { handleShowFeedback(); setShowMenu(false); }} className="lobby-menu-button">Feedback Repository</button>
             <button onClick={() => { handleOpenFeedbackModal(); setShowMenu(false); }} className="lobby-menu-button">Submit Feedback</button>
             <button onClick={() => { handleRequestFreeToken(); setShowMenu(false); }} className="lobby-menu-button">Request Free Token</button>
             <button onClick={() => { emitEvent("requestUserSync"); setShowMenu(false); }} className="lobby-menu-button">Sync Profile</button>

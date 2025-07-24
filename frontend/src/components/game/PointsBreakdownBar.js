@@ -1,3 +1,4 @@
+// frontend/src/components/game/PointsBreakdownBar.js
 import React from 'react';
 import './PointsBreakdownBar.css';
 

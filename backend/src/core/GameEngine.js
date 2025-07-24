@@ -123,13 +123,9 @@ class GameEngine {
         const playerInfo = this.players[userId];
         const safeLeaveStates = ["Waiting for Players", "Ready to Start"];
         
-        // --- THIS IS FIX #1: REJOIN LOGIC ---
-        // If a game has started (has an ID), leaving should ALWAYS just disconnect the player,
-        // allowing them to rejoin, even if the state is "Game Over".
         if (this.gameId) {
             this.disconnectPlayer(userId);
         } 
-        // If the game hasn't started yet, it's safe to remove them completely.
         else if (safeLeaveStates.includes(this.state) || playerInfo.isSpectator) {
             delete this.players[userId];
             if (playerInfo.isBot) delete this.bots[userId];
@@ -260,16 +256,10 @@ class GameEngine {
 
     reset() {
         console.log(`[${this.tableId}] Game is being reset by 'Play Again' button.`);
-
-        // --- NEW, SAFER RESET LOGIC ---
-
-        // 1. Reset game-specific state, but keep player list intact for now.
         this.gameStarted = false;
         this.gameId = null;
         this.playerMode = null;
-        this._initializeNewRoundState(); // This clears all round-related data.
-
-        // 2. Remove any players who disconnected during the game.
+        this._initializeNewRoundState(); 
         for (const userId in this.players) {
             if (this.players[userId].disconnected) {
                 console.log(`[${this.tableId}] Removing disconnected player ${this.players[userId].playerName} during reset.`);
@@ -280,24 +270,16 @@ class GameEngine {
                 delete this.players[userId];
             }
         }
-        
-        // 3. Reset scores and status for all remaining players.
         this.scores = {};
         for (const userId in this.players) {
             const player = this.players[userId];
-            player.isSpectator = false; // Everyone is an active player now.
+            player.isSpectator = false;
             this.scores[player.playerName] = 120;
         }
-
-        // 4. Update the final table state.
         this.playerMode = this.playerOrder.count;
         this.state = this.playerMode >= 3 ? "Ready to Start" : "Waiting for Players";
-
-        // Reset dealer to null. A new dealer will be picked in startGame().
         this.dealer = null;
-
         console.log(`[${this.tableId}] Reset complete. State is now '${this.state}' with ${this.playerMode} players.`);
-
         return this._effects([{ type: 'BROADCAST_STATE' }, { type: 'UPDATE_LOBBY' }]);
     }
     
@@ -389,10 +371,6 @@ class GameEngine {
         }]);
     }
 
-    // =================================================================
-    // --- HELPER METHODS ---
-    // =================================================================
-
     _initializeNewRoundState() {
         this.hands = {}; this.widow = []; this.originalDealtWidow = [];
         this.biddingTurnPlayerId = null; this.currentHighestBidDetails = null; this.playersWhoPassedThisRound = [];
@@ -406,6 +384,9 @@ class GameEngine {
             }
         });
         this.bidderCardPoints = 0; this.defenderCardPoints = 0;
+        // --- THIS IS THE FIX ---
+        // Initialize the array that was causing the crash in playHandler.js
+        this.allCardsPlayedThisRound = [];
     }
     
     _clearForfeitTimer() {
@@ -437,8 +418,6 @@ class GameEngine {
             this.insurance.bidderPlayerName = this.bidWinnerInfo.playerName;
             this.insurance.bidderRequirement = 120 * multiplier;
             
-            // --- THIS IS FIX #2: INSURANCE COUNTER ---
-            // This is a more robust way to get the list of defender names.
             const allPlayerNames = Object.values(this.players)
                 .filter(p => !p.isSpectator)
                 .map(p => p.playerName);

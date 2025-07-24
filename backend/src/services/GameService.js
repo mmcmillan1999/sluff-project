@@ -80,7 +80,6 @@ class GameService {
         await this._performAction(tableId, (engine) => engine.requestNextRound(userId));
     }
     
-    // --- COMPLETELY REWRITTEN AND CORRECTED PAYOUT LOGIC ---
     async handleGameOver(payload) {
         const { scores, theme, gameId, players } = payload;
         const tableCost = TABLE_COSTS[theme] || 0;
@@ -91,7 +90,6 @@ class GameService {
         const transactionFn = (args) => transactionPromises.push(transactionManager.postTransaction(this.pool, args));
         const statUpdateFn = (query, params) => statPromises.push(this.pool.query(query, params));
 
-        // 1. Get the final ranking of ALL players, including bots. This is the source of truth.
         const finalRankings = Object.values(players)
             .filter(p => !p.isSpectator)
             .map(p => ({ ...p, score: scores[p.playerName] || 0 }))
@@ -100,11 +98,9 @@ class GameService {
         const winners = finalRankings.filter(p => p.score === finalRankings[0].score);
         const gameWinnerName = winners.map(w => w.playerName).join(' & ');
         
-        // 2. Apply payout logic based on the number of players at the table.
         if (finalRankings.length === 3) {
             const [p1, p2, p3] = finalRankings;
 
-            // Scenario: Clear 1st, 2nd, 3rd
             if (p1.score > p2.score && p2.score > p3.score) {
                 if (!p1.isBot) {
                     transactionFn({ userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 2, description: `Win and Payout from ${p3.playerName}` });
@@ -121,7 +117,6 @@ class GameService {
                     payoutDetails[p3.userId] = `You finished last and lost your buy-in of ${tableCost.toFixed(2)} tokens.`;
                 }
             }
-            // Scenario: Tie for 1st
             else if (p1.score === p2.score && p2.score > p3.score) {
                 if (!p1.isBot) {
                     transactionFn({ userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 1.5, description: `Win (tie) - Split payout from ${p3.playerName}` });
@@ -138,7 +133,6 @@ class GameService {
                     payoutDetails[p3.userId] = `You finished last and lost your buy-in of ${tableCost.toFixed(2)} tokens.`;
                 }
             }
-            // Scenario: Tie for 2nd/Last
             else if (p1.score > p2.score && p2.score === p3.score) {
                 if (!p1.isBot) {
                     transactionFn({ userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 3, description: `Win - Collects full pot` });
@@ -154,7 +148,6 @@ class GameService {
                     payoutDetails[p3.userId] = `You tied for last and lost your buy-in of ${tableCost.toFixed(2)} tokens.`;
                 }
             }
-            // Scenario: 3-Way Tie
             else {
                 finalRankings.forEach(p => {
                     if (!p.isBot) {
@@ -284,56 +277,68 @@ class GameService {
         }
     }
 
-    _triggerBots(tableId) {
+  _triggerBots(tableId) {
         const engine = this.getEngineById(tableId);
         if (!engine || engine.pendingBotAction) return;
 
+        let actionTaken = false;
+
         for (const botId in engine.bots) {
+            if (actionTaken) break;
+
             const bot = engine.bots[botId];
+            const botUserId = bot.userId;
             
             const isCourtney = bot.playerName === "Courtney Sr.";
             const standardDelay = 1000;
             const playDelay = 1200;
             const roundEndDelay = 8000;
+            const insuranceDelay = 3000;
 
-            const makeMove = (actionServiceFn, ...args) => {
-                const delay = 
-                    engine.state === 'Playing Phase' ? (isCourtney ? playDelay * 2 : playDelay) :
-                    engine.state === 'Awaiting Next Round Trigger' ? (isCourtney ? roundEndDelay * 2 : roundEndDelay) :
-                    (isCourtney ? standardDelay * 2 : standardDelay);
-
+            const scheduleAction = (actionFn, delay, ...args) => {
+                actionTaken = true;
                 engine.pendingBotAction = setTimeout(() => {
                     engine.pendingBotAction = null;
-                    actionServiceFn.call(this, tableId, bot.userId, ...args);
-                }, delay);
+                    actionFn.call(this, tableId, botUserId, ...args);
+                }, isCourtney ? delay * 2 : delay);
             };
 
-            if (engine.state === 'Dealing Pending' && engine.dealer == bot.userId) {
-                return makeMove(this.dealCards);
-            }
-            if (engine.state === 'Awaiting Next Round Trigger' && engine.roundSummary?.dealerOfRoundId == bot.userId) {
-                return makeMove(this.requestNextRound);
-            }
-            if (engine.state === 'Awaiting Frog Upgrade Decision' && engine.biddingTurnPlayerId == bot.userId) {
-                return makeMove(this.placeBid, "Pass");
-            }
-            if (engine.state === 'Bidding Phase' && engine.biddingTurnPlayerId == bot.userId) {
-                const bid = bot.makeBid();
-                return makeMove(this.placeBid, bid);
-            }
-            if (engine.state === 'Trump Selection' && engine.bidWinnerInfo?.userId == bot.userId && !engine.trumpSuit) {
+            // --- Priority 1: Turn-based Game Flow Actions ---
+            if (engine.state === 'Dealing Pending' && engine.dealer == botUserId) {
+                scheduleAction(this.dealCards, standardDelay);
+            } else if (engine.state === 'Awaiting Next Round Trigger' && engine.roundSummary?.dealerOfRoundId == botUserId) {
+                scheduleAction(this.requestNextRound, roundEndDelay);
+            } else if (engine.state === 'Bidding Phase' && engine.biddingTurnPlayerId == botUserId) {
+                const bid = bot.decideBid(); // Use new method name
+                scheduleAction(this.placeBid, standardDelay, bid);
+            } else if (engine.state === 'Awaiting Frog Upgrade Decision' && engine.biddingTurnPlayerId == botUserId) {
+                const bid = bot.decideFrogUpgrade(); // Use new smart upgrade logic
+                scheduleAction(this.placeBid, standardDelay, bid);
+            } else if (engine.state === 'Trump Selection' && engine.bidWinnerInfo?.userId == botUserId && !engine.trumpSuit) {
                 const suit = bot.chooseTrump();
-                return makeMove(this.chooseTrump, suit);
-            }
-            if (engine.state === 'Frog Widow Exchange' && engine.bidWinnerInfo?.userId == bot.userId && engine.widowDiscardsForFrogBidder.length === 0) {
+                scheduleAction(this.chooseTrump, standardDelay, suit);
+            } else if (engine.state === 'Frog Widow Exchange' && engine.bidWinnerInfo?.userId == botUserId && engine.widowDiscardsForFrogBidder.length === 0) {
                 const discards = bot.submitFrogDiscards();
-                return makeMove(this.submitFrogDiscards, discards);
-            }
-            if (engine.state === 'Playing Phase' && engine.trickTurnPlayerId == bot.userId) {
+                scheduleAction(this.submitFrogDiscards, standardDelay, discards);
+            } else if (engine.state === 'Playing Phase' && engine.trickTurnPlayerId == botUserId) {
                 const card = bot.playCard();
                 if (card) {
-                    return makeMove(this.playCard, card);
+                    scheduleAction(this.playCard, playDelay, card);
                 }
+            }
+        }
+
+        if (!actionTaken && engine.state === 'Playing Phase' && engine.insurance.isActive && !engine.insurance.dealExecuted) {
+            for (const botId in engine.bots) {
+                const bot = engine.bots[botId];
+                setTimeout(() => {
+                    const decision = bot.makeInsuranceDecision();
+                    if (decision) {
+                        engine.updateInsuranceSetting(bot.userId, decision.settingType, decision.value);
+                        this.io.to(tableId).emit('gameState', engine.getStateForClient());
+                        this.io.emit('lobbyState', this.getLobbyState());
+                    }
+                }, 500);
             }
         }
     }

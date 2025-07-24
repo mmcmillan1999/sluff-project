@@ -1,13 +1,13 @@
 // backend/src/core/BotPlayer.js
 
 const gameLogic = require('./logic');
-const { RANKS_ORDER, BID_HIERARCHY } = require('./constants');
+const { RANKS_ORDER, BID_HIERARCHY, BID_MULTIPLIERS, CARD_POINT_VALUES } = require('./constants');
 const { getLegalMoves } = require('./legalMoves');
 
 const getRankValue = (card) => RANKS_ORDER.indexOf(gameLogic.getRank(card));
 
 class BotPlayer {
-    constructor(userId, name, engine) { // Renamed table to engine for clarity
+    constructor(userId, name, engine) {
         this.userId = userId;
         this.playerName = name;
         this.engine = engine; 
@@ -21,8 +21,57 @@ class BotPlayer {
         return { points, suits };
     }
 
-    // --- REFACTORED TO ONLY RETURN A DECISION ---
-    makeBid() {
+    _getBestCardToPlay(legalCards, isLeading) {
+        if (isLeading) {
+            return legalCards.sort((a, b) => getRankValue(b) - getRankValue(a))[0];
+        } else {
+            const winningPlays = legalCards.filter(myCard => {
+                const potentialTrick = [...this.engine.currentTrickCards, { card: myCard, userId: this.userId }];
+                const winner = gameLogic.determineTrickWinner(potentialTrick, this.engine.leadSuitCurrentTrick, this.engine.trumpSuit);
+                return winner.userId === this.userId;
+            });
+
+            if (winningPlays.length > 0) {
+                return winningPlays.sort((a, b) => getRankValue(b) - getRankValue(a))[0];
+            } else {
+                return legalCards.sort((a, b) => getRankValue(a) - getRankValue(b))[0];
+            }
+        }
+    }
+
+    playCard() {
+        const hand = this.engine.hands[this.playerName];
+        if (!hand || hand.length === 0) return null;
+
+        const isLeading = this.engine.currentTrickCards.length === 0;
+        let legalPlays = getLegalMoves(hand, isLeading, this.engine.leadSuitCurrentTrick, this.engine.trumpSuit, this.engine.trumpBroken);
+        if (legalPlays.length === 0) return null;
+
+        let proposedCard = this._getBestCardToPlay([...legalPlays], isLeading);
+
+        if (gameLogic.getRank(proposedCard) === '10') {
+            const suit = gameLogic.getSuit(proposedCard);
+            const aceOfSuit = 'A' + suit;
+
+            const allPlayedCards = Object.values(this.engine.capturedTricks)
+                .flat()
+                .flatMap(trick => trick.cards);
+            
+            const isAceUnaccountedFor = !hand.includes(aceOfSuit) && !allPlayedCards.includes(aceOfSuit);
+
+            if (isAceUnaccountedFor) {
+                const saferPlays = legalPlays.filter(card => card !== proposedCard);
+                if (saferPlays.length > 0) {
+                    proposedCard = this._getBestCardToPlay(saferPlays, isLeading);
+                }
+            }
+        }
+
+        return proposedCard;
+    }
+
+    // --- RENAMED for clarity ---
+    decideBid() {
         const hand = this.engine.hands[this.playerName] || [];
         const { points, suits } = this._analyzeHand(hand);
         let potentialBid = "Pass";
@@ -41,6 +90,17 @@ class BotPlayer {
 
         if (potentialBidLevel > currentBidLevel) {
             return potentialBid;
+        }
+        return "Pass";
+    }
+
+    // --- NEW METHOD for upgrade decision ---
+    decideFrogUpgrade() {
+        const hand = this.engine.hands[this.playerName] || [];
+        const { points, suits } = this._analyzeHand(hand);
+        // A simple check: if the hand is very strong in hearts, take the upgrade.
+        if (suits.H >= 5 && points > 35) {
+            return "Heart Solo";
         }
         return "Pass";
     }
@@ -65,32 +125,50 @@ class BotPlayer {
         return sortedHand.slice(0, 3);
     }
 
-    playCard() {
-        const hand = this.engine.hands[this.playerName];
-        if (!hand || hand.length === 0) return null;
+    makeInsuranceDecision() {
+        const { insurance, bidWinnerInfo, hands, bidderCardPoints, tricksPlayedCount } = this.engine;
+        const bidMultiplier = BID_MULTIPLIERS[bidWinnerInfo.bid] || 1;
+        const isBidder = this.playerName === bidWinnerInfo.playerName;
+        const numberOfOpponents = this.engine.playerOrder.count - 1;
 
-        const isLeading = this.engine.currentTrickCards.length === 0;
-        const legalPlays = getLegalMoves(hand, isLeading, this.engine.leadSuitCurrentTrick, this.engine.trumpSuit, this.engine.trumpBroken);
-        if (legalPlays.length === 0) return null;
+        const certaintyFactor = tricksPlayedCount / 10.0;
+        const projectionFactor = 1.0 - certaintyFactor;
 
-        legalPlays.sort((a, b) => getRankValue(a) - getRankValue(b));
-        let cardToPlay;
-        if (isLeading) {
-            cardToPlay = legalPlays[legalPlays.length - 1];
-        } else {
-            const winningPlays = legalPlays.filter(myCard => {
-                const potentialTrick = [...this.engine.currentTrickCards, { card: myCard, userId: this.userId }];
-                const winner = gameLogic.determineTrickWinner(potentialTrick, this.engine.leadSuitCurrentTrick, this.engine.trumpSuit);
-                return winner.userId === this.userId;
-            });
-            if (winningPlays.length > 0) {
-                winningPlays.sort((a, b) => getRankValue(a) - getRankValue(b));
-                cardToPlay = winningPlays[winningPlays.length - 1];
+        const bidderHand = hands[bidWinnerInfo.playerName] || [];
+        const bidderPointsInHand = gameLogic.calculateCardPoints(bidderHand);
+        const bidderMaxScore = bidderCardPoints + bidderPointsInHand;
+
+        const GOAL = 60;
+        const projectedFinalScore = (GOAL * projectionFactor) + (bidderMaxScore * certaintyFactor);
+
+        if (isBidder) {
+            const projectedSurplus = projectedFinalScore - GOAL;
+            const projectedPointExchange = projectedSurplus * bidMultiplier * numberOfOpponents;
+            const strategicAsk = Math.round(projectedPointExchange / 5) * 5;
+
+            if (strategicAsk !== insurance.bidderRequirement) {
+                return { settingType: 'bidderRequirement', value: strategicAsk };
+            }
+        } else { // Is a Defender
+            const projectedSurplus = projectedFinalScore - GOAL;
+            const projectedDefenderLoss = projectedSurplus * bidMultiplier;
+            
+            let strategicOffer;
+            if (projectedDefenderLoss > 0) {
+                const baseOffer = Math.round((projectedDefenderLoss * 1.05) / 5) * 5;
+                strategicOffer = baseOffer + 20; 
             } else {
-                cardToPlay = legalPlays[0];
+                const projectedDefenderWinnings = -projectedDefenderLoss;
+                const baseOffer = -Math.round((projectedDefenderWinnings / 2) / 5) * 5;
+                strategicOffer = baseOffer + 20; 
+            }
+
+            if (strategicOffer !== insurance.defenderOffers[this.playerName]) {
+                return { settingType: 'defenderOffer', value: strategicOffer };
             }
         }
-        return cardToPlay;
+        
+        return null;
     }
 }
 
