@@ -203,14 +203,15 @@ const TableLayout = ({
 
     return (
         <main className="game-table">
-            <div className="player-seat-left">
-                <PlayerSeat playerName={seatAssignments.opponentLeft} currentTableState={currentTableState} isSelf={false} emitEvent={emitEvent} />
-            </div>
-            <div className="player-seat-right">
-                <PlayerSeat playerName={seatAssignments.opponentRight} currentTableState={currentTableState} isSelf={false} emitEvent={emitEvent} />
-            </div>
-
             <div className="table-oval">
+                {/* --- STRUCTURAL CHANGE: Opponent seats are now INSIDE the oval --- */}
+                <div className="player-seat-left">
+                    <PlayerSeat playerName={seatAssignments.opponentLeft} currentTableState={currentTableState} isSelf={false} emitEvent={emitEvent} />
+                </div>
+                <div className="player-seat-right">
+                    <PlayerSeat playerName={seatAssignments.opponentRight} currentTableState={currentTableState} isSelf={false} emitEvent={emitEvent} />
+                </div>
+
                 <img 
                     src="/SluffLogo.png" 
                     alt="Sluff Watermark" 

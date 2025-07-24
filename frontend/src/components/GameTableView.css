@@ -53,14 +53,16 @@
     background-color: #004d00;
     border-radius: 150px;
     border: 10px solid #3e2723;
+    /* --- CRITICAL CHANGE: Make this a positioning context --- */
     position: relative;
     box-shadow: inset 0 0 25px rgba(0,0,0,0.5);
 }
 
+/* --- MODIFIED: Position seats relative to the .table-oval --- */
 .player-seat-left {
     position: absolute;
     top: 50%;
-    left: 2%; 
+    left: 20px; /* Anchor to the left edge of the oval */
     transform: translateY(-50%);
     z-index: 10;
 }
@@ -68,10 +70,12 @@
 .player-seat-right {
     position: absolute;
     top: 50%;
-    right: 2%;
+    right: 20px; /* Anchor to the right edge of the oval */
     transform: translateY(-50%);
     z-index: 10;
 }
+/* --- END MODIFICATION --- */
+
 
 .player-seat-bottom {
     position: absolute;
@@ -521,18 +525,7 @@ button.card-display:disabled {
 @media (orientation: portrait) {
     .table-oval { border-radius: 50px; }
 
-    /* --- THIS IS THE FIX --- */
-    /* Override desktop positioning for opponent seat CONTAINERS in portrait mode */
-    .player-seat-left {
-        left: 15px; /* Use a fixed pixel value to anchor to the edge */
-        transform: translateY(-50%); /* Keep vertical centering */
-    }
-    .player-seat-right {
-        right: 15px; /* Use a fixed pixel value to anchor to the edge */
-        transform: translateY(-50%); /* Keep vertical centering */
-    }
-    /* --- END THE FIX --- */
-
+    /* Portrait mode keeps the rotation, but the containers are already positioned correctly now */
     .player-seat-left .player-seat {
         transform: rotate(90deg);
     }
