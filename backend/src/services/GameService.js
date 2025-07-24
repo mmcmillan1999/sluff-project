@@ -277,70 +277,73 @@ class GameService {
         }
     }
 
+    // --- REWRITTEN BOT TRIGGER LOGIC ---
     _triggerBots(tableId) {
         const engine = this.getEngineById(tableId);
         if (!engine || engine.pendingBotAction) return;
 
+        // A single bot should take a single action per trigger. This prevents race conditions.
+        let actionTaken = false;
+
         for (const botId in engine.bots) {
+            if (actionTaken) break; // Only allow one bot to act at a time.
+
             const bot = engine.bots[botId];
+            const botUserId = bot.userId;
             
             const isCourtney = bot.playerName === "Courtney Sr.";
             const standardDelay = 1000;
             const playDelay = 1200;
             const roundEndDelay = 8000;
-            const insuranceDelay = 2500; // --- NEW: Delay for insurance thinking
+            const insuranceDelay = 3000;
 
-            const makeMove = (actionServiceFn, ...args) => {
-                const delay = 
-                    engine.state === 'Playing Phase' ? (isCourtney ? playDelay * 2 : playDelay) :
-                    engine.state === 'Awaiting Next Round Trigger' ? (isCourtney ? roundEndDelay * 2 : roundEndDelay) :
-                    (isCourtney ? standardDelay * 2 : standardDelay);
-
+            const scheduleAction = (actionFn, delay, ...args) => {
+                actionTaken = true; // Mark that an action is being scheduled
                 engine.pendingBotAction = setTimeout(() => {
                     engine.pendingBotAction = null;
-                    actionServiceFn.call(this, tableId, bot.userId, ...args);
-                }, delay);
+                    actionFn.call(this, tableId, botUserId, ...args);
+                }, isCourtney ? delay * 2 : delay);
             };
 
-            if (engine.state === 'Dealing Pending' && engine.dealer == bot.userId) {
-                return makeMove(this.dealCards);
-            }
-            if (engine.state === 'Awaiting Next Round Trigger' && engine.roundSummary?.dealerOfRoundId == bot.userId) {
-                return makeMove(this.requestNextRound);
-            }
-            if (engine.state === 'Awaiting Frog Upgrade Decision' && engine.biddingTurnPlayerId == bot.userId) {
-                return makeMove(this.placeBid, "Pass");
-            }
-            if (engine.state === 'Bidding Phase' && engine.biddingTurnPlayerId == bot.userId) {
+            // --- Priority 1: Turn-based Game Flow Actions ---
+            if (engine.state === 'Dealing Pending' && engine.dealer == botUserId) {
+                scheduleAction(this.dealCards, standardDelay);
+            } else if (engine.state === 'Awaiting Next Round Trigger' && engine.roundSummary?.dealerOfRoundId == botUserId) {
+                scheduleAction(this.requestNextRound, roundEndDelay);
+            } else if (engine.state === 'Bidding Phase' && engine.biddingTurnPlayerId == botUserId) {
                 const bid = bot.makeBid();
-                return makeMove(this.placeBid, bid);
-            }
-            if (engine.state === 'Trump Selection' && engine.bidWinnerInfo?.userId == bot.userId && !engine.trumpSuit) {
+                scheduleAction(this.placeBid, standardDelay, bid);
+            } else if (engine.state === 'Awaiting Frog Upgrade Decision' && engine.biddingTurnPlayerId == botUserId) {
+                scheduleAction(this.placeBid, standardDelay, "Pass");
+            } else if (engine.state === 'Trump Selection' && engine.bidWinnerInfo?.userId == botUserId && !engine.trumpSuit) {
                 const suit = bot.chooseTrump();
-                return makeMove(this.chooseTrump, suit);
-            }
-            if (engine.state === 'Frog Widow Exchange' && engine.bidWinnerInfo?.userId == bot.userId && engine.widowDiscardsForFrogBidder.length === 0) {
+                scheduleAction(this.chooseTrump, standardDelay, suit);
+            } else if (engine.state === 'Frog Widow Exchange' && engine.bidWinnerInfo?.userId == botUserId && engine.widowDiscardsForFrogBidder.length === 0) {
                 const discards = bot.submitFrogDiscards();
-                return makeMove(this.submitFrogDiscards, discards);
-            }
-            if (engine.state === 'Playing Phase' && engine.trickTurnPlayerId == bot.userId) {
+                scheduleAction(this.submitFrogDiscards, standardDelay, discards);
+            } else if (engine.state === 'Playing Phase' && engine.trickTurnPlayerId == botUserId) {
                 const card = bot.playCard();
                 if (card) {
-                    return makeMove(this.playCard, card);
+                    scheduleAction(this.playCard, playDelay, card);
                 }
             }
-            // --- NEW: Trigger for bot insurance decision ---
-            if (engine.state === 'Playing Phase' && engine.insurance.isActive && !engine.insurance.dealExecuted) {
-                engine.pendingBotAction = setTimeout(() => {
-                    engine.pendingBotAction = null;
+        }
+
+        // --- Priority 2: Background "Thinking" Actions (like Insurance) ---
+        // This runs *after* the main loop to avoid blocking game flow.
+        // It also doesn't set actionTaken, allowing multiple bots to think at once if needed.
+        if (!actionTaken && engine.state === 'Playing Phase' && engine.insurance.isActive && !engine.insurance.dealExecuted) {
+            for (const botId in engine.bots) {
+                const bot = engine.bots[botId];
+                // Give each bot its own short timer to make an insurance decision
+                setTimeout(() => {
                     const decision = bot.makeInsuranceDecision();
                     if (decision) {
                         engine.updateInsuranceSetting(bot.userId, decision.settingType, decision.value);
                         this.io.to(tableId).emit('gameState', engine.getStateForClient());
                         this.io.emit('lobbyState', this.getLobbyState());
                     }
-                }, isCourtney ? insuranceDelay * 2 : insuranceDelay);
-                return; // Prevent other actions from being scheduled
+                }, 500); // A very short delay for near-instant "thinking"
             }
         }
     }
