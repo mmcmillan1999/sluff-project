@@ -350,26 +350,14 @@ button.card-display:disabled {
         bottom: 25%;
     }
     
-    .defender-pile, .bidder-pile {
-        position: fixed;
-        bottom: 180px;
-        transform: none;
-        z-index: 15;
+    /* --- THE CORRECTED AND SIMPLIFIED FIX --- */
+    .trick-pile-container {
+        /* This positions the entire pile (cards + bar) */
+        bottom: 20vh; /* Position it 20% from the bottom of the screen */
     }
 
-    .defender-pile {
-        left: 1px;
-    }
-
-    .bidder-pile {
-        right: 1px;
-        left: auto;
-    }
-    
-    .defender-pile .score-progress-container, 
-    .bidder-pile .score-progress-container {
-        width: 130px;
-        left: 0;
-        transform: none;
+    .score-progress-container {
+        /* This positions the bar relative to its parent pile */
+        width: 140px; /* Narrow the progress bar */
     }
 }
