@@ -3,6 +3,8 @@
 
 const createDbTables = async (pool) => {
     try {
+        await pool.query('BEGIN');
+
         // This command creates the type if it doesn't exist at all.
         await pool.query(`
             DO $$ BEGIN
@@ -28,7 +30,7 @@ const createDbTables = async (pool) => {
             END $$;
         `);
 
-        // NEW: Add a status type for feedback tracking
+        // --- MODIFICATION: Add 'hidden' to the feedback status enum ---
         await pool.query(`
             DO $$ BEGIN
                 CREATE TYPE feedback_status_enum AS ENUM ('new', 'in_progress', 'resolved', 'wont_fix');
@@ -36,6 +38,9 @@ const createDbTables = async (pool) => {
                 WHEN duplicate_object THEN null;
             END $$;
         `);
+        // Add the new value if the type already exists but the value doesn't
+        await pool.query("ALTER TYPE feedback_status_enum ADD VALUE IF NOT EXISTS 'hidden'");
+
 
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
@@ -87,8 +92,13 @@ const createDbTables = async (pool) => {
                 status feedback_status_enum DEFAULT 'new'
             );
         `);
+        
+        // --- MODIFICATION: Add new columns to the feedback table ---
+        await pool.query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS admin_response TEXT");
+        await pool.query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS admin_notes TEXT");
+        await pool.query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS last_updated_by_admin_at TIMESTAMP WITH TIME ZONE");
 
-        // --- NEW: Create the lobby chat messages table ---
+
         await pool.query(`
             CREATE TABLE IF NOT EXISTS lobby_chat_messages (
                 id SERIAL PRIMARY KEY,
@@ -99,9 +109,10 @@ const createDbTables = async (pool) => {
             );
         `);
 
-
-        console.log("✅ Tables checked/created successfully.");
+        await pool.query('COMMIT');
+        console.log("✅ Tables checked/created/altered successfully.");
     } catch (err) {
+        await pool.query('ROLLBACK');
         console.error("Error during table creation/modification:", err);
         throw err;
     }
