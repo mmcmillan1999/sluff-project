@@ -54,11 +54,10 @@ const registerGameHandlers = (io, gameService) => {
             }
         });
 
-        socket.on("joinTable", async ({ tableId }) => { // Made async
+        socket.on("joinTable", async ({ tableId }) => {
             const engineToJoin = gameService.getEngineById(tableId);
             if (!engineToJoin) return socket.emit("error", { message: "Table not found." });
             
-            // --- MODIFICATION: Fetch tokens before joining ---
             try {
                 const tokenResult = await gameService.pool.query("SELECT SUM(amount) AS tokens FROM transactions WHERE user_id = $1", [socket.user.id]);
                 const tokens = parseFloat(tokenResult.rows[0].tokens || 0).toFixed(2);
@@ -70,7 +69,7 @@ const registerGameHandlers = (io, gameService) => {
                     gameService.io.to(previousEngine.tableId).emit('gameState', previousEngine.getStateForClient());
                 }
                 socket.join(tableId);
-                engineToJoin.joinTable(socket.user, socket.id, tokens); // Pass tokens to engine
+                engineToJoin.joinTable(socket.user, socket.id, tokens);
                 socket.emit('joinedTable', { gameState: engineToJoin.getStateForClient() });
                 gameService.io.to(tableId).emit('gameState', engineToJoin.getStateForClient());
                 gameService.io.emit('lobbyState', gameService.getLobbyState());
@@ -108,7 +107,9 @@ const registerGameHandlers = (io, gameService) => {
         socket.on("chooseTrump", ({tableId, suit}) => gameService.chooseTrump(tableId, socket.user.id, suit));
         socket.on("submitFrogDiscards", ({tableId, discards}) => gameService.submitFrogDiscards(tableId, socket.user.id, discards));
         socket.on("requestNextRound", ({tableId}) => gameService.requestNextRound(tableId, socket.user.id));
+        socket.on("submitDrawVote", ({tableId, vote}) => gameService.submitDrawVote(tableId, socket.user.id, vote)); // THE FIX
 
+        // Non-effect handlers can still call the engine directly for simple synchronous changes.
         const createDirectHandler = (methodName) => (payload) => {
             const { tableId, ...args } = payload;
             const engine = gameService.getEngineById(tableId);
@@ -125,15 +126,6 @@ const registerGameHandlers = (io, gameService) => {
         socket.on("updateInsuranceSetting", createDirectHandler('updateInsuranceSetting'));
         socket.on("startTimeoutClock", createDirectHandler('startTimeoutClock'));
         socket.on("requestDraw", createDirectHandler('requestDraw'));
-
-        socket.on("submitDrawVote", (payload) => {
-            const { tableId, vote } = payload;
-            const engine = gameService.getEngineById(tableId);
-            if (engine) {
-                engine.submitDrawVote(socket.user.id, vote);
-                gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
-            }
-        });
 
         socket.on("requestUserSync", async () => {
             try {

@@ -77,6 +77,11 @@ class GameService {
     async requestNextRound(tableId, userId) {
         await this._performAction(tableId, (engine) => engine.requestNextRound(userId));
     }
+
+    // --- NEW METHOD TO ENSURE EFFECTS ARE PROCESSED ---
+    async submitDrawVote(tableId, userId, vote) {
+        await this._performAction(tableId, (engine) => engine.submitDrawVote(userId, vote));
+    }
     
     async handleGameOver(payload) {
         const { scores, theme, gameId, players } = payload;
@@ -169,16 +174,19 @@ class GameService {
     }
 
     async handleDrawOutcome(payload) {
-        const transactionFn = (args) => transactionManager.postTransaction(this.pool, args);
-        const statUpdateFn = (query, params) => this.pool.query(query, params);
-
-        const summary = await gameLogic.handleDrawGameOver(
-            { ...payload, pool: this.pool },
-            payload.outcome,
-            transactionFn,
-            statUpdateFn
-        );
-        return summary;
+        const { outcome, ...tableData } = payload;
+        try {
+            const summary = await transactionManager.handleDrawTransactions(this.pool, tableData, outcome);
+            return summary;
+        } catch (error) {
+            console.error(`[SERVICE] Error handling draw outcome for game ${payload.gameId}:`, error);
+            return {
+                isGameOver: true,
+                drawOutcome: 'Error',
+                message: 'An error occurred processing the game end. Please contact an admin.',
+                payouts: {},
+            };
+        }
     }
 
     resetAllEngines() {
@@ -261,7 +269,6 @@ class GameService {
                 case 'START_GAME_TRANSACTIONS': {
                     try {
                         const gameId = await transactionManager.createGameRecord(this.pool, effect.payload.table);
-                        // --- MODIFICATION: Expect updatedTokens back ---
                         const updatedTokens = await transactionManager.handleGameStartTransaction(this.pool, effect.payload.table, effect.payload.playerIds, gameId);
                         if (effect.onSuccess) effect.onSuccess(gameId, updatedTokens);
                     } catch (err) {
@@ -340,20 +347,18 @@ class GameService {
             }
         }
 
-        // --- NEW BLOCK: Handle bot voting for draw requests ---
         if (!actionTaken && engine.drawRequest.isActive) {
             for (const botId in engine.bots) {
                 const bot = engine.bots[botId];
-                // Check if this bot has a pending vote
                 if (engine.drawRequest.votes[bot.playerName] === null) {
-                    actionTaken = true; // Mark that an action is being scheduled
+                    actionTaken = true;
                     engine.pendingBotAction = setTimeout(async () => {
                         engine.pendingBotAction = null;
                         const vote = bot.decideDrawVote();
-                        const { effects } = engine.submitDrawVote(bot.userId, vote);
-                        await this._executeEffects(tableId, effects);
-                    }, 2000); // Wait 2 seconds before voting
-                    break; // Only one bot votes per trigger cycle
+                        // Use the new service method to ensure effects are processed
+                        await this.submitDrawVote(tableId, bot.userId, vote);
+                    }, 2000);
+                    break;
                 }
             }
         }
