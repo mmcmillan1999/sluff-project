@@ -112,18 +112,20 @@ const TableLayout = ({
 
         const TrickPile = ({ count }) => (
             <div className="trick-pile">
-                <div className="trick-pile-cards">
-                    {count === 0 ? (
-                        renderCard(null, { isFaceDown: true, style: { opacity: 0.3 }, small: true })
-                    ) : (
-                        Array.from({ length: count }).map((_, i) => (
-                            <div key={i} className="trick-pile-card-wrapper" style={{ transform: `translateY(-${i * 2}px)` }}>
-                                {renderCard(null, { isFaceDown: true, small: true })}
-                            </div>
-                        ))
-                    )}
+                <div className="trick-pile-content-wrapper">
+                    <div className="trick-pile-cards">
+                        {count === 0 ? (
+                            renderCard(null, { isFaceDown: true, style: { opacity: 0.3 }, small: true })
+                        ) : (
+                            Array.from({ length: count }).map((_, i) => (
+                                <div key={i} className="trick-pile-card-wrapper" style={{ transform: `translateY(-${i * 2}px)` }}>
+                                    {renderCard(null, { isFaceDown: true, small: true })}
+                                </div>
+                            ))
+                        )}
+                    </div>
+                    <span className="trick-pile-count">{count}</span>
                 </div>
-                <span className="trick-pile-count">{count}</span>
             </div>
         );
 
