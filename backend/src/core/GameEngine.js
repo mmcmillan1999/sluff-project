@@ -54,18 +54,20 @@ class GameEngine {
         this._resolveForfeit(playerName, "voluntary forfeit");
     }
     
-    joinTable(user, socketId) {
+    joinTable(user, socketId, tokens = null) { // MODIFIED to accept tokens
         const { id, username } = user;
         const isPlayerAlreadyInGame = !!this.players[id];
         if (isPlayerAlreadyInGame) {
             this.players[id].disconnected = false;
             this.players[id].socketId = socketId;
+            if (tokens !== null) this.players[id].tokens = tokens; // Update tokens on reconnect
         } else {
             const activePlayersCount = this.playerOrder.count;
+            const playerBase = { userId: id, playerName: username, socketId, tokens }; // Add tokens here
             if (this.gameStarted || activePlayersCount >= 4) {
-                this.players[id] = { userId: id, playerName: username, socketId: socketId, isSpectator: true, disconnected: false };
+                this.players[id] = { ...playerBase, isSpectator: true, disconnected: false };
             } else {
-                 this.players[id] = { userId: id, playerName: username, socketId: socketId, isSpectator: false, disconnected: false };
+                 this.players[id] = { ...playerBase, isSpectator: false, disconnected: false };
                  if (!this.playerOrder.includes(id)) {
                     this.playerOrder.add(id);
                 }
@@ -87,7 +89,7 @@ class GameEngine {
         const botName = availableNames[Math.floor(Math.random() * availableNames.length)];
         const botId = this._nextBotId--;
         
-        this.players[botId] = { userId: botId, playerName: botName, socketId: null, isSpectator: false, disconnected: false, isBot: true };
+        this.players[botId] = { userId: botId, playerName: botName, socketId: null, isSpectator: false, disconnected: false, isBot: true, tokens: 'N/A' }; // Give bots a token placeholder
         this.bots[botId] = new BotPlayer(botId, botName, this);
         if (!this.scores[botName]) this.scores[botName] = 120;
         if (!this.playerOrder.includes(botId)) {
@@ -146,11 +148,12 @@ class GameEngine {
         }
     }
     
-    reconnectPlayer(userId, socket) {
+    reconnectPlayer(userId, socket, tokens) { // MODIFIED to accept tokens
         if (!this.players[userId] || !this.players[userId].disconnected) return;
         console.log(`[${this.tableId}] Reconnecting user ${this.players[userId].playerName}.`);
         this.players[userId].disconnected = false;
         this.players[userId].socketId = socket.id;
+        if (tokens !== null) this.players[userId].tokens = tokens; // Update tokens on reconnect
         if (this.forfeiture.targetPlayerName === this.players[userId].playerName) {
              this._clearForfeitTimer();
         }
@@ -172,10 +175,15 @@ class GameEngine {
                 table: { tableId: this.tableId, theme: this.theme, playerMode: this.playerMode },
                 playerIds: activePlayerIds.filter(id => !this.players[id].isBot) 
             },
-            onSuccess: (gameId) => {
+            onSuccess: (gameId, updatedTokens) => { // MODIFIED to receive tokens
                 this.gameId = gameId;
                 this.gameStarted = true;
-                activePlayerIds.forEach(id => { if (this.scores[this.players[id].playerName] === undefined) this.scores[this.players[id].playerName] = 120; });
+                activePlayerIds.forEach(id => { 
+                    if (this.scores[this.players[id].playerName] === undefined) this.scores[this.players[id].playerName] = 120;
+                    if(updatedTokens && updatedTokens[id] !== undefined) {
+                        this.players[id].tokens = updatedTokens[id]; // Update tokens after buy-in
+                    }
+                });
                 if (this.playerMode === 3 && this.scores[PLACEHOLDER_ID] === undefined) { this.scores[PLACEHOLDER_ID] = 120; }
                 const shuffledPlayerIds = shuffle([...activePlayerIds]);
                 this.dealer = shuffledPlayerIds[0];
@@ -384,8 +392,6 @@ class GameEngine {
             }
         });
         this.bidderCardPoints = 0; this.defenderCardPoints = 0;
-        // --- THIS IS THE FIX ---
-        // Initialize the array that was causing the crash in playHandler.js
         this.allCardsPlayedThisRound = [];
     }
     

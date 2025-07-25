@@ -63,13 +63,13 @@ const TableLayout = ({
 
         return (
             <>
-                <div style={{ position: 'absolute', bottom: '30%', left: '50%', transform: 'translateX(-50%)' }}>
+                <div className="played-card-bottom">
                     {getPlayedCardForPlayer(seatAssignments.self)}
                 </div>
-                <div style={{ position: 'absolute', top: '50%', left: '25%', transform: 'translateY(-50%)' }}>
+                <div className="played-card-left">
                     {getPlayedCardForPlayer(seatAssignments.opponentLeft)}
                 </div>
-                <div style={{ position: 'absolute', top: '50%', right: '25%', transform: 'translateY(-50%)' }}>
+                <div className="played-card-right">
                     {getPlayedCardForPlayer(seatAssignments.opponentRight)}
                 </div>
             </>
@@ -98,7 +98,7 @@ const TableLayout = ({
     };
     
     const renderTrickTallyPiles = () => {
-        const { capturedTricks, bidWinnerInfo, playerOrderActive, lastCompletedTrick, theme, state, bidderCardPoints, defenderCardPoints } = currentTableState;
+        const { capturedTricks, bidWinnerInfo, playerOrderActive, lastCompletedTrick } = currentTableState;
         if (!bidWinnerInfo) return null;
         
         const bidderName = bidWinnerInfo.playerName;
@@ -109,8 +109,6 @@ const TableLayout = ({
         const lastWinnerName = lastCompletedTrick?.winnerName;
         const bidderWonLast = lastWinnerName === bidderName;
         const defenderWonLast = lastWinnerName && !bidderWonLast;
-        
-        const showProgressBars = theme === 'miss-pauls-academy' && state === 'Playing Phase';
 
         const TrickPile = ({ count }) => (
             <div className="trick-pile">
@@ -137,30 +135,81 @@ const TableLayout = ({
                     <div className={`trick-pile-base defender-base ${defenderWonLast ? 'pulsating-blue' : ''}`} onClick={() => handleTrickPileClick('defender')}>
                         <TrickPile count={defenderTricksCount} />
                     </div>
-                    {showProgressBars && (
-                        <div className="progress-bar-container">
-                            <ScoreProgressBar 
-                                currentPoints={defenderCardPoints} 
-                                opponentPoints={bidderCardPoints}
-                                barColor="linear-gradient(to right, #3b82f6, #60a5fa)"
-                            />
-                        </div>
-                    )}
                 </div>
                 <div className="trick-pile-container bidder-pile">
                     <div className={`trick-pile-base bidder-base ${bidderWonLast ? 'pulsating-gold' : ''}`} onClick={() => handleTrickPileClick('bidder')}>
                         <TrickPile count={bidderTricksCount} />
                     </div>
-                    {showProgressBars && (
-                        <div className="progress-bar-container">
-                            <ScoreProgressBar 
-                                currentPoints={bidderCardPoints} 
-                                opponentPoints={defenderCardPoints}
-                                barColor="linear-gradient(to right, #f59e0b, #facc15)"
-                            />
-                        </div>
-                    )}
                 </div>
+            </>
+        );
+    };
+
+    const renderProgressBars = () => {
+        const { theme, state, bidWinnerInfo, bidderCardPoints, defenderCardPoints } = currentTableState;
+        if (!bidWinnerInfo || theme !== 'miss-pauls-academy' || state !== 'Playing Phase') {
+            return null;
+        }
+
+        return (
+            <>
+                <div className="progress-bar-container defender-progress-container">
+                    <ScoreProgressBar 
+                        currentPoints={defenderCardPoints} 
+                        opponentPoints={bidderCardPoints}
+                        barColor="linear-gradient(to right, #3b82f6, #60a5fa)"
+                    />
+                </div>
+                <div className="progress-bar-container bidder-progress-container">
+                    <ScoreProgressBar 
+                        currentPoints={bidderCardPoints} 
+                        opponentPoints={defenderCardPoints}
+                        barColor="linear-gradient(to right, #f59e0b, #facc15)"
+                    />
+                </div>
+            </>
+        );
+    };
+
+    const renderPlayerPucks = () => {
+        const { players, dealer, bidWinnerInfo, trumpSuit, playerOrderActive } = currentTableState;
+        if (!playerOrderActive || playerOrderActive.length === 0) return null;
+
+        const Puck = ({ player, position }) => {
+            if (!player) return null;
+            const isDealer = dealer === player.userId;
+            const isBidWinner = bidWinnerInfo?.playerName === player.playerName;
+            const isDefender = bidWinnerInfo && !isBidWinner && playerOrderActive.includes(player.playerName);
+
+            let rolePuckContent = null;
+            if (isBidWinner) {
+                switch (bidWinnerInfo.bid) {
+                    case "Frog": rolePuckContent = "FROG"; break;
+                    case "Heart Solo": rolePuckContent = "H-S"; break;
+                    case "Solo": rolePuckContent = `${trumpSuit}-S`; break;
+                    default: break;
+                }
+            } else if (isDefender) {
+                rolePuckContent = "TEAM";
+            }
+            
+            const rolePuckClasses = ['puck', 'role-puck', isBidWinner ? 'bid-winner' : 'defender', rolePuckContent?.length > 3 && 'small-font'].filter(Boolean).join(' ');
+
+            return (
+                <div className={`puck-container-${position}`}>
+                    {isDealer && <div className="puck dealer-puck">D</div>}
+                    {rolePuckContent && <div className={rolePuckClasses}>{rolePuckContent}</div>}
+                </div>
+            );
+        };
+
+        const getPlayerByName = (name) => Object.values(players).find(p => p.playerName === name);
+
+        return (
+            <>
+                <Puck player={getPlayerByName(seatAssignments.self)} position="bottom" />
+                <Puck player={getPlayerByName(seatAssignments.opponentLeft)} position="left" />
+                <Puck player={getPlayerByName(seatAssignments.opponentRight)} position="right" />
             </>
         );
     };
@@ -249,6 +298,8 @@ const TableLayout = ({
                 {renderTrumpIndicatorPuck()}
                 {renderTrickTallyPiles()}
                 {renderLastTrickOverlay()}
+                {renderPlayerPucks()}
+                {renderProgressBars()}
 
                 <div className="player-seat-bottom">
                     <PlayerSeat playerName={seatAssignments.self} currentTableState={currentTableState} isSelf={true} emitEvent={emitEvent} />

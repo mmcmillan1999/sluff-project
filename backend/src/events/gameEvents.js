@@ -20,8 +20,13 @@ const registerGameHandlers = (io, gameService) => {
 
         const engine = Object.values(gameService.getAllEngines()).find(e => e.players[socket.user.id]);
         if (engine && engine.players[socket.user.id]?.disconnected) {
-            engine.reconnectPlayer(socket.user.id, socket);
-            gameService.io.to(engine.tableId).emit('gameState', engine.getStateForClient());
+            gameService.pool.query("SELECT SUM(amount) AS tokens FROM transactions WHERE user_id = $1", [socket.user.id])
+                .then(tokenResult => {
+                    const tokens = parseFloat(tokenResult.rows[0].tokens || 0).toFixed(2);
+                    engine.reconnectPlayer(socket.user.id, socket, tokens);
+                    gameService.io.to(engine.tableId).emit('gameState', engine.getStateForClient());
+                })
+                .catch(err => console.error("Error fetching tokens on reconnect:", err));
         }
         
         socket.emit("lobbyState", gameService.getLobbyState());
@@ -49,20 +54,31 @@ const registerGameHandlers = (io, gameService) => {
             }
         });
 
-        socket.on("joinTable", ({ tableId }) => {
+        socket.on("joinTable", async ({ tableId }) => { // Made async
             const engineToJoin = gameService.getEngineById(tableId);
             if (!engineToJoin) return socket.emit("error", { message: "Table not found." });
-            const previousEngine = Object.values(gameService.getAllEngines()).find(e => e.players[socket.user.id] && e.tableId !== tableId);
-            if (previousEngine) {
-                previousEngine.leaveTable(socket.user.id);
-                socket.leave(previousEngine.tableId);
-                gameService.io.to(previousEngine.tableId).emit('gameState', previousEngine.getStateForClient());
+            
+            // --- MODIFICATION: Fetch tokens before joining ---
+            try {
+                const tokenResult = await gameService.pool.query("SELECT SUM(amount) AS tokens FROM transactions WHERE user_id = $1", [socket.user.id]);
+                const tokens = parseFloat(tokenResult.rows[0].tokens || 0).toFixed(2);
+
+                const previousEngine = Object.values(gameService.getAllEngines()).find(e => e.players[socket.user.id] && e.tableId !== tableId);
+                if (previousEngine) {
+                    previousEngine.leaveTable(socket.user.id);
+                    socket.leave(previousEngine.tableId);
+                    gameService.io.to(previousEngine.tableId).emit('gameState', previousEngine.getStateForClient());
+                }
+                socket.join(tableId);
+                engineToJoin.joinTable(socket.user, socket.id, tokens); // Pass tokens to engine
+                socket.emit('joinedTable', { gameState: engineToJoin.getStateForClient() });
+                gameService.io.to(tableId).emit('gameState', engineToJoin.getStateForClient());
+                gameService.io.emit('lobbyState', gameService.getLobbyState());
+
+            } catch(err) {
+                 console.error(`Error fetching tokens for user ${socket.user.id} on join:`, err);
+                 socket.emit("error", { message: "Could not retrieve your token balance." });
             }
-            socket.join(tableId);
-            engineToJoin.joinTable(socket.user, socket.id);
-            socket.emit('joinedTable', { gameState: engineToJoin.getStateForClient() });
-            gameService.io.to(tableId).emit('gameState', engineToJoin.getStateForClient());
-            gameService.io.emit('lobbyState', gameService.getLobbyState());
         });
 
         socket.on("leaveTable", ({ tableId }) => {
@@ -85,7 +101,6 @@ const registerGameHandlers = (io, gameService) => {
             }
         });
         
-        // --- ALL HANDLERS NOW POINT TO THE SERVICE ---
         socket.on("startGame", ({tableId}) => gameService.startGame(tableId, socket.user.id));
         socket.on("playCard", ({tableId, card}) => gameService.playCard(tableId, socket.user.id, card));
         socket.on("dealCards", ({tableId}) => gameService.dealCards(tableId, socket.user.id));
@@ -94,7 +109,6 @@ const registerGameHandlers = (io, gameService) => {
         socket.on("submitFrogDiscards", ({tableId, discards}) => gameService.submitFrogDiscards(tableId, socket.user.id, discards));
         socket.on("requestNextRound", ({tableId}) => gameService.requestNextRound(tableId, socket.user.id));
 
-        // --- NON-EFFECT HANDLERS (for now) ---
         const createDirectHandler = (methodName) => (payload) => {
             const { tableId, ...args } = payload;
             const engine = gameService.getEngineById(tableId);
@@ -102,7 +116,7 @@ const registerGameHandlers = (io, gameService) => {
                 const methodArgs = Object.keys(args).length > 0 ? [socket.user.id, args] : [socket.user.id];
                 engine[methodName](...methodArgs);
                 gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
-                gameService.io.emit('lobbyState', gameService.getLobbyState()); // Also update lobby
+                gameService.io.emit('lobbyState', gameService.getLobbyState());
             }
         };
         socket.on("removeBot", createDirectHandler('removeBot'));
@@ -112,18 +126,15 @@ const registerGameHandlers = (io, gameService) => {
         socket.on("startTimeoutClock", createDirectHandler('startTimeoutClock'));
         socket.on("requestDraw", createDirectHandler('requestDraw'));
 
-        // --- THIS IS THE FIX: A dedicated handler for submitDrawVote ---
         socket.on("submitDrawVote", (payload) => {
             const { tableId, vote } = payload;
             const engine = gameService.getEngineById(tableId);
             if (engine) {
-                // We now pass the 'vote' string directly, not the whole object
                 engine.submitDrawVote(socket.user.id, vote);
                 gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
             }
         });
 
-        // --- USER-SPECIFIC & MISC LISTENERS ---
         socket.on("requestUserSync", async () => {
             try {
                 const pool = gameService.pool;
