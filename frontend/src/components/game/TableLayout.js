@@ -123,6 +123,7 @@ const TableLayout = ({
                         ))
                     )}
                 </div>
+                <span className="trick-pile-count">{count}</span>
             </div>
         );
 
@@ -131,19 +132,11 @@ const TableLayout = ({
                 <div className="trick-pile-container defender-pile" onClick={() => handleTrickPileClick('defender')}>
                     <div className={`trick-pile-base defender-base ${defenderWonLast ? 'pulsating-blue' : ''}`}>
                         <TrickPile count={defenderTricksCount} />
-                        <div className="pile-label">
-                            Team ({defenderTricksCount})<br/>
-                            {defenderNames.join(', ')}
-                        </div>
                     </div>
                 </div>
                 <div className="trick-pile-container bidder-pile" onClick={() => handleTrickPileClick('bidder')}>
                     <div className={`trick-pile-base bidder-base ${bidderWonLast ? 'pulsating-gold' : ''}`}>
                         <TrickPile count={bidderTricksCount} />
-                        <div className="pile-label">
-                            Bidder ({bidderTricksCount})<br/>
-                            {bidderName}
-                        </div>
                     </div>
                 </div>
             </>

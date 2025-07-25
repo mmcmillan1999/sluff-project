@@ -112,7 +112,7 @@
 .bidder-pile { right: 15%; }
 
 .trick-pile-base {
-    padding: 5px 15px;
+    padding: 8px; /* Reduced padding to make it tighter */
     border-radius: 8px;
     box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
     transition: box-shadow 0.3s;
@@ -145,7 +145,6 @@
     position: relative;
     height: 67.5px;
     width: 48.75px;
-    margin-bottom: 5px;
 }
 .trick-pile-card-wrapper {
     position: absolute;
@@ -153,13 +152,13 @@
     left: 0;
 }
 
-.pile-label {
+.trick-pile-count { /* NEW STYLE for the count */
     color: white;
     font-family: 'Oswald', sans-serif;
     text-shadow: 1px 1px 2px black;
-    font-size: 0.9em;
-    margin-top: 5px;
-    text-align: center;
+    font-size: 1.2em; /* Made it larger */
+    margin-top: 5px; /* Space between cards and count */
+    font-weight: bold;
 }
 
 .score-progress-container {
