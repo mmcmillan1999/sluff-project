@@ -98,7 +98,7 @@ const TableLayout = ({
     };
     
     const renderTrickTallyPiles = () => {
-        const { capturedTricks, bidWinnerInfo, playerOrderActive, lastCompletedTrick } = currentTableState;
+        const { capturedTricks, bidWinnerInfo, playerOrderActive, lastCompletedTrick, theme, state, bidderCardPoints, defenderCardPoints } = currentTableState;
         if (!bidWinnerInfo) return null;
         
         const bidderName = bidWinnerInfo.playerName;
@@ -109,6 +109,8 @@ const TableLayout = ({
         const lastWinnerName = lastCompletedTrick?.winnerName;
         const bidderWonLast = lastWinnerName === bidderName;
         const defenderWonLast = lastWinnerName && !bidderWonLast;
+        
+        const showProgressBars = theme === 'miss-pauls-academy' && state === 'Playing Phase';
 
         const TrickPile = ({ count }) => (
             <div className="trick-pile">
@@ -131,41 +133,33 @@ const TableLayout = ({
 
         return (
             <>
-                <div className="trick-pile-container defender-pile" onClick={() => handleTrickPileClick('defender')}>
-                    <div className={`trick-pile-base defender-base ${defenderWonLast ? 'pulsating-blue' : ''}`}>
+                <div className="trick-pile-container defender-pile" >
+                    <div className={`trick-pile-base defender-base ${defenderWonLast ? 'pulsating-blue' : ''}`} onClick={() => handleTrickPileClick('defender')}>
                         <TrickPile count={defenderTricksCount} />
                     </div>
+                    {showProgressBars && (
+                        <div className="progress-bar-container">
+                            <ScoreProgressBar 
+                                currentPoints={defenderCardPoints} 
+                                opponentPoints={bidderCardPoints}
+                                barColor="linear-gradient(to right, #3b82f6, #60a5fa)"
+                            />
+                        </div>
+                    )}
                 </div>
-                <div className="trick-pile-container bidder-pile" onClick={() => handleTrickPileClick('bidder')}>
-                    <div className={`trick-pile-base bidder-base ${bidderWonLast ? 'pulsating-gold' : ''}`}>
+                <div className="trick-pile-container bidder-pile">
+                    <div className={`trick-pile-base bidder-base ${bidderWonLast ? 'pulsating-gold' : ''}`} onClick={() => handleTrickPileClick('bidder')}>
                         <TrickPile count={bidderTricksCount} />
                     </div>
-                </div>
-            </>
-        );
-    };
-
-    const renderProgressBars = () => {
-        const { theme, state, bidWinnerInfo, bidderCardPoints, defenderCardPoints } = currentTableState;
-        if (!bidWinnerInfo || theme !== 'miss-pauls-academy' || state !== 'Playing Phase') {
-            return null;
-        }
-
-        return (
-            <>
-                <div className="progress-bar-container defender-progress-container">
-                    <ScoreProgressBar 
-                        currentPoints={defenderCardPoints} 
-                        opponentPoints={bidderCardPoints}
-                        barColor="linear-gradient(to right, #3b82f6, #60a5fa)"
-                    />
-                </div>
-                <div className="progress-bar-container bidder-progress-container">
-                    <ScoreProgressBar 
-                        currentPoints={bidderCardPoints} 
-                        opponentPoints={defenderCardPoints}
-                        barColor="linear-gradient(to right, #f59e0b, #facc15)"
-                    />
+                    {showProgressBars && (
+                        <div className="progress-bar-container">
+                            <ScoreProgressBar 
+                                currentPoints={bidderCardPoints} 
+                                opponentPoints={defenderCardPoints}
+                                barColor="linear-gradient(to right, #f59e0b, #facc15)"
+                            />
+                        </div>
+                    )}
                 </div>
             </>
         );
@@ -274,7 +268,6 @@ const TableLayout = ({
                     />
                 </div>
             </div>
-            {renderProgressBars()}
         </main>
     );
 };

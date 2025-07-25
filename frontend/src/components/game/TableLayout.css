@@ -49,29 +49,36 @@
     box-shadow: inset 0 0 25px rgba(0,0,0,0.5);
 }
 
-.player-seat-left {
+.action-prompt-container { /* NEW STANDARDIZED PROMPT CONTAINER */
     position: absolute;
-    top: 50%;
-    left: 20px;
-    transform: translateY(-50%);
-    z-index: 10;
-}
-
-.player-seat-right {
-    position: absolute;
-    top: 50%;
-    right: 20px;
-    transform: translateY(-50%);
-    z-index: 10;
-}
-
-.player-seat-bottom {
-    position: absolute;
-    bottom: 5%;
+    top: 70px; /* Position below the trump puck */
     left: 50%;
     transform: translateX(-50%);
+    z-index: 15;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 15px 20px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+    text-align: center;
+    min-width: 280px;
+}
+
+.action-prompt-container h4 {
+    font-family: 'Oswald', sans-serif;
+    margin: 0 0 10px 0;
+    color: #ffc107;
+    font-size: 1.2em;
+}
+
+.player-seat-left, .player-seat-right, .player-seat-bottom {
+    position: absolute;
     z-index: 10;
 }
+.player-seat-left { top: 50%; left: 20px; transform: translateY(-50%); }
+.player-seat-right { top: 50%; right: 20px; transform: translateY(-50%); }
+.player-seat-bottom { bottom: 5%; left: 50%; transform: translateX(-50%); }
 
 .card-back-container {
     display: inline-flex;
@@ -169,12 +176,11 @@
     line-height: 1; /* Keep it tight */
 }
 
-.score-progress-container {
+/* --- MODIFICATION: Progress Bar Styling --- */
+.progress-bar-container {
     position: absolute;
-    top: 15px;
+    top: 15px; /* Default for landscape */
     width: 220px;
-    left: 50%;
-    transform: translateX(-50%);
     background-color: rgba(0, 0, 0, 0.6);
     padding: 5px 8px;
     border-radius: 8px;
@@ -183,11 +189,8 @@
     font-family: 'Oswald', sans-serif;
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
-.trick-pile .score-progress-container {
-    bottom: 0;
-    top: auto;
-}
-
+.defender-progress-container { left: 15%; transform: translateX(-50%); }
+.bidder-progress-container { right: 15%; transform: translateX(50%); }
 
 .score-progress-label {
     font-size: 0.9em;
@@ -210,6 +213,8 @@
     border-radius: 4px;
     transition: width 0.5s ease-in-out;
 }
+/* --- END MODIFICATION --- */
+
 
 .widow-display-container {
     position: absolute;
@@ -394,8 +399,14 @@ button.card-display:disabled {
         margin-top: 2px;
     }
 
+    /* --- MODIFICATION: Progress Bar in Portrait --- */
     .progress-bar-container {
-        bottom: 22vh; 
+        position: relative; /* No longer absolute */
         top: auto;
+        left: auto;
+        right: auto;
+        transform: none;
+        margin-top: 8px; /* Space below the trick pile */
+        width: 120px; /* Smaller width for portrait */
     }
 }
