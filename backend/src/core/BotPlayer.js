@@ -3,7 +3,6 @@
 const gameLogic = require('./logic');
 const { RANKS_ORDER, BID_HIERARCHY, BID_MULTIPLIERS, CARD_POINT_VALUES } = require('./constants');
 const { getLegalMoves } = require('./legalMoves');
-// --- NEW: Import the insurance strategy ---
 const { calculateInsuranceMove } = require('./bot-strategies/InsuranceStrategy');
 
 const getRankValue = (card) => RANKS_ORDER.indexOf(gameLogic.getRank(card));
@@ -122,10 +121,32 @@ class BotPlayer {
         return sortedHand.slice(0, 3);
     }
 
-    // --- REFACTORED: This method now calls the external strategy ---
     makeInsuranceDecision() {
-        // 'this.engine' is the full game state, 'this' is the bot instance
         return calculateInsuranceMove(this.engine, this);
+    }
+
+    /**
+     * NEW: Decides how the bot should vote on a draw request.
+     * The bot's strategy is to be agreeable and help players who are losing.
+     * @returns {'wash'|'split'} The bot's vote.
+     */
+    decideDrawVote() {
+        const { drawRequest, scores } = this.engine;
+        if (!drawRequest || !drawRequest.initiator) {
+            return 'wash'; // Safe default
+        }
+
+        const initiatorName = drawRequest.initiator;
+        const initiatorScore = scores[initiatorName] || 0;
+
+        // If the player requesting the draw is losing (score < 60),
+        // the bot agrees to a "split" to help them recover some tokens.
+        if (initiatorScore < 60) {
+            return 'split';
+        }
+
+        // Otherwise, the bot agrees to a simple "wash".
+        return 'wash';
     }
 }
 

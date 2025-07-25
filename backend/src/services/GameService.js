@@ -28,7 +28,6 @@ class GameService {
         console.log(`${tableCounter - 1} in-memory game engines initialized.`);
     }
 
-    // --- Public Accessors ---
     getEngineById(tableId) { return this.engines[tableId]; }
     getAllEngines() { return this.engines; }
     getLobbyState() {
@@ -51,7 +50,6 @@ class GameService {
         return { themes: groupedByTheme, serverVersion: SERVER_VERSION };
     }
 
-    // --- Action Handlers (called by socket events) ---
     async playCard(tableId, userId, card) {
         await this._performAction(tableId, (engine) => engine.playCard(userId, card));
     }
@@ -263,8 +261,9 @@ class GameService {
                 case 'START_GAME_TRANSACTIONS': {
                     try {
                         const gameId = await transactionManager.createGameRecord(this.pool, effect.payload.table);
-                        await transactionManager.handleGameStartTransaction(this.pool, effect.payload.table, effect.payload.playerIds, gameId);
-                        if (effect.onSuccess) effect.onSuccess(gameId);
+                        // --- MODIFICATION: Expect updatedTokens back ---
+                        const updatedTokens = await transactionManager.handleGameStartTransaction(this.pool, effect.payload.table, effect.payload.playerIds, gameId);
+                        if (effect.onSuccess) effect.onSuccess(gameId, updatedTokens);
                     } catch (err) {
                         const insufficientFundsMatch = err.message.match(/(.+) has insufficient tokens/);
                         const brokePlayerName = insufficientFundsMatch ? insufficientFundsMatch[1] : null;
@@ -303,16 +302,15 @@ class GameService {
                 }, isCourtney ? delay * 2 : delay);
             };
 
-            // --- Priority 1: Turn-based Game Flow Actions ---
             if (engine.state === 'Dealing Pending' && engine.dealer == botUserId) {
                 scheduleAction(this.dealCards, standardDelay);
             } else if (engine.state === 'Awaiting Next Round Trigger' && engine.roundSummary?.dealerOfRoundId == botUserId) {
                 scheduleAction(this.requestNextRound, roundEndDelay);
             } else if (engine.state === 'Bidding Phase' && engine.biddingTurnPlayerId == botUserId) {
-                const bid = bot.decideBid(); // Use new method name
+                const bid = bot.decideBid();
                 scheduleAction(this.placeBid, standardDelay, bid);
             } else if (engine.state === 'Awaiting Frog Upgrade Decision' && engine.biddingTurnPlayerId == botUserId) {
-                const bid = bot.decideFrogUpgrade(); // Use new smart upgrade logic
+                const bid = bot.decideFrogUpgrade();
                 scheduleAction(this.placeBid, standardDelay, bid);
             } else if (engine.state === 'Trump Selection' && engine.bidWinnerInfo?.userId == botUserId && !engine.trumpSuit) {
                 const suit = bot.chooseTrump();
@@ -339,6 +337,24 @@ class GameService {
                         this.io.emit('lobbyState', this.getLobbyState());
                     }
                 }, 500);
+            }
+        }
+
+        // --- NEW BLOCK: Handle bot voting for draw requests ---
+        if (!actionTaken && engine.drawRequest.isActive) {
+            for (const botId in engine.bots) {
+                const bot = engine.bots[botId];
+                // Check if this bot has a pending vote
+                if (engine.drawRequest.votes[bot.playerName] === null) {
+                    actionTaken = true; // Mark that an action is being scheduled
+                    engine.pendingBotAction = setTimeout(async () => {
+                        engine.pendingBotAction = null;
+                        const vote = bot.decideDrawVote();
+                        const { effects } = engine.submitDrawVote(bot.userId, vote);
+                        await this._executeEffects(tableId, effects);
+                    }, 2000); // Wait 2 seconds before voting
+                    break; // Only one bot votes per trigger cycle
+                }
             }
         }
     }
