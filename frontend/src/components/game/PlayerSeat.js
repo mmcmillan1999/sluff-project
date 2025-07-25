@@ -22,7 +22,8 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent }) => {
         return null;
     }
 
-    const { userId, disconnected, tokens } = playerEntry; // Now getting tokens from playerEntry
+    // --- THE FIX: 'userId' was removed from this line as it was unused ---
+    const { disconnected, tokens } = playerEntry; // Now getting tokens from playerEntry
     const playerTokenCount = tokens; // Use the value directly
     const isBidWinner = bidWinnerInfo?.playerName === playerName;
     const isDefender = bidWinnerInfo && !isBidWinner && playerOrderActive.includes(playerName);
