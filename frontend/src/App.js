@@ -101,6 +101,14 @@ function App() {
         }
     }, [token, user, handleLogout]);
 
+    const handleLeaveTable = useCallback(() => { // Made into a useCallback
+        if (currentTableState) {
+            socket.emit("leaveTable", { tableId: currentTableState.tableId });
+        }
+        handleReturnToLobby();
+        setCurrentTableState(null);
+    }, [currentTableState]);
+
     useEffect(() => {
         if (token) {
             socket.auth = { token };
@@ -165,6 +173,11 @@ function App() {
             const onNotification = ({ message }) => {
                 alert(message);
             };
+            
+            // --- NEW LISTENER ---
+            const onForceLobbyReturn = () => {
+                handleLeaveTable();
+            };
 
             socket.on('connect', onConnect);
             socket.on('updateUser', onUpdateUser);
@@ -176,6 +189,7 @@ function App() {
             socket.on('forceDisconnectAndReset', onForceReset);
             socket.on('gameStartFailed', onGameStartFailed);
             socket.on('notification', onNotification);
+            socket.on('forceLobbyReturn', onForceLobbyReturn); // ADDED
 
             return () => {
                 socket.off('connect', onConnect);
@@ -188,9 +202,10 @@ function App() {
                 socket.off('forceDisconnectAndReset', onForceReset);
                 socket.off('gameStartFailed', onGameStartFailed);
                 socket.off('notification', onNotification);
+                socket.off('forceLobbyReturn', onForceLobbyReturn); // ADDED
             };
         }
-    }, [token, handleLogout]);
+    }, [token, handleLogout, handleLeaveTable]); // ADDED handleLeaveTable to dependency array
 
     const handleLoginSuccess = (data) => {
         localStorage.setItem("sluff_token", data.token);
@@ -202,14 +217,6 @@ function App() {
     const handleJoinTable = (tableId) => {
         enableSound();
         socket.emit("joinTable", { tableId });
-    }
-
-    const handleLeaveTable = () => {
-        if (currentTableState) {
-            socket.emit("leaveTable", { tableId: currentTableState.tableId });
-        }
-        handleReturnToLobby();
-        setCurrentTableState(null);
     }
 
     const emitEvent = (eventName, payload = {}) => {

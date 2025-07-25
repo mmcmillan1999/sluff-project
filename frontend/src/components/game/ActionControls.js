@@ -137,6 +137,14 @@ const ActionControls = ({
                     </p>
                 </div>
             );
+        // --- NEW CASE ---
+        case "DrawAccepted":
+            return (
+                <div className="action-prompt-container">
+                    <h4>Draw Accepted!</h4>
+                    <p style={{ margin: 0 }}>Returning to lobby in {currentTableState.drawCountdown}...</p>
+                </div>
+            );
         case "Playing Phase":
         case "TrickCompleteLinger":
             // No prompt needed here, player hand glows instead.

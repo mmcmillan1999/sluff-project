@@ -54,16 +54,16 @@ class GameEngine {
         this._resolveForfeit(playerName, "voluntary forfeit");
     }
     
-    joinTable(user, socketId, tokens = null) { // MODIFIED to accept tokens
+    joinTable(user, socketId, tokens = null) {
         const { id, username } = user;
         const isPlayerAlreadyInGame = !!this.players[id];
         if (isPlayerAlreadyInGame) {
             this.players[id].disconnected = false;
             this.players[id].socketId = socketId;
-            if (tokens !== null) this.players[id].tokens = tokens; // Update tokens on reconnect
+            if (tokens !== null) this.players[id].tokens = tokens;
         } else {
             const activePlayersCount = this.playerOrder.count;
-            const playerBase = { userId: id, playerName: username, socketId, tokens }; // Add tokens here
+            const playerBase = { userId: id, playerName: username, socketId, tokens };
             if (this.gameStarted || activePlayersCount >= 4) {
                 this.players[id] = { ...playerBase, isSpectator: true, disconnected: false };
             } else {
@@ -89,7 +89,7 @@ class GameEngine {
         const botName = availableNames[Math.floor(Math.random() * availableNames.length)];
         const botId = this._nextBotId--;
         
-        this.players[botId] = { userId: botId, playerName: botName, socketId: null, isSpectator: false, disconnected: false, isBot: true, tokens: 'N/A' }; // Give bots a token placeholder
+        this.players[botId] = { userId: botId, playerName: botName, socketId: null, isSpectator: false, disconnected: false, isBot: true, tokens: 'N/A' };
         this.bots[botId] = new BotPlayer(botId, botName, this);
         if (!this.scores[botName]) this.scores[botName] = 120;
         if (!this.playerOrder.includes(botId)) {
@@ -148,12 +148,12 @@ class GameEngine {
         }
     }
     
-    reconnectPlayer(userId, socket, tokens) { // MODIFIED to accept tokens
+    reconnectPlayer(userId, socket, tokens) {
         if (!this.players[userId] || !this.players[userId].disconnected) return;
         console.log(`[${this.tableId}] Reconnecting user ${this.players[userId].playerName}.`);
         this.players[userId].disconnected = false;
         this.players[userId].socketId = socket.id;
-        if (tokens !== null) this.players[userId].tokens = tokens; // Update tokens on reconnect
+        if (tokens !== null) this.players[userId].tokens = tokens;
         if (this.forfeiture.targetPlayerName === this.players[userId].playerName) {
              this._clearForfeitTimer();
         }
@@ -175,13 +175,13 @@ class GameEngine {
                 table: { tableId: this.tableId, theme: this.theme, playerMode: this.playerMode },
                 playerIds: activePlayerIds.filter(id => !this.players[id].isBot) 
             },
-            onSuccess: (gameId, updatedTokens) => { // MODIFIED to receive tokens
+            onSuccess: (gameId, updatedTokens) => {
                 this.gameId = gameId;
                 this.gameStarted = true;
                 activePlayerIds.forEach(id => { 
                     if (this.scores[this.players[id].playerName] === undefined) this.scores[this.players[id].playerName] = 120;
                     if(updatedTokens && updatedTokens[id] !== undefined) {
-                        this.players[id].tokens = updatedTokens[id]; // Update tokens after buy-in
+                        this.players[id].tokens = updatedTokens[id];
                     }
                 });
                 if (this.playerMode === 3 && this.scores[PLACEHOLDER_ID] === undefined) { this.scores[PLACEHOLDER_ID] = 120; }
@@ -360,23 +360,39 @@ class GameEngine {
             return this._effects([{ type: 'BROADCAST_STATE' }]);
         }
         
+        // --- MODIFICATION: Transition to new state instead of Game Over ---
         this.drawRequest.isActive = false;
         const outcome = allVotes.includes('split') ? 'split' : 'wash';
 
-        return this._effects([{
+        const effects = [{
             type: 'HANDLE_DRAW_OUTCOME',
-            payload: {
-                outcome,
-                gameId: this.gameId,
-                theme: this.theme,
-                players: this.players,
-                scores: this.scores
-            },
+            payload: { outcome, gameId: this.gameId, theme: this.theme, players: this.players, scores: this.scores },
             onComplete: (summary) => {
                 this.roundSummary = summary;
-                this.state = "Game Over";
+                this.state = "DrawAccepted";
+                this.drawCountdown = 5;
+
+                this.internalTimers.drawCountdown = setInterval(() => {
+                    this.drawCountdown--;
+                    // Just need to notify service to broadcast, so an empty effect works
+                    this.emitLobbyUpdateCallback([{ type: 'BROADCAST_STATE' }]);
+                }, 1000);
             }
-        }]);
+        }];
+
+        effects.push({
+            type: 'START_TIMER',
+            payload: {
+                duration: 5000,
+                onTimeout: (engineRef) => {
+                    clearInterval(engineRef.internalTimers.drawCountdown);
+                    delete engineRef.internalTimers.drawCountdown;
+                    return [{ type: 'EMIT_TO_TABLE', payload: { event: 'forceLobbyReturn' } }];
+                }
+            }
+        });
+
+        return this._effects(effects);
     }
 
     _initializeNewRoundState() {
@@ -386,6 +402,7 @@ class GameEngine {
         this.trickTurnPlayerId = null; this.trickLeaderId = null; this.currentTrickCards = []; this.leadSuitCurrentTrick = null; this.lastCompletedTrick = null; this.tricksPlayedCount = 0; this.capturedTricks = {}; this.roundSummary = null; 
         this.insurance = { isActive: false, bidMultiplier: null, bidderPlayerName: null, bidderRequirement: 0, defenderOffers: {}, dealExecuted: false, executedDetails: null };
         this.forfeiture = { targetPlayerName: null, timeLeft: null }; this.drawRequest = { isActive: false, initiator: null, votes: {}, timer: null };
+        this.drawCountdown = null; // ADDED
         Object.values(this.players).forEach(p => {
             if (p.playerName && this.scores[p.playerName] !== undefined) {
                 this.capturedTricks[p.playerName] = [];
@@ -457,6 +474,7 @@ class GameEngine {
             playerOrderActive: activeTurnOrder.map(id => this.players[id]?.playerName).filter(Boolean),
             dealer: this.dealer, hands: this.hands, widow: this.widow, originalDealtWidow: this.originalDealtWidow, scores: this.scores, currentHighestBidDetails: this.currentHighestBidDetails, bidWinnerInfo: this.bidWinnerInfo, gameStarted: this.gameStarted, trumpSuit: this.trumpSuit, currentTrickCards: this.currentTrickCards, tricksPlayedCount: this.tricksPlayedCount, leadSuitCurrentTrick: this.leadSuitCurrentTrick, trumpBroken: this.trumpBroken, capturedTricks: this.capturedTricks, roundSummary: this.roundSummary, lastCompletedTrick: this.lastCompletedTrick, playersWhoPassedThisRound: this.playersWhoPassedThisRound.map(id => this.players[id]?.playerName), playerMode: this.playerMode, serverVersion: this.serverVersion, insurance: this.insurance, forfeiture: this.forfeiture, drawRequest: this.drawRequest, originalFrogBidderId: this.originalFrogBidderId, soloBidMadeAfterFrog: this.soloBidMadeAfterFrog, revealedWidowForFrog: this.revealedWidowForFrog, widowDiscardsForFrogBidder: this.widowDiscardsForFrogBidder,
             bidderCardPoints: this.bidderCardPoints, defenderCardPoints: this.defenderCardPoints,
+            drawCountdown: this.drawCountdown, // ADDED
         };
         state.biddingTurnPlayerName = this.players[this.biddingTurnPlayerId]?.playerName;
         state.trickTurnPlayerName = this.players[this.trickTurnPlayerId]?.playerName;
