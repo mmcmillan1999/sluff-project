@@ -1,3 +1,5 @@
+// frontend/src/components/game/InsurancePrompt.js
+
 import React from 'react';
 
 /**
@@ -43,7 +45,27 @@ const InitialInsurancePrompt = ({ show, insuranceState, selfPlayerName, emitEven
         onClose();
     };
 
-    // --- MODIFICATION: Changed from modal overlay to standardized prompt container ---
+    // --- NEW LOGIC for the "Pass" button ---
+    let passValue;
+    let passButtonText;
+    let passButtonColor;
+
+    if (isBidder) {
+        passValue = 120 * bidMultiplier;
+        passButtonText = `Pass (+${passValue})`;
+        passButtonColor = buttonColors.get; // Green for 'get'
+    } else {
+        // A defender's default is to offer a value of -60 * multiplier
+        passValue = -60 * bidMultiplier;
+        passButtonText = `Pass (${passValue})`;
+        passButtonColor = buttonColors.get; // This is green because negative values are what defenders 'get'
+    }
+
+    const handlePass = () => {
+        // "Passing" simply closes the prompt, leaving the default server value unchanged.
+        onClose();
+    };
+
     return (
         <div className="action-prompt-container">
             <h4>{title}</h4>
@@ -82,7 +104,21 @@ const InitialInsurancePrompt = ({ show, insuranceState, selfPlayerName, emitEven
             <p style={{ fontSize: '0.8em', fontStyle: 'italic', marginTop: '15px', color: '#aaa' }}>
                 You can change this at any time using the main insurance panel below.
             </p>
-             <button onClick={onClose} style={{marginTop: '10px', background: 'none', border: '1px solid #aaa', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer'}}>Skip</button>
+             <button
+                onClick={handlePass}
+                className="game-button"
+                style={{
+                    marginTop: '15px',
+                    fontSize: '1.1em',
+                    width: '100%',
+                    backgroundImage: 'none',
+                    backgroundColor: passButtonColor,
+                    borderColor: passButtonColor,
+                    opacity: 0.8
+                }}
+            >
+                {passButtonText}
+            </button>
         </div>
     );
 };
