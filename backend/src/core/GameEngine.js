@@ -340,14 +340,16 @@ class GameEngine {
         this.drawRequest.timer = 30;
 
         this.internalTimers.drawTimer = setInterval(() => {
-            this.drawRequest.timer--;
-            if (this.drawRequest.timer <= 0) {
-                console.log(`[${this.tableId}] Draw request timed out.`);
-                clearInterval(this.internalTimers.drawTimer);
-                delete this.internalTimers.drawTimer;
-                this.drawRequest.isActive = false;
+            if (this.drawRequest.isActive) {
+                this.drawRequest.timer--;
+                if (this.drawRequest.timer <= 0) {
+                    console.log(`[${this.tableId}] Draw request timed out.`);
+                    clearInterval(this.internalTimers.drawTimer);
+                    delete this.internalTimers.drawTimer;
+                    this.drawRequest.isActive = false;
+                }
+                this.emitLobbyUpdateCallback([{ type: 'BROADCAST_STATE' }]);
             }
-            this.emitLobbyUpdateCallback([{ type: 'BROADCAST_STATE' }]);
         }, 1000);
 
         return this._effects([{ type: 'BROADCAST_STATE' }]);
@@ -373,7 +375,6 @@ class GameEngine {
             clearDrawTimer();
             this.drawRequest.isActive = false;
             this.state = "DrawDeclined";
-            this.drawCountdown = 3;
             console.log(`[${this.tableId}] Draw declined.`);
 
             return this._effects([

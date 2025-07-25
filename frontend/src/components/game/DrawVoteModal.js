@@ -89,11 +89,36 @@ const DrawVoteModal = ({ show, currentTableState, onVote, handleLeaveTable }) =>
     );
     
     let content;
+    const myVote = drawRequest?.votes?.[currentTableState.players[currentTableState.playerId]?.playerName];
+    const isMyVotePending = myVote === null;
+
     if (state === 'DrawDeclined') {
         content = renderDeclinedContent();
     } else if (state === 'DrawComplete') {
         content = renderCompleteContent();
+    } else if (drawRequest?.isActive && !isMyVotePending) {
+        // I have voted, but the request is still active for others. Show pending state.
+        content = (
+            <div className="draw-vote-main-area">
+                <h2>Draw in Progress...</h2>
+                <p className="draw-vote-message">Waiting for all players to vote.</p>
+                <div className="draw-vote-timer">{drawRequest.timer}s</div>
+                <div className="draw-votes-list-container">
+                    <h4>Current Votes</h4>
+                    {Object.entries(drawRequest.votes).map(([name, vote]) => {
+                        const status = getVoteStatus(vote);
+                        return (
+                            <div key={name} className="draw-vote-item">
+                                <span>{name}</span>
+                                <span className={`vote-status ${status.className}`}>{status.text}</span>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        );
     } else {
+        // It's my turn to vote.
         content = renderVotingContent();
     }
 

@@ -113,15 +113,14 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
     useEffect(() => {
         if (currentTableState) {
             const { state, drawRequest } = currentTableState;
-            const myVote = drawRequest?.votes?.[selfPlayerName];
             
-            // --- MODIFIED: Determine when to show the draw modal ---
-            const isVotingActive = drawRequest?.isActive && myVote == null && !isSpectator;
-            const isDrawStateActive = state === 'DrawDeclined' || state === 'DrawComplete';
+            // --- CORRECTED LOGIC ---
+            // Show the modal if a draw is active OR if the game is in a draw-related end state.
+            const shouldShow = (drawRequest?.isActive || state === 'DrawDeclined' || state === 'DrawComplete') && !isSpectator;
             
-            setShowDrawVoteModal(isVotingActive || isDrawStateActive);
+            setShowDrawVoteModal(shouldShow);
         }
-    }, [currentTableState, selfPlayerName, isSpectator]);
+    }, [currentTableState, isSpectator]);
 
     useEffect(() => {
         if (currentTableState?.playerOrderActive?.length > 0 && playerId && currentTableState.players[playerId] && !isSpectator) {
@@ -264,7 +263,7 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
 
             <DrawVoteModal
                 show={showDrawVoteModal}
-                currentTableState={currentTableState}
+                currentTableState={{...currentTableState, playerId: playerId}}
                 onVote={(vote) => emitEvent("submitDrawVote", { vote })}
                 handleLeaveTable={handleLeaveTable}
             />
