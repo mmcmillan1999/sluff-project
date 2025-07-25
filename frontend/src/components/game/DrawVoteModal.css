@@ -1,5 +1,48 @@
 /* frontend/src/components/game/DrawVoteModal.css */
 
+.draw-vote-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.draw-vote-modal-content {
+    background-color: #f8f9fa;
+    padding: 0;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 450px;
+    text-align: center;
+    font-family: 'Merriweather', serif;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 2px solid #adb5bd;
+}
+
+.draw-vote-main-area {
+    padding: 20px 25px;
+}
+
+.draw-vote-main-area h2 {
+    font-family: 'Oswald', sans-serif;
+    color: #343a40;
+    margin: 0 0 10px 0;
+}
+
+.draw-vote-message {
+    font-style: italic;
+    color: #6c757d;
+    margin-bottom: 20px;
+}
+
 .draw-vote-timer {
     font-size: 2.5em;
     font-weight: bold;
@@ -37,10 +80,7 @@
     padding: 8px 12px;
     border-bottom: 1px solid #e9ecef;
 }
-
-.draw-vote-item:last-child {
-    border-bottom: none;
-}
+.draw-vote-item:last-child { border-bottom: none; }
 
 .vote-status {
     font-weight: bold;
@@ -49,23 +89,33 @@
     border-radius: 12px;
     font-size: 0.9em;
 }
+.vote-status.pending { color: #6c757d; background-color: #e9ecef; }
+.vote-status.wash { color: #0d6efd; background-color: #cfe2ff; }
+.vote-status.split { color: #0f5132; background-color: #d1e7dd; }
+.vote-status.no { color: #842029; background-color: #f8d7da; }
 
-.vote-status.pending {
-    color: #6c757d;
+/* Styles for Summary / Action Area */
+.draw-vote-action-area {
+    margin-top: auto;
     background-color: #e9ecef;
+    padding: 15px;
+    border-top: 1px solid #ced4da;
 }
 
-.vote-status.wash {
-    color: #0d6efd;
-    background-color: #cfe2ff;
+.draw-vote-actions {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
 }
 
-.vote-status.split {
-    color: #0f5132;
+.draw-payout-section {
+    margin: 0;
+    padding: 10px;
     background-color: #d1e7dd;
+    border: 1px solid #a3cfbb;
+    border-radius: 8px;
+    text-align: left;
 }
-
-.vote-status.no {
-    color: #842029;
-    background-color: #f8d7da;
-}
+.draw-payout-section h4 { margin-top: 0; color: #0a3622; }
+.draw-payout-list { list-style: none; padding: 0; margin: 0; }

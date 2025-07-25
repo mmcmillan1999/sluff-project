@@ -1,7 +1,7 @@
 // frontend/src/components/GameTableView.js
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './GameTableView.css';
-import './game/DrawVoteModal.css';
+import DrawVoteModal from './game/DrawVoteModal';
 import PlayerHand from './game/PlayerHand';
 import InsuranceControls from './game/InsuranceControls';
 import RoundSummaryModal from './game/RoundSummaryModal';
@@ -10,7 +10,6 @@ import PlayerSeat from './game/PlayerSeat';
 import ActionControls from './game/ActionControls';
 import InsurancePrompt from './game/InsurancePrompt';
 import IosPwaPrompt from './game/IosPwaPrompt';
-import DrawVoteModal from './game/DrawVoteModal';
 import LobbyChat from './LobbyChat';
 import { getLobbyChatHistory } from '../services/api';
 import { SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS } from '../constants';
@@ -21,7 +20,7 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
     const [showInsurancePrompt, setShowInsurancePrompt] = useState(false);
     const [showGameMenu, setShowGameMenu] = useState(false);
     const [showIosPwaPrompt, setShowIosPwaPrompt] = useState(false);
-    const [showDrawVote, setShowDrawVote] = useState(false);
+    const [showDrawVoteModal, setShowDrawVoteModal] = useState(false);
     const [chatOpen, setChatOpen] = useState(false);
     const [unreadChat, setUnreadChat] = useState(0);
     const [touchStartX, setTouchStartX] = useState(null);
@@ -71,7 +70,7 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
         };
 
         const handleDrawDeclined = () => {
-            alert("Draw request has been declined. Play will continue.");
+            // The new DrawDeclined state handles this, so a pop-up is no longer needed.
         };
 
         socket.on('new_lobby_message', handleNewChatMessage);
@@ -88,7 +87,7 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
 
     useEffect(() => {
         if (!showGameMenu) return;
-        const timer = setTimeout(() => setShowGameMenu(false), 5000); // Increased timeout for menu
+        const timer = setTimeout(() => setShowGameMenu(false), 5000);
         return () => clearTimeout(timer);
     }, [showGameMenu]);
     
@@ -113,9 +112,14 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
 
     useEffect(() => {
         if (currentTableState) {
-            const myVote = currentTableState.drawRequest?.votes?.[selfPlayerName];
-            const shouldShow = currentTableState.drawRequest?.isActive && myVote == null && !isSpectator;
-            setShowDrawVote(shouldShow);
+            const { state, drawRequest } = currentTableState;
+            const myVote = drawRequest?.votes?.[selfPlayerName];
+            
+            // --- MODIFIED: Determine when to show the draw modal ---
+            const isVotingActive = drawRequest?.isActive && myVote == null && !isSpectator;
+            const isDrawStateActive = state === 'DrawDeclined' || state === 'DrawComplete';
+            
+            setShowDrawVoteModal(isVotingActive || isDrawStateActive);
         }
     }, [currentTableState, selfPlayerName, isSpectator]);
 
@@ -259,9 +263,10 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
             />
 
             <DrawVoteModal
-                show={showDrawVote}
-                drawRequest={currentTableState.drawRequest}
+                show={showDrawVoteModal}
+                currentTableState={currentTableState}
                 onVote={(vote) => emitEvent("submitDrawVote", { vote })}
+                handleLeaveTable={handleLeaveTable}
             />
 
             <IosPwaPrompt show={showIosPwaPrompt} onClose={() => setShowIosPwaPrompt(false)} />

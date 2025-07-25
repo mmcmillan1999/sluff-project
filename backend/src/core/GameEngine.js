@@ -326,6 +326,8 @@ class GameEngine {
     requestDraw(userId) {
         const player = this.players[userId];
         if (!player || this.drawRequest.isActive || this.state !== 'Playing Phase') return this._effects();
+        
+        console.log(`[${this.tableId}] Draw requested by ${player.playerName}.`);
         this.drawRequest.isActive = true;
         this.drawRequest.initiator = player.playerName;
         this.drawRequest.votes = {};
@@ -336,6 +338,18 @@ class GameEngine {
             }
         });
         this.drawRequest.timer = 30;
+
+        this.internalTimers.drawTimer = setInterval(() => {
+            this.drawRequest.timer--;
+            if (this.drawRequest.timer <= 0) {
+                console.log(`[${this.tableId}] Draw request timed out.`);
+                clearInterval(this.internalTimers.drawTimer);
+                delete this.internalTimers.drawTimer;
+                this.drawRequest.isActive = false;
+            }
+            this.emitLobbyUpdateCallback([{ type: 'BROADCAST_STATE' }]);
+        }, 1000);
+
         return this._effects([{ type: 'BROADCAST_STATE' }]);
     }
 
@@ -344,14 +358,33 @@ class GameEngine {
         if (!player || !this.drawRequest.isActive || !['wash', 'split', 'no'].includes(vote) || this.drawRequest.votes[player.playerName] !== null) {
             return this._effects();
         }
-
+        
+        console.log(`[${this.tableId}] ${player.playerName} voted to ${vote}.`);
         this.drawRequest.votes[player.playerName] = vote;
         
+        const clearDrawTimer = () => {
+            if (this.internalTimers.drawTimer) {
+                clearInterval(this.internalTimers.drawTimer);
+                delete this.internalTimers.drawTimer;
+            }
+        };
+
         if (vote === 'no') {
+            clearDrawTimer();
             this.drawRequest.isActive = false;
+            this.state = "DrawDeclined";
+            this.drawCountdown = 3;
+            console.log(`[${this.tableId}] Draw declined.`);
+
             return this._effects([
-                { type: 'EMIT_TO_TABLE', payload: { event: 'drawDeclined' } },
-                { type: 'BROADCAST_STATE' }
+                { type: 'BROADCAST_STATE' },
+                { type: 'START_TIMER', payload: {
+                    duration: 3000,
+                    onTimeout: (engineRef) => {
+                        engineRef.state = "Playing Phase";
+                        return [{ type: 'BROADCAST_STATE' }];
+                    }
+                }}
             ]);
         }
 
@@ -360,39 +393,19 @@ class GameEngine {
             return this._effects([{ type: 'BROADCAST_STATE' }]);
         }
         
-        // --- MODIFICATION: Transition to new state instead of Game Over ---
+        clearDrawTimer();
         this.drawRequest.isActive = false;
         const outcome = allVotes.includes('split') ? 'split' : 'wash';
+        console.log(`[${this.tableId}] Draw accepted with outcome: ${outcome}.`);
 
-        const effects = [{
+        return this._effects([{
             type: 'HANDLE_DRAW_OUTCOME',
             payload: { outcome, gameId: this.gameId, theme: this.theme, players: this.players, scores: this.scores },
             onComplete: (summary) => {
                 this.roundSummary = summary;
-                this.state = "DrawAccepted";
-                this.drawCountdown = 5;
-
-                this.internalTimers.drawCountdown = setInterval(() => {
-                    this.drawCountdown--;
-                    // Just need to notify service to broadcast, so an empty effect works
-                    this.emitLobbyUpdateCallback([{ type: 'BROADCAST_STATE' }]);
-                }, 1000);
+                this.state = "DrawComplete";
             }
-        }];
-
-        effects.push({
-            type: 'START_TIMER',
-            payload: {
-                duration: 5000,
-                onTimeout: (engineRef) => {
-                    clearInterval(engineRef.internalTimers.drawCountdown);
-                    delete engineRef.internalTimers.drawCountdown;
-                    return [{ type: 'EMIT_TO_TABLE', payload: { event: 'forceLobbyReturn' } }];
-                }
-            }
-        });
-
-        return this._effects(effects);
+        }]);
     }
 
     _initializeNewRoundState() {
@@ -402,7 +415,7 @@ class GameEngine {
         this.trickTurnPlayerId = null; this.trickLeaderId = null; this.currentTrickCards = []; this.leadSuitCurrentTrick = null; this.lastCompletedTrick = null; this.tricksPlayedCount = 0; this.capturedTricks = {}; this.roundSummary = null; 
         this.insurance = { isActive: false, bidMultiplier: null, bidderPlayerName: null, bidderRequirement: 0, defenderOffers: {}, dealExecuted: false, executedDetails: null };
         this.forfeiture = { targetPlayerName: null, timeLeft: null }; this.drawRequest = { isActive: false, initiator: null, votes: {}, timer: null };
-        this.drawCountdown = null; // ADDED
+        this.drawCountdown = null;
         Object.values(this.players).forEach(p => {
             if (p.playerName && this.scores[p.playerName] !== undefined) {
                 this.capturedTricks[p.playerName] = [];
@@ -474,7 +487,7 @@ class GameEngine {
             playerOrderActive: activeTurnOrder.map(id => this.players[id]?.playerName).filter(Boolean),
             dealer: this.dealer, hands: this.hands, widow: this.widow, originalDealtWidow: this.originalDealtWidow, scores: this.scores, currentHighestBidDetails: this.currentHighestBidDetails, bidWinnerInfo: this.bidWinnerInfo, gameStarted: this.gameStarted, trumpSuit: this.trumpSuit, currentTrickCards: this.currentTrickCards, tricksPlayedCount: this.tricksPlayedCount, leadSuitCurrentTrick: this.leadSuitCurrentTrick, trumpBroken: this.trumpBroken, capturedTricks: this.capturedTricks, roundSummary: this.roundSummary, lastCompletedTrick: this.lastCompletedTrick, playersWhoPassedThisRound: this.playersWhoPassedThisRound.map(id => this.players[id]?.playerName), playerMode: this.playerMode, serverVersion: this.serverVersion, insurance: this.insurance, forfeiture: this.forfeiture, drawRequest: this.drawRequest, originalFrogBidderId: this.originalFrogBidderId, soloBidMadeAfterFrog: this.soloBidMadeAfterFrog, revealedWidowForFrog: this.revealedWidowForFrog, widowDiscardsForFrogBidder: this.widowDiscardsForFrogBidder,
             bidderCardPoints: this.bidderCardPoints, defenderCardPoints: this.defenderCardPoints,
-            drawCountdown: this.drawCountdown, // ADDED
+            drawCountdown: this.drawCountdown,
         };
         state.biddingTurnPlayerName = this.players[this.biddingTurnPlayerId]?.playerName;
         state.trickTurnPlayerName = this.players[this.trickTurnPlayerId]?.playerName;
