@@ -10,6 +10,7 @@
     "test:e2e": "node tests/auth.test.js && node tests/api.test.js"
   },
   "dependencies": {
+    "@sendgrid/mail": "^8.1.5",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",

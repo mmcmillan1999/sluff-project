@@ -51,12 +51,19 @@ export const login = async (email, password) => {
 };
 
 export const register = async (username, email, password) => {
-    const response = await configuredFetch('/api/auth/register', 'POST', { username, email, password }, false);
-    const data = await response.json();
-    if (!response.ok) {
-        throw new Error(data.message || 'Failed to register');
+    try {
+        const response = await configuredFetch('/api/auth/register', 'POST', { username, email, password }, false);
+        const data = await response.json();
+        if (!response.ok) {
+            // This now correctly throws an error with the API's message
+            throw new Error(data.message || 'Failed to register');
+        }
+        return data; // Return the success data
+    } catch (error) {
+        // This catches network errors (like "Failed to fetch") and re-throws them
+        // so the component can display a generic message.
+        throw error;
     }
-    return;
 };
 
 // --- Leaderboard Service Calls ---
@@ -128,6 +135,16 @@ export const updateFeedback = async (id, updateData) => {
     const data = await response.json();
     if (!response.ok) {
         throw new Error(data.message || 'Failed to update feedback.');
+    }
+    return data;
+};
+
+export const verifyEmail = async (token) => {
+    // This endpoint does not require an auth token, as the user is not yet logged in.
+    const response = await configuredFetch('/api/auth/verify-email', 'POST', { token }, false);
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.message || 'Failed to verify email.');
     }
     return data;
 };

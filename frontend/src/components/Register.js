@@ -1,25 +1,48 @@
-import React, { useState } from 'react';
-import './AuthForm.css'; // Import the shared CSS file
-import { register } from '../services/api'; // --- MODIFICATION: Import the new register service function ---
+// frontend/src/components/Register.js
 
-const Register = ({ onRegisterSuccess, onSwitchToLogin }) => {
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import './AuthForm.css';
+import { register } from '../services/api';
+
+const Register = () => {
     const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [successMessage, setSuccessMessage] = useState('');
+    const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+        setSuccessMessage('');
 
         try {
-            // --- MODIFICATION: Replace the old fetch with a call to the api service ---
-            await register(username, email, password);
-            onRegisterSuccess();
+            const data = await register(username, email, password);
+            setSuccessMessage(data.message);
         } catch (err) {
-            setError(err.message);
+            // --- THIS IS THE FINAL ROBUST ERROR HANDLING ---
+            if (err instanceof Error) {
+                setError(err.message);
+            } else {
+                setError('An unexpected network error occurred. Please try again.');
+            }
         }
     };
+
+    if (successMessage) {
+        return (
+            <div className="auth-container">
+                <img src="/SluffLogo.png" alt="Sluff Logo" className="auth-logo" />
+                <div className="auth-form" style={{ textAlign: 'center' }}>
+                    <h3>✅ Registration Complete!</h3>
+                    <p>{successMessage}</p>
+                    <button onClick={() => navigate('/')} className="auth-button login">Back to Login</button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="auth-container">
@@ -58,9 +81,9 @@ const Register = ({ onRegisterSuccess, onSwitchToLogin }) => {
                 {error && <p className="auth-error">{error}</p>}
                 <button type="submit" className="auth-button register">Register</button>
             </form>
-            <button onClick={onSwitchToLogin} className="switch-form-button">
+            <Link to="/" className="switch-form-button">
                 Already have an account? Login
-            </button>
+            </Link>
         </div>
     );
 };

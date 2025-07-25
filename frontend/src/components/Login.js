@@ -1,22 +1,31 @@
-import React, { useState } from 'react';
-import './AuthForm.css'; // Import the shared CSS file
-import { login } from '../services/api'; // --- MODIFICATION: Import the new login service function ---
+// frontend/src/components/Login.js
 
-const Login = ({ onLoginSuccess, onSwitchToRegister }) => {
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import './AuthForm.css';
+import { login } from '../services/api';
+
+const Login = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
 
         try {
-            // --- MODIFICATION: Replace the old fetch with a call to the api service ---
             const data = await login(email, password);
-            onLoginSuccess(data);
+            localStorage.setItem("sluff_token", data.token);
+            navigate('/app');
         } catch (err) {
-            setError(err.message);
+            // --- THE FIX: More robust error handling ---
+            if (err && err.message) {
+                setError(err.message);
+            } else {
+                setError('An unexpected error occurred. Please try again.');
+            }
         }
     };
 
@@ -45,9 +54,9 @@ const Login = ({ onLoginSuccess, onSwitchToRegister }) => {
                 {error && <p className="auth-error">{error}</p>}
                 <button type="submit" className="auth-button login">Login</button>
             </form>
-            <button onClick={onSwitchToRegister} className="switch-form-button">
+            <Link to="/register" className="switch-form-button">
                 Don't have an account? Register
-            </button>
+            </Link>
         </div>
     );
 };
