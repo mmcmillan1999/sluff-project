@@ -114,8 +114,6 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
         if (currentTableState) {
             const { state, drawRequest } = currentTableState;
             
-            // --- CORRECTED LOGIC ---
-            // Show the modal if a draw is active OR if the game is in a draw-related end state.
             const shouldShow = (drawRequest?.isActive || state === 'DrawDeclined' || state === 'DrawComplete') && !isSpectator;
             
             setShowDrawVoteModal(shouldShow);

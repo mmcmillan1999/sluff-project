@@ -349,6 +349,9 @@ class GameEngine {
                     this.drawRequest.isActive = false;
                 }
                 this.emitLobbyUpdateCallback([{ type: 'BROADCAST_STATE' }]);
+            } else {
+                clearInterval(this.internalTimers.drawTimer);
+                delete this.internalTimers.drawTimer;
             }
         }, 1000);
 

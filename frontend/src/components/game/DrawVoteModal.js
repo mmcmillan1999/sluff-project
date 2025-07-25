@@ -3,8 +3,9 @@ import React, { useState, useEffect } from 'react';
 import './DrawVoteModal.css';
 
 const DrawVoteModal = ({ show, currentTableState, onVote, handleLeaveTable }) => {
-    const { state, drawRequest, roundSummary } = currentTableState;
+    const { state, drawRequest, roundSummary, players, playerId } = currentTableState;
     const [declineCountdown, setDeclineCountdown] = useState(3);
+    const selfPlayerName = players[playerId]?.playerName;
 
     useEffect(() => {
         if (state === 'DrawDeclined') {
@@ -22,8 +23,23 @@ const DrawVoteModal = ({ show, currentTableState, onVote, handleLeaveTable }) =>
         if (!vote) return { text: 'Pending...', className: 'pending' };
         return { text: vote.toUpperCase(), className: vote.toLowerCase() };
     };
+    
+    const renderVotesList = () => (
+        <div className="draw-votes-list-container">
+            <h4>Current Votes</h4>
+            {Object.entries(drawRequest.votes).map(([name, vote]) => {
+                const status = getVoteStatus(vote);
+                return (
+                    <div key={name} className="draw-vote-item">
+                        <span>{name}</span>
+                        <span className={`vote-status ${status.className}`}>{status.text}</span>
+                    </div>
+                );
+            })}
+        </div>
+    );
 
-    const renderVotingContent = () => (
+    const renderVotingInterface = () => (
         <>
             <div className="draw-vote-main-area">
                 <h2>Draw Requested</h2>
@@ -31,18 +47,7 @@ const DrawVoteModal = ({ show, currentTableState, onVote, handleLeaveTable }) =>
                     <strong>{drawRequest.initiator}</strong> has requested to end the game. All players must vote.
                 </p>
                 <div className="draw-vote-timer">{drawRequest.timer}s</div>
-                <div className="draw-votes-list-container">
-                    <h4>Current Votes</h4>
-                    {Object.entries(drawRequest.votes).map(([name, vote]) => {
-                        const status = getVoteStatus(vote);
-                        return (
-                            <div key={name} className="draw-vote-item">
-                                <span>{name}</span>
-                                <span className={`vote-status ${status.className}`}>{status.text}</span>
-                            </div>
-                        );
-                    })}
-                </div>
+                {renderVotesList()}
             </div>
             <div className="draw-vote-action-area">
                 <p style={{ margin: '0 0 10px 0', fontWeight: 'bold' }}>Your Vote:</p>
@@ -53,6 +58,15 @@ const DrawVoteModal = ({ show, currentTableState, onVote, handleLeaveTable }) =>
                 </div>
             </div>
         </>
+    );
+
+    const renderPendingVoteInterface = () => (
+         <div className="draw-vote-main-area">
+            <h2>Draw in Progress...</h2>
+            <p className="draw-vote-message">Waiting for all players to vote.</p>
+            <div className="draw-vote-timer">{drawRequest.timer}s</div>
+            {renderVotesList()}
+        </div>
     );
 
     const renderDeclinedContent = () => (
@@ -89,37 +103,18 @@ const DrawVoteModal = ({ show, currentTableState, onVote, handleLeaveTable }) =>
     );
     
     let content;
-    const myVote = drawRequest?.votes?.[currentTableState.players[currentTableState.playerId]?.playerName];
-    const isMyVotePending = myVote === null;
+    const myVote = drawRequest?.votes?.[selfPlayerName];
 
     if (state === 'DrawDeclined') {
         content = renderDeclinedContent();
     } else if (state === 'DrawComplete') {
         content = renderCompleteContent();
-    } else if (drawRequest?.isActive && !isMyVotePending) {
-        // I have voted, but the request is still active for others. Show pending state.
-        content = (
-            <div className="draw-vote-main-area">
-                <h2>Draw in Progress...</h2>
-                <p className="draw-vote-message">Waiting for all players to vote.</p>
-                <div className="draw-vote-timer">{drawRequest.timer}s</div>
-                <div className="draw-votes-list-container">
-                    <h4>Current Votes</h4>
-                    {Object.entries(drawRequest.votes).map(([name, vote]) => {
-                        const status = getVoteStatus(vote);
-                        return (
-                            <div key={name} className="draw-vote-item">
-                                <span>{name}</span>
-                                <span className={`vote-status ${status.className}`}>{status.text}</span>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-        );
-    } else {
-        // It's my turn to vote.
-        content = renderVotingContent();
+    } else if (drawRequest?.isActive) {
+        if (myVote === null) {
+            content = renderVotingInterface();
+        } else {
+            content = renderPendingVoteInterface();
+        }
     }
 
     return (
