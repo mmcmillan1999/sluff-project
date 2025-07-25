@@ -28,17 +28,12 @@ function handleFrogUpgrade(engine, userId, bid) {
     return resolveBiddingFinal(engine);
 }
 
-// --- NEW, STABLE, AND CORRECT BID HANDLING LOGIC ---
 function handleNormalBid(engine, userId, bid) {
-    // 1. GATHER FACTS & VALIDATE
-    // ===========================
     if (!BID_HIERARCHY.includes(bid) || engine.playersWhoPassedThisRound.includes(userId)) return [];
     
-    const currentHighestBidIndex = engine.currentHighestBidDetails ? BID_HIERARCHY.indexOf(engine.currentHighestBidDetails.bid) : -1;
-    if (bid !== "Pass" && BID_HIERARCHY.indexOf(bid) <= currentHighestBidIndex) return [];
+    const currentHighestBidLevel = engine.currentHighestBidDetails ? BID_HIERARCHY.indexOf(engine.currentHighestBidDetails.bid) : -1;
+    if (bid !== "Pass" && BID_HIERARCHY.indexOf(bid) <= currentHighestBidLevel) return [];
     
-    // 2. APPLY THE CURRENT PLAYER'S ACTION
-    // =====================================
     if (bid !== "Pass") {
         const player = engine.players[userId];
         engine.currentHighestBidDetails = { userId, playerName: player.playerName, bid };
@@ -50,18 +45,17 @@ function handleNormalBid(engine, userId, bid) {
         engine.playersWhoPassedThisRound.push(userId);
     }
 
-    // 3. DETERMINE THE NEXT STATE
-    // =============================
     const turnOrder = engine.playerOrder.turnOrder;
     const activeBidders = turnOrder.filter(id => !engine.playersWhoPassedThisRound.includes(id));
 
-    // Outcome 1: Bidding is completely over.
-    if (activeBidders.length <= 1) {
+    // --- THE FIX ---
+    // Condition 1: Bidding ends if only one person is left AND someone has actually made a bid.
+    // Condition 2: Bidding ends if NO ONE is left (everyone passed).
+    if ((activeBidders.length < 2 && engine.currentHighestBidDetails) || activeBidders.length < 1) {
         engine.biddingTurnPlayerId = null;
         return resolveBiddingFinal(engine);
     }
     
-    // Outcome 2: A Solo was just bid, and the Frog bidder is the ONLY one left to act.
     const soloIsHighest = engine.currentHighestBidDetails?.bid === "Solo";
     const frogBidderIsOnlyRemainingPlayer = activeBidders.length === 1 && activeBidders[0] === engine.originalFrogBidderId;
     if (soloIsHighest && frogBidderIsOnlyRemainingPlayer) {
@@ -70,7 +64,6 @@ function handleNormalBid(engine, userId, bid) {
         return [{ type: 'BROADCAST_STATE' }];
     }
 
-    // Outcome 3: Bidding continues to the next player in line.
     const currentBidderIndex = turnOrder.indexOf(userId);
     for (let i = 1; i <= turnOrder.length; i++) {
         const nextBidderId = turnOrder[(currentBidderIndex + i) % turnOrder.length];
@@ -80,7 +73,6 @@ function handleNormalBid(engine, userId, bid) {
         }
     }
 
-    // Fallback: If something unexpected happens, end the bidding safely.
     engine.biddingTurnPlayerId = null;
     return resolveBiddingFinal(engine);
 }
