@@ -285,69 +285,75 @@ class GameService {
     _triggerBots(tableId) {
         const engine = this.getEngineById(tableId);
         if (!engine || engine.pendingBotAction) return;
-
-        let actionTaken = false;
-
-        const scheduleAction = (actionFn, delay, ...args) => {
-            actionTaken = true;
+    
+        let turnActionTaken = false;
+    
+        const scheduleTurnAction = (actionFn, delay, ...args) => {
+            turnActionTaken = true;
             engine.pendingBotAction = setTimeout(async () => {
                 engine.pendingBotAction = null;
-                // --- THE FIX: Use the service method for actions that produce effects ---
                 await actionFn.call(this, tableId, ...args);
             }, delay);
         };
-        
-        // --- Find a bot whose turn it is for a specific action ---
+    
+        // --- Primary Turn-Based Action Loop ---
         for (const botId in engine.bots) {
-            if (actionTaken) break;
-
+            if (turnActionTaken) break;
+    
             const bot = engine.bots[botId];
             const botUserId = bot.userId;
-            
             const isCourtney = bot.playerName === "Courtney Sr.";
             const standardDelay = isCourtney ? 2000 : 1000;
             const playDelay = isCourtney ? 2400 : 1200;
             const roundEndDelay = isCourtney ? 16000 : 8000;
-
+    
             if (engine.state === 'Dealing Pending' && engine.dealer == botUserId) {
-                scheduleAction(this.dealCards, standardDelay, botUserId);
+                scheduleTurnAction(this.dealCards, standardDelay, botUserId);
             } else if (engine.state === 'Awaiting Next Round Trigger' && engine.roundSummary?.dealerOfRoundId == botUserId) {
-                scheduleAction(this.requestNextRound, roundEndDelay, botUserId);
+                scheduleTurnAction(this.requestNextRound, roundEndDelay, botUserId);
             } else if (engine.state === 'Bidding Phase' && engine.biddingTurnPlayerId == botUserId) {
                 const bid = bot.decideBid();
-                scheduleAction(this.placeBid, standardDelay, botUserId, bid);
+                scheduleTurnAction(this.placeBid, standardDelay, botUserId, bid);
             } else if (engine.state === 'Awaiting Frog Upgrade Decision' && engine.biddingTurnPlayerId == botUserId) {
                 const bid = bot.decideFrogUpgrade();
-                scheduleAction(this.placeBid, standardDelay, botUserId, bid);
+                scheduleTurnAction(this.placeBid, standardDelay, botUserId, bid);
             } else if (engine.state === 'Trump Selection' && engine.bidWinnerInfo?.userId == botUserId && !engine.trumpSuit) {
                 const suit = bot.chooseTrump();
-                scheduleAction(this.chooseTrump, standardDelay, botUserId, suit);
+                scheduleTurnAction(this.chooseTrump, standardDelay, botUserId, suit);
             } else if (engine.state === 'Frog Widow Exchange' && engine.bidWinnerInfo?.userId == botUserId && engine.widowDiscardsForFrogBidder.length === 0) {
                 const discards = bot.submitFrogDiscards();
-                scheduleAction(this.submitFrogDiscards, standardDelay, botUserId, discards);
+                scheduleTurnAction(this.submitFrogDiscards, standardDelay, botUserId, discards);
             } else if (engine.state === 'Playing Phase' && engine.trickTurnPlayerId == botUserId) {
                 const card = bot.playCard();
                 if (card) {
-                    scheduleAction(this.playCard, playDelay, botUserId, card);
+                    scheduleTurnAction(this.playCard, playDelay, botUserId, card);
                 }
             }
         }
-
-        // --- Handle asynchronous, non-turn-based actions ---
-        if (!actionTaken && engine.state === 'Playing Phase' && engine.insurance.isActive && !engine.insurance.dealExecuted) {
-            // ... (insurance logic unchanged)
-        }
-
-        if (!actionTaken && engine.drawRequest.isActive) {
+    
+        // --- Independent Logic for Draw Voting ---
+        // This runs regardless of the turn-based action above.
+        if (engine.drawRequest.isActive) {
+            let delay = 2000; // Stagger the bot votes
             for (const botId in engine.bots) {
                 const bot = engine.bots[botId];
                 if (engine.drawRequest.votes[bot.playerName] === null) {
-                    const vote = bot.decideDrawVote();
-                    // Schedule the action using the corrected pattern
-                    scheduleAction(this.submitDrawVote, 2000, bot.userId, vote);
-                    break;
+                    setTimeout(async () => {
+                        // Re-fetch engine state in case it changed during the delay
+                        const currentEngine = this.getEngineById(tableId);
+                        if (currentEngine && currentEngine.drawRequest.isActive && currentEngine.drawRequest.votes[bot.playerName] === null) {
+                            const vote = bot.decideDrawVote();
+                            await this.submitDrawVote(tableId, bot.userId, vote);
+                        }
+                    }, delay);
+                    delay += 1500; // Each bot waits a bit longer than the last
                 }
             }
+        }
+
+        // --- Independent Logic for Insurance ---
+        if (engine.state === 'Playing Phase' && engine.insurance.isActive && !engine.insurance.dealExecuted) {
+            // ... (insurance logic remains unchanged)
         }
     }
 }
