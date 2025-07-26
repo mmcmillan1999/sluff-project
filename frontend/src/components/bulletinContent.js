@@ -36,6 +36,6 @@ export const bulletinContent = [
     },
     {
         type: 'list-item',
-        text: '10.0.0'
+        text: '10.0.1 smarter bidder bot'
     },
 ];
