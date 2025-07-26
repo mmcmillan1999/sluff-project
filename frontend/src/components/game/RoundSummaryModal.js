@@ -1,7 +1,7 @@
 // frontend/src/components/game/RoundSummaryModal.js
 import React, { useState } from 'react';
 import './RoundSummaryModal.css';
-import { CARD_POINT_VALUES, BID_MULTIPLIERS } from '../../constants';
+import { CARD_POINT_VALUES, BID_MULTIPLIERS, PLACEHOLDER_ID_CLIENT } from '../../constants';
 import PointsBreakdownBar from './PointsBreakdownBar';
 
 const RoundSummaryModal = ({
@@ -24,10 +24,8 @@ const RoundSummaryModal = ({
     }
 
     const {
-        message,
-        finalScores,
         isGameOver,
-        gameWinner,
+        // gameWinner, // <-- THIS LINE IS REMOVED
         dealerOfRoundId,
         widowForReveal,
         insuranceHindsight,
@@ -38,9 +36,10 @@ const RoundSummaryModal = ({
         widowPointsValue,
         bidType,
         drawOutcome,
-        payouts,
         payoutDetails,
-        lastCompletedTrick
+        lastCompletedTrick,
+        insuranceDealWasMade,
+        finalScores
     } = summaryData;
     
     const bidderName = bidWinnerInfo?.playerName || 'Bidder';
@@ -60,178 +59,160 @@ const RoundSummaryModal = ({
 
     const myPayoutMessage = isGameOver && payoutDetails ? payoutDetails[playerId] : null;
 
-    const pointsPanelContent = (
-        <div className="summary-points-section">
-            <h4>Points Captured</h4>
-            <PointsBreakdownBar
-                bidderName={bidderName}
-                bidderPoints={finalBidderPoints}
-                defenderNames={defenderNames}
-                defenderPoints={finalDefenderPoints}
-            />
-            <div className="point-calculation-recap">
-                <span>Difference from Goal: <strong>{rawDifference}</strong> pts</span>
-                <span className="recap-divider">×</span>
-                <span className="recap-divider">×</span>
-                <span>Bid Multiplier: <strong>{bidMultiplier}x</strong> ({bidType})</span>
-                <span className="recap-divider">=</span>
-                <span>Exchange Value: <strong>{exchangeValue}</strong> pts</span>
+    const renderTotalsTable = (changes, totals) => {
+        const sortedPlayerNames = [bidderName, ...defenderNames];
+        return (
+            <div className="summary-totals-panel">
+                <table className="summary-totals-table">
+                    <thead>
+                        <tr>
+                            <th>Player</th>
+                            <th>Round</th>
+                            <th>New Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {sortedPlayerNames
+                            .filter(name => name !== PLACEHOLDER_ID_CLIENT)
+                            .map(name => {
+                                const change = changes[name] || 0;
+                                const isBidder = name === bidderName;
+                                return (
+                                    <tr key={name}>
+                                        <td className={isBidder ? 'bidder-text' : 'defender-text'}><strong>{name}</strong></td>
+                                        <td className={change > 0 ? 'positive' : (change < 0 ? 'negative' : '')}>
+                                            {change > 0 ? `+${change}` : change}
+                                        </td>
+                                        <td>{totals[name]}</td>
+                                    </tr>
+                                );
+                        })}
+                    </tbody>
+                </table>
             </div>
-            <div className="point-changes-list">
-                {pointChanges && Object.entries(pointChanges).map(([name, change]) => (
-                    name !== 'ScoreAbsorber' &&
-                    <div key={name} className="point-change-item">
-                        {name}: <span className={change > 0 ? 'positive' : 'negative'}>{change > 0 ? `+${change}` : change}</span>
-                    </div>
-                ))}
+        );
+    };
+
+    const TrickPointRecapPanel = () => {
+        const bidderWonPoints = pointChanges[bidderName] > 0;
+        const panelClasses = ['summary-points-section'];
+        if (!insuranceDealWasMade) {
+            panelClasses.push(bidderWonPoints ? 'pulsating-gold' : 'pulsating-blue');
+        }
+
+        return (
+            <div className={panelClasses.join(' ')}>
+                <h4>Trick Point Recap</h4>
+                <PointsBreakdownBar
+                    bidderPoints={finalBidderPoints}
+                    defenderPoints={finalDefenderPoints}
+                />
+                <div className="point-calculation-recap">
+                    Δ60: {rawDifference} pts × {bidMultiplier}x ({bidType}) = {exchangeValue} pts
+                </div>
+                {!insuranceDealWasMade && renderTotalsTable(pointChanges, finalScores)}
             </div>
-        </div>
-    );
+        );
+    };
+
+    const InsuranceRecapPanel = () => {
+        if (!insurance || !insurance.bidMultiplier) return null;
+        
+        const dealStatusText = insuranceDealWasMade ? "by taking deal" : "by not taking deal";
+        const bidderGainedPoints = pointChanges[bidderName] > 0;
+
+        const panelClasses = ['insurance-recap-panel'];
+        if (insuranceDealWasMade) {
+            panelClasses.push(bidderGainedPoints ? 'pulsating-gold' : 'pulsating-blue');
+        }
+
+        return (
+            <div className={panelClasses.join(' ')}>
+                <h4>{insuranceDealWasMade ? "Insurance Deal Executed" : "Insurance Recap (No Deal)"}</h4>
+                <div className="insurance-narrative">
+                    {Object.entries(insuranceHindsight).map(([pName, data]) => {
+                        const isBidder = pName === bidderName;
+                        const actionText = isBidder ? `required ${insurance.bidderRequirement}` : `offered ${insurance.defenderOffers[pName]}`;
+                        const outcomeValue = data.hindsightValue >= 0 ? data.hindsightValue : Math.abs(data.hindsightValue);
+                        const outcomeWord = data.hindsightValue >= 0 ? "Saved" : "Wasted";
+                        const outcomeClass = data.hindsightValue >= 0 ? "saved-text" : "wasted-text";
+                        
+                        return (
+                            <p key={pName} className={isBidder ? 'bidder-text' : 'defender-text'}>
+                                <strong>{pName}</strong> {actionText}, <strong className={outcomeClass}>{outcomeWord} {outcomeValue} pts</strong> {dealStatusText}.
+                            </p>
+                        );
+                    })}
+                </div>
+                {insuranceDealWasMade && renderTotalsTable(pointChanges, finalScores)}
+            </div>
+        );
+    };
     
-    const renderTrickDetails = () => {
+    const TrickDetailsPanel = () => {
         if (!allTricks) return null;
-
-        const bidderTotal = finalBidderPoints;
-        const defenderTotal = finalDefenderPoints;
-
-        const bidderWonWidow = 
-            (bidType === 'Frog') || 
-            ((bidType === 'Solo' || bidType === 'Heart Solo') && lastCompletedTrick?.winnerName === bidderName);
-
-        const widowRowJsx = widowPointsValue > 0 ? (
+        const bidderWonWidow = (bidType === 'Frog') || (bidType === 'Solo') || ((bidType === 'Heart Solo') && lastCompletedTrick?.winnerName === bidderName);
+        const widowRowJsx = (
             <div className="trick-detail-row widow-row">
                 <span className="trick-number">Widow:</span>
-                <div className="trick-cards" style={{ display: 'flex', gap: '2px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <div className="trick-cards">
                     {widowForReveal.map((card, i) => renderCard(card, { key: `widow-${i}`, small: true }))}
                 </div>
                 <span className="trick-points">({widowPointsValue} pts)</span>
             </div>
-        ) : null;
-        
+        );
         const TrickRow = ({ trick }) => (
             <div key={`trick-${trick.trickNumber}`} className="trick-detail-row">
                 <span className="trick-number">Trick {trick.trickNumber}:</span>
-                <div className="trick-cards" style={{ display: 'flex', gap: '2px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <div className="trick-cards">
                     {trick.cards.map((card, i) => renderCard(card, { key: `trickcard-${trick.trickNumber}-${i}`, small: true }))}
                 </div>
                 <span className="trick-points">({calculateCardPoints(trick.cards)} pts)</span>
             </div>
         );
-
-        // --- THIS IS THE FIX: A much simpler and more robust way to get the tricks ---
         const bidderTricks = allTricks[bidderName] || [];
         const defenderTricks = defenderNames.flatMap(name => allTricks[name] || []);
-
         return (
             <div className="trick-breakdown-details">
                 <div className="team-trick-section">
-                    <h4>Bidder Total ({bidderName}): {bidderTotal} pts</h4>
+                    <h4>{bidderName} (Bidder): {finalBidderPoints} pts</h4>
                      {bidderTricks.map(trick => <TrickRow key={trick.trickNumber} trick={trick} />)}
                     {bidderWonWidow && widowRowJsx}
                 </div>
                 <div className="team-trick-section">
-                    <h4>Defender Total ({defenderNames.join(', ')}): {defenderTotal} pts</h4>
+                    <h4>{defenderNames.join(' & ')} (Defenders): {finalDefenderPoints} pts</h4>
                      {defenderTricks.map(trick => <TrickRow key={trick.trickNumber} trick={trick} />)}
                     {!bidderWonWidow && widowRowJsx}
                 </div>
             </div>
         );
     };
-
-    const renderMainContent = () => {
-        if (drawOutcome) {
-            return (
-                <div className="summary-scores-container">
-                    {payouts && (
-                         <div className="forfeit-payout-section" style={{ backgroundColor: '#cfe2ff', borderColor: '#b6d4fe' }}>
-                            <h4 style={{ color: '#0a58ca' }}>Draw Payouts ({drawOutcome}):</h4>
-                            <ul className="forfeit-payout-list">
-                                {Object.entries(payouts).map(([pName, details]) => (
-                                    <li key={pName}>
-                                        <strong>{pName}:</strong> Received {details.totalReturn.toFixed(2)} tokens
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    )}
-                </div>
-            );
-        }
-
-        return (
-            <>
-                {summaryData.insuranceDealWasMade ? (
-                    <div className="what-if-panel">
-                        <h4 className="what-if-title">How Points Would Have Been Calculated</h4>
-                        {pointsPanelContent}
-                    </div>
-                ) : (
-                    pointsPanelContent
-                )}
-                
-                {insurance && insurance.bidMultiplier && (
-                    <div className="insurance-deal-recap">
-                        <h4 className="recap-title">
-                            {summaryData.insuranceDealWasMade ? "Insurance Deal Recap" : "Final Insurance State (No Deal)"}
-                        </h4>
-                        <p>
-                            <strong>{insurance.bidderPlayerName}</strong> (Bidder) required <strong>{insurance.bidderRequirement}</strong> points.
-                        </p>
-                        <ul>
-                            {Object.entries(insurance.defenderOffers).map(([name, offer]) => (
-                                <li key={name}><strong>{name}</strong> offered <strong>{offer}</strong> points.</li>
-                            ))}
-                        </ul>
-                    </div>
-                )}
-                
-                {insuranceHindsight && (
-                    <div className="insurance-hindsight">
-                        <h4 className="hindsight-title">Insurance Hindsight</h4>
-                         {Object.entries(insuranceHindsight).map(([pName, data]) => (
-                            <p key={pName} className="hindsight-text">
-                                <strong>{pName}:</strong> Your decision <strong>{data.hindsightValue >= 0 ? 'saved' : 'wasted'} {Math.abs(data.hindsightValue)}</strong> points.
-                            </p>
-                        ))}
-                    </div>
-                )}
-
-                <div className="summary-scores-container">
-                    <h4>Updated Scores</h4>
-                    <ul className="summary-score-list">
-                        {Object.entries(finalScores).map(([name, score]) => (
-                           <li key={name}><strong>{name}:</strong> {score}</li>
-                        ))}
-                    </ul>
-                </div>
-            </>
-        );
-    };
-
+    
     return (
         <div className="modal-overlay">
             <div className="summary-modal-content">
                 <div className="summary-main-area">
                     <h2>{isGameOver ? "Game Over" : "Round Over"}</h2>
-                    <p className="summary-message">{isGameOver ? `Winner: ${gameWinner}` : message}</p>
                     {myPayoutMessage && (
-                        <div style={{ padding: '10px', backgroundColor: '#e0eafc', border: '1px solid #c4d5f5', borderRadius: '8px', marginBottom: '15px' }}>
-                            <p style={{ margin: 0, fontWeight: 'bold', color: '#0d6efd' }}>{myPayoutMessage}</p>
+                        <div className="payout-details-banner">
+                            <p>{myPayoutMessage}</p>
                         </div>
                     )}
-                    {renderMainContent()}
+                    
+                    <TrickPointRecapPanel />
+                    {!detailsVisible && <InsuranceRecapPanel />}
+
                 </div>
 
                 {!drawOutcome && (
                     <div className="summary-details-section">
                         <button className="details-toggle" onClick={() => setDetailsVisible(!detailsVisible)}>
-                            {detailsVisible ? 'Hide Round Details' : 'Show Round Details'}
+                            {detailsVisible ? 'Hide Trick Breakdown' : 'Show Trick Breakdown'}
                         </button>
                         {detailsVisible && (
                             <div className="details-content">
-                                <h4 style={{marginTop: '0px'}}>Trick Breakdown</h4>
                                  <div className="scrollable-tricks">
-                                    {renderTrickDetails()}
+                                    <TrickDetailsPanel />
                                 </div>
                             </div>
                         )}

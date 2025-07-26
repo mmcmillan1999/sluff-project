@@ -2,7 +2,7 @@
 
 .points-breakdown-container {
     position: relative;
-    padding-top: 20px; 
+    padding-top: 5px; 
     margin-bottom: 10px;
 }
 
@@ -13,11 +13,11 @@
     border-radius: 8px;
     overflow: hidden;
     position: relative;
-    background-color: #8b5cf6; /* Defender color as fallback */
+    background-color: #f0f0f0;
     border: 1px solid #a7a7a7;
+    justify-content: center;
 }
 
-/* The vertical "Break Even" line */
 .points-bar::after {
     content: '';
     position: absolute;
@@ -25,22 +25,9 @@
     top: 0;
     bottom: 0;
     width: 3px;
-    background-color: #a7f3d0; /* A light, minty green */
+    background-color: #a7f3d0;
     transform: translateX(-1.5px);
     z-index: 2;
-}
-
-.break-even-label {
-    position: absolute;
-    top: -5px;
-    left: 50%;
-    transform: translateX(-50%);
-    background-color: #0d6efd;
-    color: white;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 0.7em;
-    font-family: 'Oswald', sans-serif;
 }
 
 .points-bar-bidder,
@@ -53,24 +40,25 @@
     font-family: 'Oswald', sans-serif;
     transition: width 0.5s ease-in-out;
     text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+    flex-shrink: 0; /* Important for accurate width */
 }
 
 .points-bar-bidder {
-    background-color: #166534; /* Dark Green */
-    flex-shrink: 0; 
+    background-color: #ca8a04; /* Gold */
 }
 
 .points-bar-defender {
-    background-color: #8b5cf6; /* Purple */
-    flex-grow: 1; 
+    background-color: #2563eb; /* Blue */
 }
 
-/* --- NEW STYLES for displaying info inside the bar --- */
 .player-info {
     display: flex;
     flex-direction: column;
     align-items: center;
     line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .player-name {

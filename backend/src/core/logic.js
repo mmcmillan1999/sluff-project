@@ -185,7 +185,7 @@ function calculateRoundScoreDetails(table) {
         }
     }
     
-    const insuranceHindsight = calculateInsuranceHindsight(table, bidderTotalCardPoints, currentBidMultiplier);
+    const insuranceHindsight = calculateInsuranceHindsight(table, pointChanges);
 
     const finalBidderPoints = bidderTotalCardPoints;
     const finalDefenderPoints = 120 - finalBidderPoints;
@@ -307,56 +307,72 @@ async function handleDrawGameOver(table, outcome, transactionFn, statUpdateFn) {
 }
 
 
-function calculateInsuranceHindsight(table, bidderTotalCardPoints, currentBidMultiplier) {
+function calculateInsuranceHindsight(table, pointChanges) {
     if (table.playerMode !== 3) return null;
-    const { playerOrderActive, bidWinnerInfo, insurance, players } = table;
+
+    const { bidWinnerInfo, insurance, players } = table;
     const bidWinnerName = bidWinnerInfo.playerName;
-    const insuranceHindsight = {};
-    const activePlayerNames = playerOrderActive.map(id => players[id].playerName);
-    const defenders = activePlayerNames.filter(p => p !== bidWinnerName);
-    const outcomeFromCards = {};
-    const scoreDifferenceFrom60 = bidderTotalCardPoints - 60;
-    const exchangeValue = Math.abs(scoreDifferenceFrom60) * currentBidMultiplier;
-    if (scoreDifferenceFrom60 > 0) {
-        outcomeFromCards[bidWinnerName] = exchangeValue * 2;
-        defenders.forEach(def => outcomeFromCards[def] = -exchangeValue);
-    } else if (scoreDifferenceFrom60 < 0) {
-        outcomeFromCards[bidWinnerName] = -(exchangeValue * 2);
-        defenders.forEach(def => outcomeFromCards[def] = exchangeValue);
-    } else {
-         activePlayerNames.forEach(p => outcomeFromCards[p] = 0);
-    }
-    const potentialOutcomeFromDeal = {};
-    const sumOfFinalOffers = Object.values(insurance.defenderOffers).reduce((sum, offer) => sum + offer, 0);
-    potentialOutcomeFromDeal[bidWinnerName] = sumOfFinalOffers;
-    const costPerDefenderForced = Math.round(insurance.bidderRequirement / defenders.length);
-    defenders.forEach(def => { potentialOutcomeFromDeal[def] = -costPerDefenderForced; });
-    const actualOutcomeFromDeal = {};
+    const defenders = Object.values(players)
+        .filter(p => !p.isSpectator && p.playerName !== bidWinnerName)
+        .map(p => p.playerName);
+    
+    const hindsight = {};
+
     if (insurance.dealExecuted) {
-        const agreement = insurance.executedDetails.agreement;
-        actualOutcomeFromDeal[agreement.bidderPlayerName] = agreement.bidderRequirement;
-        for (const defName in agreement.defenderOffers) {
-            actualOutcomeFromDeal[defName] = -agreement.defenderOffers[defName];
-       }
-    }
-    activePlayerNames.forEach(pName => {
-        let actualPoints, potentialPoints;
-        if (insurance.dealExecuted) {
-            actualPoints = actualOutcomeFromDeal[pName];
-            potentialPoints = outcomeFromCards[pName];
-        } else {
-            actualPoints = outcomeFromCards[pName];
-            potentialPoints = potentialOutcomeFromDeal[pName];
+        // Hindsight is what would have happened if they played it out.
+        // The "actual" points are from the deal, "potential" are from the cards.
+        const actualPointsFromDeal = pointChanges;
+        const potentialPointsFromCards = {};
+        
+        const scoreDifferenceFrom60 = table.bidderCardPoints - 60;
+        const exchangeValue = Math.abs(scoreDifferenceFrom60) * insurance.bidMultiplier;
+        
+        if (scoreDifferenceFrom60 > 0) { // Bidder would have succeeded
+            potentialPointsFromCards[bidWinnerName] = exchangeValue * 2;
+            defenders.forEach(def => potentialPointsFromCards[def] = -exchangeValue);
+        } else { // Bidder would have failed
+            potentialPointsFromCards[bidWinnerName] = -(exchangeValue * 2);
+            defenders.forEach(def => potentialPointsFromCards[def] = exchangeValue);
         }
-        insuranceHindsight[pName] = {
-            actualPoints: actualPoints || 0,
-            actualReason: insurance.dealExecuted ? "Insurance Deal" : "Card Outcome",
-            potentialPoints: potentialPoints || 0,
-            potentialReason: insurance.dealExecuted ? "Played it Out" : "Taken Insurance Deal",
-            hindsightValue: (actualPoints || 0) - (potentialPoints || 0)
-        };
-    });
-    return insuranceHindsight;
+
+        [bidWinnerName, ...defenders].forEach(pName => {
+            hindsight[pName] = {
+                hindsightValue: (actualPointsFromDeal[pName] || 0) - (potentialPointsFromCards[pName] || 0)
+            };
+        });
+
+    } else {
+        // --- THIS IS THE CORRECTED LOGIC ---
+        // Hindsight is what would have happened if they took a forced deal.
+        // The "actual" points are from the cards, "potential" are from a hypothetical deal.
+        const actualPointsFromCards = pointChanges;
+        const potentialPointsFromDeal = {};
+        const bidderRequirement = insurance.bidderRequirement;
+        
+        // Bidder's potential is what they asked for.
+        potentialPointsFromDeal[bidWinnerName] = bidderRequirement;
+
+        // Defenders' potential is the cost of the bidder's ask, split evenly.
+        if (defenders.length > 0) {
+            const costPerDefender = bidderRequirement / defenders.length;
+            defenders.forEach(def => {
+                potentialPointsFromDeal[def] = -costPerDefender;
+            });
+        }
+        
+        [bidWinnerName, ...defenders].forEach(pName => {
+            hindsight[pName] = {
+                hindsightValue: (actualPointsFromCards[pName] || 0) - (potentialPointsFromDeal[pName] || 0)
+            };
+        });
+    }
+
+    // Round all hindsight values for cleaner display
+    for (const pName in hindsight) {
+        hindsight[pName].hindsightValue = Math.round(hindsight[pName].hindsightValue);
+    }
+    
+    return hindsight;
 }
 
 module.exports = {

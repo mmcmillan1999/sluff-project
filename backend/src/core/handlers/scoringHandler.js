@@ -8,15 +8,18 @@ function calculateRoundScores(engine) {
     const bidType = engine.bidWinnerInfo.bid;
     let widowPoints = 0;
     
+    // --- THIS LOGIC IS NOW CORRECTED ---
     if (bidType === "Frog") {
         widowPoints = gameLogic.calculateCardPoints(engine.widowDiscardsForFrogBidder);
-    } else if (bidType === "Solo" || bidType === "Heart Solo") {
-        widowPoints = gameLogic.calculateCardPoints(engine.originalDealtWidow);
-    }
-
-    if (bidType === "Frog") {
+        // Frog points from discards are added directly to the bidder's captured tricks.
         engine.bidderCardPoints += widowPoints;
-    } else if (bidType === "Solo" || bidType === "Heart Solo") {
+    } else if (bidType === "Solo") {
+        widowPoints = gameLogic.calculateCardPoints(engine.originalDealtWidow);
+        // On a Solo, the widow points ALWAYS go to the bidder, unconditionally.
+        engine.bidderCardPoints += widowPoints;
+    } else if (bidType === "Heart Solo") {
+        widowPoints = gameLogic.calculateCardPoints(engine.originalDealtWidow);
+        // ONLY on a Heart Solo does the winner of the last trick get the widow.
         const lastTrickWinnerName = engine.lastCompletedTrick?.winnerName;
         const bidderName = engine.bidWinnerInfo.playerName;
         
@@ -74,7 +77,6 @@ function calculateRoundScores(engine) {
         pointChanges: roundData.pointChanges,
         widowPointsValue: roundData.widowPointsValue,
         bidType: roundData.bidType,
-        // --- THIS IS THE CRITICAL FIX FOR WIDOW DISPLAY ---
         lastCompletedTrick: engine.lastCompletedTrick 
     };
 
