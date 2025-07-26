@@ -1,28 +1,49 @@
+// frontend/src/components/Register.js
 import React, { useState } from 'react';
-import './AuthForm.css'; // Import the shared CSS file
-import { register } from '../services/api'; // --- MODIFICATION: Import the new register service function ---
+import './AuthForm.css';
+import { register } from '../services/api';
 
 const Register = ({ onRegisterSuccess, onSwitchToLogin }) => {
     const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [successMessage, setSuccessMessage] = useState('');
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+        setSuccessMessage('');
 
         try {
-            // --- MODIFICATION: Replace the old fetch with a call to the api service ---
-            await register(username, email, password);
-            onRegisterSuccess();
+            const data = await register(username, email, password);
+            setSuccessMessage(data.message);
         } catch (err) {
-            setError(err.message);
+            if (err && err.message) {
+                setError(err.message);
+            } else {
+                setError('An unexpected error occurred. Please try again.');
+            }
         }
     };
 
+    if (successMessage) {
+        return (
+            <div className="auth-container">
+                <img src="/SluffLogo.png" alt="Sluff Logo" className="auth-logo" />
+                <div className="auth-form" style={{ textAlign: 'center' }}>
+                    <h3>✅ Registration Complete!</h3>
+                    <p>{successMessage}</p>
+                    {/* This button now correctly uses the onSwitchToLogin prop */}
+                    <button onClick={onSwitchToLogin} className="auth-button login">Back to Login</button>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="auth-container">
+            <img src="/SluffLogo.png" alt="Sluff Logo" className="auth-logo" />
             <h2 className="auth-title">Register</h2>
             <form onSubmit={handleSubmit} className="auth-form">
                 <input
@@ -49,15 +70,10 @@ const Register = ({ onRegisterSuccess, onSwitchToLogin }) => {
                     required
                     className="auth-input"
                 />
-
-                <div className="register-warning">
-                    <strong className="register-warning-title">WARNING: Unrecoverable Password!</strong>
-                    <p className="register-warning-text">There is currently no way to recover a lost password. Please store your password in a very safe place, like a password manager.</p>
-                </div>
-
                 {error && <p className="auth-error">{error}</p>}
                 <button type="submit" className="auth-button register">Register</button>
             </form>
+            {/* This button now correctly uses the onSwitchToLogin prop */}
             <button onClick={onSwitchToLogin} className="switch-form-button">
                 Already have an account? Login
             </button>

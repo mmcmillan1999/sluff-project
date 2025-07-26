@@ -9,7 +9,6 @@ const { Pool } = require("pg");
 const jwt = require("jsonwebtoken");
 const bcrypt = require('bcrypt');
 
-// --- Refactored Imports ---
 const GameService = require('./services/GameService');
 const registerGameHandlers = require('./events/gameEvents');
 const createAuthRoutes = require('./api/auth');
@@ -20,44 +19,43 @@ const createChatRoutes = require('./api/chat');
 const createDbTables = require('./data/createTables');
 const createAiRoutes = require('./api/ai');
 const createPingRoutes = require('./api/ping');
-
-// --- NEW: Insurance Handler ---
 const insuranceHandler = require('./core/handlers/insuranceHandler');
 
 
-// --- Basic Server Setup ---
 const app = express();
 const server = http.createServer(app);
+
+// --- MODIFIED CORS SETUP ---
+const corsOptions = {
+    origin: process.env.CLIENT_ORIGIN || "http://localhost:3001", // Fallback for safety
+    methods: ["GET", "POST"]
+};
+
 const io = new Server(server, {
-  cors: { origin: process.env.CLIENT_ORIGIN, methods: ["GET", "POST"] },
+  cors: corsOptions,
 });
 
 let pool;
 
-app.use(cors({ origin: process.env.CLIENT_ORIGIN }));
+app.use(cors(corsOptions)); // Use the same options for Express
 app.use(express.json());
 
-// --- SERVER STARTUP ---
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, async () => {
   console.log(`Sluff Game Server running on port ${PORT}`);
   try {
-    // 1. Connect to Database
     pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
+      connectionString: process.env.POSTGRES_CONNECT_STRING,
       ssl: { rejectUnauthorized: false }
     });
     await pool.connect();
     console.log("✅ Database connection successful.");
     await createDbTables(pool);
     
-    // 2. Initialize Services
     const gameService = new GameService(io, pool);
 
-    // 3. Register Network Handlers
     registerGameHandlers(io, gameService);
 
-    // 4. Register Insurance Handler
     io.on('connection', (socket) => {
       socket.on('updateInsuranceSetting', ({ tableId, settingType, value }) => {
         const engine = gameService.getEngineById(tableId);
@@ -67,18 +65,15 @@ server.listen(PORT, async () => {
       });
     });
     
-    // 5. Register API Routes
     app.use('/api/auth', createAuthRoutes(pool, bcrypt, jwt, io));
     app.use('/api/leaderboard', createLeaderboardRoutes(pool));
     app.use('/api/admin', createAdminRoutes(pool, jwt));
     app.use('/api/feedback', createFeedbackRoutes(pool, jwt));
     app.use('/api/chat', createChatRoutes(pool, io, jwt));
     
-    // --- MODIFICATION: Initialize and use the AI router ---
     const aiRouter = createAiRoutes(pool, gameService);
     app.use('/api/ai', aiRouter);
 
-    // --- NEW ROUTE: Simple ping endpoint ---
     const pingRouter = createPingRoutes();
     app.use('/api/ping', pingRouter);
 

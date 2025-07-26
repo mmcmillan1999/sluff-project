@@ -51,13 +51,49 @@ export const login = async (email, password) => {
 };
 
 export const register = async (username, email, password) => {
-    const response = await configuredFetch('/api/auth/register', 'POST', { username, email, password }, false);
+    try {
+        const response = await configuredFetch('/api/auth/register', 'POST', { username, email, password }, false);
+        const data = await response.json();
+        if (!response.ok) {
+            // This now correctly throws an error with the API's message
+            throw new Error(data.message || 'Failed to register');
+        }
+        return data; // Return the success data
+    } catch (error) {
+        // This catches network errors (like "Failed to fetch") and re-throws them
+        // so the component can display a generic message.
+        throw error;
+    }
+};
+
+export const verifyEmail = async (token) => {
+    // This endpoint does not require an auth token, as the user is not yet logged in.
+    const response = await configuredFetch('/api/auth/verify-email', 'POST', { token }, false);
     const data = await response.json();
     if (!response.ok) {
-        throw new Error(data.message || 'Failed to register');
+        throw new Error(data.message || 'Failed to verify email.');
     }
-    return;
+    return data;
 };
+
+export const requestPasswordReset = async (email) => {
+    const response = await configuredFetch('/api/auth/request-password-reset', 'POST', { email }, false);
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.message || 'Failed to request password reset.');
+    }
+    return data;
+};
+
+export const resetPassword = async (token, password) => {
+    const response = await configuredFetch('/api/auth/reset-password', 'POST', { token, password }, false);
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.message || 'Failed to reset password.');
+    }
+    return data;
+};
+
 
 // --- Leaderboard Service Calls ---
 
@@ -112,8 +148,6 @@ export const submitFeedback = async (feedbackData) => {
     return data;
 };
 
-// --- NEW: Functions for the Feedback Repository ---
-
 export const getFeedback = async () => {
     const response = await configuredFetch('/api/feedback', 'GET');
     const data = await response.json();
@@ -128,6 +162,15 @@ export const updateFeedback = async (id, updateData) => {
     const data = await response.json();
     if (!response.ok) {
         throw new Error(data.message || 'Failed to update feedback.');
+    }
+    return data;
+};
+
+export const resendVerificationEmail = async (email) => {
+    const response = await configuredFetch('/api/auth/resend-verification', 'POST', { email }, false);
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.message || 'Failed to resend verification email.');
     }
     return data;
 };

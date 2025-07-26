@@ -5,7 +5,6 @@ const createDbTables = async (pool) => {
     try {
         await pool.query('BEGIN');
 
-        // This command creates the type if it doesn't exist at all.
         await pool.query(`
             DO $$ BEGIN
                 CREATE TYPE transaction_type_enum AS ENUM (
@@ -30,7 +29,6 @@ const createDbTables = async (pool) => {
             END $$;
         `);
 
-        // --- MODIFICATION: Add 'hidden' to the feedback status enum ---
         await pool.query(`
             DO $$ BEGIN
                 CREATE TYPE feedback_status_enum AS ENUM ('new', 'in_progress', 'resolved', 'wont_fix');
@@ -38,7 +36,6 @@ const createDbTables = async (pool) => {
                 WHEN duplicate_object THEN null;
             END $$;
         `);
-        // Add the new value if the type already exists but the value doesn't
         await pool.query("ALTER TYPE feedback_status_enum ADD VALUE IF NOT EXISTS 'hidden'");
 
 
@@ -55,6 +52,15 @@ const createDbTables = async (pool) => {
                 is_admin BOOLEAN DEFAULT FALSE
             );
         `);
+        
+        await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE");
+        await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token TEXT");
+        await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token_expires TIMESTAMP WITH TIME ZONE");
+        
+        // --- NEW: Add columns for password recovery ---
+        await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token TEXT");
+        await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token_expires TIMESTAMP WITH TIME ZONE");
+
 
         await pool.query(`
             CREATE TABLE IF NOT EXISTS game_history (
@@ -93,7 +99,6 @@ const createDbTables = async (pool) => {
             );
         `);
         
-        // --- MODIFICATION: Add new columns to the feedback table ---
         await pool.query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS admin_response TEXT");
         await pool.query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS admin_notes TEXT");
         await pool.query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS last_updated_by_admin_at TIMESTAMP WITH TIME ZONE");

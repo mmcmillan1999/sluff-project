@@ -1,8 +1,7 @@
 // frontend/src/App.js
 import React, { useState, useEffect, useCallback } from "react";
 import io from "socket.io-client";
-import Login from "./components/Login.js";
-import Register from "./components/Register.js";
+import AuthContainer from "./components/AuthContainer.js";
 import LobbyView from "./components/LobbyView.js";
 import GameTableView from "./components/GameTableView.js";
 import LeaderboardView from "./components/LeaderboardView.js";
@@ -22,7 +21,7 @@ const socket = io(SERVER_URL, {
 });
 
 function App() {
-    const [view, setView] = useState('login');
+    const [view, setView] = useState('lobby');
     const [token, setToken] = useState(localStorage.getItem("sluff_token"));
     const [user, setUser] = useState(null);
     const [lobbyThemes, setLobbyThemes] = useState([]);
@@ -38,11 +37,17 @@ function App() {
         localStorage.removeItem("sluff_token");
         setToken(null);
         setUser(null);
-        setView('login');
         if (socket.connected) {
             socket.disconnect();
         }
     }, []);
+
+    const handleLoginSuccess = (data) => {
+        localStorage.setItem("sluff_token", data.token);
+        setToken(data.token);
+        setUser(data.user);
+        enableSound();
+    };
 
     const handleHardReset = () => {
         if (window.confirm("SERVER RESET WARNING:\n\nThis will boot ALL players from ALL tables, reset ALL in-progress games, and force everyone to log in again. This action cannot be undone.\n\nAre you sure you want to proceed?")) {
@@ -55,7 +60,7 @@ function App() {
             socket.emit("resetAllTokens", {});
         }
     };
-    
+
     const handleOpenFeedbackModal = (context = null) => {
         setFeedbackGameContext(context);
         setShowFeedbackModal(true);
@@ -63,7 +68,7 @@ function App() {
 
     const handleCloseFeedbackModal = () => {
         setShowFeedbackModal(false);
-        setFeedbackGameContext(null); 
+        setFeedbackGameContext(null);
     };
 
     const handleSubmitFeedback = async (feedbackData) => {
@@ -78,30 +83,14 @@ function App() {
         }
     };
 
-    const handleShowAdmin = () => {
-        setView('admin');
-    };
+    const handleShowAdmin = () => setView('admin');
 
     const handleReturnToLobby = () => {
         setView('lobby');
-        socket.emit("requestUserSync");
+        if (socket.connected) socket.emit("requestUserSync");
     };
 
-    useEffect(() => {
-        if (token && !user) {
-            try {
-                const payload = JSON.parse(atob(token.split('.')[1]));
-                setUser({ id: payload.id, username: payload.username, tokens: 0, is_admin: payload.is_admin || false });
-                setView('lobby');
-            }
-            catch (e) {
-                console.error("Invalid token found, logging out:", e);
-                handleLogout();
-            }
-        }
-    }, [token, user, handleLogout]);
-
-    const handleLeaveTable = useCallback(() => { // Made into a useCallback
+    const handleLeaveTable = useCallback(() => {
         if (currentTableState) {
             socket.emit("leaveTable", { tableId: currentTableState.tableId });
         }
@@ -110,30 +99,34 @@ function App() {
     }, [currentTableState]);
 
     useEffect(() => {
+        if (token && !user) {
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                setUser({ id: payload.id, username: payload.username, tokens: 0, is_admin: payload.is_admin || false });
+            } catch (e) {
+                console.error("Invalid token found, logging out:", e);
+                handleLogout();
+            }
+        }
+    }, [token, user, handleLogout]);
+
+    useEffect(() => {
         if (token) {
             socket.auth = { token };
             socket.connect();
+            socket.emit("requestUserSync");
 
-            const onConnect = () => {
-                console.log("Socket connected!");
-                socket.emit("requestUserSync");
-            };
-
-            const onUpdateUser = (updatedUser) => {
-                setUser(updatedUser);
-            };
-
+            const onConnect = () => console.log("Socket connected!");
+            const onUpdateUser = (updatedUser) => setUser(updatedUser);
             const onLobbyState = (newLobbyState) => {
                 if (newLobbyState && newLobbyState.themes) {
                     setLobbyThemes(newLobbyState.themes);
                     setServerVersion(newLobbyState.serverVersion || 'N/A');
                 }
             };
-
             const onGameState = (newTableState) => {
                 const currentUserId = JSON.parse(atob(token.split('.')[1])).id;
                 const playerAtTable = newTableState.players[currentUserId];
-
                 if (!playerAtTable) {
                     setView('lobby');
                     setCurrentTableState(null);
@@ -141,43 +134,29 @@ function App() {
                     setCurrentTableState(newTableState);
                 }
             };
-
             const onJoinedTable = ({ gameState }) => {
                 setCurrentTableState(gameState);
                 setView('gameTable');
             };
-
             const onError = (error) => {
                 const msg = error.message || error;
                 setErrorMessage(msg);
                 setTimeout(() => setErrorMessage(''), 5000);
             };
-
             const onConnectError = (err) => {
                 console.error("Connection Error:", err.message);
                 if (err.message.includes("Authentication error")) {
                     handleLogout();
                 }
             };
-
             const onForceReset = (message) => {
                 alert(message);
                 handleLogout();
                 window.location.reload(true);
             };
-
-            const onGameStartFailed = ({ message }) => {
-                alert(`Game could not start:\n\n${message}`);
-            };
-
-            const onNotification = ({ message }) => {
-                alert(message);
-            };
-            
-            // --- NEW LISTENER ---
-            const onForceLobbyReturn = () => {
-                handleLeaveTable();
-            };
+            const onGameStartFailed = ({ message }) => alert(`Game could not start:\n\n${message}`);
+            const onNotification = ({ message }) => alert(message);
+            const onForceLobbyReturn = () => handleLeaveTable();
 
             socket.on('connect', onConnect);
             socket.on('updateUser', onUpdateUser);
@@ -189,7 +168,7 @@ function App() {
             socket.on('forceDisconnectAndReset', onForceReset);
             socket.on('gameStartFailed', onGameStartFailed);
             socket.on('notification', onNotification);
-            socket.on('forceLobbyReturn', onForceLobbyReturn); // ADDED
+            socket.on('forceLobbyReturn', onForceLobbyReturn);
 
             return () => {
                 socket.off('connect', onConnect);
@@ -202,22 +181,19 @@ function App() {
                 socket.off('forceDisconnectAndReset', onForceReset);
                 socket.off('gameStartFailed', onGameStartFailed);
                 socket.off('notification', onNotification);
-                socket.off('forceLobbyReturn', onForceLobbyReturn); // ADDED
+                socket.off('forceLobbyReturn', onForceLobbyReturn);
             };
+        } else {
+            if (socket.connected) {
+                socket.disconnect();
+            }
         }
-    }, [token, handleLogout, handleLeaveTable]); // ADDED handleLeaveTable to dependency array
-
-    const handleLoginSuccess = (data) => {
-        localStorage.setItem("sluff_token", data.token);
-        setToken(data.token);
-        setUser(data.user);
-        enableSound();
-    };
+    }, [token, handleLogout, handleLeaveTable]);
 
     const handleJoinTable = (tableId) => {
         enableSound();
         socket.emit("joinTable", { tableId });
-    }
+    };
 
     const emitEvent = (eventName, payload = {}) => {
         if (currentTableState) {
@@ -225,85 +201,29 @@ function App() {
         } else {
             socket.emit(eventName, payload);
         }
-    }
+    };
 
     if (!token || !user) {
-        return view === 'register' ?
-            (
-                <Register onRegisterSuccess={() => setView('login')} onSwitchToLogin={() => setView('login')} />
-            ) : (
-                <Login onLoginSuccess={handleLoginSuccess} onSwitchToRegister={() => setView('register')} />
-            );
+        return <AuthContainer onLoginSuccess={handleLoginSuccess} />;
     }
 
     return (
         <>
-            <MercyWindow
-                show={showMercyWindow}
-                onClose={() => setShowMercyWindow(false)}
-                emitEvent={emitEvent}
-            />
-
-            <FeedbackModal
-                show={showFeedbackModal}
-                onClose={handleCloseFeedbackModal}
-                onSubmit={handleSubmitFeedback}
-                gameContext={feedbackGameContext}
-            />
+            <MercyWindow show={showMercyWindow} onClose={() => setShowMercyWindow(false)} emitEvent={emitEvent} />
+            <FeedbackModal show={showFeedbackModal} onClose={handleCloseFeedbackModal} onSubmit={handleSubmitFeedback} gameContext={feedbackGameContext} />
 
             {(() => {
                 switch (view) {
                     case 'lobby':
-                        return <LobbyView
-                            user={user}
-                            lobbyThemes={lobbyThemes}
-                            serverVersion={serverVersion}
-                            handleJoinTable={handleJoinTable}
-                            handleLogout={handleLogout}
-                            handleRequestFreeToken={handleRequestFreeToken}
-                            handleShowLeaderboard={() => setView('leaderboard')}
-                            handleShowAdmin={handleShowAdmin}
-                            handleShowFeedback={() => setView('feedback')}
-                            errorMessage={errorMessage}
-                            emitEvent={emitEvent}
-                            socket={socket}
-                            handleOpenFeedbackModal={handleOpenFeedbackModal}
-                        />;
+                        return <LobbyView user={user} lobbyThemes={lobbyThemes} serverVersion={serverVersion} handleJoinTable={handleJoinTable} handleLogout={handleLogout} handleRequestFreeToken={handleRequestFreeToken} handleShowLeaderboard={() => setView('leaderboard')} handleShowAdmin={handleShowAdmin} handleShowFeedback={() => setView('feedback')} errorMessage={errorMessage} emitEvent={emitEvent} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} />;
                     case 'gameTable':
-                        return currentTableState ?
-                            (
-                                <GameTableView
-                                    playerId={user.id}
-                                    currentTableState={currentTableState}
-                                    handleLeaveTable={handleLeaveTable}
-                                    handleLogout={handleLogout}
-                                    errorMessage={errorMessage}
-                                    emitEvent={emitEvent}
-                                    playSound={playSound}
-                                    socket={socket}
-                                    handleOpenFeedbackModal={handleOpenFeedbackModal}
-                                />
-                            ) : (
-                                <div>Loading table...</div>
-                            );
+                        return currentTableState ? <GameTableView playerId={user.id} currentTableState={currentTableState} handleLeaveTable={handleLeaveTable} handleLogout={handleLogout} errorMessage={errorMessage} emitEvent={emitEvent} playSound={playSound} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} /> : <div>Loading table...</div>;
                     case 'leaderboard':
-                        return <LeaderboardView
-                            user={user}
-                            onReturnToLobby={handleReturnToLobby}
-                            handleResetAllTokens={handleResetAllTokens}
-                            handleShowAdmin={handleShowAdmin}
-                        />;
+                        return <LeaderboardView user={user} onReturnToLobby={handleReturnToLobby} handleResetAllTokens={handleResetAllTokens} handleShowAdmin={handleShowAdmin} />;
                     case 'feedback':
-                        return <FeedbackView
-                            user={user}
-                            onReturnToLobby={handleReturnToLobby}
-                        />;
+                        return <FeedbackView user={user} onReturnToLobby={handleReturnToLobby} />;
                     case 'admin':
-                        return <AdminView
-                            onReturnToLobby={handleReturnToLobby}
-                            handleHardReset={handleHardReset}
-                            handleResetAllTokens={handleResetAllTokens}
-                        />;
+                        return <AdminView onReturnToLobby={handleReturnToLobby} handleHardReset={handleHardReset} handleResetAllTokens={handleResetAllTokens} />;
                     default:
                         setView('lobby');
                         return null;
