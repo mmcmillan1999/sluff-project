@@ -332,28 +332,42 @@ class GameService {
         }
     
         // --- Independent Logic for Draw Voting ---
-        // This runs regardless of the turn-based action above.
         if (engine.drawRequest.isActive) {
             let delay = 2000; // Stagger the bot votes
             for (const botId in engine.bots) {
                 const bot = engine.bots[botId];
                 if (engine.drawRequest.votes[bot.playerName] === null) {
                     setTimeout(async () => {
-                        // Re-fetch engine state in case it changed during the delay
                         const currentEngine = this.getEngineById(tableId);
                         if (currentEngine && currentEngine.drawRequest.isActive && currentEngine.drawRequest.votes[bot.playerName] === null) {
                             const vote = bot.decideDrawVote();
                             await this.submitDrawVote(tableId, bot.userId, vote);
                         }
                     }, delay);
-                    delay += 1500; // Each bot waits a bit longer than the last
+                    delay += 1500;
                 }
             }
         }
 
-        // --- Independent Logic for Insurance ---
+        // --- THE FIX: Restore the bot insurance logic ---
         if (engine.state === 'Playing Phase' && engine.insurance.isActive && !engine.insurance.dealExecuted) {
-            // ... (insurance logic remains unchanged)
+            let insuranceDelay = 2500; // Initial delay before the first bot acts
+            for (const botId in engine.bots) {
+                const bot = engine.bots[botId];
+                setTimeout(() => {
+                    const currentEngine = this.getEngineById(tableId);
+                    // Check again, as the state could have changed during the delay
+                    if (currentEngine && currentEngine.insurance.isActive && !currentEngine.insurance.dealExecuted) {
+                        const decision = bot.makeInsuranceDecision();
+                        if (decision) {
+                            // Bots directly call the engine's method, bypassing sockets
+                            currentEngine.updateInsuranceSetting(bot.userId, decision.settingType, decision.value);
+                            this.io.to(tableId).emit('gameState', currentEngine.getStateForClient());
+                        }
+                    }
+                }, insuranceDelay);
+                insuranceDelay += 1500; // Stagger subsequent bot actions
+            }
         }
     }
 }

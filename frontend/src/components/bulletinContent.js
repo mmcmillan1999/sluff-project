@@ -36,6 +36,6 @@ export const bulletinContent = [
     },
     {
         type: 'list-item',
-        text: 'Teaching the Bots how to play the Insurance game!'
+        text: '10.0.0'
     },
 ];
