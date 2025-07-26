@@ -15,6 +15,10 @@ Backend Deployment: Render
 
 Database Management: DBeaver
 
+Domain Registrar: Squarespace (domain: playsluff.com)
+
+Transactional Email Service: SendGrid (sending as noreply@playsluff.com)
+
 You do not need to interact with these tools directly, but understanding this stack will help you provide more relevant suggestions. If development requires more tables, you may end up walking me through each setup step.
 
 Rules of Engagement

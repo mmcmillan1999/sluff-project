@@ -3,11 +3,24 @@
 #          context file for AI assistant onboarding.
 
 # --- CONFIGURATION ---
-$outputFile = "ai_context.txt"
+
+# --- NEW: Define the external save directory ---
+$outputDir = "C:\Users\matth\OneDrive\Desktop\AI_context_History"
+
+# --- NEW: Dynamically generate the new filename format ---
+$timestamp = (Get-Date -Format "yyyy-MM-dd-HH-mm")
+$branchName = $(git branch --show-current)
+$outputFile = "AI-Context-Sluff-Files-Exported-$timestamp-Branch-$branchName.txt"
+
+# --- Ensure the output directory exists ---
+if (-not (Test-Path -Path $outputDir)) {
+    New-Item -ItemType Directory -Force -Path $outputDir
+}
+
 $sourcePaths = @("backend", "frontend")
 $excludeDirs = @("node_modules", ".git", ".vscode", "dist", "build", "public")
 $excludeFiles = @("package-lock.json", "logo.svg")
-$includeAtTop = @("README.md") # Master README goes first for high-level context
+$includeAtTop = @("README.md")
 
 # --- SCRIPT LOGIC ---
 $projectRootPath = (Get-Location).Path
@@ -47,8 +60,8 @@ foreach ($path in $sourcePaths) {
     }
 }
 
-# 3. Write everything to the output file
-$outputPath = Join-Path -Path $projectRootPath -ChildPath $outputFile
+# 3. Write everything to the new output path
+$outputPath = Join-Path -Path $outputDir -ChildPath $outputFile
 $allContents | Set-Content -Path $outputPath -Encoding UTF8
 
 Write-Host "✅ Complete AI context created at: $outputPath"
