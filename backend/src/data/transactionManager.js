@@ -2,9 +2,145 @@
 
 const { TABLE_COSTS } = require('../core/constants');
 const gameLogic = require('../core/logic'); // Need this for payout calculations
+const securityMonitor = require('../utils/securityMonitor');
 
 const createGameRecord = async (pool, table) => { /* ... (no change) ... */ };
-const postTransaction = async (pool, { userId, gameId, type, amount, description }) => { /* ... (no change) ... */ };
+
+const postTransaction = async (pool, { userId, gameId, type, amount, description }) => {
+    // Input validation
+    if (!userId || typeof userId !== 'number') {
+        throw new Error('Invalid userId provided');
+    }
+    if (!type || typeof type !== 'string') {
+        throw new Error('Invalid transaction type provided');
+    }
+    if (amount === undefined || amount === null || isNaN(amount)) {
+        throw new Error('Invalid amount provided');
+    }
+    if (!description || typeof description !== 'string') {
+        throw new Error('Invalid description provided');
+    }
+
+    const client = await pool.connect();
+    try {
+        const insertQuery = gameId 
+            ? 'INSERT INTO transactions (user_id, game_id, transaction_type, amount, description) VALUES ($1, $2, $3, $4, $5)'
+            : 'INSERT INTO transactions (user_id, transaction_type, amount, description) VALUES ($1, $2, $3, $4)';
+        
+        const params = gameId 
+            ? [userId, gameId, type, amount, description]
+            : [userId, type, amount, description];
+            
+        await client.query(insertQuery, params);
+        console.log(`✅ Transaction posted: User ${userId}, Type: ${type}, Amount: ${amount}`);
+    } catch (error) {
+        console.error(`❌ Failed to post transaction for user ${userId}:`, error);
+        throw error;
+    } finally {
+        client.release();
+    }
+};
+
+// New atomic mercy token handler with rate limiting and proper validation
+const handleMercyTokenRequest = async (pool, userId, username = null) => {
+    // Input validation
+    if (!userId || typeof userId !== 'number') {
+        throw new Error('Invalid userId provided');
+    }
+
+    // Get username for logging if not provided
+    if (!username) {
+        try {
+            const userResult = await pool.query('SELECT username FROM users WHERE id = $1', [userId]);
+            username = userResult.rows[0]?.username || `User_${userId}`;
+        } catch (err) {
+            username = `User_${userId}`;
+        }
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Check current token balance
+        const tokenQuery = "SELECT SUM(amount) AS current_tokens FROM transactions WHERE user_id = $1";
+        const tokenResult = await client.query(tokenQuery, [userId]);
+        const currentTokens = parseFloat(tokenResult.rows[0]?.current_tokens || 0);
+        
+        if (currentTokens >= 5) {
+            await client.query('ROLLBACK');
+            securityMonitor.logMercyTokenAttempt(userId, username, false, 'Token limit exceeded', { currentTokens });
+            return {
+                success: false,
+                error: "Sorry, free tokens are only for players with fewer than 5 tokens.",
+                currentTokens
+            };
+        }
+
+        // Check rate limiting - only allow one mercy token per hour
+        const rateLimitQuery = `
+            SELECT COUNT(*) as mercy_count, MAX(transaction_time) as last_mercy_time
+            FROM transactions 
+            WHERE user_id = $1 
+            AND transaction_type = 'free_token_mercy' 
+            AND transaction_time > NOW() - INTERVAL '1 hour'
+        `;
+        const rateLimitResult = await client.query(rateLimitQuery, [userId]);
+        const mercyCount = parseInt(rateLimitResult.rows[0]?.mercy_count || 0);
+        const lastMercyTime = rateLimitResult.rows[0]?.last_mercy_time;
+
+        if (mercyCount > 0) {
+            await client.query('ROLLBACK');
+            const timeLeft = Math.ceil((new Date(lastMercyTime).getTime() + 3600000 - Date.now()) / 60000);
+            securityMonitor.logMercyTokenAttempt(userId, username, false, 'Rate limit exceeded', { timeLeft, lastMercyTime });
+            return {
+                success: false,
+                error: `You can only request one mercy token per hour. Please wait ${timeLeft} more minutes.`,
+                currentTokens,
+                timeLeft
+            };
+        }
+
+        // Check for suspicious activity before granting token
+        const suspiciousCheck = await securityMonitor.checkSuspiciousActivity(pool, userId);
+        if (suspiciousCheck.suspicious) {
+            // Still grant the token but flag for admin review
+            console.warn(`🚨 Granting mercy token to flagged user ${username} (${userId}): ${suspiciousCheck.flags.join(', ')}`);
+        }
+
+        // Insert the mercy token transaction
+        const insertQuery = `
+            INSERT INTO transactions (user_id, transaction_type, amount, description) 
+            VALUES ($1, 'free_token_mercy', 1, 'Mercy token requested by user')
+        `;
+        await client.query(insertQuery, [userId]);
+
+        await client.query('COMMIT');
+        
+        // Log successful mercy token grant
+        securityMonitor.logMercyTokenAttempt(userId, username, true, 'Mercy token granted', { 
+            previousBalance: currentTokens, 
+            newBalance: currentTokens + 1,
+            suspicious: suspiciousCheck.suspicious
+        });
+
+        return {
+            success: true,
+            message: "1 free token has been added to your account!",
+            previousBalance: currentTokens,
+            newBalance: currentTokens + 1
+        };
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        securityMonitor.logMercyTokenAttempt(userId, username, false, 'Database error', { error: error.message });
+        console.error(`❌ Mercy token request failed for user ${userId}:`, error);
+        throw error;
+    } finally {
+        client.release();
+    }
+};
+
 const updateGameRecordOutcome = async (pool, gameId, outcome) => { /* ... (no change) ... */ };
 
 const handleGameStartTransaction = async (pool, table, playerIds, gameId) => {
@@ -142,4 +278,5 @@ module.exports = {
     updateGameRecordOutcome,
     handleGameStartTransaction,
     handleDrawTransactions, // EXPORT NEW FUNCTION
+    handleMercyTokenRequest, // EXPORT NEW FUNCTION
 };

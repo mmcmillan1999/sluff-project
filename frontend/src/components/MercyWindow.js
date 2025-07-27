@@ -3,10 +3,12 @@ import './MercyWindow.css';
 
 const MercyWindow = ({ show, onClose, emitEvent }) => {
     const [secondsLeft, setSecondsLeft] = useState(15);
+    const [contemplationStartTime, setContemplationStartTime] = useState(null);
 
     useEffect(() => {
         if (show) {
             setSecondsLeft(15);
+            setContemplationStartTime(Date.now()); // Record when contemplation started
 
             const timer = setInterval(() => {
                 setSecondsLeft(prevSeconds => {
@@ -23,9 +25,8 @@ const MercyWindow = ({ show, onClose, emitEvent }) => {
     }, [show]);
 
     const handleRedeem = () => {
-        // --- MODIFICATION: Only emit the request for the token. ---
-        // The server is now responsible for pushing the user update.
-        emitEvent("requestFreeToken");
+        // Send contemplation start time for server-side validation
+        emitEvent("requestFreeToken", { contemplationStartTime });
         onClose();
     };
 
@@ -40,6 +41,9 @@ const MercyWindow = ({ show, onClose, emitEvent }) => {
             <div className="mercy-window-content">
                 <h2>A Moment of Contemplation</h2>
                 <p>You have lost everything. Contemplate your life choices for the next few moments before receiving a handout.</p>
+                <p className="rate-limit-notice">
+                    <small>Note: Mercy tokens are limited to one per hour to encourage thoughtful play.</small>
+                </p>
                 <div className="timer-display">
                     {secondsLeft}
                 </div>

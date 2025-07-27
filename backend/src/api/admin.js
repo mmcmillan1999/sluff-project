@@ -4,6 +4,9 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
+const securityMonitor = require('../utils/securityMonitor');
 
 // This function creates the router and gives it the database pool
 const createAdminRoutes = (pool, jwt) => {
@@ -43,6 +46,71 @@ const createAdminRoutes = (pool, jwt) => {
       res.status(500).send('Server error during admin check.');
     }
   };
+
+  // Middleware to check if user is admin
+  const requireAdmin = (req, res, next) => {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+          return res.status(401).json({ error: 'No token provided' });
+      }
+
+      const token = authHeader.split(' ')[1];
+      jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+          if (err) return res.status(403).json({ error: 'Invalid token' });
+          if (!user.is_admin) return res.status(403).json({ error: 'Admin access required' });
+          req.user = user;
+          next();
+      });
+  };
+
+  // GET /api/admin/mercy-token-report
+  router.get('/mercy-token-report', checkAuth, isAdmin, async (req, res) => {
+    try {
+      const { hours = 24 } = req.query;
+      
+      const report = await securityMonitor.generateSecurityReport(pool, parseInt(hours));
+      
+      if (report.error) {
+        return res.status(500).json({ error: 'Failed to generate report', details: report.error });
+      }
+      
+      res.json({
+        success: true,
+        report,
+        generatedAt: new Date().toISOString(),
+        generatedBy: req.user.username
+      });
+      
+    } catch (error) {
+      console.error('Error generating mercy token report:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // GET /api/admin/user-suspicious-activity/:userId
+  router.get('/user-suspicious-activity/:userId', checkAuth, isAdmin, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      
+      if (!userId || isNaN(parseInt(userId))) {
+        return res.status(400).json({ error: 'Invalid user ID' });
+      }
+      
+      const suspiciousCheck = await securityMonitor.checkSuspiciousActivity(pool, parseInt(userId));
+      
+      res.json({
+        success: true,
+        userId: parseInt(userId),
+        suspiciousActivity: suspiciousCheck,
+        checkedAt: new Date().toISOString(),
+        checkedBy: req.user.username
+      });
+      
+    } catch (error) {
+      console.error('Error checking suspicious activity:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
 
  router.post('/generate-schema', checkAuth, isAdmin, async (req, res) => {
     try {
