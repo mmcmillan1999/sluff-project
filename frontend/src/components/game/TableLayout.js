@@ -1,8 +1,8 @@
 // frontend/src/components/game/TableLayout.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ScoreProgressBar from './ScoreProgressBar';
 import './KeyAndModal.css';
-import './TableLayout.css'; 
+import './TableLayout.css';
 import { SUIT_SYMBOLS } from '../../constants';
 
 const TableLayout = ({
@@ -17,9 +17,10 @@ const TableLayout = ({
     emitEvent,
     handleLeaveTable,
     playSound,
+    dropZoneRef
 }) => {
     const [lastTrickVisible, setLastTrickVisible] = useState(false);
-    const lastTrickTimerRef = React.useRef(null);
+    const lastTrickTimerRef = useRef(null);
 
     useEffect(() => {
         return () => {
@@ -41,7 +42,7 @@ const TableLayout = ({
             setLastTrickVisible(true);
             lastTrickTimerRef.current = setTimeout(() => {
                 setLastTrickVisible(false);
-            }, 3000); // Show for 3 seconds
+            }, 3000);
         } else {
             playSound('no_peaking_cheater');
         }
@@ -146,28 +147,29 @@ const TableLayout = ({
     };
 
     const renderProgressBars = () => {
-        const { theme, state, bidWinnerInfo, bidderCardPoints, defenderCardPoints } = currentTableState;
+        const { theme, state, bidWinnerInfo, bidderCardPoints, defenderCardPoints, playerOrderActive } = currentTableState;
         if (!bidWinnerInfo || theme !== 'miss-pauls-academy' || state !== 'Playing Phase') {
             return null;
         }
 
+        const bidderName = bidWinnerInfo.playerName;
+        const defenderNames = playerOrderActive.filter(name => name !== bidderName);
+
         return (
-            <>
-                <div className="progress-bar-container defender-progress-container">
-                    <ScoreProgressBar 
-                        currentPoints={defenderCardPoints} 
-                        opponentPoints={bidderCardPoints}
-                        barColor="linear-gradient(to right, #3b82f6, #60a5fa)"
-                    />
-                </div>
-                <div className="progress-bar-container bidder-progress-container">
-                    <ScoreProgressBar 
-                        currentPoints={bidderCardPoints} 
-                        opponentPoints={defenderCardPoints}
-                        barColor="linear-gradient(to right, #f59e0b, #facc15)"
-                    />
-                </div>
-            </>
+            <div className="progress-bar-area">
+                <ScoreProgressBar 
+                    label={defenderNames.join(' & ')}
+                    currentPoints={defenderCardPoints} 
+                    opponentPoints={bidderCardPoints}
+                    team="defender"
+                />
+                <ScoreProgressBar 
+                    label={bidderName}
+                    currentPoints={bidderCardPoints} 
+                    opponentPoints={defenderCardPoints}
+                    team="bidder"
+                />
+            </div>
         );
     };
 
@@ -250,7 +252,6 @@ const TableLayout = ({
                         )
                     }
                 </div>
-                <span className="widow-pile-label">Widow</span>
             </div>
         );
     };
@@ -278,6 +279,10 @@ const TableLayout = ({
     return (
         <main className="game-table">
             <div className="table-oval">
+                <div ref={dropZoneRef} className="card-drop-zone-hitbox">
+                    <div className="card-drop-zone-visual"></div>
+                </div>
+                
                 <div className="player-seat-left">
                     <PlayerSeat playerName={seatAssignments.opponentLeft} currentTableState={currentTableState} isSelf={false} emitEvent={emitEvent} />
                 </div>
@@ -288,10 +293,7 @@ const TableLayout = ({
                 <img 
                     src="/SluffLogo.png" 
                     alt="Sluff Watermark" 
-                    style={{
-                        position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-                        width: '40%', maxWidth: '350px', opacity: 0.1, pointerEvents: 'none'
-                    }} 
+                    className="sluff-watermark"
                 />
                 
                 {renderWidowDisplay()}
@@ -307,17 +309,15 @@ const TableLayout = ({
 
                 {renderPlayedCardsOnTable()}
                 
-                <div className="action-message-container">
-                    <ActionControls
-                        currentTableState={currentTableState}
-                        playerId={playerId}
-                        selfPlayerName={selfPlayerName}
-                        isSpectator={isSpectator}
-                        emitEvent={emitEvent}
-                        handleLeaveTable={handleLeaveTable}
-                        renderCard={renderCard}
-                    />
-                </div>
+                <ActionControls
+                    currentTableState={currentTableState}
+                    playerId={playerId}
+                    selfPlayerName={selfPlayerName}
+                    isSpectator={isSpectator}
+                    emitEvent={emitEvent}
+                    handleLeaveTable={handleLeaveTable}
+                    renderCard={renderCard}
+                />
             </div>
         </main>
     );

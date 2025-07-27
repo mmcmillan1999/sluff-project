@@ -63,7 +63,7 @@ const ActionControls = ({
                         <h4>Your turn to bid.</h4>
                         {bids.map(bid => (
                             <button 
-                                key={bid} 
+                                key={bid}
                                 onClick={() => emitEvent("placeBid", { bid })} 
                                 className="game-button" 
                                 disabled={bid !== "Pass" && BID_HIERARCHY.indexOf(bid) <= currentHighestBidLevel}>
@@ -137,7 +137,6 @@ const ActionControls = ({
                     </p>
                 </div>
             );
-        // --- NEW CASE ---
         case "DrawAccepted":
             return (
                 <div className="action-prompt-container">
@@ -147,7 +146,6 @@ const ActionControls = ({
             );
         case "Playing Phase":
         case "TrickCompleteLinger":
-            // No prompt needed here, player hand glows instead.
             return null; 
         default:
             return (

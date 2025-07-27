@@ -11,6 +11,17 @@ class GameService {
         this.pool = pool;
         this.engines = {};
         this._initializeEngines();
+
+        // --- THE NEW GAME LOOP HEARTBEAT ---
+        // This runs every 1.5 seconds to check if any bots need to act.
+        setInterval(() => {
+            for (const tableId in this.engines) {
+                const engine = this.engines[tableId];
+                if (engine.gameStarted) {
+                    this._triggerBots(tableId);
+                }
+            }
+        }, 1500);
     }
 
     _initializeEngines() {
@@ -218,7 +229,7 @@ class GameService {
             switch (effect.type) {
                 case 'BROADCAST_STATE':
                     this.io.to(tableId).emit('gameState', engine.getStateForClient());
-                    this._triggerBots(tableId);
+                    // --- THE FIX: No longer call _triggerBots here. ---
                     break;
                 case 'EMIT_TO_SOCKET':
                     this.io.to(effect.payload.socketId).emit(effect.payload.event, effect.payload.data);
@@ -262,7 +273,6 @@ class GameService {
                         effect.onComplete(summary);
                     }
                     this.io.to(tableId).emit('gameState', engine.getStateForClient());
-                    this._triggerBots(tableId);
                     break;
                 }
                 case 'START_GAME_TRANSACTIONS': {
@@ -296,7 +306,6 @@ class GameService {
             }, delay);
         };
     
-        // --- Primary Turn-Based Action Loop ---
         for (const botId in engine.bots) {
             if (turnActionTaken) break;
     
@@ -331,9 +340,8 @@ class GameService {
             }
         }
     
-        // --- Independent Logic for Draw Voting ---
         if (engine.drawRequest.isActive) {
-            let delay = 2000; // Stagger the bot votes
+            let delay = 2000;
             for (const botId in engine.bots) {
                 const bot = engine.bots[botId];
                 if (engine.drawRequest.votes[bot.playerName] === null) {
@@ -349,24 +357,21 @@ class GameService {
             }
         }
 
-        // --- THE FIX: Restore the bot insurance logic ---
         if (engine.state === 'Playing Phase' && engine.insurance.isActive && !engine.insurance.dealExecuted) {
-            let insuranceDelay = 2500; // Initial delay before the first bot acts
+            let insuranceDelay = 500;
             for (const botId in engine.bots) {
                 const bot = engine.bots[botId];
                 setTimeout(() => {
                     const currentEngine = this.getEngineById(tableId);
-                    // Check again, as the state could have changed during the delay
                     if (currentEngine && currentEngine.insurance.isActive && !currentEngine.insurance.dealExecuted) {
                         const decision = bot.makeInsuranceDecision();
                         if (decision) {
-                            // Bots directly call the engine's method, bypassing sockets
                             currentEngine.updateInsuranceSetting(bot.userId, decision.settingType, decision.value);
                             this.io.to(tableId).emit('gameState', currentEngine.getStateForClient());
                         }
                     }
                 }, insuranceDelay);
-                insuranceDelay += 1500; // Stagger subsequent bot actions
+                insuranceDelay += 750;
             }
         }
     }

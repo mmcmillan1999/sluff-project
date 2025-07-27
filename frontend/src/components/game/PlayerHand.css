@@ -13,6 +13,12 @@
     align-items: center;
     padding: 5px 0;
     width: 100%;
+    position: relative;
+    -webkit-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    /* --- THE FIX: This single line solves the mobile scroll issue --- */
+    touch-action: none;
 }
 
 .player-hand-cards {
@@ -20,12 +26,9 @@
     display: flex;
     justify-content: center;
     align-items: flex-end;
-    padding: 10px;
+    padding: 10px 0;
     height: 110px;
     width: 100%;
-    max-width: 98vw;
-    margin: 0 auto;
-    transition: all 0.3s ease;
 }
 
 .player-hand-cards.my-turn {
@@ -35,24 +38,41 @@
 }
 
 .player-hand-card-wrapper {
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-    position: relative;
+    transition: transform 0.2s ease;
+    will-change: transform;
+    cursor: grab;
+    flex-shrink: 0;
+}
+/* Apply the dynamic margin from the parent's CSS variable */
+.player-hand-card-wrapper:not(:first-child) {
+    margin-left: var(--card-margin-left, -25px);
 }
 
-.player-hand-card-wrapper:hover {
-    transform: translateY(-12px);
-    z-index: 100;
+
+.player-hand-card-wrapper.is-dragging {
+    transition: none;
+    cursor: grabbing;
 }
 
-/* This pseudo-element creates the dark shade over illegal cards */
+.illegal-move {
+    cursor: not-allowed;
+}
+
 .illegal-move::after {
     content: '';
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    top: 0; left: 0; right: 0; bottom: 0;
     background-color: rgba(0, 0, 0, 0.5);
     border-radius: 6px;
-    pointer-events: none;
+}
+
+.player-hand-cards.is-discarding .player-hand-card-wrapper-static {
+    margin-left: -40px;
+}
+.player-hand-cards.is-discarding .player-hand-card-wrapper-static:first-child {
+    margin-left: 0;
+}
+.player-hand-card-wrapper-static:hover {
+    transform: translateY(-12px);
+    z-index: 100;
 }

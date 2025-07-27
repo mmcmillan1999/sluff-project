@@ -33,6 +33,7 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
     const gameStateRef = useRef(null);
     const insurancePromptShownRef = useRef(false);
     const errorTimerRef = useRef(null);
+    const dropZoneRef = useRef(null);
 
     const selfPlayerInTable = currentTableState ? currentTableState.players[playerId] : null;
     const isSpectator = selfPlayerInTable?.isSpectator;
@@ -69,9 +70,7 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
             }, 4000);
         };
 
-        const handleDrawDeclined = () => {
-            // The new DrawDeclined state handles this, so a pop-up is no longer needed.
-        };
+        const handleDrawDeclined = () => {};
 
         socket.on('new_lobby_message', handleNewChatMessage);
         socket.on('error', handlePlayerError);
@@ -87,7 +86,7 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
 
     useEffect(() => {
         if (!showGameMenu) return;
-        const timer = setTimeout(() => setShowGameMenu(false), 5000);
+        const timer = setTimeout(() => setShowGameMenu(false), 3000);
         return () => clearTimeout(timer);
     }, [showGameMenu]);
     
@@ -113,9 +112,7 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
     useEffect(() => {
         if (currentTableState) {
             const { state, drawRequest } = currentTableState;
-            
             const shouldShow = (drawRequest?.isActive || state === 'DrawDeclined' || state === 'DrawComplete') && !isSpectator;
-            
             setShowDrawVoteModal(shouldShow);
         }
     }, [currentTableState, isSpectator]);
@@ -170,7 +167,6 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
 
     const renderCard = (cardString, options = {}) => {
         const { isButton = false, onClick = null, disabled = false, isSelected = false, small = false, large = false, isFaceDown = false, style: customStyle = {}, className = '' } = options;
-
         const width = large ? '65px' : (small ? '37.5px' : '45px');
         const height = large ? '85px' : (small ? '50px' : '70px');
 
@@ -193,10 +189,8 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
         const symbol = SUIT_SYMBOLS[suit] || suit;
         const color = SUIT_COLORS[suit] || 'black';
         const backgroundColor = isSelected ? 'lightblue' : (SUIT_BACKGROUNDS[suit] || 'white');
-
         const cardClasses = ['card-display', className].filter(Boolean).join(' ');
         const cardContent = <>{rank !== '?' && rank}<span className="card-symbol">{symbol}</span></>;
-
         const style = { 
             backgroundColor, 
             color, 
@@ -295,6 +289,7 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
                 handleLeaveTable={handleLeaveTable}
                 playerError={playerError}
                 playSound={playSound}
+                dropZoneRef={dropZoneRef}
             />
             
             <footer className="game-footer">
@@ -304,6 +299,7 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
                     isSpectator={isSpectator}
                     emitEvent={emitEvent}
                     renderCard={renderCard}
+                    dropZoneRef={dropZoneRef}
                 />
                 <div className="footer-controls-wrapper">
                     {!chatOpen && (
