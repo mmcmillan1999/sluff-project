@@ -158,39 +158,17 @@
     line-height: 1;
 }
 
-.progress-bar-container {
+.progress-bar-area {
     position: absolute;
     top: 15px;
-    width: 220px;
-    background-color: rgba(0, 0, 0, 0.6);
-    padding: 5px 8px;
-    border-radius: 8px;
-    color: white;
-    text-align: center;
-    font-family: 'Oswald', sans-serif;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-}
-.defender-progress-container { left: 15%; transform: translateX(-50%); }
-.bidder-progress-container { right: 15%; transform: translateX(50%); }
-
-.score-progress-label {
-    font-size: 0.9em;
-    margin-bottom: 4px;
-    text-shadow: 1px 1px 1px black;
-    white-space: nowrap;
-}
-.score-progress-bar-background {
-    width: 100%;
-    height: 12px;
-    background-color: #333;
-    border-radius: 5px;
-    border: 1px solid #555;
-    overflow: hidden;
-}
-.score-progress-bar-foreground {
-    height: 100%;
-    border-radius: 4px;
-    transition: width 0.5s ease-in-out;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 500px;
+    display: flex;
+    justify-content: space-between;
+    gap: 20%;
+    pointer-events: none;
 }
 
 .widow-display-container {
@@ -291,7 +269,6 @@
     font-family: 'Oswald', sans-serif;
 }
 .dealer-puck { background-color: ivory; color: black; }
-/* --- THE FIX: The empty .role-puck ruleset has been removed --- */
 .role-puck.bid-winner { background-color: #ffc107; color: black; }
 .role-puck.defender { background-color: #0d6efd; color: white; }
 .role-puck.small-font { font-size: 0.6em; }
@@ -350,6 +327,43 @@ button.card-display:disabled {
     margin-top: 2px;
 }
 
+.sluff-watermark {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 40%;
+    max-width: 350px;
+    opacity: 0.1;
+    pointer-events: none;
+}
+
+.card-drop-zone-hitbox {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 200px;
+    height: 200px;
+    transform: translate(-50%, -50%);
+    z-index: 7;
+    pointer-events: all; 
+}
+
+.card-drop-zone-visual {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 80px;
+    height: 105px;
+    transform: translate(-50%, -50%);
+    border-radius: 8px;
+    border: 3px dashed rgba(139, 195, 247, 0.5);
+    transition: opacity 0.3s ease, box-shadow 0.2s ease;
+    opacity: 0;
+    pointer-events: none;
+    box-shadow: 0 0 20px 10px rgba(139, 195, 247, 0.5);
+}
+
 @media (orientation: portrait) {
     .table-oval { border-radius: 50px; }
 
@@ -360,7 +374,7 @@ button.card-display:disabled {
     }
 
     .player-seat-left { left: -60px; }
-    .player-seat-right { right: -60px; }
+    .player-seat-right { right: -60px; padding-right: 5px; box-sizing: border-box; } /* --- FIX 3: ADD PADDING --- */
 
     .player-seat-left .player-seat, .player-seat-right .player-seat {
         transform-origin: center;
@@ -384,16 +398,6 @@ button.card-display:disabled {
         margin-top: 2px;
     }
 
-    .progress-bar-container {
-        position: relative;
-        top: auto;
-        left: auto;
-        right: auto;
-        transform: none;
-        margin-top: 8px;
-        width: 120px;
-    }
-
     .puck-container-left, .puck-container-right {
         flex-direction: column;
         top: 50%;
@@ -402,6 +406,20 @@ button.card-display:disabled {
     .puck-container-left { left: 20px; }
     .puck-container-right { right: 20px; }
 
+    .puck-container-left .dealer-puck, .puck-container-right .dealer-puck {
+        transform: translateY(-15px);
+    }
+
     .played-card-left { left: 25%; }
     .played-card-right { right: 25%; }
+
+    .widow-display-container {
+        top: 70px; /* Nudge down from trump puck */
+        left: 50%;
+        transform: translateX(-50%);
+    }
+
+    .widow-pile {
+        justify-content: center; /* Center cards in the pile */
+    }
 }

@@ -1,31 +1,32 @@
 /* frontend/src/components/game/LearnerDisplay.css */
 
 .score-progress-container {
-    position: absolute;
-    /* 
-      THIS IS WHAT MOVES THE BAR UP AND DOWN ON THE SCREEN.
-      'bottom: 0;' anchors it to the bottom of its parent container.
-      You can change this to a pixel value like 'bottom: 10px;' to move it up,
-      or even change it to 'top: 0;' to anchor it to the top.
-    */
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 200px;
     background-color: rgba(0, 0, 0, 0.6);
     padding: 5px 8px;
     border-radius: 8px;
     color: white;
     text-align: center;
     font-family: 'Oswald', sans-serif;
-    z-index: 20;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 2px solid #555; /* Default border */
+}
+
+/* --- NEW TEAM-BASED BORDER STYLES --- */
+.score-progress-container.team-bidder {
+    border-color: #ca8a04; /* Gold */
+}
+.score-progress-container.team-defender {
+    border-color: #2563eb; /* Blue */
 }
 
 .score-progress-label {
-    font-size: 1em;
+    font-size: 0.9em;
     margin-bottom: 4px;
     text-shadow: 1px 1px 1px black;
+    white-space: nowrap;
+}
+.score-progress-label.team-label {
+    font-weight: bold;
+    font-size: 1em;
 }
 
 .score-progress-bar-background {
@@ -41,8 +42,4 @@
     height: 100%;
     border-radius: 4px;
     transition: width 0.5s ease-in-out;
-}
-
-.learner-pile-details {
-    display: none;
 }
