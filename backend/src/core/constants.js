@@ -1,6 +1,6 @@
 // backend/src/core/constants.js
 
-const SERVER_VERSION = "10.0.2 round summary fixes";
+const SERVER_VERSION = "10.1.0 Drag Cards";
 
 const SUITS = { H: "Hearts", D: "Diamonds", C: "Clubs", S: "Spades" };
 const RANKS_ORDER = ["6", "7", "8", "9", "J", "Q", "K", "10", "A"];

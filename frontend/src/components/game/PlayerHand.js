@@ -138,7 +138,7 @@ const PlayerHand = ({
         document.removeEventListener('mouseup', handleDragEnd);
         document.removeEventListener('touchmove', handleDragMove);
         document.removeEventListener('touchend', handleDragEnd);
-    }, [emitEvent, dropZoneRef]);
+    }, [emitEvent, dropZoneRef, handleDragMove]); // <-- THE FIX: handleDragMove added here
 
     useEffect(() => {
         if (state !== "Frog Widow Exchange") setSelectedDiscards([]);
