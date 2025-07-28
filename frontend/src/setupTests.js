@@ -5,12 +5,15 @@
 import '@testing-library/jest-dom';
 
 // Mock Audio constructor for tests
-global.Audio = jest.fn().mockImplementation(() => ({
-  load: jest.fn(),
-  play: jest.fn().mockResolvedValue(undefined),
-  pause: jest.fn(),
-  currentTime: 0,
-  volume: 0.7,
-  addEventListener: jest.fn(),
-  removeEventListener: jest.fn(),
-}));
+Object.defineProperty(window, 'Audio', {
+  writable: true,
+  value: jest.fn().mockImplementation(() => ({
+    load: jest.fn(),
+    play: jest.fn().mockResolvedValue(undefined),
+    pause: jest.fn(),
+    currentTime: 0,
+    volume: 0.7,
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
+  })),
+});

@@ -1,16 +1,32 @@
 import { useState, useEffect, useRef } from 'react';
 
+// Mock Audio for testing environment
+const createAudio = (src) => {
+    if (typeof Audio === 'undefined' || process.env.NODE_ENV === 'test') {
+        return {
+            load: () => {},
+            play: () => Promise.resolve(),
+            pause: () => {},
+            currentTime: 0,
+            volume: 0.7,
+            addEventListener: () => {},
+            removeEventListener: () => {},
+        };
+    }
+    return new Audio(src);
+};
+
 export const useSounds = () => {
     const sounds = useRef({});
     const [isSoundEnabled, setIsSoundEnabled] = useState(false);
 
     useEffect(() => {
         sounds.current = {
-            turnAlert: new Audio('/Sounds/turn_alert.mp3'),
-            cardPlay: new Audio('/Sounds/card_play.mp3'),
-            trickWin: new Audio('/Sounds/trick_win.mp3'),
-            cardDeal: new Audio('/Sounds/card_dealing_10s_v3.mp3'),
-            no_peaking_cheater: new Audio('/Sounds/no_peaking_cheater.mp3'), // ADDED THIS LINE
+            turnAlert: createAudio('/Sounds/turn_alert.mp3'),
+            cardPlay: createAudio('/Sounds/card_play.mp3'),
+            trickWin: createAudio('/Sounds/trick_win.mp3'),
+            cardDeal: createAudio('/Sounds/card_dealing_10s_v3.mp3'),
+            no_peaking_cheater: createAudio('/Sounds/no_peaking_cheater.mp3'), // ADDED THIS LINE
         };
         Object.values(sounds.current).forEach(sound => {
             sound.load();
