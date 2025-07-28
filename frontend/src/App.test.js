@@ -10,6 +10,9 @@ jest.mock('socket.io-client');
 // Mock the entire api service
 jest.mock('./services/api');
 
+// Mock the useSounds hook
+jest.mock('./hooks/useSounds');
+
 // Configure the mock implementation for io
 const mockSocket = {
     on: jest.fn(),
@@ -18,6 +21,7 @@ const mockSocket = {
     disconnect: jest.fn(),
     emit: jest.fn(),
     auth: {},
+    connected: false,
 };
 io.mockReturnValue(mockSocket);
 
