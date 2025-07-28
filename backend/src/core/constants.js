@@ -2,6 +2,7 @@
 
 const SERVER_VERSION = "10.1.0 Drag Cards";
 
+
 const SUITS = { H: "Hearts", D: "Diamonds", C: "Clubs", S: "Spades" };
 const RANKS_ORDER = ["6", "7", "8", "9", "J", "Q", "K", "10", "A"];
 const CARD_POINT_VALUES = { "A": 11, "10": 10, "K": 4, "Q": 3, "J": 2, "9":0, "8":0, "7":0, "6":0 };

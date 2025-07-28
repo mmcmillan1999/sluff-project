@@ -31,6 +31,20 @@
     margin-top: 0;
 }
 
+.rate-limit-notice {
+    background-color: rgba(255, 193, 7, 0.2);
+    border: 1px solid #ffc107;
+    border-radius: 5px;
+    padding: 8px 12px;
+    margin: 10px 0;
+}
+
+.rate-limit-notice small {
+    color: #856404;
+    font-style: italic;
+    font-size: 0.85em;
+}
+
 .timer-display {
     font-size: 3em;
     font-weight: bold;

@@ -116,8 +116,8 @@
 .bidder-pile { right: 15%; }
 
 .trick-pile-base {
-    padding: 4px 8px;
-    border-radius: 8px;
+    padding: 2px 4px;
+    border-radius: 6px;
     box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
     transition: box-shadow 0.3s;
 }
@@ -131,7 +131,7 @@
     flex-direction: row;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: 4px;
 }
 .trick-pile {
     display: flex;
@@ -390,12 +390,18 @@ button.card-display:disabled {
 
     .trick-pile-content-wrapper {
         flex-direction: column;
-        gap: 2px;
+        gap: 1px;
     }
 
     .trick-pile-count {
-        font-size: 1.2em;
-        margin-top: 2px;
+        font-size: 1.1em;
+        margin-top: 1px;
+    }
+
+
+    .trick-pile-base {
+        padding: 1px 3px;
+        border-radius: 4px;
     }
 
     .puck-container-left, .puck-container-right {
