@@ -367,21 +367,144 @@ class GameService {
         }
 
         if (engine.state === 'Playing Phase' && engine.insurance.isActive && !engine.insurance.dealExecuted) {
-            let insuranceDelay = 500;
-            for (const botId in engine.bots) {
-                const bot = engine.bots[botId];
+            this.handleBotInsuranceDecisions(tableId, engine);
+        }
+    }
+
+    /**
+     * Enhanced bot insurance decision handling with realistic timing and behavior patterns
+     */
+    handleBotInsuranceDecisions(tableId, engine) {
+        const { getBotPersonality } = require('../core/bot-strategies/InsuranceStrategy');
+        
+        // Track bots that have made initial decisions
+        if (!engine.botInsuranceState) {
+            engine.botInsuranceState = {
+                initialDecisionsMade: new Set(),
+                adjustmentsMade: new Map(), // Track number of adjustments per bot
+                lastDecisionTime: Date.now()
+            };
+        }
+
+        const bots = Object.values(engine.bots);
+        let baseDelay = 500;
+
+        // Phase 1: Initial decisions with personality-based timing
+        bots.forEach((bot, index) => {
+            const personality = getBotPersonality(bot);
+            const hasDecided = engine.botInsuranceState.initialDecisionsMade.has(bot.userId);
+            
+            if (!hasDecided) {
+                // Personality affects decision speed
+                let personalityDelay = baseDelay;
+                if (personality.name === 'Aggressive') {
+                    personalityDelay *= 0.7; // Quick decisions
+                } else if (personality.name === 'Conservative') {
+                    personalityDelay *= 1.3; // Slower, more thoughtful
+                }
+
                 setTimeout(() => {
-                    const currentEngine = this.getEngineById(tableId);
-                    if (currentEngine && currentEngine.insurance.isActive && !currentEngine.insurance.dealExecuted) {
-                        const decision = bot.makeInsuranceDecision();
-                        if (decision) {
-                            currentEngine.updateInsuranceSetting(bot.userId, decision.settingType, decision.value);
-                            this.io.to(tableId).emit('gameState', currentEngine.getStateForClient());
-                        }
-                    }
-                }, insuranceDelay);
-                insuranceDelay += 750;
+                    this.makeBotInsuranceDecision(tableId, bot, 'initial');
+                }, personalityDelay + (index * 600));
             }
+        });
+
+        // Phase 2: Reactive adjustments based on others' decisions
+        setTimeout(() => {
+            this.handleBotInsuranceAdjustments(tableId);
+        }, baseDelay + (bots.length * 600) + 1000);
+
+        // Phase 3: Final competitive adjustments
+        setTimeout(() => {
+            this.handleFinalInsuranceAdjustments(tableId);
+        }, baseDelay + (bots.length * 600) + 3000);
+    }
+
+    /**
+     * Make a bot insurance decision with enhanced logic
+     */
+    makeBotInsuranceDecision(tableId, bot, phase) {
+        const currentEngine = this.getEngineById(tableId);
+        if (!currentEngine || !currentEngine.insurance.isActive || currentEngine.insurance.dealExecuted) {
+            return;
+        }
+
+        const decision = bot.makeInsuranceDecision();
+        if (decision) {
+            currentEngine.updateInsuranceSetting(bot.userId, decision.settingType, decision.value);
+            this.io.to(tableId).emit('gameState', currentEngine.getStateForClient());
+
+            // Track the decision
+            if (phase === 'initial') {
+                currentEngine.botInsuranceState.initialDecisionsMade.add(bot.userId);
+            } else {
+                const adjustmentCount = currentEngine.botInsuranceState.adjustmentsMade.get(bot.userId) || 0;
+                currentEngine.botInsuranceState.adjustmentsMade.set(bot.userId, adjustmentCount + 1);
+            }
+            
+            currentEngine.botInsuranceState.lastDecisionTime = Date.now();
+        }
+    }
+
+    /**
+     * Handle reactive adjustments where bots respond to other players' decisions
+     */
+    handleBotInsuranceAdjustments(tableId) {
+        const currentEngine = this.getEngineById(tableId);
+        if (!currentEngine || !currentEngine.insurance.isActive || currentEngine.insurance.dealExecuted) {
+            return;
+        }
+
+        const { getBotPersonality } = require('../core/bot-strategies/InsuranceStrategy');
+        const bots = Object.values(currentEngine.bots);
+        
+        bots.forEach((bot, index) => {
+            const personality = getBotPersonality(bot);
+            const adjustmentCount = currentEngine.botInsuranceState.adjustmentsMade.get(bot.userId) || 0;
+            
+            // Limit adjustments based on personality
+            const maxAdjustments = personality.name === 'Conservative' ? 2 : 
+                                 personality.name === 'Aggressive' ? 3 : 2;
+            
+            if (adjustmentCount < maxAdjustments && personality.adaptiveness > 0.5) {
+                // Stagger the adjustment timing
+                setTimeout(() => {
+                    this.makeBotInsuranceDecision(tableId, bot, 'adjustment');
+                }, index * 800 + Math.random() * 400);
+            }
+        });
+    }
+
+    /**
+     * Handle final competitive adjustments as the deal approaches
+     */
+    handleFinalInsuranceAdjustments(tableId) {
+        const currentEngine = this.getEngineById(tableId);
+        if (!currentEngine || !currentEngine.insurance.isActive || currentEngine.insurance.dealExecuted) {
+            return;
+        }
+
+        const { getBotPersonality } = require('../core/bot-strategies/InsuranceStrategy');
+        const bots = Object.values(currentEngine.bots);
+        
+        // Check if a deal is close to being made
+        const { insurance } = currentEngine;
+        const sumOfOffers = Object.values(insurance.defenderOffers || {}).reduce((sum, offer) => sum + (offer || 0), 0);
+        const dealGap = insurance.bidderRequirement - sumOfOffers;
+        
+        // If deal is close (within 20 points), some bots might make final adjustments
+        if (Math.abs(dealGap) <= 20) {
+            bots.forEach((bot, index) => {
+                const personality = getBotPersonality(bot);
+                const adjustmentCount = currentEngine.botInsuranceState.adjustmentsMade.get(bot.userId) || 0;
+                
+                // Only highly adaptive bots make final adjustments
+                if (personality.adaptiveness > 0.7 && adjustmentCount < 3) {
+                    setTimeout(() => {
+                        this.makeBotInsuranceDecision(tableId, bot, 'final');
+                    }, index * 500 + Math.random() * 300);
+                }
+            });
         }
     }
 }
