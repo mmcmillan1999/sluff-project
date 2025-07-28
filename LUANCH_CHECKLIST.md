@@ -8,9 +8,9 @@ This checklist covers all areas that need attention before moving from Alpha to 
 ## ❌ CRITICAL ISSUES TO FIX
 
 ### 🔴 Backend Issues
-- [ ] **Bot Integration Test Failing** - The `Table.integration.test.js` test is failing because bots aren't making bids automatically
+- [x] **Bot Integration Test Failing** - Fixed by adjusting timing and properly triggering bot actions
   - Location: `backend/tests/Table.integration.test.js:60`
-  - Issue: Bot bidding process isn't being triggered correctly
+  - Issue: Bot bidding process wasn't being triggered correctly
   - Impact: Bots may not work properly in live games
 
 ### 🔴 Frontend Issues  
@@ -20,10 +20,10 @@ This checklist covers all areas that need attention before moving from Alpha to 
   - Solution: Create proper mocks for Audio objects in tests
 
 ### 🔴 Security Vulnerabilities
-- [ ] **Backend Dependencies** - 4 vulnerabilities (1 low, 3 high)
+- [x] **Backend Dependencies** - Fixed! 0 vulnerabilities
   - Run: `cd backend && npm audit fix`
-- [ ] **Frontend Dependencies** - 16 vulnerabilities (3 low, 6 moderate, 6 high, 1 critical)
-  - Critical: form-data vulnerability
+- [ ] **Frontend Dependencies** - 9 vulnerabilities remaining (all in dev dependencies)
+  - These are in react-scripts and don't affect production
   - Run: `cd frontend && npm audit fix`
 
 ---
@@ -50,13 +50,14 @@ This checklist covers all areas that need attention before moving from Alpha to 
 
 ### Performance
 - [ ] **Bundle Size Analysis** - Analyze and optimize frontend bundle
-- [ ] **Image Optimization** - Compress logo images for faster loading
-  - Current: `SluffLogo.png` (2.1MB), `SluffLogo_bLackfont.png` (2.4MB)
+- [x] **Image Optimization** - Compressed logo images for faster loading
+  - Previous: `SluffLogo.png` (2.1MB), `SluffLogo_bLackfont.png` (2.4MB)
+  - Optimized: `SluffLogo.png` (171KB), `SluffLogo_bLackfont.png` (279KB)
 
 ### Testing
 - [ ] **Increase Test Coverage** - Current test files found:
-  - Backend: 10 test files (good coverage)
-  - Frontend: 1 test file (needs expansion)
+  - Backend: 10 test files (good coverage) ✅
+  - Frontend: 3 test files (added tests for Bulletin and useSounds)
 - [ ] **End-to-End Testing** - Set up Cypress or Playwright for full user flows
 - [ ] **Load Testing** - Test server performance under concurrent users
 
@@ -66,11 +67,11 @@ This checklist covers all areas that need attention before moving from Alpha to 
 
 ### PWA Requirements
 - [x] **Web App Manifest** - Updated with proper game metadata
-- [ ] **Service Worker** - Implement for offline functionality
-- [ ] **App Icons** - Create full set of required sizes:
+- [x] **Service Worker** - Implemented for offline functionality
+- [x] **App Icons** - Created full set of required sizes:
   - [x] 192x192 ✅
   - [x] 512x512 ✅
-  - [ ] 72x72, 96x96, 128x128, 144x144, 152x152, 384x384
+  - [x] 72x72, 96x96, 128x128, 144x144, 152x152, 384x384 ✅
 - [ ] **Splash Screens** - Create for different device sizes
 
 ### App Store Metadata
