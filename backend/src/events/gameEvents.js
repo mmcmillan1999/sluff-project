@@ -144,23 +144,47 @@ const registerGameHandlers = (io, gameService) => {
             }
         });
 
-        socket.on("requestFreeToken", async () => {
+        socket.on("requestFreeToken", async (data = {}) => {
             try {
-                const pool = gameService.pool;
-                const tokenQuery = "SELECT SUM(amount) AS current_tokens FROM transactions WHERE user_id = $1";
-                const tokenResult = await pool.query(tokenQuery, [socket.user.id]);
-                const currentTokens = parseFloat(tokenResult.rows[0]?.current_tokens || 0);
-                if (currentTokens >= 5) {
-                    return socket.emit("error", { message: "Sorry, free tokens are only for players with fewer than 5 tokens." });
+                // Server-side validation of contemplation period
+                const { contemplationStartTime } = data;
+                if (!contemplationStartTime) {
+                    return socket.emit("error", { message: "Invalid request. Please use the proper interface." });
                 }
-                await transactionManager.postTransaction(pool, {
-                    userId: socket.user.id, gameId: null, type: 'free_token_mercy', amount: 1,
-                    description: 'Mercy token requested by user'
-                });
-                socket.emit("notification", { message: "1 free token has been added to your account!" });
-                socket.emit("requestUserSync");
+                
+                const contemplationDuration = Date.now() - contemplationStartTime;
+                const REQUIRED_CONTEMPLATION_TIME = 15000; // 15 seconds
+                
+                if (contemplationDuration < REQUIRED_CONTEMPLATION_TIME) {
+                    const remainingTime = Math.ceil((REQUIRED_CONTEMPLATION_TIME - contemplationDuration) / 1000);
+                    return socket.emit("error", { 
+                        message: `Please contemplate your life choices for ${remainingTime} more seconds.`,
+                        remainingTime 
+                    });
+                }
+
+                // Use the new atomic mercy token handler
+                const result = await transactionManager.handleMercyTokenRequest(gameService.pool, socket.user.id, socket.user.username);
+                
+                if (result.success) {
+                    socket.emit("notification", { message: result.message });
+                    socket.emit("requestUserSync");
+                    
+                    // Log successful mercy token for audit purposes
+                    console.log(`🎁 Mercy token granted to ${socket.user.username} (ID: ${socket.user.id}). Balance: ${result.previousBalance.toFixed(2)} → ${result.newBalance.toFixed(2)}`);
+                } else {
+                    socket.emit("error", { 
+                        message: result.error,
+                        currentTokens: result.currentTokens,
+                        timeLeft: result.timeLeft 
+                    });
+                    
+                    // Log failed mercy token attempts for security monitoring
+                    console.log(`⚠️ Mercy token denied for ${socket.user.username} (ID: ${socket.user.id}): ${result.error}`);
+                }
             } catch (err) {
-                socket.emit("error", { message: "Could not grant token." });
+                console.error(`❌ Mercy token request error for user ${socket.user.id}:`, err);
+                socket.emit("error", { message: "Could not process mercy token request. Please try again later." });
             }
         });
 

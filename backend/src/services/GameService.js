@@ -296,6 +296,12 @@ class GameService {
         const engine = this.getEngineById(tableId);
         if (!engine || engine.pendingBotAction) return;
     
+        // Helper function to check if game is human vs bot only
+        const isHumanVsBotOnly = () => {
+            const humanPlayers = Object.values(engine.players).filter(p => !p.isBot && !p.isSpectator);
+            return humanPlayers.length === 1;
+        };
+    
         let turnActionTaken = false;
     
         const scheduleTurnAction = (actionFn, delay, ...args) => {
@@ -319,7 +325,10 @@ class GameService {
             if (engine.state === 'Dealing Pending' && engine.dealer == botUserId) {
                 scheduleTurnAction(this.dealCards, standardDelay, botUserId);
             } else if (engine.state === 'Awaiting Next Round Trigger' && engine.roundSummary?.dealerOfRoundId == botUserId) {
-                scheduleTurnAction(this.requestNextRound, roundEndDelay, botUserId);
+                // Only auto-advance if there are other human players (not human vs bot only)
+                if (!isHumanVsBotOnly()) {
+                    scheduleTurnAction(this.requestNextRound, roundEndDelay, botUserId);
+                }
             } else if (engine.state === 'Bidding Phase' && engine.biddingTurnPlayerId == botUserId) {
                 const bid = bot.decideBid();
                 scheduleTurnAction(this.placeBid, standardDelay, botUserId, bid);
