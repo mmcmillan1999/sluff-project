@@ -86,6 +86,9 @@ const createDbTables = async (pool) => {
             );
         `);
 
+        // Ensure transaction_time column exists (for existing databases)
+        await pool.query("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS transaction_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP");
+
         await pool.query(`
             CREATE TABLE IF NOT EXISTS feedback (
                 feedback_id SERIAL PRIMARY KEY,
