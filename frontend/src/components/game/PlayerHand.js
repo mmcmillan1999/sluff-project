@@ -48,9 +48,11 @@ const PlayerHand = ({
 
     useEffect(() => {
         const calculateLayout = () => {
-            if (!myHandRef.current || myHand.length === 0) return;
+            const handElement = myHandRef.current;
+            if (!handElement || myHand.length === 0) return;
+            
             const CARD_WIDTH = 65;
-            const containerWidth = myHandRef.current.offsetWidth;
+            const containerWidth = handElement.offsetWidth;
             const totalCardWidth = myHand.length * CARD_WIDTH;
             if (totalCardWidth > containerWidth) {
                 const overlap = (totalCardWidth - containerWidth) / (myHand.length - 1);
@@ -59,6 +61,7 @@ const PlayerHand = ({
                 setCardMargin(10);
             }
         };
+        
         calculateLayout();
         window.addEventListener('resize', calculateLayout);
         return () => window.removeEventListener('resize', calculateLayout);

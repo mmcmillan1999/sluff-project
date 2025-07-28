@@ -210,10 +210,8 @@ class GameService {
         const engine = this.getEngineById(tableId);
         if (!engine) return;
 
-        if (engine.pendingBotAction) {
-            clearTimeout(engine.pendingBotAction);
-            engine.pendingBotAction = null;
-        }
+        // Clear any pending bot action before performing new action
+        this._clearPendingBotAction(engine);
 
         const result = actionFn(engine);
         if (result && result.effects) {
@@ -221,6 +219,13 @@ class GameService {
         }
     }
     
+    _clearPendingBotAction(engine) {
+        if (engine.pendingBotAction) {
+            clearTimeout(engine.pendingBotAction);
+            engine.pendingBotAction = null;
+        }
+    }
+
     async _executeEffects(tableId, effects = []) {
         if (!effects || effects.length === 0) return;
         const engine = this.getEngineById(tableId);
@@ -299,10 +304,17 @@ class GameService {
         let turnActionTaken = false;
     
         const scheduleTurnAction = (actionFn, delay, ...args) => {
+            if (turnActionTaken) return; // Prevent double scheduling
             turnActionTaken = true;
+            
             engine.pendingBotAction = setTimeout(async () => {
-                engine.pendingBotAction = null;
-                await actionFn.call(this, tableId, ...args);
+                try {
+                    engine.pendingBotAction = null;
+                    await actionFn.call(this, tableId, ...args);
+                } catch (error) {
+                    console.error(`[BOT] Error executing bot action for table ${tableId}:`, error);
+                    engine.pendingBotAction = null;
+                }
             }, delay);
         };
     

@@ -9,6 +9,7 @@ import MercyWindow from "./components/MercyWindow.js";
 import AdminView from "./components/AdminView.js";
 import FeedbackModal from "./components/FeedbackModal.js";
 import FeedbackView from "./components/FeedbackView.js";
+import ErrorBoundary from "./components/ErrorBoundary.js";
 import { submitFeedback } from "./services/api.js";
 import "./components/AdminView.css";
 import { useSounds } from "./hooks/useSounds.js";
@@ -212,23 +213,25 @@ function App() {
             <MercyWindow show={showMercyWindow} onClose={() => setShowMercyWindow(false)} emitEvent={emitEvent} />
             <FeedbackModal show={showFeedbackModal} onClose={handleCloseFeedbackModal} onSubmit={handleSubmitFeedback} gameContext={feedbackGameContext} />
 
-            {(() => {
-                switch (view) {
-                    case 'lobby':
-                        return <LobbyView user={user} lobbyThemes={lobbyThemes} serverVersion={serverVersion} handleJoinTable={handleJoinTable} handleLogout={handleLogout} handleRequestFreeToken={handleRequestFreeToken} handleShowLeaderboard={() => setView('leaderboard')} handleShowAdmin={handleShowAdmin} handleShowFeedback={() => setView('feedback')} errorMessage={errorMessage} emitEvent={emitEvent} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} />;
-                    case 'gameTable':
-                        return currentTableState ? <GameTableView playerId={user.id} currentTableState={currentTableState} handleLeaveTable={handleLeaveTable} handleLogout={handleLogout} errorMessage={errorMessage} emitEvent={emitEvent} playSound={playSound} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} /> : <div>Loading table...</div>;
-                    case 'leaderboard':
-                        return <LeaderboardView user={user} onReturnToLobby={handleReturnToLobby} handleResetAllTokens={handleResetAllTokens} handleShowAdmin={handleShowAdmin} />;
-                    case 'feedback':
-                        return <FeedbackView user={user} onReturnToLobby={handleReturnToLobby} />;
-                    case 'admin':
-                        return <AdminView onReturnToLobby={handleReturnToLobby} handleHardReset={handleHardReset} handleResetAllTokens={handleResetAllTokens} />;
-                    default:
-                        setView('lobby');
-                        return null;
-                }
-            })()}
+            <ErrorBoundary>
+                {(() => {
+                    switch (view) {
+                        case 'lobby':
+                            return <LobbyView user={user} lobbyThemes={lobbyThemes} serverVersion={serverVersion} handleJoinTable={handleJoinTable} handleLogout={handleLogout} handleRequestFreeToken={handleRequestFreeToken} handleShowLeaderboard={() => setView('leaderboard')} handleShowAdmin={handleShowAdmin} handleShowFeedback={() => setView('feedback')} errorMessage={errorMessage} emitEvent={emitEvent} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} />;
+                        case 'gameTable':
+                            return currentTableState ? <GameTableView playerId={user.id} currentTableState={currentTableState} handleLeaveTable={handleLeaveTable} handleLogout={handleLogout} errorMessage={errorMessage} emitEvent={emitEvent} playSound={playSound} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} /> : <div>Loading table...</div>;
+                        case 'leaderboard':
+                            return <LeaderboardView user={user} onReturnToLobby={handleReturnToLobby} handleResetAllTokens={handleResetAllTokens} handleShowAdmin={handleShowAdmin} />;
+                        case 'feedback':
+                            return <FeedbackView user={user} onReturnToLobby={handleReturnToLobby} />;
+                        case 'admin':
+                            return <AdminView onReturnToLobby={handleReturnToLobby} handleHardReset={handleHardReset} handleResetAllTokens={handleResetAllTokens} />;
+                        default:
+                            setView('lobby');
+                            return null;
+                    }
+                })()}
+            </ErrorBoundary>
         </>
     );
 }

@@ -7,6 +7,7 @@ const playHandler = require('./handlers/playHandler');
 const scoringHandler = require('./handlers/scoringHandler');
 const PlayerList = require('./PlayerList');
 const biddingHandler = require('./handlers/biddingHandler');
+const { validateAndReport } = require('../utils/stateValidator');
 
 const BOT_NAMES = ["Mike Knight", "Grandma Joe", "Grampa Blane", "Kimba", "Courtney Sr.", "Cliff"];
 
@@ -138,13 +139,22 @@ class GameEngine {
     disconnectPlayer(userId) {
         const player = this.players[userId];
         if (!player) return;
+        
+        // Convert userId to number for playerOrder operations (bots have negative IDs)
+        const userIdAsNumber = parseInt(userId, 10);
+        
         if (!this.gameStarted || player.isSpectator) {
             delete this.players[userId];
             if (player.isBot) delete this.bots[userId];
-            this.playerOrder.remove(userId);
+            this.playerOrder.remove(userIdAsNumber);
         } else {
             console.log(`[${this.tableId}] Player ${player.playerName} has disconnected.`);
             player.disconnected = true;
+        }
+        
+        // If this was the target of a forfeit timer, clear it
+        if (this.forfeiture.targetPlayerName === player.playerName) {
+            this._clearForfeitTimer();
         }
     }
     
@@ -264,14 +274,26 @@ class GameEngine {
 
     reset() {
         console.log(`[${this.tableId}] Game is being reset by 'Play Again' button.`);
+        
+        // Validate state before reset
+        if (process.env.NODE_ENV !== 'production') {
+            validateAndReport(this, false);
+        }
+        
         this.gameStarted = false;
         this.gameId = null;
         this.playerMode = null;
         this._initializeNewRoundState(); 
+        
+        // Clear all timers before reset
+        this._clearAllTimers();
+        
         for (const userId in this.players) {
             if (this.players[userId].disconnected) {
                 console.log(`[${this.tableId}] Removing disconnected player ${this.players[userId].playerName} during reset.`);
-                this.playerOrder.remove(parseInt(userId, 10));
+                // Fix: Convert userId to appropriate type for playerOrder operations
+                const userIdAsNumber = parseInt(userId, 10);
+                this.playerOrder.remove(userIdAsNumber);
                 if (this.players[userId].isBot) {
                     delete this.bots[userId];
                 }
@@ -287,8 +309,13 @@ class GameEngine {
         this.playerMode = this.playerOrder.count;
         this.state = this.playerMode >= 3 ? "Ready to Start" : "Waiting for Players";
         this.dealer = null;
+        
+        // Validate state after reset
+        if (process.env.NODE_ENV !== 'production') {
+            validateAndReport(this, false);
+        }
+        
         console.log(`[${this.tableId}] Reset complete. State is now '${this.state}' with ${this.playerMode} players.`);
-        return this._effects([{ type: 'BROADCAST_STATE' }, { type: 'UPDATE_LOBBY' }]);
     }
     
     updateInsuranceSetting(userId, settingType, value) {
@@ -435,6 +462,34 @@ class GameEngine {
             delete this.internalTimers.forfeit;
         }
         this.forfeiture = { targetPlayerName: null, timeLeft: null };
+    }
+
+    _clearAllTimers() {
+        // Clear forfeit timer
+        this._clearForfeitTimer();
+        
+        // Clear draw timer
+        if (this.internalTimers.drawTimer) {
+            clearInterval(this.internalTimers.drawTimer);
+            delete this.internalTimers.drawTimer;
+        }
+        
+        // Clear any other internal timers
+        for (const timerKey in this.internalTimers) {
+            if (this.internalTimers[timerKey]) {
+                clearTimeout(this.internalTimers[timerKey]);
+                clearInterval(this.internalTimers[timerKey]);
+                delete this.internalTimers[timerKey];
+            }
+        }
+        
+        // Reset draw request state
+        this.drawRequest = {
+            isActive: false,
+            votes: {},
+            requesterName: null
+        };
+        this.drawCountdown = null;
     }
 
     _resolveForfeit(forfeitingPlayerName, reason) {

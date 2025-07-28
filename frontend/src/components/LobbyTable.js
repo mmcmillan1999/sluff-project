@@ -1,14 +1,17 @@
 import React from 'react';
+import { safeObjectValues, safeFilter, safeGet } from '../utils/safetyHelpers';
 import './LobbyTable.css';
 
 const LobbyTable = ({ table, onJoin, currentUserId }) => {
-    // --- FIX: Default players to an empty object if it's null or undefined ---
-    // This prevents the "Cannot convert undefined or null to object" crash.
-    const { tableName, players = {}, gameStarted, playerMode } = table;
+    // Use safe access helpers to prevent crashes
+    const tableName = safeGet(table, 'tableName', 'Unknown Table');
+    const players = safeGet(table, 'players', {});
+    const gameStarted = safeGet(table, 'gameStarted', false);
+    const playerMode = safeGet(table, 'playerMode', 4);
 
-    const playerCount = Object.values(players).filter(p => !p.isSpectator).length;
-    const isPlayerAtTable = players[currentUserId];
-    const isFull = playerCount >= (playerMode || 4);
+    const playerCount = safeFilter(safeObjectValues(players), p => !p?.isSpectator).length;
+    const isPlayerAtTable = !!players[currentUserId];
+    const isFull = playerCount >= playerMode;
 
     let statusText = 'Waiting for players...';
     let canJoin = !isPlayerAtTable && !gameStarted && !isFull;
@@ -32,12 +35,12 @@ const LobbyTable = ({ table, onJoin, currentUserId }) => {
         <div className={`lobby-table ${gameStarted ? 'in-progress' : ''} ${isFull ? 'full' : ''}`}>
             <div className="table-header">
                 <h3>{tableName}</h3>
-                <span className="player-count">{playerCount} / {playerMode || 4}</span>
+                <span className="player-count">{playerCount} / {playerMode}</span>
             </div>
             <div className="table-body">
                 <ul className="player-list">
-                    {Object.values(players).map(p => (
-                        !p.isSpectator && <li key={p.userId}>{p.playerName}</li>
+                    {safeObjectValues(players).map(p => (
+                        !p?.isSpectator && <li key={p?.userId || Math.random()}>{p?.playerName || 'Unknown Player'}</li>
                     ))}
                 </ul>
             </div>

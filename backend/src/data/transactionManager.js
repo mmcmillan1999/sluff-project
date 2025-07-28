@@ -60,7 +60,17 @@ const handleGameStartTransaction = async (pool, table, playerIds, gameId) => {
     } catch (error) {
         await client.query('ROLLBACK');
         console.error("❌ Game start transaction failed and was rolled back:", error.message);
-        throw error; 
+        
+        // Provide more specific error messages based on the error type
+        if (error.message.includes('insufficient tokens')) {
+            throw error; // Re-throw the specific insufficient tokens error
+        } else if (error.code === '23505') { // PostgreSQL unique constraint violation
+            throw new Error('A duplicate transaction was detected. Please try again.');
+        } else if (error.code === '40001') { // PostgreSQL serialization failure
+            throw new Error('Transaction conflict detected. Please try again.');
+        } else {
+            throw new Error('Failed to process game start transaction. Please contact support if this persists.');
+        }
     } finally {
         client.release();
     }

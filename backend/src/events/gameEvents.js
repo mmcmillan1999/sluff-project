@@ -166,11 +166,19 @@ const registerGameHandlers = (io, gameService) => {
 
         socket.on("disconnect", async () => {
             console.log(`Socket disconnected: ${socket.user.username} (ID: ${socket.user.id}, Socket: ${socket.id})`);
+            
             const enginePlayerIsOn = Object.values(gameService.getAllEngines()).find(e => e.players[socket.user.id]);
             if (enginePlayerIsOn) {
+                // Clear any pending bot actions for this player if they were a bot
+                if (enginePlayerIsOn.players[socket.user.id]?.isBot) {
+                    gameService._clearPendingBotAction(enginePlayerIsOn);
+                }
+                
                 enginePlayerIsOn.disconnectPlayer(socket.user.id);
                 gameService.io.to(enginePlayerIsOn.tableId).emit('gameState', enginePlayerIsOn.getStateForClient());
+                gameService.io.emit('lobbyState', gameService.getLobbyState());
             }
+            
             try {
                 const pool = gameService.pool;
                 const logoutMsgQuery = `INSERT INTO lobby_chat_messages (user_id, username, message) VALUES ($1, $2, $3) RETURNING id, username, message, created_at;`;
