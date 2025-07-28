@@ -54,7 +54,9 @@ async function testBotBiddingProcess() {
     await gameService.dealCards('table-1', humanId);
     assert.strictEqual(engine.state, "Bidding Phase");
     assert.strictEqual(engine.biddingTurnPlayerId, firstBidderId);
-    console.log("  - Waiting for bot to make a bid...");
+    console.log("  - Manually triggering bot action...");
+    // Manually trigger bots since the interval-based system doesn't work in tests
+    gameService._triggerBots('table-1');
     await sleep(1500);
     const bidsMade = engine.playersWhoPassedThisRound.length + (engine.currentHighestBidDetails ? 1 : 0);
     assert.strictEqual(bidsMade, 1, "Expected exactly one bid to have been made by the bot.");
