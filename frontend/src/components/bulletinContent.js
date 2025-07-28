@@ -36,6 +36,6 @@ export const bulletinContent = [
     },
     {
         type: 'list-item',
-        text: '11.0.1 Bug Fixes and Improvements'
+        text: '11.2.0 beta L prep'
     },
 ];

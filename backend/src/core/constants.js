@@ -1,6 +1,6 @@
 // backend/src/core/constants.js
 
-const SERVER_VERSION = "11.0.1";
+const SERVER_VERSION = "11.2.0 beta L pretp";
 
 
 
