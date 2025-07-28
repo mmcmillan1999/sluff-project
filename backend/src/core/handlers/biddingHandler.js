@@ -56,9 +56,13 @@ function handleNormalBid(engine, userId, bid) {
         return resolveBiddingFinal(engine);
     }
     
+    // If a Solo bid is now the highest, give the original Frog bidder
+    // exactly one opportunity to upgrade to Heart Solo – regardless of
+    // how many bidders remain.  This mirrors live-play rules where the
+    // Frog bidder can immediately "snap" to Heart Solo after being
+    // out-bid.
     const soloIsHighest = engine.currentHighestBidDetails?.bid === "Solo";
-    const frogBidderIsOnlyRemainingPlayer = activeBidders.length === 1 && activeBidders[0] === engine.originalFrogBidderId;
-    if (soloIsHighest && frogBidderIsOnlyRemainingPlayer) {
+    if (soloIsHighest && engine.originalFrogBidderId) {
         engine.state = "Awaiting Frog Upgrade Decision";
         engine.biddingTurnPlayerId = engine.originalFrogBidderId;
         return [{ type: 'BROADCAST_STATE' }];
