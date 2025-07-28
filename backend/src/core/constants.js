@@ -1,6 +1,6 @@
 // backend/src/core/constants.js
 
-const SERVER_VERSION = "10.1.0 Drag Cards";
+const SERVER_VERSION = "11.0.1";
 
 
 const SUITS = { H: "Hearts", D: "Diamonds", C: "Clubs", S: "Spades" };
