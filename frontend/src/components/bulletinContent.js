@@ -36,6 +36,6 @@ export const bulletinContent = [
     },
     {
         type: 'list-item',
-        text: '10.1.0 Drag Cards'
+        text: '11.0.1 Bug Fixes and Improvements'
     },
 ];
