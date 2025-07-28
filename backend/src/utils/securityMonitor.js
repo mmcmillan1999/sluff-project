@@ -32,7 +32,7 @@ const logMercyTokenAttempt = (userId, username, success, reason, additionalData 
 const checkSuspiciousActivity = async (pool, userId) => {
     try {
         // Check for suspicious patterns in the last 24 hours
-        const suspiciousActivityQuery = `
+        let suspiciousActivityQuery = `
             SELECT 
                 COUNT(*) as total_attempts,
                 COUNT(CASE WHEN transaction_type = 'free_token_mercy' THEN 1 END) as successful_mercy,
@@ -44,20 +44,45 @@ const checkSuspiciousActivity = async (pool, userId) => {
             AND (transaction_type = 'free_token_mercy' OR description LIKE '%mercy%')
         `;
         
-        const result = await pool.query(suspiciousActivityQuery, [userId]);
+        let result;
+        try {
+            result = await pool.query(suspiciousActivityQuery, [userId]);
+        } catch (error) {
+            // If transaction_time column doesn't exist, use fallback query
+            if (error.code === '42703') {
+                console.warn('⚠️ transaction_time column not found in suspicious activity check, using fallback');
+                const fallbackQuery = `
+                    SELECT 
+                        COUNT(*) as total_attempts,
+                        COUNT(CASE WHEN transaction_type = 'free_token_mercy' THEN 1 END) as successful_mercy
+                    FROM transactions 
+                    WHERE user_id = $1 
+                    AND (transaction_type = 'free_token_mercy' OR description LIKE '%mercy%')
+                `;
+                result = await pool.query(fallbackQuery, [userId]);
+                // Set default values for missing time fields
+                result.rows[0].first_attempt = null;
+                result.rows[0].last_attempt = null;
+            } else {
+                throw error;
+            }
+        }
+        
         const stats = result.rows[0];
         
         const flags = [];
         
-        // Flag if user has gotten multiple mercy tokens in 24 hours
+        // Flag if user has gotten multiple mercy tokens
         if (parseInt(stats.successful_mercy) > 3) {
-            flags.push(`Multiple mercy tokens in 24h: ${stats.successful_mercy}`);
+            flags.push(`Multiple mercy tokens: ${stats.successful_mercy}`);
         }
         
-        // Flag rapid-fire attempts (would need additional tracking for failed attempts)
-        const timeSpan = new Date(stats.last_attempt) - new Date(stats.first_attempt);
-        if (parseInt(stats.total_attempts) > 5 && timeSpan < 3600000) { // 5 attempts in 1 hour
-            flags.push(`Rapid attempts: ${stats.total_attempts} in ${Math.round(timeSpan/60000)} minutes`);
+        // Only check time-based flags if we have time data
+        if (stats.first_attempt && stats.last_attempt) {
+            const timeSpan = new Date(stats.last_attempt) - new Date(stats.first_attempt);
+            if (parseInt(stats.total_attempts) > 5 && timeSpan < 3600000) { // 5 attempts in 1 hour
+                flags.push(`Rapid attempts: ${stats.total_attempts} in ${Math.round(timeSpan/60000)} minutes`);
+            }
         }
         
         if (flags.length > 0) {
@@ -75,7 +100,7 @@ const checkSuspiciousActivity = async (pool, userId) => {
 
 const generateSecurityReport = async (pool, hours = 24) => {
     try {
-        const reportQuery = `
+        let reportQuery = `
             SELECT 
                 u.id,
                 u.username,
@@ -91,7 +116,35 @@ const generateSecurityReport = async (pool, hours = 24) => {
             ORDER BY mercy_tokens_granted DESC, total_mercy_amount DESC
         `;
         
-        const result = await pool.query(reportQuery);
+        let result;
+        try {
+            result = await pool.query(reportQuery);
+        } catch (error) {
+            // If transaction_time column doesn't exist, use fallback query
+            if (error.code === '42703') {
+                console.warn('⚠️ transaction_time column not found in security report, using fallback');
+                const fallbackQuery = `
+                    SELECT 
+                        u.id,
+                        u.username,
+                        COUNT(*) as mercy_tokens_granted,
+                        SUM(t.amount) as total_mercy_amount
+                    FROM transactions t
+                    JOIN users u ON t.user_id = u.id
+                    WHERE t.transaction_type = 'free_token_mercy'
+                    GROUP BY u.id, u.username
+                    ORDER BY mercy_tokens_granted DESC, total_mercy_amount DESC
+                `;
+                result = await pool.query(fallbackQuery);
+                // Set default values for missing time fields
+                result.rows.forEach(row => {
+                    row.first_mercy = null;
+                    row.last_mercy = null;
+                });
+            } else {
+                throw error;
+            }
+        }
         
         console.log(`\n📊 [SECURITY REPORT] Mercy Token Activity (Last ${hours} hours)`);
         console.log('='.repeat(70));
@@ -102,13 +155,17 @@ const generateSecurityReport = async (pool, hours = 24) => {
         }
         
         result.rows.forEach((row, index) => {
-            const timeSpan = new Date(row.last_mercy) - new Date(row.first_mercy);
-            const timeSpanHours = Math.round(timeSpan / 3600000 * 10) / 10;
-            
             console.log(`${index + 1}. ${row.username} (ID: ${row.id})`);
             console.log(`   Mercy tokens: ${row.mercy_tokens_granted}`);
             console.log(`   Total amount: ${row.total_mercy_amount}`);
-            console.log(`   Time span: ${timeSpanHours}h`);
+            
+            if (row.first_mercy && row.last_mercy) {
+                const timeSpan = new Date(row.last_mercy) - new Date(row.first_mercy);
+                const timeSpanHours = Math.round(timeSpan / 3600000 * 10) / 10;
+                console.log(`   Time span: ${timeSpanHours}h`);
+            } else {
+                console.log(`   Time span: N/A (no timestamp data)`);
+            }
             console.log('');
         });
         

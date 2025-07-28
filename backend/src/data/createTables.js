@@ -86,6 +86,19 @@ const createDbTables = async (pool) => {
             );
         `);
 
+        // Migration: Add transaction_time column if it doesn't exist (for existing databases)
+        await pool.query(`
+            ALTER TABLE transactions 
+            ADD COLUMN IF NOT EXISTS transaction_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+        `);
+
+        // Migration: Update existing records without transaction_time to have a timestamp
+        await pool.query(`
+            UPDATE transactions 
+            SET transaction_time = CURRENT_TIMESTAMP 
+            WHERE transaction_time IS NULL;
+        `);
+
         await pool.query(`
             CREATE TABLE IF NOT EXISTS feedback (
                 feedback_id SERIAL PRIMARY KEY,

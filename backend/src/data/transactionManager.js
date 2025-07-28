@@ -78,27 +78,66 @@ const handleMercyTokenRequest = async (pool, userId, username = null) => {
         }
 
         // Check rate limiting - only allow one mercy token per hour
-        const rateLimitQuery = `
-            SELECT COUNT(*) as mercy_count, MAX(transaction_time) as last_mercy_time
-            FROM transactions 
-            WHERE user_id = $1 
-            AND transaction_type = 'free_token_mercy' 
-            AND transaction_time > NOW() - INTERVAL '1 hour'
-        `;
-        const rateLimitResult = await client.query(rateLimitQuery, [userId]);
-        const mercyCount = parseInt(rateLimitResult.rows[0]?.mercy_count || 0);
-        const lastMercyTime = rateLimitResult.rows[0]?.last_mercy_time;
+        // First, check if transaction_time column exists
+        let rateLimitQuery;
+        let hasTransactionTimeColumn = true;
+        
+        try {
+            // Try to query with transaction_time column
+            rateLimitQuery = `
+                SELECT COUNT(*) as mercy_count, MAX(transaction_time) as last_mercy_time
+                FROM transactions 
+                WHERE user_id = $1 
+                AND transaction_type = 'free_token_mercy' 
+                AND transaction_time > NOW() - INTERVAL '1 hour'
+            `;
+            const rateLimitResult = await client.query(rateLimitQuery, [userId]);
+            const mercyCount = parseInt(rateLimitResult.rows[0]?.mercy_count || 0);
+            const lastMercyTime = rateLimitResult.rows[0]?.last_mercy_time;
 
-        if (mercyCount > 0) {
-            await client.query('ROLLBACK');
-            const timeLeft = Math.ceil((new Date(lastMercyTime).getTime() + 3600000 - Date.now()) / 60000);
-            securityMonitor.logMercyTokenAttempt(userId, username, false, 'Rate limit exceeded', { timeLeft, lastMercyTime });
-            return {
-                success: false,
-                error: `You can only request one mercy token per hour. Please wait ${timeLeft} more minutes.`,
-                currentTokens,
-                timeLeft
-            };
+            if (mercyCount > 0) {
+                await client.query('ROLLBACK');
+                const timeLeft = Math.ceil((new Date(lastMercyTime).getTime() + 3600000 - Date.now()) / 60000);
+                securityMonitor.logMercyTokenAttempt(userId, username, false, 'Rate limit exceeded', { timeLeft, lastMercyTime });
+                return {
+                    success: false,
+                    error: `You can only request one mercy token per hour. Please wait ${timeLeft} more minutes.`,
+                    currentTokens,
+                    timeLeft
+                };
+            }
+        } catch (error) {
+            // If transaction_time column doesn't exist, fall back to simpler rate limiting
+            if (error.code === '42703') { // Column does not exist error
+                console.warn('⚠️ transaction_time column not found, using fallback rate limiting');
+                hasTransactionTimeColumn = false;
+                
+                // Simple fallback: just check if user has gotten any mercy tokens recently
+                // This is less precise but will work until the database is migrated
+                const fallbackQuery = `
+                    SELECT COUNT(*) as mercy_count
+                    FROM transactions 
+                    WHERE user_id = $1 
+                    AND transaction_type = 'free_token_mercy'
+                `;
+                const fallbackResult = await client.query(fallbackQuery, [userId]);
+                const totalMercyTokens = parseInt(fallbackResult.rows[0]?.mercy_count || 0);
+                
+                // For fallback, allow mercy token if user has fewer than 3 total mercy tokens
+                // This is a temporary measure until the column is added
+                if (totalMercyTokens >= 3) {
+                    await client.query('ROLLBACK');
+                    securityMonitor.logMercyTokenAttempt(userId, username, false, 'Fallback rate limit exceeded', { totalMercyTokens });
+                    return {
+                        success: false,
+                        error: `You have reached the maximum number of mercy tokens. Please contact an administrator if you need assistance.`,
+                        currentTokens
+                    };
+                }
+            } else {
+                // Re-throw other errors
+                throw error;
+            }
         }
 
         // Check for suspicious activity before granting token
