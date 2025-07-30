@@ -14,7 +14,7 @@ import { submitFeedback } from './services/api.js';
 import './components/AdminView.css';
 import { useSounds } from './hooks/useSounds.js';
 
-const SERVER_URL = process.env.REACT_APP_SERVER_URL || "http://localhost:3005";
+const SERVER_URL = process.env.REACT_APP_SERVER_URL || "https://sluff-backend.onrender.com";
 
 const MainApp = () => {
     const navigate = useNavigate();
