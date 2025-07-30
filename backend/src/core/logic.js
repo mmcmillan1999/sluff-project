@@ -185,7 +185,9 @@ function calculateRoundScoreDetails(table) {
         }
     }
     
+    console.log('[DEBUG] About to calculate insurance hindsight. PlayerMode:', table.playerMode, 'Insurance active:', table.insurance?.isActive, 'Deal executed:', table.insurance?.dealExecuted);
     const insuranceHindsight = calculateInsuranceHindsight(table, pointChanges);
+    console.log('[DEBUG] Insurance hindsight result:', insuranceHindsight);
 
     const finalBidderPoints = bidderTotalCardPoints;
     const finalDefenderPoints = 120 - finalBidderPoints;
@@ -308,7 +310,11 @@ async function handleDrawGameOver(table, outcome, transactionFn, statUpdateFn) {
 
 
 function calculateInsuranceHindsight(table, pointChanges) {
-    if (table.playerMode !== 3) return null;
+    console.log('[DEBUG] calculateInsuranceHindsight called. PlayerMode:', table.playerMode);
+    if (table.playerMode !== 3) {
+        console.log('[DEBUG] Returning null - not 3 player mode');
+        return null;
+    }
 
     const { bidWinnerInfo, insurance, players } = table;
     const bidWinnerName = bidWinnerInfo.playerName;
@@ -317,8 +323,11 @@ function calculateInsuranceHindsight(table, pointChanges) {
         .map(p => p.playerName);
     
     const hindsight = {};
+    
+    console.log('[DEBUG] Insurance state:', { isActive: insurance.isActive, dealExecuted: insurance.dealExecuted, bidderRequirement: insurance.bidderRequirement });
 
     if (insurance.dealExecuted) {
+        console.log('[DEBUG] Insurance deal was executed, calculating hindsight...');
         // Hindsight is what would have happened if they played it out.
         // The "actual" points are from the deal, "potential" are from the cards.
         const actualPointsFromDeal = pointChanges;

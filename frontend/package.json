@@ -16,6 +16,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
+    "start:force": "cross-env FORCE_COLOR=1 react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test --transformIgnorePatterns \"node_modules/(?!socket.io-client)/\"",
     "eject": "react-scripts eject"

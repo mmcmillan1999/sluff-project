@@ -4,12 +4,14 @@
     const transactionManager = require('../data/transactionManager');
     const { THEMES, TABLE_COSTS, SERVER_VERSION } = require('../core/constants');
     const gameLogic = require('../core/logic');
+    const AdaptiveInsuranceStrategy = require('../core/bot-strategies/AdaptiveInsuranceStrategy');
 
     class GameService {
         constructor(io, pool) {
             this.io = io;
             this.pool = pool;
             this.engines = {};
+            this.adaptiveInsurance = new AdaptiveInsuranceStrategy(pool, io);
             this._initializeEngines();
 
             // --- THE NEW GAME LOOP HEARTBEAT ---
@@ -230,6 +232,56 @@
                     case 'BROADCAST_STATE':
                         this.io.to(tableId).emit('gameState', engine.getStateForClient());
                         // --- THE FIX: No longer call _triggerBots here. ---
+                        
+                        // Log insurance hindsight values for bots when round ends
+                        if (engine.roundSummary && engine.roundSummary.insuranceHindsight && engine.gameId) {
+                            console.log(`[Insurance] Round ended with hindsight data for game ${engine.gameId}`);
+                            setTimeout(async () => {
+                                for (const botId in engine.bots) {
+                                    const bot = engine.bots[botId];
+                                    const hindsightData = engine.roundSummary.insuranceHindsight[bot.playerName];
+                                    if (hindsightData) {
+                                        console.log(`[Insurance] Bot ${bot.playerName} hindsight:`, hindsightData);
+                                        // Log the decision
+                                        await this.adaptiveInsurance.logInsuranceDecision(
+                                            engine.gameId,
+                                            bot.playerName,
+                                            engine,
+                                            engine.insurance.dealExecuted,
+                                            hindsightData.hindsightValue
+                                        );
+                                        
+                                        // Have bot comment on their learning
+                                        if (hindsightData.hindsightValue < -20) {
+                                            const messages = [
+                                                `You got me this time! I wasted ${Math.abs(hindsightData.hindsightValue)} points by ${engine.insurance.dealExecuted ? 'making' : 'not making'} that deal at trick ${engine.tricksPlayedCount}.`,
+                                                `Ouch! That insurance ${engine.insurance.dealExecuted ? 'deal' : 'decision'} cost me ${Math.abs(hindsightData.hindsightValue)} points. My circuits are adjusting...`,
+                                                `Well played! I'm learning that trick ${engine.tricksPlayedCount} is too ${engine.tricksPlayedCount <= 3 ? 'early' : 'late'} for those kinds of deals.`,
+                                                `${Math.abs(hindsightData.hindsightValue)} points down the drain! Next time I'll be smarter about ${engine.tricksPlayedCount <= 3 ? 'early' : engine.tricksPlayedCount <= 7 ? 'mid' : 'late'}-game insurance.`
+                                            ];
+                                            const message = messages[Math.floor(Math.random() * messages.length)];
+                                            this.io.to(tableId).emit('tableChat', {
+                                                playerName: bot.playerName,
+                                                message: message,
+                                                timestamp: Date.now()
+                                            });
+                                        } else if (hindsightData.hindsightValue > 20) {
+                                            const messages = [
+                                                `Ha! My insurance strategy saved me ${hindsightData.hindsightValue} points that round!`,
+                                                `My neural network is pleased - that ${engine.insurance.dealExecuted ? 'deal' : 'decision'} gained me ${hindsightData.hindsightValue} points!`,
+                                                `Experience pays off! Making the right call at trick ${engine.tricksPlayedCount} saved me ${hindsightData.hindsightValue} points.`
+                                            ];
+                                            const message = messages[Math.floor(Math.random() * messages.length)];
+                                            this.io.to(tableId).emit('tableChat', {
+                                                playerName: bot.playerName,
+                                                message: message,
+                                                timestamp: Date.now()
+                                            });
+                                        }
+                                    }
+                                }
+                            }, 3000); // Delay so it appears after round summary
+                        }
                         break;
                     case 'EMIT_TO_SOCKET':
                         this.io.to(effect.payload.socketId).emit(effect.payload.event, effect.payload.data);
@@ -325,10 +377,8 @@
                 if (engine.state === 'Dealing Pending' && engine.dealer == botUserId) {
                     scheduleTurnAction(this.dealCards, standardDelay, botUserId);
                 } else if (engine.state === 'Awaiting Next Round Trigger' && engine.roundSummary?.dealerOfRoundId == botUserId) {
-                    // Only auto-advance if there are other human players (not human vs bot only)
-                    if (!isHumanVsBotOnly()) {
-                        scheduleTurnAction(this.requestNextRound, roundEndDelay, botUserId);
-                    }
+                    // Always allow bots to trigger the next round
+                    scheduleTurnAction(this.requestNextRound, roundEndDelay, botUserId);
                 } else if (engine.state === 'Bidding Phase' && engine.biddingTurnPlayerId == botUserId) {
                     const bid = bot.decideBid();
                     scheduleTurnAction(this.placeBid, standardDelay, botUserId, bid);
@@ -370,13 +420,25 @@
                 let insuranceDelay = 500;
                 for (const botId in engine.bots) {
                     const bot = engine.bots[botId];
-                    setTimeout(() => {
+                    setTimeout(async () => {
                         const currentEngine = this.getEngineById(tableId);
                         if (currentEngine && currentEngine.insurance.isActive && !currentEngine.insurance.dealExecuted) {
-                            const decision = bot.makeInsuranceDecision();
+                            // Use adaptive strategy instead of fixed strategy
+                            const decision = await this.adaptiveInsurance.calculateInsuranceMove(currentEngine, bot);
                             if (decision) {
                                 currentEngine.updateInsuranceSetting(bot.userId, decision.settingType, decision.value);
                                 this.io.to(tableId).emit('gameState', currentEngine.getStateForClient());
+                                
+                                // Log the decision for learning
+                                if (currentEngine.gameId) {
+                                    await this.adaptiveInsurance.logInsuranceDecision(
+                                        currentEngine.gameId,
+                                        bot.playerName,
+                                        currentEngine,
+                                        false, // deal not executed yet
+                                        null // hindsight value will be calculated later
+                                    );
+                                }
                             }
                         }
                     }, insuranceDelay);

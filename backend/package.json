@@ -5,7 +5,9 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "nodemon src/server.js",
+    "dev": "node scripts/dev-server.js",
+    "dev:simple": "nodemon src/server.js",
+    "kill-port": "node scripts/kill-port.js",
     "test": "node tests/run_all_tests.js",
     "test:e2e": "node tests/auth.test.js && node tests/api.test.js"
   },

@@ -26,9 +26,33 @@ const app = express();
 const server = http.createServer(app);
 
 // --- MODIFIED CORS SETUP ---
+// Allow multiple origins for local development
+const allowedOrigins = process.env.CLIENT_ORIGIN 
+    ? [process.env.CLIENT_ORIGIN]
+    : ["http://localhost:3003"];
+
+// Add additional local development origins if needed
+if (process.env.NODE_ENV !== 'production') {
+    allowedOrigins.push(
+        "http://10.0.0.40:3003",
+        "http://localhost:3001",
+        "http://localhost:3000"
+    );
+}
+
 const corsOptions = {
-    origin: process.env.CLIENT_ORIGIN || "http://localhost:3001", // Fallback for safety
-    methods: ["GET", "POST"]
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or Postman)
+        if (!origin) return callback(null, true);
+        
+        if (allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    methods: ["GET", "POST"],
+    credentials: true
 };
 
 const io = new Server(server, {

@@ -117,6 +117,52 @@ const createDbTables = async (pool) => {
             );
         `);
 
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS bot_insurance_logs (
+                log_id SERIAL PRIMARY KEY,
+                game_id INTEGER REFERENCES game_history(game_id) ON DELETE CASCADE,
+                bot_name VARCHAR(50) NOT NULL,
+                is_bidder BOOLEAN NOT NULL,
+                bid_multiplier INTEGER NOT NULL,
+                trick_number INTEGER NOT NULL,
+                deal_executed BOOLEAN NOT NULL,
+                bot_offer INTEGER NOT NULL,
+                bidder_requirement INTEGER NOT NULL,
+                actual_outcome INTEGER,
+                hindsight_value INTEGER,
+                saved_or_wasted INTEGER,
+                game_phase VARCHAR(20),
+                hand_strength INTEGER,
+                current_score INTEGER,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+        
+        await pool.query(`
+            CREATE INDEX IF NOT EXISTS idx_bot_insurance_logs_bot_name 
+            ON bot_insurance_logs(bot_name);
+        `);
+        
+        await pool.query(`
+            CREATE INDEX IF NOT EXISTS idx_bot_insurance_logs_created_at 
+            ON bot_insurance_logs(created_at);
+        `);
+
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS bot_strategy_adjustments (
+                adjustment_id SERIAL PRIMARY KEY,
+                bot_name VARCHAR(50) NOT NULL,
+                strategy_type VARCHAR(50) NOT NULL,
+                trick_range VARCHAR(20) NOT NULL,
+                adjustment_factor DECIMAL(5,3) NOT NULL,
+                reason TEXT,
+                performance_metric DECIMAL(10,2),
+                games_analyzed INTEGER,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP WITH TIME ZONE
+            );
+        `);
+
         await pool.query('COMMIT');
         console.log("✅ Tables checked/created/altered successfully.");
     } catch (err) {

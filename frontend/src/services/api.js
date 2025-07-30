@@ -5,7 +5,8 @@
  * Handles all HTTP communication with the backend, providing a clean interface for components.
  */
 
-const SERVER_URL = process.env.REACT_APP_SERVER_URL || "https://sluff-backend.onrender.com";
+const SERVER_URL = process.env.REACT_APP_SERVER_URL || "http://localhost:3005";
+console.log('API Service - Using SERVER_URL:', SERVER_URL);
 
 /**
  * A generic, configured fetch request helper.
@@ -35,7 +36,9 @@ const configuredFetch = async (endpoint, method, body = null, requiresAuth = tru
         config.body = JSON.stringify(body);
     }
 
-    return fetch(`${SERVER_URL}${endpoint}`, config);
+    const url = `${SERVER_URL}${endpoint}`;
+    console.log('Fetching:', url, 'with config:', config);
+    return fetch(url, config);
 };
 
 
