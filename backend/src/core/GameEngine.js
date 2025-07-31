@@ -375,20 +375,15 @@ class GameEngine {
         };
 
         if (vote === 'no') {
+            // A 'no' vote cancels the draw request and the game continues in
+            // its current state (usually "Playing Phase").  We simply clear
+            // the request and broadcast the unchanged state.
             clearDrawTimer();
             this.drawRequest.isActive = false;
-            this.state = "DrawDeclined";
             console.log(`[${this.tableId}] Draw declined.`);
 
             return this._effects([
-                { type: 'BROADCAST_STATE' },
-                { type: 'START_TIMER', payload: {
-                    duration: 3000,
-                    onTimeout: (engineRef) => {
-                        engineRef.state = "Playing Phase";
-                        return [{ type: 'BROADCAST_STATE' }];
-                    }
-                }}
+                { type: 'BROADCAST_STATE' }
             ]);
         }
 
@@ -407,7 +402,7 @@ class GameEngine {
             payload: { outcome, gameId: this.gameId, theme: this.theme, players: this.players, scores: this.scores },
             onComplete: (summary) => {
                 this.roundSummary = summary;
-                this.state = "DrawComplete";
+                this.state = "Game Over";
             }
         }]);
     }
