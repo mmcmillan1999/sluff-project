@@ -30,13 +30,12 @@ const AdminObserverMode = ({
   console.log('[DEBUG] AdminObserverMode - RENDERING the component');
 
   return (
-    <div className="admin-observer-mode" style={{border: '2px solid red', background: 'yellow'}}>
+    <div className="admin-observer-mode">
       <button 
         className="observer-toggle"
         onClick={() => setShowControls(!showControls)}
-        style={{background: 'red', color: 'white', fontWeight: 'bold'}}
       >
-        👁️ ADMIN OBSERVER MODE [DEBUG]
+        👁️ Observer Mode
       </button>
 
       {showControls && (

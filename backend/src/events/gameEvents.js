@@ -308,35 +308,33 @@ const registerGameHandlers = (io, gameService) => {
             }
 
             try {
-                // Find or create a suitable table for bot game
+                // Find the table the admin is currently on
                 let botEngine = Object.values(gameService.getAllEngines()).find(engine => 
-                    engine.tableName === "Bot Observer Table" && 
-                    Object.keys(engine.players).length < 4
+                    engine.players[socket.user.id] !== undefined
                 );
 
-                console.log(`[ADMIN] Found existing bot table: ${!!botEngine}`);
-
                 if (!botEngine) {
-                    // Create a new table for bot observation
-                    const tableId = `bot_observer_${Date.now()}`;
-                    const emitLobbyUpdateCallback = () => gameService.io.emit('lobbyState', gameService.getLobbyState());
-                    botEngine = new (require('../core/GameEngine'))(tableId, 99, "Bot Observer Table", emitLobbyUpdateCallback);
-                    gameService.engines[tableId] = botEngine;
-                    console.log(`[ADMIN] Created new bot table: ${tableId}`);
+                    return socket.emit("error", { message: "You must be at a table to start a bot game." });
                 }
+
+                console.log(`[ADMIN] Starting bot game on current table: ${botEngine.tableId}`);
 
                 // First, check if admin is already at the table as a player
                 const existingPlayer = Object.values(botEngine.players).find(p => p.userId === socket.user.id);
                 console.log(`[ADMIN] Existing player check:`, existingPlayer ? `Found as ${existingPlayer.playerName}` : 'Not found');
                 
-                if (existingPlayer && !existingPlayer.isSpectator) {
-                    // Remove the admin from player seat
-                    console.log(`[ADMIN] Removing admin from player seat`);
-                    botEngine.removePlayer(socket.user.id);
+                // If admin is already a spectator, we just need to ensure we have 3 bots
+                if (existingPlayer && existingPlayer.isSpectator) {
+                    console.log(`[ADMIN] Admin is already a spectator`);
+                } else if (existingPlayer && !existingPlayer.isSpectator) {
+                    // Admin needs to be moved to spectator
+                    return socket.emit("error", { message: "Please use 'Move to Spectator' first before starting bot game." });
                 }
                 
-                // Add exactly 3 bots to fill all player seats
-                const currentPlayerCount = Object.keys(botEngine.players).filter(id => !botEngine.players[id].isSpectator).length;
+                // Count current non-spectator players (excluding the admin spectator)
+                const currentPlayers = Object.values(botEngine.players).filter(p => !p.isSpectator);
+                const currentPlayerCount = currentPlayers.length;
+                const currentBotCount = currentPlayers.filter(p => p.isBot).length;
                 const botsNeeded = 3 - currentPlayerCount;
                 
                 console.log(`[ADMIN] Current player count: ${currentPlayerCount}, bots needed: ${botsNeeded}`);
@@ -346,43 +344,41 @@ const registerGameHandlers = (io, gameService) => {
                     console.log(`[ADMIN] Added bot ${i + 1} of ${botsNeeded}`);
                 }
                 
-                // Join the table as an observer
-                socket.join(botEngine.tableId);
-                
-                // Then join as spectator (since table should now have 3 bots)
-                const tokenResult = await gameService.pool.query("SELECT SUM(amount) AS tokens FROM transactions WHERE user_id = $1", [socket.user.id]);
-                const tokens = parseFloat(tokenResult.rows[0].tokens || 0).toFixed(2);
-                botEngine.joinTable(socket.user, socket.id, tokens, true); // Force spectator mode
-                console.log(`[ADMIN] Admin joined as spectator`);
+                // If admin isn't at the table yet, they need to join first
+                if (!existingPlayer) {
+                    return socket.emit("error", { message: "You must be at the table to start a bot game." });
+                }
 
-                // Start the game if we have exactly 3 players (all bots)
-                const finalPlayerCount = Object.keys(botEngine.players).filter(id => !botEngine.players[id].isSpectator).length;
+                // Verify we have exactly 3 bot players
+                const finalPlayers = Object.values(botEngine.players).filter(p => !p.isSpectator);
+                const finalPlayerCount = finalPlayers.length;
                 console.log(`[ADMIN] Final player count: ${finalPlayerCount}`);
                 console.log(`[ADMIN] Players:`, Object.entries(botEngine.players).map(([id, p]) => 
                     `${p.playerName} (${p.isSpectator ? 'spectator' : 'player'})`
                 ).join(', '));
                 
-                if (finalPlayerCount === 3) {
+                if (finalPlayerCount === 3 && finalPlayers.every(p => p.isBot)) {
                     console.log(`[ADMIN] Starting game with 3 bots`);
-                    // Get a bot player ID to start the game (spectators can't start games)
-                    const botPlayerId = Object.keys(botEngine.players).find(id => 
-                        botEngine.players[id].isBot && !botEngine.players[id].isSpectator
-                    );
-                    if (botPlayerId) {
-                        console.log(`[ADMIN] Using bot ${botEngine.players[botPlayerId].playerName} (ID: ${botPlayerId}) to start game`);
-                        botEngine.startGame(parseInt(botPlayerId));
-                    } else {
-                        console.log(`[ADMIN] ERROR: No bot player found to start game`);
+                    // Get a bot player to start the game
+                    const botPlayer = finalPlayers[0];
+                    if (botPlayer) {
+                        console.log(`[ADMIN] Using bot ${botPlayer.playerName} (ID: ${botPlayer.userId}) to start game`);
+                        const startResult = botEngine.startGame(botPlayer.userId);
+                        if (startResult && startResult.effects) {
+                            // Execute the start game effects
+                            await gameService._executeEffects(botEngine.tableId, startResult.effects);
+                        }
                     }
                 } else {
-                    console.log(`[ADMIN] Not starting game - need exactly 3 players, have ${finalPlayerCount}`);
+                    console.log(`[ADMIN] Cannot start - need exactly 3 bot players, have ${finalPlayerCount} players`);
+                    socket.emit("error", { message: `Need exactly 3 bots. Currently have ${finalPlayerCount} players.` });
                 }
 
-                socket.emit('joinedTable', { gameState: botEngine.getStateForClient() });
+                // Always emit updated state
                 gameService.io.to(botEngine.tableId).emit('gameState', botEngine.getStateForClient());
                 gameService.io.emit('lobbyState', gameService.getLobbyState());
 
-                console.log(`[ADMIN] Bot game started by ${socket.user.username} with ${botCount} bots`);
+                console.log(`[ADMIN] Bot game setup complete`);
             } catch (err) {
                 console.error("Error starting bot game:", err);
                 socket.emit("error", { message: "Failed to start bot game." });
