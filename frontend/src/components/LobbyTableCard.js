@@ -1,16 +1,18 @@
 import React from 'react';
 import './LobbyTableCard.css';
 
-const LobbyTableCard = ({ table, canAfford, onJoin, user }) => {
+const LobbyTableCard = ({ table, canAfford, onJoin, onJoinAsSpectator, user }) => {
     const isFull = table.playerCount >= 4;
     const isPlaying = table.state.includes("Playing") || table.state.includes("Game Over");
     
     const isMyGame = table.players.some(p => p.userId === user.id);
+    const isAdmin = user.is_admin;
 
     const canRejoin = isMyGame && isPlaying;
     const canJoin = !isMyGame && !isFull && canAfford && !isPlaying;
+    const canSpectate = isAdmin && !isMyGame;
     
-    const isDisabled = !(canJoin || canRejoin);
+    const isDisabled = !(canJoin || canRejoin || canSpectate);
     const buttonText = canRejoin ? "Return to Game" : "Join";
 
     // --- MODIFICATION: Improved status text logic ---
@@ -43,15 +45,27 @@ const LobbyTableCard = ({ table, canAfford, onJoin, user }) => {
                             : <em className="open-seats">Open Seats</em>
                         }
                     </span>
-                    <button
-                        onClick={() => onJoin(table.tableId)}
-                        className="join-table-button"
-                        disabled={isDisabled}
-                        title={buttonTitle}
-                        style={canRejoin ? {backgroundColor: '#17a2b8'} : {}}
-                    >
-                        {buttonText}
-                    </button>
+                    <div className="table-actions">
+                        <button
+                            onClick={() => onJoin(table.tableId)}
+                            className="join-table-button"
+                            disabled={!(canJoin || canRejoin)}
+                            title={buttonTitle}
+                            style={canRejoin ? {backgroundColor: '#17a2b8'} : {}}
+                        >
+                            {buttonText}
+                        </button>
+                        {canSpectate && (
+                            <button
+                                onClick={() => onJoinAsSpectator(table.tableId)}
+                                className="spectate-table-button"
+                                title="Join as spectator (Admin only)"
+                                style={{marginLeft: '10px', backgroundColor: '#6c757d'}}
+                            >
+                                👁️ Spectate
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
