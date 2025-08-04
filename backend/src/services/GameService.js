@@ -387,6 +387,38 @@
                 } else if (engine.state === 'Awaiting Next Round Trigger' && engine.roundSummary?.dealerOfRoundId == botUserId) {
                     // Always allow bots to trigger the next round
                     scheduleTurnAction(this.requestNextRound, roundEndDelay, botUserId);
+                } else if (engine.state === 'Game Over') {
+                    // Handle game over state - reset the game after a delay
+                    // Only do this once per game (check if no other bot has scheduled it)
+                    if (!engine.gameOverHandled) {
+                        engine.gameOverHandled = true;
+                        console.log(`[BOT] Game Over detected on table ${tableId}. Resetting in 10 seconds...`);
+                        setTimeout(() => {
+                            const currentEngine = this.getEngineById(tableId);
+                            if (currentEngine && currentEngine.state === 'Game Over') {
+                                console.log(`[BOT] Resetting game on table ${tableId}`);
+                                currentEngine.reset();
+                                this.io.to(tableId).emit('gameState', currentEngine.getStateForClient());
+                                this.io.emit('lobbyState', this.getLobbyState());
+                                
+                                // If all players are bots, start a new game automatically
+                                const allBots = Object.values(currentEngine.players).every(p => p.isBot && !p.isSpectator);
+                                if (allBots && currentEngine.playerOrder.count === 3) {
+                                    setTimeout(() => {
+                                        const engine = this.getEngineById(tableId);
+                                        if (engine && engine.state === 'Ready to Start') {
+                                            console.log(`[BOT] Starting new bot-only game on table ${tableId}`);
+                                            const firstBot = Object.values(engine.players).find(p => p.isBot && !p.isSpectator);
+                                            if (firstBot) {
+                                                this._performAction(tableId, (eng) => eng.startGame(firstBot.userId));
+                                            }
+                                        }
+                                    }, 3000);
+                                }
+                            }
+                        }, 10000); // 10 second delay before reset
+                    }
+                    break; // Exit the loop since we've handled game over
                 } else if (engine.state === 'Bidding Phase' && engine.biddingTurnPlayerId == botUserId) {
                     const bid = bot.decideBid();
                     console.log(`[BOT-BID] ${bot.playerName} is bidding: ${bid}`);

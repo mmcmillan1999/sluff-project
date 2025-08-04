@@ -363,10 +363,15 @@ const registerGameHandlers = (io, gameService) => {
                     const botPlayer = finalPlayers[0];
                     if (botPlayer) {
                         console.log(`[ADMIN] Using bot ${botPlayer.playerName} (ID: ${botPlayer.userId}) to start game`);
+                        console.log(`[ADMIN] Table details - ID: ${botEngine.tableId}, Name: ${botEngine.tableName}, Theme: ${botEngine.theme}`);
                         const startResult = botEngine.startGame(botPlayer.userId);
+                        console.log(`[ADMIN] Start game result:`, startResult);
                         if (startResult && startResult.effects) {
+                            console.log(`[ADMIN] Executing ${startResult.effects.length} effects`);
                             // Execute the start game effects
                             await gameService._executeEffects(botEngine.tableId, startResult.effects);
+                        } else {
+                            console.log(`[ADMIN] WARNING: No effects returned from startGame`);
                         }
                     }
                 } else {

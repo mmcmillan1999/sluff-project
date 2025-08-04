@@ -1,0 +1,71 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Build outputs
+/build
+/dist
+/out
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Testing
+coverage/
+.nyc_output
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Claude AI files
+.claude/
+CLAUDE.md
+
+# Development tools and scripts
+agent.bat
+agents.bat
+mybrain.bat
+mybrain-agents.bat
+agents_cli.py
+analyze_ports.py
+show_agents.py
+agents/
+Addons/
+PORT_STANDARDS.md
+
+# Backend analysis scripts (development tools)
+backend/src/analyze-bot-performance.js
+backend/src/check-bot-games.js
+backend/src/check-insurance-logs.js
+
+# Package lock files (keeping for now)
+# package-lock.json
+# yarn.lock
