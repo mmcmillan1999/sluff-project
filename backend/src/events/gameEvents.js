@@ -54,7 +54,11 @@ const registerGameHandlers = (io, gameService) => {
             }
         });
 
-        socket.on("joinTable", async ({ tableId }) => {
+        socket.on("joinTable", async ({ tableId, asSpectator = false }) => {
+            if (asSpectator) {
+                console.log(`[ADMIN] User ${socket.user.username} joining table ${tableId} as spectator`);
+            }
+
             const engineToJoin = gameService.getEngineById(tableId);
             if (!engineToJoin) return socket.emit("error", { message: "Table not found." });
             
@@ -69,7 +73,15 @@ const registerGameHandlers = (io, gameService) => {
                     gameService.io.to(previousEngine.tableId).emit('gameState', previousEngine.getStateForClient());
                 }
                 socket.join(tableId);
-                engineToJoin.joinTable(socket.user, socket.id, tokens);
+                
+                // Join table with forceSpectator parameter
+                engineToJoin.joinTable(socket.user, socket.id, tokens, asSpectator);
+                
+                if (asSpectator) {
+                    const finalPlayer = engineToJoin.players[socket.user.id];
+                    console.log(`[ADMIN] Spectator join result: isSpectator=${finalPlayer?.isSpectator}, inPlayerOrder=${engineToJoin.playerOrder.includes(socket.user.id)}`);
+                }
+                
                 socket.emit('joinedTable', { gameState: engineToJoin.getStateForClient() });
                 gameService.io.to(tableId).emit('gameState', engineToJoin.getStateForClient());
                 gameService.io.emit('lobbyState', gameService.getLobbyState());
@@ -89,6 +101,80 @@ const registerGameHandlers = (io, gameService) => {
             }
             socket.leave(tableId);
             socket.emit("lobbyState", gameService.getLobbyState());
+        });
+
+        socket.on("moveToSpectator", ({ tableId }) => {
+            console.log(`[ADMIN] ${socket.user.username} requesting move to spectator on table ${tableId}`);
+
+            // Only allow admins to use this feature
+            if (!socket.user.is_admin) {
+                return socket.emit("error", { message: "Only admins can move to spectator mode." });
+            }
+
+            const engine = gameService.getEngineById(tableId);
+            if (!engine) {
+                return socket.emit("error", { message: "Table not found." });
+            }
+
+            const existingPlayer = engine.players[socket.user.id];
+            if (!existingPlayer) {
+                return socket.emit("error", { message: "You are not at this table." });
+            }
+
+            if (existingPlayer.isSpectator) {
+                return socket.emit("notification", { message: "You are already a spectator." });
+            }
+
+            console.log(`[ADMIN] BEFORE moveToSpectator - Player ${socket.user.username}:`);
+            console.log(`[ADMIN]   - isSpectator: ${existingPlayer.isSpectator}`);
+            console.log(`[ADMIN]   - inPlayerOrder: ${engine.playerOrder.includes(socket.user.id)}`);
+            console.log(`[ADMIN]   - playerOrder.allIds: [${engine.playerOrder.allIds.join(', ')}]`);
+            console.log(`[ADMIN]   - playerOrder.count: ${engine.playerOrder.count}`);
+            console.log(`[ADMIN]   - gameStarted: ${engine.gameStarted}`);
+
+            // Convert player to spectator
+            engine.players[socket.user.id].isSpectator = true;
+            engine.players[socket.user.id].wasExplicitSpectator = true; // Mark as explicitly chosen spectator
+            console.log(`[ADMIN] Set isSpectator to true for ${socket.user.username}`);
+            
+            // Remove from player order
+            if (engine.playerOrder.includes(socket.user.id)) {
+                console.log(`[ADMIN] Removing ${socket.user.username} from playerOrder`);
+                engine.playerOrder.remove(socket.user.id);
+                console.log(`[ADMIN] After removal - playerOrder.allIds: [${engine.playerOrder.allIds.join(', ')}]`);
+                console.log(`[ADMIN] After removal - playerOrder.count: ${engine.playerOrder.count}`);
+            } else {
+                console.log(`[ADMIN] Player ${socket.user.username} was NOT in playerOrder`);
+            }
+
+            // Update game state based on remaining players
+            if (!engine.gameStarted) {
+                const activePlayersCount = engine.playerOrder.count;
+                const oldState = engine.state;
+                engine.state = (activePlayersCount >= 3) ? "Ready to Start" : "Waiting for Players";
+                console.log(`[ADMIN] Game state changed from '${oldState}' to '${engine.state}' (active players: ${activePlayersCount})`);
+            }
+
+            console.log(`[ADMIN] AFTER moveToSpectator - Player ${socket.user.username}:`);
+            console.log(`[ADMIN]   - isSpectator: ${engine.players[socket.user.id].isSpectator}`);
+            console.log(`[ADMIN]   - inPlayerOrder: ${engine.playerOrder.includes(socket.user.id)}`);
+            console.log(`[ADMIN]   - playerOrder.allIds: [${engine.playerOrder.allIds.join(', ')}]`);
+            console.log(`[ADMIN]   - playerOrder.count: ${engine.playerOrder.count}`);
+
+            // Get the state that will be sent to clients
+            const stateForClient = engine.getStateForClient();
+            console.log(`[ADMIN] State being sent to clients:`);
+            console.log(`[ADMIN]   - playerOrderActive: [${stateForClient.playerOrderActive.join(', ')}]`);
+            console.log(`[ADMIN]   - players[${socket.user.id}].isSpectator: ${stateForClient.players[socket.user.id]?.isSpectator}`);
+            console.log(`[ADMIN]   - players[${socket.user.id}].playerName: ${stateForClient.players[socket.user.id]?.playerName}`);
+
+            console.log(`[ADMIN] Successfully converted ${socket.user.username} to spectator. Active players: ${engine.playerOrder.count}`);
+
+            // Emit updated state
+            gameService.io.to(tableId).emit('gameState', stateForClient);
+            gameService.io.emit('lobbyState', gameService.getLobbyState());
+            
+            socket.emit("notification", { message: "You are now a spectator." });
         });
 
         socket.on("addBot", ({ tableId, name }) => {
@@ -126,6 +212,26 @@ const registerGameHandlers = (io, gameService) => {
         socket.on("updateInsuranceSetting", createDirectHandler('updateInsuranceSetting'));
         socket.on("startTimeoutClock", createDirectHandler('startTimeoutClock'));
         socket.on("requestDraw", createDirectHandler('requestDraw'));
+        
+        // Admin spectator start game handler
+        socket.on("startGameAsBot", ({ tableId, botPlayerId }) => {
+            const engine = gameService.getEngineById(tableId);
+            if (!engine) return socket.emit("error", { message: "Table not found." });
+            
+            // Verify admin status
+            if (!socket.user.is_admin) {
+                return socket.emit("error", { message: "Only admins can start bot games." });
+            }
+            
+            // Verify the bot exists and is a player
+            const botPlayer = engine.players[botPlayerId];
+            if (!botPlayer || !botPlayer.isBot || botPlayer.isSpectator) {
+                return socket.emit("error", { message: "Invalid bot player." });
+            }
+            
+            console.log(`[ADMIN] Starting game via bot ${botPlayer.playerName} (ID: ${botPlayerId})`);
+            gameService.startGame(tableId, botPlayerId);
+        });
 
         socket.on("requestUserSync", async () => {
             try {
@@ -185,6 +291,96 @@ const registerGameHandlers = (io, gameService) => {
             } catch (err) {
                 console.error(`❌ Mercy token request error for user ${socket.user.id}:`, err);
                 socket.emit("error", { message: "Could not process mercy token request. Please try again later." });
+            }
+        });
+
+        socket.on("startBotGame", async ({ botCount = 3 }) => {
+            console.log(`[ADMIN] startBotGame event received from ${socket.user.username}`);
+            
+            // Only admins can start bot-only games
+            if (!socket.user.is_admin) {
+                return socket.emit("error", { message: "Only admins can start bot-only games." });
+            }
+
+            try {
+                // Find or create a suitable table for bot game
+                let botEngine = Object.values(gameService.getAllEngines()).find(engine => 
+                    engine.tableName === "Bot Observer Table" && 
+                    Object.keys(engine.players).length < 4
+                );
+
+                console.log(`[ADMIN] Found existing bot table: ${!!botEngine}`);
+
+                if (!botEngine) {
+                    // Create a new table for bot observation
+                    const tableId = `bot_observer_${Date.now()}`;
+                    const emitLobbyUpdateCallback = () => gameService.io.emit('lobbyState', gameService.getLobbyState());
+                    botEngine = new (require('../core/GameEngine'))(tableId, 99, "Bot Observer Table", emitLobbyUpdateCallback);
+                    gameService.engines[tableId] = botEngine;
+                    console.log(`[ADMIN] Created new bot table: ${tableId}`);
+                }
+
+                // First, check if admin is already at the table as a player
+                const existingPlayer = Object.values(botEngine.players).find(p => p.userId === socket.user.id);
+                console.log(`[ADMIN] Existing player check:`, existingPlayer ? `Found as ${existingPlayer.playerName}` : 'Not found');
+                
+                if (existingPlayer && !existingPlayer.isSpectator) {
+                    // Remove the admin from player seat
+                    console.log(`[ADMIN] Removing admin from player seat`);
+                    botEngine.removePlayer(socket.user.id);
+                }
+                
+                // Add exactly 3 bots to fill all player seats
+                const currentPlayerCount = Object.keys(botEngine.players).filter(id => !botEngine.players[id].isSpectator).length;
+                const botsNeeded = 3 - currentPlayerCount;
+                
+                console.log(`[ADMIN] Current player count: ${currentPlayerCount}, bots needed: ${botsNeeded}`);
+                
+                for (let i = 0; i < botsNeeded; i++) {
+                    botEngine.addBotPlayer();
+                    console.log(`[ADMIN] Added bot ${i + 1} of ${botsNeeded}`);
+                }
+                
+                // Join the table as an observer
+                socket.join(botEngine.tableId);
+                
+                // Then join as spectator (since table should now have 3 bots)
+                const tokenResult = await gameService.pool.query("SELECT SUM(amount) AS tokens FROM transactions WHERE user_id = $1", [socket.user.id]);
+                const tokens = parseFloat(tokenResult.rows[0].tokens || 0).toFixed(2);
+                botEngine.joinTable(socket.user, socket.id, tokens, true); // Force spectator mode
+                console.log(`[ADMIN] Admin joined as spectator`);
+
+                // Start the game if we have exactly 3 players (all bots)
+                const finalPlayerCount = Object.keys(botEngine.players).filter(id => !botEngine.players[id].isSpectator).length;
+                console.log(`[ADMIN] Final player count: ${finalPlayerCount}`);
+                console.log(`[ADMIN] Players:`, Object.entries(botEngine.players).map(([id, p]) => 
+                    `${p.playerName} (${p.isSpectator ? 'spectator' : 'player'})`
+                ).join(', '));
+                
+                if (finalPlayerCount === 3) {
+                    console.log(`[ADMIN] Starting game with 3 bots`);
+                    // Get a bot player ID to start the game (spectators can't start games)
+                    const botPlayerId = Object.keys(botEngine.players).find(id => 
+                        botEngine.players[id].isBot && !botEngine.players[id].isSpectator
+                    );
+                    if (botPlayerId) {
+                        console.log(`[ADMIN] Using bot ${botEngine.players[botPlayerId].playerName} (ID: ${botPlayerId}) to start game`);
+                        botEngine.startGame(parseInt(botPlayerId));
+                    } else {
+                        console.log(`[ADMIN] ERROR: No bot player found to start game`);
+                    }
+                } else {
+                    console.log(`[ADMIN] Not starting game - need exactly 3 players, have ${finalPlayerCount}`);
+                }
+
+                socket.emit('joinedTable', { gameState: botEngine.getStateForClient() });
+                gameService.io.to(botEngine.tableId).emit('gameState', botEngine.getStateForClient());
+                gameService.io.emit('lobbyState', gameService.getLobbyState());
+
+                console.log(`[ADMIN] Bot game started by ${socket.user.username} with ${botCount} bots`);
+            } catch (err) {
+                console.error("Error starting bot game:", err);
+                socket.emit("error", { message: "Failed to start bot game." });
             }
         });
 

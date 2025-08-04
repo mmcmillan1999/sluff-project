@@ -4,7 +4,24 @@ const { TABLE_COSTS } = require('../core/constants');
 const gameLogic = require('../core/logic'); // Need this for payout calculations
 const securityMonitor = require('../utils/securityMonitor');
 
-const createGameRecord = async (pool, table) => { /* ... (no change) ... */ };
+const createGameRecord = async (pool, table) => {
+    const { tableId, theme, playerMode } = table;
+    
+    try {
+        const query = `
+            INSERT INTO game_history (table_id, theme, player_count, outcome)
+            VALUES ($1, $2, $3, $4)
+            RETURNING game_id
+        `;
+        const result = await pool.query(query, [tableId, theme, playerMode, 'In Progress']);
+        const gameId = result.rows[0].game_id;
+        console.log(`✅ Game record created with ID ${gameId} for table ${tableId}`);
+        return gameId;
+    } catch (error) {
+        console.error('❌ Failed to create game record:', error);
+        throw error;
+    }
+};
 
 const postTransaction = async (pool, { userId, gameId, type, amount, description }) => {
     // Input validation

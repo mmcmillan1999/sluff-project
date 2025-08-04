@@ -235,11 +235,22 @@ class AdaptiveInsuranceStrategy {
      * Log insurance decision for learning
      */
     async logInsuranceDecision(gameId, botName, engine, dealExecuted, hindsightValue) {
+        console.log(`[INSURANCE-LOG] Starting log for ${botName} in game ${gameId}`);
         try {
             const { insurance, bidWinnerInfo, tricksPlayedCount, scores } = engine;
             const isBidder = botName === bidWinnerInfo.playerName;
             const botOffer = isBidder ? insurance.bidderRequirement : insurance.defenderOffers[botName];
             const savedOrWasted = hindsightValue || 0;
+            
+            console.log(`[INSURANCE-LOG] Data:`, {
+                botName,
+                gameId,
+                isBidder,
+                dealExecuted,
+                hindsightValue,
+                savedOrWasted,
+                tricksPlayedCount
+            });
             
             // Calculate hand strength (simple metric)
             const hand = engine.hands[botName] || [];
@@ -253,7 +264,7 @@ class AdaptiveInsuranceStrategy {
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             `;
             
-            await this.pool.query(query, [
+            const result = await this.pool.query(query, [
                 gameId,
                 botName,
                 isBidder,
@@ -269,6 +280,8 @@ class AdaptiveInsuranceStrategy {
                 handStrength,
                 scores[botName] || 120
             ]);
+            
+            console.log(`[INSURANCE-LOG] Database insert successful for ${botName}`);
 
             // Periodically analyze and adjust (10% chance)
             if (Math.random() < 0.1) {
@@ -287,17 +300,21 @@ class AdaptiveInsuranceStrategy {
                         
                         // Emit directly through the pool's io reference if available
                         if (this.io) {
-                            this.io.to(engine.tableId).emit('tableChat', {
-                                playerName: botName,
+                            // Use new_lobby_message event that frontend is listening for
+                            this.io.emit('new_lobby_message', {
+                                id: Date.now(),
+                                username: botName,
                                 message: message,
-                                timestamp: Date.now()
+                                created_at: new Date().toISOString()
                             });
                         }
                     }, 1000);
                 }
             }
         } catch (error) {
-            console.error('Error logging insurance decision:', error);
+            console.error('[INSURANCE-LOG] ERROR logging insurance decision:', error);
+            console.error('[INSURANCE-LOG] Error details:', error.message);
+            console.error('[INSURANCE-LOG] Stack:', error.stack);
         }
     }
 }

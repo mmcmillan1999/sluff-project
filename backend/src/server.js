@@ -19,6 +19,7 @@ const createChatRoutes = require('./api/chat');
 const createDbTables = require('./data/createTables');
 const createAiRoutes = require('./api/ai');
 const createPingRoutes = require('./api/ping');
+const createBotInsuranceStatsRoutes = require('./api/botInsuranceStats');
 const insuranceHandler = require('./core/handlers/insuranceHandler');
 
 
@@ -100,6 +101,9 @@ server.listen(PORT, async () => {
 
     const pingRouter = createPingRoutes();
     app.use('/api/ping', pingRouter);
+    
+    const botStatsRouter = createBotInsuranceStatsRoutes(pool);
+    app.use('/api/bot-insurance', botStatsRouter);
 
   } catch (err) {
     console.error("❌ DATABASE CONNECTION FAILED:", err);

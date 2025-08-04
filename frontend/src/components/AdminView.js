@@ -1,8 +1,10 @@
 // frontend/src/components/AdminView.js
-import React from 'react';
+import React, { useState } from 'react';
+import BotInsuranceStats from './BotInsuranceStats';
 
 // --- UPDATED: Accept handleHardReset and handleResetAllTokens as props ---
 const AdminView = ({ onReturnToLobby, handleHardReset, handleResetAllTokens }) => {
+    const [showBotStats, setShowBotStats] = useState(false);
 
     return (
         <div className="admin-view">
@@ -27,7 +29,18 @@ const AdminView = ({ onReturnToLobby, handleHardReset, handleResetAllTokens }) =
                         Hard Reset Server
                     </button>
                 </div>
+                <div className="admin-action-card">
+                    <h3>Bot Insurance Stats</h3>
+                    <p>View detailed statistics on how bots are performing with insurance decisions and their learning progress.</p>
+                    <button onClick={() => setShowBotStats(true)} className="admin-button">
+                        View Bot Stats
+                    </button>
+                </div>
             </div>
+            
+            {showBotStats && (
+                <BotInsuranceStats onClose={() => setShowBotStats(false)} />
+            )}
         </div>
     );
 };

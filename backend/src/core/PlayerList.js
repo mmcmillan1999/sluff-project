@@ -26,8 +26,10 @@ class PlayerList {
     }
 
     remove(playerId) {
+        console.log(`[PLAYERLIST] Removing player ${playerId} from [${this._playerIds.join(', ')}]`);
         this._playerIds = this._playerIds.filter(id => id !== playerId);
         this._turnOrder = this._turnOrder.filter(id => id !== playerId);
+        console.log(`[PLAYERLIST] After removal: [${this._playerIds.join(', ')}]`);
     }
     
     includes(playerId) {

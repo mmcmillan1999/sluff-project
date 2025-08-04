@@ -11,10 +11,11 @@ import ActionControls from './game/ActionControls';
 import InsurancePrompt from './game/InsurancePrompt';
 import IosPwaPrompt from './game/IosPwaPrompt';
 import LobbyChat from './LobbyChat';
+import AdminObserverMode from './AdminObserverMode';
 import { getLobbyChatHistory } from '../services/api';
 import { SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS } from '../constants';
 
-const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLogout, emitEvent, playSound, socket, handleOpenFeedbackModal }) => {
+const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, emitEvent, playSound, socket, handleOpenFeedbackModal }) => {
     const [seatAssignments, setSeatAssignments] = useState({ self: null, opponentLeft: null, opponentRight: null });
     const [showRoundSummaryModal, setShowRoundSummaryModal] = useState(false);
     const [showInsurancePrompt, setShowInsurancePrompt] = useState(false);
@@ -27,6 +28,8 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
     const SWIPE_CLOSE_THRESHOLD = 50; 
     const [playerError, setPlayerError] = useState(null);
     const [chatMessages, setChatMessages] = useState([]);
+    const [observedPlayerId, setObservedPlayerId] = useState(playerId);
+    const [isObserverMode, setIsObserverMode] = useState(false);
     const turnPlayerRef = useRef(null);
     const trickWinnerRef = useRef(null);
     const cardCountRef = useRef(null);
@@ -118,17 +121,57 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
     }, [currentTableState, isSpectator]);
 
     useEffect(() => {
-        if (currentTableState?.playerOrderActive?.length > 0 && playerId && currentTableState.players[playerId] && !isSpectator) {
-            const myName = getPlayerNameByUserId(playerId);
-            const selfIndex = currentTableState.playerOrderActive.indexOf(myName);
-            if (selfIndex !== -1) {
-                const numActive = currentTableState.playerOrderActive.length;
-                const opponentLeftName = currentTableState.playerOrderActive[(selfIndex + 1) % numActive];
-                const opponentRightName = currentTableState.playerOrderActive[(selfIndex + numActive - 1) % numActive];
-                setSeatAssignments({ self: myName, opponentLeft: opponentLeftName, opponentRight: opponentRightName });
-            } else { setSeatAssignments({ self: null, opponentLeft: null, opponentRight: null }); }
-        } else { setSeatAssignments({ self: null, opponentLeft: null, opponentRight: null }); }
+        if (currentTableState?.playerOrderActive?.length > 0) {
+            if (isSpectator) {
+                // For spectators, show all players in a default arrangement
+                const activePlayerNames = currentTableState.playerOrderActive;
+                console.log('[ADMIN] Spectator seat assignment - active players:', activePlayerNames);
+                if (activePlayerNames.length === 3) {
+                    const assignments = { 
+                        self: activePlayerNames[0], 
+                        opponentLeft: activePlayerNames[1], 
+                        opponentRight: activePlayerNames[2] 
+                    };
+                    console.log('[ADMIN] Setting 3-player spectator seats:', assignments);
+                    setSeatAssignments(assignments);
+                } else if (activePlayerNames.length === 4) {
+                    const assignments = { 
+                        self: activePlayerNames[0], 
+                        opponentLeft: activePlayerNames[1], 
+                        opponentAcross: activePlayerNames[2],
+                        opponentRight: activePlayerNames[3] 
+                    };
+                    console.log('[ADMIN] Setting 4-player spectator seats:', assignments);
+                    setSeatAssignments(assignments);
+                }
+            } else if (playerId && currentTableState.players[playerId]) {
+                // For players, show from their perspective
+                const myName = getPlayerNameByUserId(playerId);
+                const selfIndex = currentTableState.playerOrderActive.indexOf(myName);
+                if (selfIndex !== -1) {
+                    const numActive = currentTableState.playerOrderActive.length;
+                    const opponentLeftName = currentTableState.playerOrderActive[(selfIndex + 1) % numActive];
+                    const opponentRightName = currentTableState.playerOrderActive[(selfIndex + numActive - 1) % numActive];
+                    setSeatAssignments({ self: myName, opponentLeft: opponentLeftName, opponentRight: opponentRightName });
+                } else { setSeatAssignments({ self: null, opponentLeft: null, opponentRight: null }); }
+            }
+        } else { 
+            setSeatAssignments({ self: null, opponentLeft: null, opponentRight: null }); 
+        }
     }, [currentTableState, playerId, isSpectator, getPlayerNameByUserId]);
+
+    // Debug spectator status changes
+    useEffect(() => {
+        if (currentTableState && playerId) {
+            const player = currentTableState.players[playerId];
+            console.log('[ADMIN] TableState updated - spectator status debug:');
+            console.log('[ADMIN]   - playerId:', playerId);
+            console.log('[ADMIN]   - player object:', player);
+            console.log('[ADMIN]   - isSpectator calculated:', player?.isSpectator);
+            console.log('[ADMIN]   - playerOrderActive:', currentTableState.playerOrderActive);
+            console.log('[ADMIN]   - player in playerOrderActive:', currentTableState.playerOrderActive?.includes(player?.playerName));
+        }
+    }, [currentTableState, playerId]);
     
     useEffect(() => {
         if (currentTableState) {
@@ -213,6 +256,28 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
         setShowGameMenu(false);
     };
     
+    // Observer mode handlers
+    const handlePlayerSwitch = (newPlayerId) => {
+        setObservedPlayerId(newPlayerId);
+        setIsObserverMode(true);
+    };
+
+    const handleStartBotGame = () => {
+        // Emit event to start a bot-only game
+        emitEvent('startBotGame', { botCount: 3 });
+    };
+
+    const handleMoveToSpectator = () => {
+        console.log('[ADMIN] Moving to spectator mode');
+        console.log('[ADMIN] BEFORE moveToSpectator - currentTableState.players[playerId]:', currentTableState.players[playerId]);
+        console.log('[ADMIN] BEFORE moveToSpectator - playerOrderActive:', currentTableState.playerOrderActive);
+        emitEvent('moveToSpectator', { tableId: currentTableState.tableId });
+    };
+
+    // Get the current perspective player (either self or observed)
+    const perspectivePlayerId = isObserverMode ? observedPlayerId : playerId;
+    const perspectivePlayer = currentTableState ? currentTableState.players[perspectivePlayerId] : null;
+    
     const GameMenu = () => (
         <div className="game-menu-popup">
             <h3>{currentTableState.tableName}</h3>
@@ -262,6 +327,20 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
 
             <IosPwaPrompt show={showIosPwaPrompt} onClose={() => setShowIosPwaPrompt(false)} />
 
+            {user?.is_admin && (
+                <AdminObserverMode
+                    players={Object.values(currentTableState.players || {})}
+                    currentObservedPlayer={observedPlayerId}
+                    onPlayerSwitch={handlePlayerSwitch}
+                    onStartBotGame={handleStartBotGame}
+                    onMoveToSpectator={handleMoveToSpectator}
+                    gameInProgress={currentTableState.gameStarted || (currentTableState.state !== 'Waiting for Players' && currentTableState.state !== 'Ready to Start')}
+                    isAdmin={user.is_admin}
+                    isSpectator={currentTableState.players?.[playerId]?.isSpectator}
+                    userId={playerId}
+                />
+            )}
+
             <RoundSummaryModal
                 summaryData={currentTableState.roundSummary}
                 showModal={showRoundSummaryModal}
@@ -290,13 +369,21 @@ const GameTableView = ({ playerId, currentTableState, handleLeaveTable, handleLo
                 playerError={playerError}
                 playSound={playSound}
                 dropZoneRef={dropZoneRef}
+                isAdmin={user?.is_admin}
             />
             
             <footer className="game-footer">
                 <PlayerHand
-                    currentTableState={currentTableState}
-                    selfPlayerName={selfPlayerName}
-                    isSpectator={isSpectator}
+                    currentTableState={{
+                        ...currentTableState,
+                        // Override the player data with the observed player's data if in observer mode
+                        players: {
+                            ...currentTableState.players,
+                            [playerId]: isObserverMode ? perspectivePlayer : selfPlayerInTable
+                        }
+                    }}
+                    selfPlayerName={isObserverMode ? perspectivePlayer?.playerName : selfPlayerName}
+                    isSpectator={isObserverMode ? false : isSpectator}
                     emitEvent={emitEvent}
                     renderCard={renderCard}
                     dropZoneRef={dropZoneRef}

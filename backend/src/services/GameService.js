@@ -236,6 +236,9 @@
                         // Log insurance hindsight values for bots when round ends
                         if (engine.roundSummary && engine.roundSummary.insuranceHindsight && engine.gameId) {
                             console.log(`[Insurance] Round ended with hindsight data for game ${engine.gameId}`);
+                            console.log(`[Insurance] Insurance was active:`, engine.insurance.isActive);
+                            console.log(`[Insurance] Deal executed:`, engine.insurance.dealExecuted);
+                            console.log(`[Insurance] Hindsight data:`, engine.roundSummary.insuranceHindsight);
                             setTimeout(async () => {
                                 for (const botId in engine.bots) {
                                     const bot = engine.bots[botId];
@@ -260,10 +263,12 @@
                                                 `${Math.abs(hindsightData.hindsightValue)} points down the drain! Next time I'll be smarter about ${engine.tricksPlayedCount <= 3 ? 'early' : engine.tricksPlayedCount <= 7 ? 'mid' : 'late'}-game insurance.`
                                             ];
                                             const message = messages[Math.floor(Math.random() * messages.length)];
-                                            this.io.to(tableId).emit('tableChat', {
-                                                playerName: bot.playerName,
+                                            // Use new_lobby_message event that frontend is listening for
+                                            this.io.emit('new_lobby_message', {
+                                                id: Date.now(),
+                                                username: bot.playerName,
                                                 message: message,
-                                                timestamp: Date.now()
+                                                created_at: new Date().toISOString()
                                             });
                                         } else if (hindsightData.hindsightValue > 20) {
                                             const messages = [
@@ -272,10 +277,12 @@
                                                 `Experience pays off! Making the right call at trick ${engine.tricksPlayedCount} saved me ${hindsightData.hindsightValue} points.`
                                             ];
                                             const message = messages[Math.floor(Math.random() * messages.length)];
-                                            this.io.to(tableId).emit('tableChat', {
-                                                playerName: bot.playerName,
+                                            // Use new_lobby_message event that frontend is listening for
+                                            this.io.emit('new_lobby_message', {
+                                                id: Date.now(),
+                                                username: bot.playerName,
                                                 message: message,
-                                                timestamp: Date.now()
+                                                created_at: new Date().toISOString()
                                             });
                                         }
                                     }
@@ -330,6 +337,7 @@
                     case 'START_GAME_TRANSACTIONS': {
                         try {
                             const gameId = await transactionManager.createGameRecord(this.pool, effect.payload.table);
+                            console.log(`[GAME-START] Created game record with ID: ${gameId}`);
                             const updatedTokens = await transactionManager.handleGameStartTransaction(this.pool, effect.payload.table, effect.payload.playerIds, gameId);
                             if (effect.onSuccess) effect.onSuccess(gameId, updatedTokens);
                         } catch (err) {
@@ -381,6 +389,7 @@
                     scheduleTurnAction(this.requestNextRound, roundEndDelay, botUserId);
                 } else if (engine.state === 'Bidding Phase' && engine.biddingTurnPlayerId == botUserId) {
                     const bid = bot.decideBid();
+                    console.log(`[BOT-BID] ${bot.playerName} is bidding: ${bid}`);
                     scheduleTurnAction(this.placeBid, standardDelay, botUserId, bid);
                 } else if (engine.state === 'Awaiting Frog Upgrade Decision' && engine.biddingTurnPlayerId == botUserId) {
                     const bid = bot.decideFrogUpgrade();
@@ -417,12 +426,14 @@
             }
 
             if (engine.state === 'Playing Phase' && engine.insurance.isActive && !engine.insurance.dealExecuted) {
+                console.log(`[INSURANCE] Processing insurance for table ${tableId} - ${Object.keys(engine.bots).length} bots`);
                 let insuranceDelay = 500;
                 for (const botId in engine.bots) {
                     const bot = engine.bots[botId];
                     setTimeout(async () => {
                         const currentEngine = this.getEngineById(tableId);
                         if (currentEngine && currentEngine.insurance.isActive && !currentEngine.insurance.dealExecuted) {
+                            console.log(`[INSURANCE] Bot ${bot.playerName} making insurance decision`);
                             // Use adaptive strategy instead of fixed strategy
                             const decision = await this.adaptiveInsurance.calculateInsuranceMove(currentEngine, bot);
                             if (decision) {
@@ -430,6 +441,7 @@
                                 this.io.to(tableId).emit('gameState', currentEngine.getStateForClient());
                                 
                                 // Log the decision for learning
+                                console.log(`[INSURANCE] Logging decision for ${bot.playerName}, gameId: ${currentEngine.gameId}`);
                                 if (currentEngine.gameId) {
                                     await this.adaptiveInsurance.logInsuranceDecision(
                                         currentEngine.gameId,
@@ -438,6 +450,8 @@
                                         false, // deal not executed yet
                                         null // hindsight value will be calculated later
                                     );
+                                } else {
+                                    console.log(`[INSURANCE] WARNING: No gameId available for logging`);
                                 }
                             }
                         }

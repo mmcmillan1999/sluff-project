@@ -1,0 +1,132 @@
+.bot-stats-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.bot-stats-content {
+    background: #1a1a1a;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 800px;
+    max-height: 90vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.bot-stats-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border-bottom: 1px solid #333;
+}
+
+.bot-stats-header h2 {
+    margin: 0;
+    color: #fff;
+}
+
+.close-button {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+}
+
+.bot-stats-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.stats-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 30px;
+}
+
+.stats-table th,
+.stats-table td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid #333;
+}
+
+.stats-table th {
+    background: #2a2a2a;
+    color: #fff;
+    font-weight: bold;
+}
+
+.stats-table td {
+    color: #ddd;
+}
+
+.positive {
+    color: #4caf50;
+}
+
+.negative {
+    color: #f44336;
+}
+
+.recent-decisions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.decision-item {
+    display: flex;
+    gap: 15px;
+    padding: 10px;
+    background: #2a2a2a;
+    border-radius: 5px;
+    align-items: center;
+}
+
+.bot-name {
+    font-weight: bold;
+    color: #4a9eff;
+    min-width: 100px;
+}
+
+.role {
+    color: #888;
+    font-size: 0.9em;
+}
+
+.trick {
+    color: #aaa;
+}
+
+.deal-made {
+    color: #ffa726;
+}
+
+.deal-passed {
+    color: #666;
+}
+
+.stats-note {
+    margin-top: 20px;
+    padding: 15px;
+    background: #2a2a2a;
+    border-radius: 5px;
+    color: #aaa;
+    font-style: italic;
+}

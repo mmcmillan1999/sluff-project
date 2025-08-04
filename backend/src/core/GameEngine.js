@@ -54,29 +54,54 @@ class GameEngine {
         this._resolveForfeit(playerName, "voluntary forfeit");
     }
     
-    joinTable(user, socketId, tokens = null) {
+    joinTable(user, socketId, tokens = null, forceSpectator = false) {
         const { id, username } = user;
+        
+        if (forceSpectator) {
+            console.log(`[ADMIN] Forcing spectator mode for ${username} on table ${this.tableId}`);
+        }
+
         const isPlayerAlreadyInGame = !!this.players[id];
+        
         if (isPlayerAlreadyInGame) {
             this.players[id].disconnected = false;
             this.players[id].socketId = socketId;
             if (tokens !== null) this.players[id].tokens = tokens;
+            
+            // Force spectator mode - handle both conversion cases
+            if (forceSpectator) {
+                if (!this.players[id].isSpectator) {
+                    this.players[id].isSpectator = true;
+                    this.playerOrder.remove(id);
+                } else {
+                    // Ensure they're not in player order if already spectator
+                    if (this.playerOrder.includes(id)) {
+                        this.playerOrder.remove(id);
+                    }
+                }
+            }
         } else {
             const activePlayersCount = this.playerOrder.count;
             const playerBase = { userId: id, playerName: username, socketId, tokens };
-            if (this.gameStarted || activePlayersCount >= 4) {
+
+            if (forceSpectator || this.gameStarted || activePlayersCount >= 4) {
                 this.players[id] = { ...playerBase, isSpectator: true, disconnected: false };
             } else {
-                 this.players[id] = { ...playerBase, isSpectator: false, disconnected: false };
-                 if (!this.playerOrder.includes(id)) {
+                this.players[id] = { ...playerBase, isSpectator: false, disconnected: false };
+                if (!this.playerOrder.includes(id)) {
                     this.playerOrder.add(id);
                 }
             }
         }
+        
         if (!this.scores[username]) this.scores[username] = 120;
         const activePlayersAfterJoin = this.playerOrder.count;
         if (!this.gameStarted) {
             this.state = (activePlayersAfterJoin >= 3) ? "Ready to Start" : "Waiting for Players";
+        }
+
+        if (forceSpectator) {
+            console.log(`[ADMIN] Spectator join result for ${username}: isSpectator=${this.players[id].isSpectator}, inPlayerOrder=${this.playerOrder.includes(id)}`);
         }
     }
 
@@ -122,6 +147,7 @@ class GameEngine {
 
     leaveTable(userId) {
         if (!this.players[userId]) return;
+        
         const playerInfo = this.players[userId];
         const safeLeaveStates = ["Waiting for Players", "Ready to Start"];
         
@@ -176,6 +202,7 @@ class GameEngine {
                 playerIds: activePlayerIds.filter(id => !this.players[id].isBot) 
             },
             onSuccess: (gameId, updatedTokens) => {
+                console.log(`[GAME-ENGINE] Setting gameId to: ${gameId}`);
                 this.gameId = gameId;
                 this.gameStarted = true;
                 activePlayerIds.forEach(id => { 
@@ -279,9 +306,17 @@ class GameEngine {
             }
         }
         this.scores = {};
+        // Reset playerOrder to include all remaining players (except those who should stay spectators)
+        this.playerOrder = new PlayerList();
+        
         for (const userId in this.players) {
             const player = this.players[userId];
-            player.isSpectator = false;
+            // For normal resets, convert all players back to active players
+            // But preserve explicit spectator status for admins who chose to spectate
+            if (!player.wasExplicitSpectator) {
+                player.isSpectator = false;
+                this.playerOrder.add(parseInt(userId, 10));
+            }
             this.scores[player.playerName] = 120;
         }
         this.playerMode = this.playerOrder.count;
@@ -457,6 +492,7 @@ class GameEngine {
             this.insurance.bidMultiplier = multiplier;
             this.insurance.bidderPlayerName = this.bidWinnerInfo.playerName;
             this.insurance.bidderRequirement = 120 * multiplier;
+            console.log(`[INSURANCE] Activated for ${this.bidWinnerInfo.playerName} with bid ${this.bidWinnerInfo.bid} (multiplier: ${multiplier})`);
             
             const allPlayerNames = Object.values(this.players)
                 .filter(p => !p.isSpectator)
