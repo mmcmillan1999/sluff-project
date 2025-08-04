@@ -102,6 +102,8 @@ function App() {
         if (token && !user) {
             try {
                 const payload = JSON.parse(atob(token.split('.')[1]));
+                console.log('[DEBUG] JWT payload decoded:', payload);
+                console.log('[DEBUG] is_admin from token:', payload.is_admin);
                 setUser({ id: payload.id, username: payload.username, tokens: 0, is_admin: payload.is_admin || false });
             } catch (e) {
                 console.error("Invalid token found, logging out:", e);
@@ -117,7 +119,11 @@ function App() {
             socket.emit("requestUserSync");
 
             const onConnect = () => console.log("Socket connected!");
-            const onUpdateUser = (updatedUser) => setUser(updatedUser);
+            const onUpdateUser = (updatedUser) => {
+                console.log('[DEBUG] updateUser received from server:', updatedUser);
+                console.log('[DEBUG] is_admin from server:', updatedUser.is_admin);
+                setUser(updatedUser);
+            };
             const onLobbyState = (newLobbyState) => {
                 if (newLobbyState && newLobbyState.themes) {
                     setLobbyThemes(newLobbyState.themes);
@@ -135,6 +141,9 @@ function App() {
                 }
             };
             const onJoinedTable = ({ gameState }) => {
+                console.log('[ADMIN] Joined table event received, tableId:', gameState?.tableId);
+                console.log('[ADMIN] Table name:', gameState?.tableName);
+                console.log('[ADMIN] Players:', Object.values(gameState?.players || {}).map(p => `${p.playerName} (${p.isSpectator ? 'spectator' : 'player'})`));
                 setCurrentTableState(gameState);
                 setView('gameTable');
             };
@@ -195,6 +204,11 @@ function App() {
         socket.emit("joinTable", { tableId });
     };
 
+    const handleJoinTableAsSpectator = (tableId) => {
+        enableSound();
+        socket.emit("joinTable", { tableId, asSpectator: true });
+    };
+
     const emitEvent = (eventName, payload = {}) => {
         if (currentTableState) {
             socket.emit(eventName, { ...payload, tableId: currentTableState.tableId });
@@ -215,9 +229,9 @@ function App() {
             {(() => {
                 switch (view) {
                     case 'lobby':
-                        return <LobbyView user={user} lobbyThemes={lobbyThemes} serverVersion={serverVersion} handleJoinTable={handleJoinTable} handleLogout={handleLogout} handleRequestFreeToken={handleRequestFreeToken} handleShowLeaderboard={() => setView('leaderboard')} handleShowAdmin={handleShowAdmin} handleShowFeedback={() => setView('feedback')} errorMessage={errorMessage} emitEvent={emitEvent} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} />;
+                        return <LobbyView user={user} lobbyThemes={lobbyThemes} serverVersion={serverVersion} handleJoinTable={handleJoinTable} handleJoinTableAsSpectator={handleJoinTableAsSpectator} handleLogout={handleLogout} handleRequestFreeToken={handleRequestFreeToken} handleShowLeaderboard={() => setView('leaderboard')} handleShowAdmin={handleShowAdmin} handleShowFeedback={() => setView('feedback')} errorMessage={errorMessage} emitEvent={emitEvent} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} />;
                     case 'gameTable':
-                        return currentTableState ? <GameTableView playerId={user.id} currentTableState={currentTableState} handleLeaveTable={handleLeaveTable} handleLogout={handleLogout} errorMessage={errorMessage} emitEvent={emitEvent} playSound={playSound} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} /> : <div>Loading table...</div>;
+                        return currentTableState ? <GameTableView user={user} playerId={user.id} currentTableState={currentTableState} handleLeaveTable={handleLeaveTable} handleLogout={handleLogout} errorMessage={errorMessage} emitEvent={emitEvent} playSound={playSound} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} /> : <div>Loading table...</div>;
                     case 'leaderboard':
                         return <LeaderboardView user={user} onReturnToLobby={handleReturnToLobby} handleResetAllTokens={handleResetAllTokens} handleShowAdmin={handleShowAdmin} />;
                     case 'feedback':

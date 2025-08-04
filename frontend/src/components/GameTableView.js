@@ -340,6 +340,9 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                     userId={playerId}
                 />
             )}
+            {console.log('[DEBUG] GameTableView render - user:', user)}
+            {console.log('[DEBUG] GameTableView render - user.is_admin:', user?.is_admin)}
+            {console.log('[DEBUG] GameTableView render - should show AdminObserverMode:', !!user?.is_admin)}
 
             <RoundSummaryModal
                 summaryData={currentTableState.roundSummary}

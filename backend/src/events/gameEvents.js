@@ -243,6 +243,11 @@ const registerGameHandlers = (io, gameService) => {
                     const tokenQuery = "SELECT SUM(amount) AS current_tokens FROM transactions WHERE user_id = $1";
                     const tokenResult = await pool.query(tokenQuery, [socket.user.id]);
                     updatedUser.tokens = parseFloat(tokenResult.rows[0]?.current_tokens || 0).toFixed(2);
+                    
+                    // CRITICAL FIX: Update the socket.user object with fresh admin status
+                    socket.user.is_admin = updatedUser.is_admin;
+                    console.log(`[DEBUG] User sync - ${updatedUser.username} admin status: ${updatedUser.is_admin}`);
+                    
                     socket.emit("updateUser", updatedUser);
                 }
             } catch(err) {

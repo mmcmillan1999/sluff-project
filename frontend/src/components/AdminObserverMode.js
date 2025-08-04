@@ -14,18 +14,29 @@ const AdminObserverMode = ({
 }) => {
   const [showControls, setShowControls] = useState(false);
 
-  if (!isAdmin) return null;
+  console.log('[DEBUG] AdminObserverMode render - isAdmin:', isAdmin);
+  console.log('[DEBUG] AdminObserverMode render - players:', players);
+  console.log('[DEBUG] AdminObserverMode render - gameInProgress:', gameInProgress);
+  console.log('[DEBUG] AdminObserverMode render - isSpectator:', isSpectator);
+
+  if (!isAdmin) {
+    console.log('[DEBUG] AdminObserverMode - returning null because isAdmin is false');
+    return null;
+  }
 
   const botPlayers = players.filter(p => p.isBot);
   const hasEnoughBots = botPlayers.length >= 3;
 
+  console.log('[DEBUG] AdminObserverMode - RENDERING the component');
+
   return (
-    <div className="admin-observer-mode">
+    <div className="admin-observer-mode" style={{border: '2px solid red', background: 'yellow'}}>
       <button 
         className="observer-toggle"
         onClick={() => setShowControls(!showControls)}
+        style={{background: 'red', color: 'white', fontWeight: 'bold'}}
       >
-        👁️ Observer Mode
+        👁️ ADMIN OBSERVER MODE [DEBUG]
       </button>
 
       {showControls && (
