@@ -52,7 +52,6 @@ class AdaptiveInsuranceStrategy {
                     adjustment_factor
                 FROM bot_strategy_adjustments
                 WHERE bot_name = $1
-                AND (expires_at IS NULL OR expires_at > NOW())
                 ORDER BY created_at DESC
             `;
             const adjustmentResult = await this.pool.query(adjustmentQuery, [botName]);
@@ -131,7 +130,7 @@ class AdaptiveInsuranceStrategy {
             const query = `
                 INSERT INTO bot_strategy_adjustments 
                 (bot_name, strategy_type, trick_range, adjustment_factor, reason, expires_at)
-                VALUES ($1, $2, $3, $4, $5, NOW() + INTERVAL '7 days')
+                VALUES ($1, $2, $3, $4, $5, NULL)
             `;
             await this.pool.query(query, [botName, strategyType, trickRange, adjustmentFactor, reason]);
         } catch (error) {
@@ -143,88 +142,138 @@ class AdaptiveInsuranceStrategy {
      * Calculate insurance move with adaptive strategy
      */
     async calculateInsuranceMove(engine, bot, gameService = null) {
-        const { insurance, bidWinnerInfo, hands, bidderCardPoints, defenderCardPoints, tricksPlayedCount } = engine;
+        const { insurance, bidWinnerInfo, hands, bidderCardPoints, defenderCardPoints, tricksPlayedCount, trumpSuit } = engine;
         const bidMultiplier = BID_MULTIPLIERS[bidWinnerInfo.bid] || 1;
         const isBidder = bot.playerName === bidWinnerInfo.playerName;
         const numberOfOpponents = engine.playerOrder.count - 1;
         const GOAL = 60;
+        const TOTAL_POINTS = 120;
 
-        // Get bot's historical performance
+        // CRITICAL: No insurance changes after trick 8
+        if (tricksPlayedCount >= 8) {
+            return null;
+        }
+
+        // Get bot's historical performance and personality
         const botData = await this.getBotHistory(bot.playerName);
         
         // Determine trick phase
         const trickPhase = tricksPlayedCount <= 3 ? 'early' : 
                           tricksPlayedCount <= 7 ? 'mid' : 'late';
 
-        // Base personality values
-        let greedFactor = 20;
-        let hedgeFactor = 0.5;
-        let stinginessFactor = 10;
+        // Calculate remaining points in play
+        const pointsCapturedSoFar = bidderCardPoints + defenderCardPoints;
+        const pointsRemaining = TOTAL_POINTS - pointsCapturedSoFar;
+        const tricksRemaining = 11 - tricksPlayedCount;
         
-        // Add some randomness based on bot name
+        // Analyze hand strength
+        const myHand = hands[bot.playerName] || [];
+        const pointsInMyHand = gameLogic.calculateCardPoints(myHand);
+        
+        // Count high cards and trump
+        const highCards = myHand.filter(card => {
+            const rank = card.slice(0, -1);
+            return rank === 'A' || rank === '10';
+        }).length;
+        
+        const trumpCards = myHand.filter(card => {
+            const suit = card.slice(-1);
+            return suit === trumpSuit;
+        }).length;
+
+        // Base personality values with bot-specific offset
         const nameHash = bot.playerName.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
         const personalityOffset = (nameHash % 20) - 10;
         
-        greedFactor += personalityOffset;
-        stinginessFactor += personalityOffset / 2;
-
-        // Apply learned adjustments
+        let aggressiveness = 1.0 + (personalityOffset * 0.02); // 0.8 to 1.2
+        let riskTolerance = 0.3 + (personalityOffset * 0.01);  // 0.2 to 0.4
+        
+        // Apply learned adjustments (PERMANENT)
         for (const adj of botData.adjustments) {
             if (adj.strategy_type === (isBidder ? 'bidder' : 'defender') && 
                 adj.trick_range === trickPhase) {
-                if (isBidder) {
-                    greedFactor *= (1 - adj.adjustment_factor);
-                    hedgeFactor *= (1 + adj.adjustment_factor);
-                } else {
-                    stinginessFactor *= (1 + adj.adjustment_factor);
-                }
+                // Adjustments modify personality permanently
+                aggressiveness *= (1 - adj.adjustment_factor);
+                riskTolerance *= (1 + adj.adjustment_factor);
             }
         }
 
-        // Add trick-based variance
-        const trickVariance = tricksPlayedCount * (Math.random() * 4 - 2);
+        // Estimate capture rate based on hand strength
+        let myCaptureRate;
+        if (isBidder) {
+            const baseRate = 0.5;
+            const highCardBonus = highCards * 0.05;
+            const trumpBonus = trumpCards * 0.03;
+            const positionBonus = tricksRemaining > 0 ? 0.1 : 0;
+            myCaptureRate = Math.min(0.85, baseRate + highCardBonus + trumpBonus + positionBonus);
+        } else {
+            const baseRate = 0.5 / numberOfOpponents;
+            const highCardBonus = highCards * 0.03;
+            const trumpBonus = trumpCards * 0.02;
+            myCaptureRate = Math.min(0.4, baseRate + highCardBonus + trumpBonus);
+        }
+        
+        // Project final score
+        const projectedRemainingCapture = pointsRemaining * myCaptureRate;
+        const projectedFinalScore = isBidder ? 
+            (bidderCardPoints + projectedRemainingCapture) :
+            (defenderCardPoints + projectedRemainingCapture * numberOfOpponents);
+        
+        // Calculate current trajectory
+        const progressPercent = tricksPlayedCount / 11;
+        const currentTrajectory = isBidder ? 
+            (bidderCardPoints / Math.max(0.1, progressPercent)) : 
+            (defenderCardPoints / Math.max(0.1, progressPercent));
 
         if (isBidder) {
-            const myHand = hands[bot.playerName] || [];
-            const pointsInMyHand = gameLogic.calculateCardPoints(myHand);
-            const projectedFinalScore = bidderCardPoints + pointsInMyHand;
             const projectedSurplus = projectedFinalScore - GOAL;
-
+            const trajectoryIndicatesWin = currentTrajectory > GOAL;
             let strategicAsk;
 
-            if (projectedSurplus > 0) {
-                // Winning scenario
+            if (projectedSurplus > 15 && trajectoryIndicatesWin) {
+                // Winning comfortably
                 const projectedPointExchange = projectedSurplus * bidMultiplier * numberOfOpponents;
-                strategicAsk = projectedPointExchange + greedFactor + trickVariance;
+                strategicAsk = Math.round(projectedPointExchange * 0.8 * aggressiveness);
+            } else if (projectedSurplus < -10 || !trajectoryIndicatesWin) {
+                // Losing or risky
+                const projectedLoss = Math.abs(GOAL - projectedFinalScore);
+                const riskFactor = Math.min(0.4, riskTolerance + (tricksPlayedCount * 0.02));
+                strategicAsk = Math.round(projectedLoss * bidMultiplier * numberOfOpponents * riskFactor);
+                strategicAsk = Math.min(strategicAsk, 40 + (personalityOffset * 2)); // Cap varies by personality
             } else {
-                // Losing scenario
-                const projectedPointExchange = projectedSurplus * bidMultiplier * numberOfOpponents;
-                strategicAsk = -projectedPointExchange * hedgeFactor + trickVariance;
+                // Close game
+                strategicAsk = 5 * aggressiveness;
             }
 
-            const finalAsk = Math.round(strategicAsk / 5) * 5;
-
-            if (finalAsk !== insurance.bidderRequirement) {
+            const finalAsk = Math.max(0, Math.round(strategicAsk / 5) * 5);
+            
+            if (Math.abs(finalAsk - (insurance.bidderRequirement || 0)) >= 5) {
                 return { settingType: 'bidderRequirement', value: finalAsk };
             }
 
         } else {
             // Defender logic
-            const myHand = hands[bot.playerName] || [];
-            const pointsInMyHand = gameLogic.calculateCardPoints(myHand);
-            const numberOfDefenders = numberOfOpponents;
-
-            const projectedFinalScore = defenderCardPoints + (pointsInMyHand * numberOfDefenders);
-            const projectedSurplus = projectedFinalScore - GOAL;
-
-            const baseOffer = -projectedSurplus * bidMultiplier;
+            const projectedBidderScore = TOTAL_POINTS - projectedFinalScore;
+            const bidderSurplus = projectedBidderScore - GOAL;
             
-            // Add variance to prevent predictability
-            const offerVariance = Math.random() * 10 - 5;
-            const strategicOffer = Math.round((baseOffer - stinginessFactor + trickVariance + offerVariance) / 5) * 5;
+            let strategicOffer;
+            if (bidderSurplus > 10) {
+                // Bidder likely to win big
+                strategicOffer = -5 * aggressiveness;
+            } else if (bidderSurplus < -10) {
+                // Bidder likely to lose
+                const defenderBenefit = Math.abs(bidderSurplus) * bidMultiplier / numberOfOpponents;
+                strategicOffer = Math.round(defenderBenefit * 0.6 * (2 - aggressiveness)); // Less aggressive = more generous
+                strategicOffer = Math.min(strategicOffer, 25 + (personalityOffset));
+            } else {
+                // Close game
+                strategicOffer = 0;
+            }
 
-            if (strategicOffer !== insurance.defenderOffers[bot.playerName]) {
-                return { settingType: 'defenderOffer', value: strategicOffer };
+            const finalOffer = Math.round(strategicOffer / 5) * 5;
+            
+            if (Math.abs(finalOffer - (insurance.defenderOffers[bot.playerName] || 0)) >= 5) {
+                return { settingType: 'defenderOffer', value: finalOffer };
             }
         }
         
