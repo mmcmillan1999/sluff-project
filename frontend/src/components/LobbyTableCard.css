@@ -60,6 +60,12 @@
     min-height: 36px;
 }
 
+.table-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
 .player-names {
     flex-grow: 1;
     margin-right: 10px;
@@ -102,4 +108,26 @@
     background: #6c757d;
     border-color: #5a6268;
     cursor: not-allowed;
+}
+
+.spectate-table-button {
+    flex-shrink: 0;
+    padding: 8px;
+    background: #6c757d;
+    color: white;
+    border: 1px solid #5a6268;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 16px;
+    min-width: 36px;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.spectate-table-button:hover {
+    background: #5a6268;
+    transform: scale(1.05);
 }

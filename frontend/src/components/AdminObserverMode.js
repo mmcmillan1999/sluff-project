@@ -14,28 +14,29 @@ const AdminObserverMode = ({
 }) => {
   const [showControls, setShowControls] = useState(false);
 
-  console.log('[DEBUG] AdminObserverMode render - isAdmin:', isAdmin);
-  console.log('[DEBUG] AdminObserverMode render - players:', players);
-  console.log('[DEBUG] AdminObserverMode render - gameInProgress:', gameInProgress);
-  console.log('[DEBUG] AdminObserverMode render - isSpectator:', isSpectator);
+  // console.log('[DEBUG] AdminObserverMode render - isAdmin:', isAdmin);
+  // console.log('[DEBUG] AdminObserverMode render - players:', players);
+  // console.log('[DEBUG] AdminObserverMode render - gameInProgress:', gameInProgress);
+  // console.log('[DEBUG] AdminObserverMode render - isSpectator:', isSpectator);
 
   if (!isAdmin) {
-    console.log('[DEBUG] AdminObserverMode - returning null because isAdmin is false');
+    // console.log("[DEBUG] AdminObserverMode - returning null because isAdmin is false");
     return null;
   }
 
   const botPlayers = players.filter(p => p.isBot);
   const hasEnoughBots = botPlayers.length >= 3;
 
-  console.log('[DEBUG] AdminObserverMode - RENDERING the component');
+  // console.log('[DEBUG] AdminObserverMode - RENDERING the component');
 
   return (
     <div className="admin-observer-mode">
       <button 
         className="observer-toggle"
         onClick={() => setShowControls(!showControls)}
+        title="Observer Mode"
       >
-        👁️ Observer Mode
+        👁️
       </button>
 
       {showControls && (
@@ -50,7 +51,7 @@ const AdminObserverMode = ({
                   onClick={onMoveToSpectator}
                   style={{ marginBottom: '10px' }}
                 >
-                  👁️ Move to Spectator Seat
+                  👁️ Move to Spectator
                 </button>
               )}
               {hasEnoughBots ? (
@@ -95,7 +96,7 @@ const AdminObserverMode = ({
                       </span>
                       <span className="player-name">{player.playerName}</span>
                       {currentObservedPlayer === player.userId && (
-                        <span className="viewing-indicator">👁️</span>
+                        <span className="viewing-indicator" title="Currently viewing">👁️</span>
                       )}
                     </button>
                   );

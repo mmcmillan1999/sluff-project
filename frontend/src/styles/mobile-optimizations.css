@@ -85,13 +85,126 @@ button,
     }
 }
 
-/* Vertical mobile optimizations */
-@media (orientation: portrait) and (max-width: 768px) {
-    /* Fix viewport height issues on mobile */
+/* Small mobile screens (320px - 414px) - iPhones and small Androids */
+@media (max-width: 414px) and (orientation: portrait) {
+    /* Viewport optimization for small screens - account for advertising header */
     .game-view {
-        height: 100vh;
-        height: 100dvh; /* Dynamic viewport height for mobile browsers */
-        max-height: -webkit-fill-available;
+        height: calc(100vh - 58px); /* Subtract mobile ad header height */
+        height: calc(100dvh - 58px); /* Dynamic viewport height */
+        max-height: 100vh;
+        overflow: hidden;
+        margin-top: 0; /* Remove any existing margin */
+    }
+    
+    /* Compact table layout */
+    .game-table {
+        padding: 1px;
+        flex: 1;
+        min-height: 0;
+    }
+    
+    .table-oval {
+        max-width: 100%;
+        height: 100%;
+        max-height: calc(100vh - 278px); /* Tighter spacing + account for ad header */
+        min-width: 320px; /* Ensure minimum stable size */
+        aspect-ratio: 4/3; /* Mobile-friendly aspect ratio */
+        border-width: 5px; /* Thicker border visible but not overwhelming */
+        flex-shrink: 0; /* Prevent shrinking below minimum dimensions */
+    }
+    
+    /* Compact footer for small screens */
+    .game-footer {
+        padding: 6px 8px;
+        z-index: 20;
+        font-size: 0.9em;
+    }
+    
+    /* Optimized player hand for small screens */
+    .player-hand-container {
+        max-height: 95px;
+        overflow: visible;
+    }
+    
+    .player-hand-cards {
+        height: 80px;
+        padding: 10px 0;
+    }
+    
+    /* Smaller card sizing for small screens */
+    .player-hand-card-wrapper .card-display {
+        width: min(55px, calc((100vw - 20px) / 9));
+        height: min(75px, calc((100vw - 20px) / 6.5));
+        font-size: 0.8em;
+    }
+    
+    /* Compact player seats */
+    .player-seat {
+        min-width: 100px;
+        padding: 4px 8px;
+        font-size: 0.85em;
+    }
+    
+    /* Smaller action buttons with professional styling */
+    .action-prompt-container {
+        padding: 8px 12px; /* More compact */
+        min-width: 180px; /* Narrower to not cover names */
+        max-width: calc(100vw - 100px); /* Ensure doesn't cover side elements */
+        font-size: 0.8em; /* Smaller text */
+        font-family: 'Arial', 'Helvetica', sans-serif; /* Professional font */
+    }
+    
+    .action-prompt-container h4 {
+        font-size: 0.9em; /* Smaller header */
+        font-weight: 500; /* Less bold */
+        margin: 0 0 6px 0;
+    }
+    
+    .action-prompt-container p {
+        font-size: 0.75em;
+        margin: 3px 0;
+    }
+    
+    .action-prompt-container button {
+        padding: 8px 10px;
+        font-size: 0.75em;
+        margin: 2px;
+        min-height: 44px; /* Maintain touch target */
+        min-width: 44px;
+    }
+    
+    /* Smaller pucks but maintain touch targets */
+    .puck {
+        width: 32px;
+        height: 32px;
+        font-size: 0.7em;
+    }
+    
+    /* Ensure touch targets remain accessible */
+    button, .game-button {
+        min-height: 44px;
+        min-width: 44px;
+        font-size: 0.9em;
+    }
+    
+    /* Widow cards positioned below widow seat for small mobile screens */
+    .widow-display-container {
+        position: absolute;
+        top: calc(2% + min(90px, calc(100vh * 0.12)) + 2px); /* Below widow seat + 2px padding */
+        left: 50%;
+        transform: translateX(-50%);
+        margin-top: 0;
+        z-index: 6;
+    }
+}
+
+/* Vertical mobile optimizations - larger phones (415px+) */
+@media (orientation: portrait) and (min-width: 415px) and (max-width: 768px) {
+    /* Fix viewport height issues on mobile - account for advertising header */
+    .game-view {
+        height: calc(100vh - 72px); /* Subtract tablet ad header height */
+        height: calc(100dvh - 72px); /* Dynamic viewport height for mobile browsers */
+        max-height: 100vh;
     }
     
     /* Optimize table layout for portrait */
@@ -104,7 +217,10 @@ button,
     .table-oval {
         max-width: 100%;
         height: 100%;
-        max-height: calc(100vh - 250px); /* Account for header, footer, and hand */
+        max-height: calc(100vh - 322px); /* Account for header, footer, hand, and ad header */
+        min-width: 320px; /* Stable minimum dimensions */
+        aspect-ratio: 4/3; /* Mobile-optimized aspect ratio */
+        flex-shrink: 0; /* Prevent unwanted shrinking */
     }
     
     /* Ensure footer doesn't get clipped */
@@ -136,4 +252,280 @@ button,
         width: min(65px, calc((100vw - 40px) / 8));
         height: min(85px, calc((100vw - 40px) / 6));
     }
+    
+    /* Action prompt improvements for larger mobile */
+    .action-prompt-container {
+        min-width: 220px;
+        max-width: calc(100vw - 80px); /* Don't cover player names */
+        padding: 12px 16px;
+        font-size: 0.9em;
+        font-family: 'Arial', 'Helvetica', sans-serif;
+    }
+    
+    .action-prompt-container h4 {
+        font-size: 1.1em;
+        font-weight: 500;
+        margin: 0 0 8px 0;
+    }
+    
+    .action-prompt-container p {
+        font-size: 0.85em;
+        margin: 4px 0;
+    }
+    
+    .action-prompt-container .game-button {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 10px 14px;
+        font-size: 0.85em;
+        margin: 4px;
+    }
+    
+    /* Trick pile improvements for larger mobile - no scale to match widow cards */
+    .trick-pile-container {
+        transform: none; /* Remove scale to match widow card size */
+        transform-origin: bottom;
+    }
+    
+    .defender-pile { left: 10%; }
+    .bidder-pile { right: 10%; }
+    
+    /* Widow cards positioned for larger mobile screens */
+    .widow-display-container {
+        position: absolute;
+        top: calc(2% + min(90px, calc(100vh * 0.12)) + 2px); /* Below widow seat + 2px padding */
+        left: 50%;
+        transform: translateX(-50%);
+        margin-top: 0;
+        z-index: 6;
+    }
+}
+
+/* Universal mobile portrait optimizations */
+@media (orientation: portrait) and (max-width: 768px) {
+    /* Trick pile mobile optimizations - same size as widow cards */
+    .trick-pile-container {
+        transform: none; /* Remove scale to match widow card size exactly */
+        transform-origin: bottom;
+    }
+    
+    .defender-pile { left: 12%; } /* More centered positioning */
+    .bidder-pile { right: 12%; }
+    
+    .trick-pile-cards {
+        /* Remove size constraints to match widow cards exactly */
+    }
+    
+    .trick-pile-count {
+        font-size: 0.9em; /* Smaller count text */
+    }
+    
+    /* Action prompt improvements for all mobile portrait */
+    .action-prompt-container {
+        min-width: 200px;
+        max-width: calc(100vw - 60px); /* Don't cover player names */
+        padding: 10px 14px;
+        font-size: 0.85em;
+        font-family: 'Arial', 'Helvetica', sans-serif;
+    }
+    
+    .action-prompt-container h4 {
+        font-size: 1.0em;
+        font-weight: 500;
+        margin: 0 0 8px 0;
+    }
+    
+    .action-prompt-container p {
+        font-size: 0.8em;
+        margin: 4px 0;
+    }
+    
+    .action-prompt-container .game-button {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 8px 12px;
+        font-size: 0.8em;
+        margin: 4px;
+    }
+    
+    /* Widow seat mobile positioning */
+    .widow-seat {
+        top: 2%;
+        width: min(140px, calc(100vw - 40px));
+        height: min(90px, calc(100vh * 0.12));
+    }
+    
+    /* Widow cards positioned directly below widow seat on mobile portrait */
+    .widow-display-container {
+        position: absolute;
+        top: calc(2% + min(90px, calc(100vh * 0.12)) + 2px); /* Below widow seat + 2px padding */
+        left: 50%;
+        transform: translateX(-50%);
+        margin-top: 0; /* Override default margin */
+        z-index: 6;
+    }
+    
+    .widow-title {
+        font-size: min(1.1em, calc(100vw * 0.035));
+        letter-spacing: 1px;
+    }
+    
+    .widow-hourglass {
+        width: 10px;
+        height: 16px;
+    }
+    
+    .widow-subtitle {
+        font-size: min(0.6em, calc(100vw * 0.02));
+    }
+    
+    /* Trump indicator mobile sizing */
+    .trump-indicator-puck {
+        width: min(45px, calc(100vw * 0.12));
+        height: min(45px, calc(100vw * 0.12));
+        font-size: min(1.1em, calc(100vw * 0.03));
+        border-width: 2px; /* Thinner border on mobile */
+    }
+    
+    .trump-state-indicator {
+        width: min(25px, calc(100vw * 0.065));
+        height: 2px;
+    }
+    
+    .trump-state-indicator.broken::before {
+        font-size: min(0.7em, calc(100vw * 0.025));
+    }
+    
+    /* Trump broken announcement mobile scaling */
+    .trump-broken-announcement {
+        width: 95vw;
+        max-width: 350px;
+    }
+    
+    .trump-broken-content {
+        padding: 15px 20px;
+        min-width: 0; /* Allow shrinking */
+        gap: 10px;
+    }
+    
+    .trump-broken-text {
+        font-size: min(1.8em, calc(100vw * 0.06));
+        letter-spacing: 1px;
+        white-space: normal; /* Allow wrapping on very small screens */
+        text-align: center;
+    }
+    
+    .trump-broken-lightning {
+        font-size: min(2em, calc(100vw * 0.065));
+    }
+    
+    /* Player seat border visibility optimization */
+    .player-seat {
+        /* Border thickness is handled in JS, but ensure visibility */
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); /* Enhanced shadow for better definition */
+    }
+    
+    /* Enhanced touch targets for mobile */
+    .trump-indicator-puck {
+        min-width: 44px;
+        min-height: 44px;
+    }
+    
+    /* Game menu popup mobile optimization */
+    .game-menu-popup {
+        width: 90vw;
+        max-width: 300px;
+        right: 5vw;
+        bottom: calc(100% + 5px);
+        font-size: 0.9em;
+    }
+    
+    /* Chat container mobile optimization */
+    .game-view-chat-container {
+        width: min(300px, calc(100vw - 20px));
+        bottom: 8px;
+        left: 8px;
+    }
+}
+
+/* Ultra-small screens (< 320px) */
+@media (max-width: 319px) and (orientation: portrait) {
+    /* Account for ultra-small ad header */
+    .game-view {
+        height: calc(100vh - 53px) !important;
+        height: calc(100dvh - 53px) !important;
+        max-height: 100vh !important;
+    }
+    
+    .table-oval {
+        max-height: calc(100vh - 273px) !important; /* Ultra compact */
+        min-width: 280px !important; /* Even smaller minimum for ultra compact */
+        aspect-ratio: 4/3 !important;
+    }
+    
+    .trump-broken-text {
+        font-size: 1.4em;
+        letter-spacing: 0;
+    }
+    
+    .trump-broken-lightning {
+        font-size: 1.6em;
+    }
+    
+    .widow-seat {
+        width: calc(100vw - 20px);
+        height: 70px;
+    }
+    
+    /* Widow cards for ultra-small screens positioned below widow seat */
+    .widow-display-container {
+        position: absolute;
+        top: calc(2% + 70px + 2px); /* Below ultra-small widow seat + 2px padding */
+        left: 50%;
+        transform: translateX(-50%);
+        margin-top: 0;
+        z-index: 6;
+    }
+    
+    .widow-title {
+        font-size: 0.9em;
+    }
+    
+    .player-seat {
+        min-width: 90px;
+        font-size: 0.8em;
+    }
+    
+    /* Ultra compact action prompts for tiny screens */
+    .action-prompt-container {
+        min-width: 160px;
+        max-width: calc(100vw - 120px);
+        padding: 6px 10px;
+        font-size: 0.75em;
+    }
+    
+    .action-prompt-container h4 {
+        font-size: 0.85em;
+        margin: 0 0 4px 0;
+    }
+    
+    .action-prompt-container p {
+        font-size: 0.7em;
+        margin: 2px 0;
+    }
+    
+    .action-prompt-container .game-button {
+        padding: 6px 8px;
+        font-size: 0.7em;
+        margin: 2px;
+    }
+    
+    /* Ultra compact trick piles - same size as widow cards */
+    .trick-pile-container {
+        transform: none; /* Remove scale to match widow card size */
+        transform-origin: bottom;
+    }
+    
+    .defender-pile { left: 15%; }
+    .bidder-pile { right: 15%; }
 }

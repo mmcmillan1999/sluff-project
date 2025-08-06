@@ -9,7 +9,9 @@ import MercyWindow from "./components/MercyWindow.js";
 import AdminView from "./components/AdminView.js";
 import FeedbackModal from "./components/FeedbackModal.js";
 import FeedbackView from "./components/FeedbackView.js";
+import AdvertisingHeader from "./components/AdvertisingHeader.js";
 import { submitFeedback } from "./services/api.js";
+import "./App.css";
 import "./components/AdminView.css";
 import "./styles/mobile-optimizations.css";
 import { useSounds } from "./hooks/useSounds.js";
@@ -74,6 +76,12 @@ function App() {
 
     const handleSubmitFeedback = async (feedbackData) => {
         await submitFeedback(feedbackData);
+    };
+
+    const handleAdClick = (adType) => {
+        // Track advertisement clicks for analytics
+        // console.log("Advertisement clicked");
+        // In a real implementation, this would send analytics data to your tracking service
     };
 
     const handleRequestFreeToken = () => {
@@ -219,31 +227,41 @@ function App() {
     };
 
     if (!token || !user) {
-        return <AuthContainer onLoginSuccess={handleLoginSuccess} />;
+        return (
+            <>
+                <AdvertisingHeader onAdClick={handleAdClick} />
+                <div className="app-content-container">
+                    <AuthContainer onLoginSuccess={handleLoginSuccess} />
+                </div>
+            </>
+        );
     }
 
     return (
         <>
-            <MercyWindow show={showMercyWindow} onClose={() => setShowMercyWindow(false)} emitEvent={emitEvent} />
-            <FeedbackModal show={showFeedbackModal} onClose={handleCloseFeedbackModal} onSubmit={handleSubmitFeedback} gameContext={feedbackGameContext} />
+            <AdvertisingHeader onAdClick={handleAdClick} />
+            <div className="app-content-container">
+                <MercyWindow show={showMercyWindow} onClose={() => setShowMercyWindow(false)} emitEvent={emitEvent} />
+                <FeedbackModal show={showFeedbackModal} onClose={handleCloseFeedbackModal} onSubmit={handleSubmitFeedback} gameContext={feedbackGameContext} />
 
-            {(() => {
-                switch (view) {
-                    case 'lobby':
-                        return <LobbyView user={user} lobbyThemes={lobbyThemes} serverVersion={serverVersion} handleJoinTable={handleJoinTable} handleJoinTableAsSpectator={handleJoinTableAsSpectator} handleLogout={handleLogout} handleRequestFreeToken={handleRequestFreeToken} handleShowLeaderboard={() => setView('leaderboard')} handleShowAdmin={handleShowAdmin} handleShowFeedback={() => setView('feedback')} errorMessage={errorMessage} emitEvent={emitEvent} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} />;
-                    case 'gameTable':
-                        return currentTableState ? <GameTableView user={user} playerId={user.id} currentTableState={currentTableState} handleLeaveTable={handleLeaveTable} handleLogout={handleLogout} errorMessage={errorMessage} emitEvent={emitEvent} playSound={playSound} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} /> : <div>Loading table...</div>;
-                    case 'leaderboard':
-                        return <LeaderboardView user={user} onReturnToLobby={handleReturnToLobby} handleResetAllTokens={handleResetAllTokens} handleShowAdmin={handleShowAdmin} />;
-                    case 'feedback':
-                        return <FeedbackView user={user} onReturnToLobby={handleReturnToLobby} />;
-                    case 'admin':
-                        return <AdminView onReturnToLobby={handleReturnToLobby} handleHardReset={handleHardReset} handleResetAllTokens={handleResetAllTokens} />;
-                    default:
-                        setView('lobby');
-                        return null;
-                }
-            })()}
+                {(() => {
+                    switch (view) {
+                        case 'lobby':
+                            return <LobbyView user={user} lobbyThemes={lobbyThemes} serverVersion={serverVersion} handleJoinTable={handleJoinTable} handleJoinTableAsSpectator={handleJoinTableAsSpectator} handleLogout={handleLogout} handleRequestFreeToken={handleRequestFreeToken} handleShowLeaderboard={() => setView('leaderboard')} handleShowAdmin={handleShowAdmin} handleShowFeedback={() => setView('feedback')} errorMessage={errorMessage} emitEvent={emitEvent} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} />;
+                        case 'gameTable':
+                            return currentTableState ? <GameTableView user={user} playerId={user.id} currentTableState={currentTableState} handleLeaveTable={handleLeaveTable} handleLogout={handleLogout} errorMessage={errorMessage} emitEvent={emitEvent} playSound={playSound} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} /> : <div>Loading table...</div>;
+                        case 'leaderboard':
+                            return <LeaderboardView user={user} onReturnToLobby={handleReturnToLobby} handleResetAllTokens={handleResetAllTokens} handleShowAdmin={handleShowAdmin} />;
+                        case 'feedback':
+                            return <FeedbackView user={user} onReturnToLobby={handleReturnToLobby} />;
+                        case 'admin':
+                            return <AdminView onReturnToLobby={handleReturnToLobby} handleHardReset={handleHardReset} handleResetAllTokens={handleResetAllTokens} />;
+                        default:
+                            setView('lobby');
+                            return null;
+                    }
+                })()}
+            </div>
         </>
     );
 }

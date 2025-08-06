@@ -163,6 +163,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     // Debug spectator status changes
     useEffect(() => {
         if (currentTableState && playerId) {
+            // eslint-disable-next-line no-unused-vars
             const player = currentTableState.players[playerId];
             // console.log('[ADMIN] TableState updated - spectator status debug:');
             // console.log('[ADMIN]   - playerId:', playerId);

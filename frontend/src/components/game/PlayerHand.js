@@ -73,7 +73,9 @@ const PlayerHand = ({
             const totalCardWidth = myHand.length * CARD_WIDTH;
             if (totalCardWidth > containerWidth) {
                 const overlap = (totalCardWidth - containerWidth) / (myHand.length - 1);
-                setCardMargin(-overlap);
+                // Add extra 1pt reduction when 7+ cards to prevent overflow
+                const extraReduction = myHand.length >= 7 ? 1 : 0;
+                setCardMargin(-(overlap + extraReduction));
             } else {
                 setCardMargin(10);
             }

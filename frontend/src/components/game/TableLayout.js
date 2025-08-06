@@ -5,6 +5,18 @@ import './KeyAndModal.css';
 import './TableLayout.css';
 import { SUIT_SYMBOLS } from '../../constants';
 
+// Full deck of 36 cards (9 ranks × 4 suits)
+const FULL_DECK = [
+    // Hearts
+    '6H', '7H', '8H', '9H', 'JH', 'QH', 'KH', '10H', 'AH',
+    // Diamonds  
+    '6D', '7D', '8D', '9D', 'JD', 'QD', 'KD', '10D', 'AD',
+    // Clubs
+    '6C', '7C', '8C', '9C', 'JC', 'QC', 'KC', '10C', 'AC',
+    // Spades
+    '6S', '7S', '8S', '9S', 'JS', 'QS', 'KS', '10S', 'AS'
+];
+
 const TableLayout = ({
     currentTableState,
     seatAssignments,
@@ -20,23 +32,59 @@ const TableLayout = ({
     dropZoneRef
 }) => {
     const [lastTrickVisible, setLastTrickVisible] = useState(false);
+    const [trumpBrokenAnnouncementVisible, setTrumpBrokenAnnouncementVisible] = useState(false);
+    const [previousTrumpBroken, setPreviousTrumpBroken] = useState(false);
     const lastTrickTimerRef = useRef(null);
+    const trumpAnnouncementTimerRef = useRef(null);
 
     useEffect(() => {
         return () => {
             if (lastTrickTimerRef.current) {
                 clearTimeout(lastTrickTimerRef.current);
             }
+            if (trumpAnnouncementTimerRef.current) {
+                clearTimeout(trumpAnnouncementTimerRef.current);
+            }
         };
     }, []);
 
+    // Track trump broken state changes and trigger announcement
+    useEffect(() => {
+        const { trumpBroken } = currentTableState;
+        
+        // Check if trump just got broken (transition from false to true)
+        if (!previousTrumpBroken && trumpBroken) {
+            // Clear any existing timer
+            if (trumpAnnouncementTimerRef.current) {
+                clearTimeout(trumpAnnouncementTimerRef.current);
+            }
+            
+            // Show announcement
+            setTrumpBrokenAnnouncementVisible(true);
+            
+            // Hide announcement after 2.5 seconds
+            trumpAnnouncementTimerRef.current = setTimeout(() => {
+                setTrumpBrokenAnnouncementVisible(false);
+            }, 2500);
+        }
+        
+        // Update previous state
+        setPreviousTrumpBroken(trumpBroken);
+    }, [currentTableState.trumpBroken, previousTrumpBroken]);
+
     const handleTrickPileClick = (clickedPile) => {
         const { lastCompletedTrick, bidWinnerInfo } = currentTableState;
-        if (!lastCompletedTrick || !bidWinnerInfo) return;
+        if (!lastCompletedTrick || !bidWinnerInfo) {
+            console.log('[TrickPile] No last trick or bid winner info available');
+            return;
+        }
 
         const winnerIsBidder = lastCompletedTrick.winnerName === bidWinnerInfo.playerName;
         const clickedWinnerPile = (clickedPile === 'bidder' && winnerIsBidder) || (clickedPile === 'defender' && !winnerIsBidder);
 
+        console.log('[TrickPile] Click:', clickedPile, 'Winner:', lastCompletedTrick.winnerName, 'Is Bidder:', winnerIsBidder, 'Correct pile:', clickedWinnerPile);
+
+        // Only show last trick when clicking the pile of the team that won
         if (clickedWinnerPile) {
             if (lastTrickTimerRef.current) clearTimeout(lastTrickTimerRef.current);
             setLastTrickVisible(true);
@@ -44,7 +92,13 @@ const TableLayout = ({
                 setLastTrickVisible(false);
             }, 3000);
         } else {
-            playSound('no_peaking_cheater');
+            // Play sound when clicking the pile that didn't win
+            console.log('[TrickPile] Playing no_peaking_cheater sound');
+            if (playSound) {
+                playSound('no_peaking_cheater');
+            } else {
+                console.error('[TrickPile] playSound function not available');
+            }
         }
     };
 
@@ -119,7 +173,12 @@ const TableLayout = ({
                             renderCard(null, { isFaceDown: true, style: { opacity: 0.3 }, small: true })
                         ) : (
                             Array.from({ length: count }).map((_, i) => (
-                                <div key={i} className="trick-pile-card-wrapper" style={{ transform: `translateY(-${i * 2}px)` }}>
+                                <div key={i} style={{ 
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    transform: `translateY(-${i * 2}px)` 
+                                }}>
                                     {renderCard(null, { isFaceDown: true, small: true })}
                                 </div>
                             ))
@@ -174,33 +233,15 @@ const TableLayout = ({
     };
 
     const renderPlayerPucks = () => {
-        const { players, dealer, bidWinnerInfo, trumpSuit, playerOrderActive } = currentTableState;
-        if (!playerOrderActive || playerOrderActive.length === 0) return null;
+        const { players, dealer } = currentTableState;
 
         const Puck = ({ player, position }) => {
             if (!player) return null;
             const isDealer = dealer === player.userId;
-            const isBidWinner = bidWinnerInfo?.playerName === player.playerName;
-            const isDefender = bidWinnerInfo && !isBidWinner && playerOrderActive.includes(player.playerName);
-
-            let rolePuckContent = null;
-            if (isBidWinner) {
-                switch (bidWinnerInfo.bid) {
-                    case "Frog": rolePuckContent = "FROG"; break;
-                    case "Heart Solo": rolePuckContent = "H-S"; break;
-                    case "Solo": rolePuckContent = `${trumpSuit}-S`; break;
-                    default: break;
-                }
-            } else if (isDefender) {
-                rolePuckContent = "TEAM";
-            }
-            
-            const rolePuckClasses = ['puck', 'role-puck', isBidWinner ? 'bid-winner' : 'defender', rolePuckContent?.length > 3 && 'small-font'].filter(Boolean).join(' ');
 
             return (
                 <div className={`puck-container-${position}`}>
                     {isDealer && <div className="puck dealer-puck">D</div>}
-                    {rolePuckContent && <div className={rolePuckClasses}>{rolePuckContent}</div>}
                 </div>
             );
         };
@@ -239,13 +280,13 @@ const TableLayout = ({
                     {isRoundOver 
                         ? (
                             cardsToDisplay.map((card, i) => (
-                                <div key={card + i} className="trick-pile-card-wrapper" style={{ transform: `translateX(${i * 15}px)` }}>
+                                <div key={card + i} style={{ transform: `translateX(${i * 12}px)`, position: 'absolute', top: 0, left: 0 }}>
                                     {renderCard(card, { small: true })}
                                 </div>
                             ))
                         ) : (
                             Array.from({ length: widowSize }).map((_, i) => (
-                                <div key={i} className="trick-pile-card-wrapper" style={{ transform: `translateX(${i * 15}px)` }}>
+                                <div key={i} style={{ transform: `translateX(${i * 12}px)`, position: 'absolute', top: 0, left: 0 }}>
                                     {renderCard(null, { isFaceDown: true, small: true })}
                                 </div>
                             ))
@@ -257,24 +298,169 @@ const TableLayout = ({
     };
 
     const renderTrumpIndicatorPuck = () => {
-        const { trumpSuit, trumpBroken } = currentTableState;
-        if (!trumpSuit) {
+        const { trumpSuit, trumpBroken, bidWinnerInfo } = currentTableState;
+        if (!trumpSuit || !bidWinnerInfo) {
             return null;
+        }
+
+        const bidType = bidWinnerInfo.bid;
+        
+        // Determine trump indicator content based on bid type
+        let trumpContent = '';
+        if (bidType === 'Heart Solo') {
+            trumpContent = '♥♥♥'; // Three hearts for Heart Solo
+        } else if (bidType === 'Frog') {
+            trumpContent = '♥'; // Single heart for Frog
+        } else {
+            trumpContent = SUIT_SYMBOLS[trumpSuit]; // Trump suit symbol for regular solo
         }
 
         const classes = [
             'trump-indicator-puck',
-            trumpBroken ? 'broken' : ''
+            trumpBroken ? 'broken' : 'connected'
         ].filter(Boolean).join(' ');
         
-        const title = trumpBroken ? 'Trump has been broken!' : `Trump is ${trumpSuit}`;
+        const title = trumpBroken ? 'Trump has been broken!' : `Trump is ${trumpSuit} (${bidType})`;
 
         return (
             <div className={classes} title={title}>
-                {SUIT_SYMBOLS[trumpSuit]}
+                <div className="trump-content">{trumpContent}</div>
+                <div className={`trump-state-indicator ${trumpBroken ? 'broken' : 'connected'}`}></div>
             </div>
         );
     };
+
+    const renderTrumpBrokenAnnouncement = () => {
+        if (!trumpBrokenAnnouncementVisible) {
+            return null;
+        }
+
+        return (
+            <div className="trump-broken-announcement">
+                <div className="trump-broken-content">
+                    <div className="trump-broken-lightning">⚡</div>
+                    <div className="trump-broken-text">TRUMP BROKEN!</div>
+                    <div className="trump-broken-lightning">⚡</div>
+                </div>
+            </div>
+        );
+    };
+
+    const renderDealerDeck = () => {
+        const { state, dealer, players } = currentTableState;
+        
+        // Only show deck during "Dealing Pending" state
+        if (state !== 'Dealing Pending' || !dealer || !players) {
+            return null;
+        }
+
+        // Find the dealer's name and position
+        const dealerPlayer = Object.values(players).find(p => p.userId === dealer);
+        if (!dealerPlayer) return null;
+
+        const dealerName = dealerPlayer.playerName;
+        let deckPosition = '';
+        
+        // Determine dealer position based on seat assignments
+        if (seatAssignments.self === dealerName) {
+            deckPosition = 'bottom';
+        } else if (seatAssignments.opponentLeft === dealerName) {
+            deckPosition = 'left';
+        } else if (seatAssignments.opponentRight === dealerName) {
+            deckPosition = 'right';
+        } else {
+            return null; // Dealer not in current player's view
+        }
+
+        return (
+            <div className={`dealer-deck-container dealer-deck-${deckPosition}`}>
+                <div className="dealer-deck-label">
+                    {dealerName} is dealing...
+                </div>
+                <div className="dealer-deck-pile">
+                    {/* Stack of 36 face-down cards */}
+                    {FULL_DECK.map((_, index) => (
+                        <div 
+                            key={index} 
+                            className="dealer-deck-card-wrapper" 
+                            style={{ 
+                                transform: `translateY(-${index * 0.5}px) translateX(-${index * 0.2}px)`,
+                                zIndex: 50 + index
+                            }}
+                        >
+                            {renderCard(null, { isFaceDown: true, small: true })}
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    };
+
+    const renderWidowSeat = () => {
+        const { playerOrderActive, state, widow, originalDealtWidow, roundSummary } = currentTableState;
+        
+        // Only show the widow seat when there are less than 4 players
+        if (!playerOrderActive || playerOrderActive.length >= 4) {
+            return null;
+        }
+        
+        const hiddenStates = ["Waiting for Players", "Ready to Start", "Dealing Pending"];
+        if (hiddenStates.includes(state)) {
+            return null;
+        }
+        
+        // Get widow cards to display
+        const isRoundOver = state === 'Awaiting Next Round Trigger' || state === 'Game Over';
+        const cardsToDisplay = isRoundOver ? roundSummary?.widowForReveal : (widow || originalDealtWidow);
+        const widowSize = cardsToDisplay?.length || 0;
+        
+        return (
+            <div className="widow-seat">
+                <div className="widow-seat-plate">
+                    <div className="widow-name-row">
+                        <div className="widow-name">WIDOW</div>
+                        {widowSize > 0 && (
+                            <div className="widow-cards-inline">
+                                {isRoundOver 
+                                    ? (
+                                        cardsToDisplay.map((card, i) => (
+                                            <div key={card + i} style={{ 
+                                                transform: `translateX(${i * 15}px)`, 
+                                                position: 'absolute', 
+                                                top: 0, 
+                                                left: 0 
+                                            }}>
+                                                {renderCard(card, { small: true })}
+                                            </div>
+                                        ))
+                                    ) : (
+                                        Array.from({ length: widowSize }).map((_, i) => (
+                                            <div key={i} style={{ 
+                                                transform: `translateX(${i * 15}px)`, 
+                                                position: 'absolute', 
+                                                top: 0, 
+                                                left: 0 
+                                            }}>
+                                                {renderCard(null, { isFaceDown: true, small: true })}
+                                            </div>
+                                        ))
+                                    )
+                                }
+                            </div>
+                        )}
+                    </div>
+                    <div className="widow-stats-line">
+                        <span className="widow-tokens">---</span>
+                        <span className="info-divider">|</span>
+                        <span className="widow-score">Empty Seat</span>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    // Extract bidder name for use in render
+    const bidderName = currentTableState?.bidWinnerInfo?.playerName;
 
     return (
         <main className="game-table">
@@ -284,10 +470,26 @@ const TableLayout = ({
                 </div>
                 
                 <div className="player-seat-left">
-                    <PlayerSeat playerName={seatAssignments.opponentLeft} currentTableState={currentTableState} isSelf={false} emitEvent={emitEvent} />
+                    <PlayerSeat 
+                        playerName={seatAssignments.opponentLeft} 
+                        currentTableState={currentTableState} 
+                        isSelf={false} 
+                        emitEvent={emitEvent}
+                        renderCard={renderCard}
+                        seatPosition="left"
+                    />
+                    {seatAssignments.opponentLeft === bidderName && renderTrumpIndicatorPuck()}
                 </div>
                 <div className="player-seat-right">
-                    <PlayerSeat playerName={seatAssignments.opponentRight} currentTableState={currentTableState} isSelf={false} emitEvent={emitEvent} />
+                    <PlayerSeat 
+                        playerName={seatAssignments.opponentRight} 
+                        currentTableState={currentTableState} 
+                        isSelf={false} 
+                        emitEvent={emitEvent}
+                        renderCard={renderCard}
+                        seatPosition="right"
+                    />
+                    {seatAssignments.opponentRight === bidderName && renderTrumpIndicatorPuck()}
                 </div>
 
                 <img 
@@ -296,15 +498,26 @@ const TableLayout = ({
                     className="sluff-watermark"
                 />
                 
-                {renderWidowDisplay()}
-                {renderTrumpIndicatorPuck()}
+                {renderWidowSeat()}
                 {renderTrickTallyPiles()}
                 {renderLastTrickOverlay()}
                 {renderPlayerPucks()}
-                {renderProgressBars()}
+                {renderTrumpBrokenAnnouncement()}
+                {renderDealerDeck()}
 
+                {renderProgressBars()}
+                
                 <div className="player-seat-bottom">
-                    <PlayerSeat playerName={seatAssignments.self} currentTableState={currentTableState} isSelf={true} emitEvent={emitEvent} />
+                    <PlayerSeat 
+                        playerName={seatAssignments.self} 
+                        currentTableState={currentTableState} 
+                        isSelf={true} 
+                        emitEvent={emitEvent}
+                        showTrumpIndicator={seatAssignments.self === bidderName}
+                        trumpIndicatorPuck={renderTrumpIndicatorPuck()}
+                        renderCard={renderCard}
+                        seatPosition="bottom"
+                    />
                 </div>
 
                 {renderPlayedCardsOnTable()}

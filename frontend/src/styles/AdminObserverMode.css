@@ -1,28 +1,31 @@
 .admin-observer-mode {
   position: fixed;
-  top: 10px;
-  right: 10px;
+  top: 15px;
+  right: 15px;
   z-index: 1000;
 }
 
 .observer-toggle {
-  background: #2c3e50;
+  background: rgba(44, 62, 80, 0.8);
   color: white;
   border: none;
-  padding: 10px 15px;
-  border-radius: 5px;
+  padding: 8px;
+  border-radius: 50%;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 18px;
   display: flex;
   align-items: center;
-  gap: 5px;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
   transition: all 0.3s ease;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(10px);
 }
 
 .observer-toggle:hover {
-  background: #34495e;
-  transform: translateY(-1px);
+  background: rgba(52, 73, 94, 0.9);
+  transform: translateY(-1px) scale(1.05);
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
 }
 
@@ -173,13 +176,15 @@
 /* Mobile responsiveness */
 @media (max-width: 768px) {
   .admin-observer-mode {
-    top: 5px;
-    right: 5px;
+    top: 10px;
+    right: 10px;
   }
 
   .observer-toggle {
-    padding: 8px 12px;
-    font-size: 12px;
+    width: 32px;
+    height: 32px;
+    padding: 6px;
+    font-size: 16px;
   }
 
   .observer-controls {

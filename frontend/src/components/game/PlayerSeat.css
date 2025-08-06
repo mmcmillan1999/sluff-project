@@ -22,6 +22,10 @@
 .player-name {
     font-weight: bold;
     font-size: 1.1em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
 }
 .player-name.is-self {
     color: #15803d;
@@ -42,9 +46,7 @@
     color: #aaa;
 }
 
-.player-seat.disconnected { border-color: red; }
-.player-seat.bid-winner { border-color: #ffc107; }
-.player-seat.defender { border-color: #0d6efd; }
+/* Border styling is now handled dynamically in JavaScript */
 .player-seat.active-turn { animation: pulsing-glow 1.5s infinite; }
 
 .puck {
@@ -63,10 +65,6 @@
     font-family: 'Oswald', sans-serif;
 }
 .dealer-puck { right: -12px; background-color: ivory; color: black; }
-.role-puck { left: -12px; }
-.role-puck.bid-winner { background-color: #ffc107; color: black; }
-.role-puck.defender { background-color: #0d6efd; color: white; }
-.role-puck.small-font { font-size: 0.6em; }
 
 .disconnected-controls { margin-top: 5px; }
 .start-timer-button {
@@ -84,6 +82,20 @@
 .player-tokens, .player-score { font-weight: bold; display: flex; align-items: center; }
 .player-tokens { color: #b45309; }
 .player-score { color: #444; }
+
+.trump-indicator-inline {
+    display: inline-flex;
+    align-items: center;
+}
+
+.trump-indicator-inline .trump-indicator-puck {
+    position: static;
+    transform: none;
+    margin: 0;
+    width: 35px;
+    height: 35px;
+    font-size: 0.9em;
+}
 
 .player-error-tooltip {
     position: absolute;
@@ -128,5 +140,133 @@
         writing-mode: vertical-rl; /* Vertical text */
         transform: rotate(180deg);   /* Read top-to-bottom */
         margin-top: 8px; /* Space between name and stats */
+    }
+    
+    /* Enhanced mobile border visibility */
+    .player-seat {
+        /* Stronger shadow to make borders more visible on mobile */
+        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.5);
+        /* Add subtle inner shadow for depth */
+        border-style: solid;
+    }
+    
+    /* Ensure 5px borders are clearly visible on mobile */
+    .player-seat[style*="border-width: 5px"] {
+        box-shadow: 
+            0 3px 8px rgba(0, 0, 0, 0.5),
+            inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+}
+
+/* Opponent cards styling */
+.opponent-cards-container {
+    position: absolute;
+    pointer-events: none;
+    z-index: -1; /* Cards behind player seat */
+    /* Cards tucked under player names */
+}
+
+.opponent-cards-container.left {
+    left: 50%;
+    top: 35%; /* Positioned under the name */
+    transform: translateX(-50%);
+}
+
+.opponent-cards-container.right {
+    left: 50%;
+    top: 35%; /* Positioned under the name */
+    transform: translateX(-50%);
+}
+
+.opponent-cards-container.bottom {
+    /* No special positioning for self/bottom seat */
+    display: none;
+}
+
+.opponent-card {
+    position: absolute;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+    opacity: 0.9;
+    filter: drop-shadow(1px 1px 3px rgba(0, 0, 0, 0.3));
+}
+
+.opponent-card:hover {
+    transform: translateX(0) translateY(-2px) !important;
+    opacity: 1;
+}
+
+/* Ensure cards appear behind the player seat */
+.player-seat-wrapper {
+    position: relative;
+}
+
+.player-seat-wrapper .opponent-cards-container {
+    z-index: -1;
+}
+
+.player-seat-wrapper .player-seat {
+    position: relative;
+    z-index: 1;
+}
+
+/* Small screen optimizations */
+@media (orientation: portrait) and (max-width: 414px) {
+    .player-seat {
+        min-width: 110px;
+        padding: 5px 8px;
+        font-size: 0.85em;
+    }
+    
+    .player-name {
+        font-size: 1.0em;
+    }
+    
+    .player-stats-line {
+        font-size: 0.8em;
+        gap: 6px;
+    }
+    
+    .token-icon-inline {
+        height: 12px;
+    }
+    
+    /* Ensure disconnected controls remain usable */
+    .start-timer-button {
+        padding: 6px 10px;
+        font-size: 0.75em;
+        min-height: 44px; /* Maintain touch target */
+        min-width: 44px;
+    }
+    
+    .timeout-display {
+        font-size: 0.8em;
+    }
+    
+    .trump-indicator-inline .trump-indicator-puck {
+        width: 28px;
+        height: 28px;
+        font-size: 0.75em;
+        border-width: 2px;
+    }
+    
+    .player-name {
+        gap: 6px;
+    }
+    
+    /* Adjust opponent cards for mobile */
+    .opponent-cards-container.left {
+        right: -8px;
+        top: -2px;
+        transform: scale(0.8);
+    }
+
+    .opponent-cards-container.right {
+        left: -8px;
+        top: -2px;
+        transform: scale(0.8);
+    }
+    
+    .opponent-card {
+        opacity: 0.8;
     }
 }

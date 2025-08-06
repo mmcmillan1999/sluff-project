@@ -795,10 +795,11 @@ class CardPhysicsEngine {
             card.element.style.filter = `drop-shadow(0 10px 20px rgba(0, 255, 0, ${glowIntensity * 0.6}))`;
             
             // Complete after docking animation
-            if (dockProgress >= 1.0 && card.onComplete && typeof card.onComplete === 'function') {
+            if (dockProgress >= 1.0 && card.onComplete && typeof card.onComplete === 'function' && !card.dockingCompleted) {
                 // Store the callback and clear it immediately to prevent multiple calls
                 const callback = card.onComplete;
                 card.onComplete = null;
+                card.dockingCompleted = true; // Prevent any other completion paths
                 
                 // Add a small delay to ensure the game can process the card
                 setTimeout(() => {
@@ -807,7 +808,7 @@ class CardPhysicsEngine {
                         const success = !card.isReturning || card.timeoutDocking;
                         
                         // Log docking completion
-                        console.log('Card docking complete:', {
+                        console.log('Card docking complete (animated):', {
                             cardId: card.element.id,
                             success,
                             isReturning: card.isReturning,
@@ -852,7 +853,7 @@ class CardPhysicsEngine {
             const dynamicSpeedLimit = ACCEPT_SPEED + (progressiveFactor * 200); // Much more lenient when close
             
             // Check if card is ready to dock - no rotation requirement!
-            if (distToDock < ACCEPT_ZONE && currentSpeed < dynamicSpeedLimit && !card.isReturning && !card.isDocking) {
+            if (distToDock < ACCEPT_ZONE && currentSpeed < dynamicSpeedLimit && !card.isReturning && !card.isDocking && !card.dockingCompleted) {
                 console.log('Natural docking achieved:', {
                     cardId: card.element.id,
                     distance: distToDock.toFixed(1),
@@ -864,29 +865,45 @@ class CardPhysicsEngine {
                 
                 // CRITICAL: Mark as docking to prevent multiple triggers
                 card.isDocking = true;
+                card.dockingCompleted = true; // Prevent any other completion paths
                 
-                // Move to exact dock position
-                card.position.x = dockCenterX;
-                card.position.y = dockCenterY;
-                card.velocity = { x: 0, y: 0 };
+                // Smooth transition to dock position - no snapping
+                if (distToDock > 5) {
+                    // Still some distance - guide smoothly
+                    const snapForce = Math.min(distToDock * 2, 50);
+                    const dirX = (dockCenterX - card.position.x) / distToDock;
+                    const dirY = (dockCenterY - card.position.y) / distToDock;
+                    card.velocity.x = dirX * snapForce;
+                    card.velocity.y = dirY * snapForce;
+                } else {
+                    // Very close - gentle settle
+                    card.position.x += (dockCenterX - card.position.x) * 0.3;
+                    card.position.y += (dockCenterY - card.position.y) * 0.3;
+                    card.velocity.x *= 0.5;
+                    card.velocity.y *= 0.5;
+                }
                 
                 // Keep the card's natural rotation - don't force alignment
                 // This gives a more realistic feel like physical card games
-                card.angularVelocity *= 0.5; // Just slow down the spin
+                card.angularVelocity *= 0.95; // Gently slow down the spin
                 
-                // Complete the docking
+                // Complete the docking IMMEDIATELY for faster response
                 if (card.onComplete && typeof card.onComplete === 'function') {
                     const callback = card.onComplete;
-                    card.onComplete = null;
+                    card.onComplete = null; // Clear immediately to prevent double calls
                     
-                    setTimeout(() => {
-                        try {
-                            callback(true);
-                            // Don't clean up here - let the game handle it after processing
-                        } catch (error) {
-                            console.error('Error in card onComplete callback:', error);
-                        }
-                    }, 100); // Short delay for visual completion
+                    // Call immediately for instant game response
+                    try {
+                        callback(true);
+                        // Visual cleanup after a delay
+                        setTimeout(() => {
+                            if (this.activeCards.has(card.element.id || card.element.getAttribute('id'))) {
+                                this.cleanupCard(card.element.id || card.element.getAttribute('id'));
+                            }
+                        }, 300); // Cleanup after visual completion
+                    } catch (error) {
+                        console.error('Error in card onComplete callback:', error);
+                    }
                 }
                 return; // Exit early - we're done!
             }
@@ -1130,46 +1147,94 @@ class CardPhysicsEngine {
             card.position.x += card.velocity.x * deltaTime;
             card.position.y += card.velocity.y * deltaTime;
             
-            // Apply air resistance - much stronger when moving away from dock
-            let airResistance = this.linearDamping; // Default damping
-            
-            // Calculate if card is moving away from or toward the docking zone
-            const velocityDotProduct = card.velocity.x * toTarget.x + card.velocity.y * toTarget.y;
-            const isMovingAway = velocityDotProduct < 0;
+            // Natural physics with smooth guidance
+            const speed = Math.sqrt(card.velocity.x ** 2 + card.velocity.y ** 2);
             
             if (!card.isReturning) {
-                if (isMovingAway) {
-                    // HEAVY air resistance when moving away from dock
-                    airResistance = this.airResistanceAway; // 15% speed loss per frame!
-                    
-                    // Even more resistance if outside magnetic range
-                    if (distance > MAGNETIC_RANGE) {
-                        airResistance = this.airResistanceAwayFar; // 25% speed loss per frame - extreme drag
-                        
-                        // Visual feedback for extreme air resistance
-                        const speed = Math.sqrt(card.velocity.x ** 2 + card.velocity.y ** 2);
-                        if (speed > 100) {
-                            // Add motion blur effect when fighting air resistance
-                            card.element.style.filter = `drop-shadow(0 10px 20px rgba(0,0,0,0.3)) blur(${Math.min(speed / 200, 2)}px)`;
-                        }
-                    }
-                } else if (distance < MAGNETIC_RANGE) {
-                    // Light resistance when being pulled in
-                    airResistance = this.airResistanceMagnetic;
-                    
-                    // Clear any blur effect when in magnetic range
-                    if (card.element.style.filter && card.element.style.filter.includes('blur')) {
-                        card.element.style.filter = 'drop-shadow(0 10px 20px rgba(0,0,0,0.3))';
-                    }
-                } else {
-                    // Medium resistance when moving toward but outside range
-                    airResistance = this.airResistanceToward;
+                // Calculate trajectory characteristics
+                const velocityDotProduct = card.velocity.x * toTarget.x + card.velocity.y * toTarget.y;
+                const isMovingToward = velocityDotProduct > 0;
+                
+                // Initialize flight tracking if not done
+                if (card.flightTime === undefined) {
+                    card.flightTime = 0;
+                    card.initialSpeed = speed;
+                    card.trajectoryConfirmed = false;
                 }
+                card.flightTime += deltaTime;
+                
+                // Natural guidance forces - no hard stops
+                if (distance < MAGNETIC_RANGE) {
+                    // Close range - gentle magnetic pull
+                    const pullStrength = Math.min(300 / (distance + 50), 6);
+                    const dirX = toTarget.x / distance;
+                    const dirY = toTarget.y / distance;
+                    
+                    card.velocity.x += dirX * pullStrength * deltaTime * 60;
+                    card.velocity.y += dirY * pullStrength * deltaTime * 60;
+                    
+                    // Very light damping in magnetic field
+                    card.velocity.x *= 0.995;
+                    card.velocity.y *= 0.995;
+                    
+                } else if (!isMovingToward && card.flightTime > 0.3) {
+                    // Only guide if card has been flying away for 0.3+ seconds
+                    // This prevents interfering with natural arcs from upward flicks
+                    
+                    if (!card.guidanceStarted) {
+                        card.guidanceStarted = true;
+                        card.guidanceTime = 0;
+                        // Determine natural curve direction based on lateral position
+                        card.curveDirection = (card.position.x < (card.targetPosition.x + card.cardDimensions.width/2)) ? 1 : -1;
+                    }
+                    
+                    card.guidanceTime += deltaTime;
+                    const guidanceProgress = Math.min(card.guidanceTime / 2.0, 1.0); // 2 second gentle curve
+                    
+                    // Natural curve using physics-based forces
+                    if (speed > 30) { // Only curve if moving fast enough
+                        // Perpendicular force for natural arc
+                        const perpX = -card.velocity.y / speed;
+                        const perpY = card.velocity.x / speed;
+                        
+                        // Gentle, progressive curve force
+                        const curveStrength = 80 * guidanceProgress * (1 - guidanceProgress * 0.5); // Peaks mid-flight
+                        card.velocity.x += perpX * card.curveDirection * curveStrength * deltaTime;
+                        card.velocity.y += perpY * card.curveDirection * curveStrength * deltaTime;
+                        
+                        // Gradual redirection toward target
+                        const redirectStrength = 40 * guidanceProgress * guidanceProgress; // Accelerates over time
+                        const dirX = toTarget.x / distance;
+                        const dirY = toTarget.y / distance;
+                        
+                        card.velocity.x += dirX * redirectStrength * deltaTime;
+                        card.velocity.y += dirY * redirectStrength * deltaTime;
+                    }
+                    
+                    // Natural air resistance - smooth deceleration
+                    const naturalDamping = 0.985 + (0.01 * guidanceProgress); // 98.5% to 99.5%
+                    card.velocity.x *= naturalDamping;
+                    card.velocity.y *= naturalDamping;
+                    
+                } else {
+                    // Normal flight - just natural physics
+                    // Light, consistent air resistance
+                    card.velocity.x *= 0.99;
+                    card.velocity.y *= 0.99;
+                }
+                
+                // Remove any blur effects - keep visuals clean
+                if (card.element.style.filter && card.element.style.filter.includes('blur')) {
+                    card.element.style.filter = 'drop-shadow(0 10px 20px rgba(0,0,0,0.3))';
+                }
+            } else {
+                // Returning to hand - smooth spring physics
+                const returnForce = 0.15;
+                card.velocity.x += toTarget.x * returnForce;
+                card.velocity.y += toTarget.y * returnForce;
+                card.velocity.x *= 0.92;
+                card.velocity.y *= 0.92;
             }
-            
-            // Apply the calculated air resistance
-            card.velocity.x *= airResistance;
-            card.velocity.y *= airResistance;
             
             // Maintain angular momentum during flight
             if (!card.isReturning) {

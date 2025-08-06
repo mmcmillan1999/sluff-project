@@ -60,9 +60,8 @@ const LobbyTableCard = ({ table, canAfford, onJoin, onJoinAsSpectator, user }) =
                                 onClick={() => onJoinAsSpectator(table.tableId)}
                                 className="spectate-table-button"
                                 title="Join as spectator (Admin only)"
-                                style={{marginLeft: '10px', backgroundColor: '#6c757d'}}
                             >
-                                👁️ Spectate
+                                👁️
                             </button>
                         )}
                     </div>

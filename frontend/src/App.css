@@ -3,7 +3,46 @@ body {
   font-family: Arial, sans-serif;
   text-align: center;
   background-color: #f4f4f4;
-  padding: 20px;
+  padding: 0;
+  margin: 0;
+}
+
+/* Main content container to account for fixed advertising header */
+.app-content-container {
+  /* Desktop: Account for 106px header height */
+  padding-top: 106px;
+  min-height: calc(100vh - 106px);
+  padding-left: 20px;
+  padding-right: 20px;
+  padding-bottom: 20px;
+}
+
+/* Responsive adjustments for different ad sizes */
+@media (max-width: 768px) and (min-width: 481px) {
+  .app-content-container {
+    /* Tablet: Account for 72px header height */
+    padding-top: 72px;
+    min-height: calc(100vh - 72px);
+  }
+}
+
+@media (max-width: 480px) {
+  .app-content-container {
+    /* Mobile: Account for 58px header height */
+    padding-top: 58px;
+    min-height: calc(100vh - 58px);
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-bottom: 10px;
+  }
+}
+
+@media (max-width: 320px) {
+  .app-content-container {
+    /* Ultra small: Account for 53px header height */
+    padding-top: 53px;
+    min-height: calc(100vh - 53px);
+  }
 }
 
 h1 {

@@ -2,7 +2,7 @@
 import React from 'react';
 import './PlayerSeat.css'; // Import the CSS file
 
-const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent }) => {
+const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent, showTrumpIndicator, trumpIndicatorPuck, renderCard, seatPosition }) => {
     if (!playerName) {
         return null; 
     }
@@ -14,6 +14,8 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent }) => {
         playerOrderActive,
         trickTurnPlayerName,
         forfeiture,
+        hands,
+        state,
     } = currentTableState;
 
     const playerEntry = Object.values(players).find(p => p.playerName === playerName);
@@ -30,18 +32,23 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent }) => {
     const isTimerRunningForThisPlayer = forfeiture?.targetPlayerName === playerName;
     const isMyTurn = trickTurnPlayerName === playerName;
 
-    // --- MODIFICATION: New border styling logic ---
-    let borderColor = '#ccc'; // Default
-    if (isBidWinner) {
-        borderColor = '#ffc107'; // Gold
-    } else if (isDefender) {
-        borderColor = '#0d6efd'; // Blue
-    }
+    // Team indication border styling
+    let borderColor = '#ccc'; // Default for non-players
+    let borderWidth = '2px'; // Default width for non-players
+    
     if (disconnected) {
         borderColor = 'red';
+        borderWidth = '3px'; // Keep disconnected override
+    } else if (isBidWinner) {
+        borderColor = '#ffc107'; // Gold for bidder
+        borderWidth = '5px';
+    } else if (isDefender) {
+        borderColor = '#0d6efd'; // Blue for defenders
+        borderWidth = '5px';
     }
+    
     const dynamicStyles = {
-        border: `3px solid ${borderColor}`, // Thicker border
+        border: `${borderWidth} solid ${borderColor}`,
     };
 
     const seatClasses = [
@@ -55,14 +62,28 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent }) => {
         emitEvent("startTimeoutClock", { targetPlayerName: playerName });
     };
 
+    // Render opponent cards (face-down)
+    const renderOpponentCards = () => {
+        // Opponent cards disabled per user request
+        return null;
+    };
+
     return (
         <div className="player-seat-wrapper">
             {/* Pucks are now rendered in TableLayout */}
+            {renderOpponentCards()}
             <div className={seatClasses} style={dynamicStyles}>
-                <div className={nameClasses}>{playerName}</div>
+                <div className={nameClasses}>
+                    {playerName}
+                    {isSelf && showTrumpIndicator && (
+                        <div className="trump-indicator-inline">
+                            {trumpIndicatorPuck}
+                        </div>
+                    )}
+                </div>
                 <div className="player-stats-line">
                     <span className="player-tokens">
-                        <img src="/sluff_token.png" alt="Tokens" className="token-icon-inline" />
+                        <img src="/Sluff_Token.png" alt="Tokens" className="token-icon-inline" />
                         {/* --- MODIFICATION: Simplified token display logic --- */}
                         {playerTokenCount !== undefined && playerTokenCount !== 'N/A' ? parseFloat(playerTokenCount).toFixed(2) : '...'}
                     </span>

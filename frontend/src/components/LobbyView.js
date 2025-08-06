@@ -74,7 +74,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
                 <div className="header-right">
                     <span className="user-welcome"><strong>{user.username}</strong></span>
                     <div className="user-tokens">
-                        <img src="/sluff_token.png" alt="Tokens" className="token-icon" />
+                        <img src="/Sluff_Token.png" alt="Tokens" className="token-icon" />
                         <span>{parseFloat(user.tokens).toFixed(2)}</span>
                     </div>
                     <div className="hamburger-menu-container">
@@ -97,7 +97,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
                     >
                         <span className="lobby-tab-name">{theme.name}</span>
                         <span className="lobby-tab-cost">
-                            <img src="/sluff_token.png" alt="Token" className="tab-token-icon" /> {theme.cost}
+                            <img src="/Sluff_Token.png" alt="Token" className="tab-token-icon" /> {theme.cost}
                         </span>
                     </button>
                 ))}

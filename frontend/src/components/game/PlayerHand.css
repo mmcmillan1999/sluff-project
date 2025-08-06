@@ -83,3 +83,67 @@
     transform: translateY(-12px);
     z-index: 100;
 }
+
+/* Mobile optimizations for player hand */
+@media (orientation: portrait) and (max-width: 768px) {
+    .player-hand-container {
+        padding: 3px 0;
+        /* Ensure physics interactions work on mobile */
+        touch-action: none;
+        -webkit-touch-callout: none;
+    }
+    
+    .player-hand-cards {
+        height: 95px;
+        padding: 8px 0;
+    }
+    
+    /* Tighter card spacing on mobile */
+    .player-hand-card-wrapper:not(:first-child) {
+        margin-left: var(--card-margin-left, -30px);
+    }
+    
+    /* Better hover/touch feedback on mobile */
+    .player-hand-card-wrapper-static:hover {
+        transform: translateY(-8px);
+    }
+    
+    /* Physics-enhanced mobile interactions */
+    .player-hand-card-wrapper.physics-active {
+        /* Enhanced touch response */
+        will-change: transform, opacity;
+    }
+    
+    /* My turn indicator smaller on mobile */
+    .player-hand-cards.my-turn {
+        border-radius: 8px;
+        background-color: rgba(59, 130, 246, 0.08);
+    }
+}
+
+/* Small mobile screens */
+@media (orientation: portrait) and (max-width: 414px) {
+    .player-hand-container {
+        padding: 2px 0;
+    }
+    
+    .player-hand-cards {
+        height: 85px;
+        padding: 6px 0;
+    }
+    
+    /* Even tighter spacing for small screens */
+    .player-hand-card-wrapper:not(:first-child) {
+        margin-left: var(--card-margin-left, -35px);
+    }
+    
+    /* Reduced hover effect for small screens */
+    .player-hand-card-wrapper-static:hover {
+        transform: translateY(-6px);
+    }
+    
+    /* Smaller illegal move overlay */
+    .illegal-move::after {
+        border-radius: 4px;
+    }
+}

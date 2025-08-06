@@ -14,6 +14,23 @@
     overflow: hidden;
 }
 
+/* In-Game Ad Container */
+.in-game-ad-container {
+    position: fixed;
+    bottom: 180px; /* Position above the player hand */
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    pointer-events: none; /* Allow clicks through to game elements */
+}
+
+.in-game-ad-container > * {
+    pointer-events: auto; /* Re-enable clicks for the ad itself */
+}
+
 .game-footer {
     background-color: rgba(48, 48, 48, 0.8);
     padding: 5px 10px;
@@ -210,7 +227,24 @@
     stroke: white;
 }
 
+@media (max-width: 768px) {
+    .in-game-ad-container {
+        bottom: 160px; /* Adjust for mobile player hand height */
+    }
+}
+
+@media (max-width: 414px) {
+    .in-game-ad-container {
+        bottom: 140px; /* Further adjustment for smaller screens */
+        transform: translateX(-50%) scale(0.9); /* Slightly smaller on very small screens */
+    }
+}
+
 @media (orientation: portrait) {
+    .in-game-ad-container {
+        bottom: 150px; /* Adjust for portrait orientation */
+    }
+    
     .game-footer {
         flex-direction: column;
         padding: 5px;
@@ -229,13 +263,58 @@
         align-items: center;
         gap: 10px;
     }
+    
+    /* Enhanced mobile chat positioning */
+    .game-view-chat-container {
+        width: min(300px, calc(100vw - 20px));
+        bottom: 8px;
+        left: 8px;
+        max-height: calc(100vh - 250px); /* Prevent overlap with footer */
+    }
 }
 
 @media (max-width: 768px) {
     .game-menu-popup {
         width: 90vw;
+        max-width: 350px;
         right: 5vw;
         bottom: calc(100% + 5px);
+        font-size: 0.9em;
+    }
+    
+    /* Small screen game menu optimization */
+    .game-menu-button {
+        padding: 10px 12px;
+        font-size: 0.9em;
+        min-height: 44px; /* Maintain touch targets */
+    }
+}
+
+/* Extra small screens */
+@media (max-width: 414px) {
+    .game-view-chat-container {
+        width: calc(100vw - 16px);
+        left: 8px;
+        bottom: 8px;
+    }
+    
+    .chat-tab-button {
+        padding: 6px 8px;
+        font-size: 0.9em;
+        min-height: 44px;
+        min-width: 44px;
+    }
+    
+    .hamburger-btn {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 6px;
+    }
+    
+    .unread-badge {
+        width: 18px;
+        height: 18px;
+        font-size: 0.7em;
     }
 }
 
