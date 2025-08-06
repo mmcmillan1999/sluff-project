@@ -342,8 +342,8 @@ button.card-display:disabled {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 200px;
-    height: 200px;
+    width: 500px; /* Expanded for magnetic range */
+    height: 500px; /* Expanded for magnetic range */
     transform: translate(-50%, -50%);
     z-index: 7;
     pointer-events: all; 
@@ -358,10 +358,82 @@ button.card-display:disabled {
     transform: translate(-50%, -50%);
     border-radius: 8px;
     border: 3px dashed rgba(139, 195, 247, 0.5);
-    transition: opacity 0.3s ease, box-shadow 0.2s ease;
+    transition: opacity 0.3s ease, box-shadow 0.2s ease, transform 0.2s ease;
     opacity: 0;
     pointer-events: none;
     box-shadow: 0 0 20px 10px rgba(139, 195, 247, 0.5);
+}
+
+/* Magnetic range indicator - outer circle */
+.card-drop-zone-visual::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 500px; /* Magnetic range diameter */
+    height: 500px;
+    transform: translate(-50%, -50%);
+    border: 2px dotted rgba(139, 195, 247, 0.15);
+    border-radius: 50%;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+/* Docking zone indicator - inner circle */
+.card-drop-zone-visual::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 300px; /* Docking zone diameter */
+    height: 300px;
+    transform: translate(-50%, -50%);
+    border: 2px dashed rgba(139, 195, 247, 0.25);
+    border-radius: 50%;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+/* Show magnetic zones when card is being dragged */
+.card-drop-zone-visual.active {
+    opacity: 1;
+}
+
+.card-drop-zone-visual.active::before,
+.card-drop-zone-visual.active::after {
+    opacity: 1;
+}
+
+/* Enhanced glow when card is in magnetic range */
+.card-drop-zone-visual.magnetic-pull {
+    border-color: rgba(139, 195, 247, 0.8);
+    box-shadow: 0 0 40px 20px rgba(139, 195, 247, 0.8);
+    transform: translate(-50%, -50%) scale(1.1);
+}
+
+/* Toilet bowl spiral animation */
+@keyframes spiral-pulse {
+    0% { 
+        box-shadow: 0 0 40px 20px rgba(139, 195, 247, 0.8);
+    }
+    50% { 
+        box-shadow: 0 0 60px 30px rgba(139, 195, 247, 1.0);
+    }
+    100% { 
+        box-shadow: 0 0 40px 20px rgba(139, 195, 247, 0.8);
+    }
+}
+
+.card-drop-zone-visual.spiral-active {
+    animation: spiral-pulse 0.5s ease-in-out infinite;
+    border-style: solid;
+    border-width: 4px;
+}
+
+/* Spiral completion indicator */
+.card-drop-zone-visual.spiral-complete {
+    border-color: rgba(255, 215, 0, 0.8);
+    box-shadow: 0 0 50px 25px rgba(255, 215, 0, 0.6);
 }
 
 @media (orientation: portrait) {

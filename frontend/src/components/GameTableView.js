@@ -125,14 +125,14 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             if (isSpectator) {
                 // For spectators, show all players in a default arrangement
                 const activePlayerNames = currentTableState.playerOrderActive;
-                console.log('[ADMIN] Spectator seat assignment - active players:', activePlayerNames);
+                // console.log('[ADMIN] Spectator seat assignment - active players:', activePlayerNames);
                 if (activePlayerNames.length === 3) {
                     const assignments = { 
                         self: activePlayerNames[0], 
                         opponentLeft: activePlayerNames[1], 
                         opponentRight: activePlayerNames[2] 
                     };
-                    console.log('[ADMIN] Setting 3-player spectator seats:', assignments);
+                    // console.log('[ADMIN] Setting 3-player spectator seats:', assignments);
                     setSeatAssignments(assignments);
                 } else if (activePlayerNames.length === 4) {
                     const assignments = { 
@@ -141,7 +141,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                         opponentAcross: activePlayerNames[2],
                         opponentRight: activePlayerNames[3] 
                     };
-                    console.log('[ADMIN] Setting 4-player spectator seats:', assignments);
+                    // console.log('[ADMIN] Setting 4-player spectator seats:', assignments);
                     setSeatAssignments(assignments);
                 }
             } else if (playerId && currentTableState.players[playerId]) {
@@ -164,12 +164,12 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     useEffect(() => {
         if (currentTableState && playerId) {
             const player = currentTableState.players[playerId];
-            console.log('[ADMIN] TableState updated - spectator status debug:');
-            console.log('[ADMIN]   - playerId:', playerId);
-            console.log('[ADMIN]   - player object:', player);
-            console.log('[ADMIN]   - isSpectator calculated:', player?.isSpectator);
-            console.log('[ADMIN]   - playerOrderActive:', currentTableState.playerOrderActive);
-            console.log('[ADMIN]   - player in playerOrderActive:', currentTableState.playerOrderActive?.includes(player?.playerName));
+            // console.log('[ADMIN] TableState updated - spectator status debug:');
+            // console.log('[ADMIN]   - playerId:', playerId);
+            // console.log('[ADMIN]   - player object:', player);
+            // console.log('[ADMIN]   - isSpectator calculated:', player?.isSpectator);
+            // console.log('[ADMIN]   - playerOrderActive:', currentTableState.playerOrderActive);
+            // console.log('[ADMIN]   - player in playerOrderActive:', currentTableState.playerOrderActive?.includes(player?.playerName));
         }
     }, [currentTableState, playerId]);
     
@@ -209,9 +209,19 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     };
 
     const renderCard = (cardString, options = {}) => {
-        const { isButton = false, onClick = null, disabled = false, isSelected = false, small = false, large = false, isFaceDown = false, style: customStyle = {}, className = '' } = options;
-        const width = large ? '65px' : (small ? '37.5px' : '45px');
-        const height = large ? '85px' : (small ? '50px' : '70px');
+        const { isButton = false, onClick = null, disabled = false, isSelected = false, small = false, large = false, isFaceDown = false, style: customStyle = {}, className = '', responsive = true } = options;
+        
+        // Responsive card sizes based on viewport
+        const isMobile = window.innerWidth <= 768;
+        const baseWidth = isMobile ? 
+            (large ? '60px' : (small ? '35px' : '50px')) :
+            (large ? '65px' : (small ? '37.5px' : '45px'));
+        const baseHeight = isMobile ?
+            (large ? '80px' : (small ? '45px' : '65px')) :
+            (large ? '85px' : (small ? '50px' : '70px'));
+        
+        const width = responsive ? baseWidth : (large ? '65px' : (small ? '37.5px' : '45px'));
+        const height = responsive ? baseHeight : (large ? '85px' : (small ? '50px' : '70px'));
 
         if (isFaceDown) {
             return (
@@ -268,9 +278,9 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     };
 
     const handleMoveToSpectator = () => {
-        console.log('[ADMIN] Moving to spectator mode');
-        console.log('[ADMIN] BEFORE moveToSpectator - currentTableState.players[playerId]:', currentTableState.players[playerId]);
-        console.log('[ADMIN] BEFORE moveToSpectator - playerOrderActive:', currentTableState.playerOrderActive);
+        // console.log('[ADMIN] Moving to spectator mode');
+        // console.log('[ADMIN] BEFORE moveToSpectator - currentTableState.players[playerId]:', currentTableState.players[playerId]);
+        // console.log('[ADMIN] BEFORE moveToSpectator - playerOrderActive:', currentTableState.playerOrderActive);
         emitEvent('moveToSpectator', { tableId: currentTableState.tableId });
     };
 
@@ -340,9 +350,9 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                     userId={playerId}
                 />
             )}
-            {console.log('[DEBUG] GameTableView render - user:', user)}
-            {console.log('[DEBUG] GameTableView render - user.is_admin:', user?.is_admin)}
-            {console.log('[DEBUG] GameTableView render - should show AdminObserverMode:', !!user?.is_admin)}
+            {/* console.log('[DEBUG] GameTableView render - user:', user) */}
+            {/* console.log('[DEBUG] GameTableView render - user.is_admin:', user?.is_admin) */}
+            {/* console.log('[DEBUG] GameTableView render - should show AdminObserverMode:', !!user?.is_admin) */}
 
             <RoundSummaryModal
                 summaryData={currentTableState.roundSummary}

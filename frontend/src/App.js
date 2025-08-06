@@ -11,6 +11,7 @@ import FeedbackModal from "./components/FeedbackModal.js";
 import FeedbackView from "./components/FeedbackView.js";
 import { submitFeedback } from "./services/api.js";
 import "./components/AdminView.css";
+import "./styles/mobile-optimizations.css";
 import { useSounds } from "./hooks/useSounds.js";
 
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || "https://sluff-backend.onrender.com";
@@ -102,8 +103,8 @@ function App() {
         if (token && !user) {
             try {
                 const payload = JSON.parse(atob(token.split('.')[1]));
-                console.log('[DEBUG] JWT payload decoded:', payload);
-                console.log('[DEBUG] is_admin from token:', payload.is_admin);
+                // console.log('[DEBUG] JWT payload decoded:', payload);
+                // console.log('[DEBUG] is_admin from token:', payload.is_admin);
                 setUser({ id: payload.id, username: payload.username, tokens: 0, is_admin: payload.is_admin || false });
             } catch (e) {
                 console.error("Invalid token found, logging out:", e);
@@ -118,10 +119,10 @@ function App() {
             socket.connect();
             socket.emit("requestUserSync");
 
-            const onConnect = () => console.log("Socket connected!");
+            const onConnect = () => {}; // console.log("Socket connected!");
             const onUpdateUser = (updatedUser) => {
-                console.log('[DEBUG] updateUser received from server:', updatedUser);
-                console.log('[DEBUG] is_admin from server:', updatedUser.is_admin);
+                // console.log('[DEBUG] updateUser received from server:', updatedUser);
+                // console.log('[DEBUG] is_admin from server:', updatedUser.is_admin);
                 setUser(updatedUser);
             };
             const onLobbyState = (newLobbyState) => {
@@ -141,9 +142,9 @@ function App() {
                 }
             };
             const onJoinedTable = ({ gameState }) => {
-                console.log('[ADMIN] Joined table event received, tableId:', gameState?.tableId);
-                console.log('[ADMIN] Table name:', gameState?.tableName);
-                console.log('[ADMIN] Players:', Object.values(gameState?.players || {}).map(p => `${p.playerName} (${p.isSpectator ? 'spectator' : 'player'})`));
+                // console.log('[ADMIN] Joined table event received, tableId:', gameState?.tableId);
+                // console.log('[ADMIN] Table name:', gameState?.tableName);
+                // console.log('[ADMIN] Players:', Object.values(gameState?.players || {}).map(p => `${p.playerName} (${p.isSpectator ? 'spectator' : 'player'})`));
                 setCurrentTableState(gameState);
                 setView('gameTable');
             };

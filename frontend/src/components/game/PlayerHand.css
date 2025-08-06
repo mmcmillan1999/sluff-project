@@ -39,9 +39,15 @@
 
 .player-hand-card-wrapper {
     transition: transform 0.2s ease;
-    will-change: transform;
     cursor: grab;
     flex-shrink: 0;
+    position: relative; /* CRITICAL FIX: Ensure proper positioning context */
+}
+
+/* CRITICAL FIX: Disable transitions and React interference when physics is active */
+.player-hand-card-wrapper[data-physics-controlled] {
+    transition: none !important;
+    will-change: auto !important;
 }
 /* Apply the dynamic margin from the parent's CSS variable */
 .player-hand-card-wrapper:not(:first-child) {
@@ -52,6 +58,7 @@
 .player-hand-card-wrapper.is-dragging {
     transition: none;
     cursor: grabbing;
+    will-change: transform; /* Only use will-change when actually dragging */
 }
 
 .illegal-move {
