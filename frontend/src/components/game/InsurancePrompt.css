@@ -1,0 +1,369 @@
+/* Insurance Prompt Modal Styles */
+.insurance-prompt-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+}
+
+.insurance-prompt-content {
+    background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+    border-radius: 16px;
+    padding: 32px;
+    max-width: 500px;
+    width: 90vw;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    position: relative;
+}
+
+.insurance-prompt-title {
+    text-align: center;
+    font-size: 1.5em;
+    font-weight: 700;
+    margin: 0 0 24px 0;
+    color: #f9fafb;
+    font-family: 'Oswald', sans-serif;
+}
+
+/* Current Value Display */
+.current-value-display {
+    text-align: center;
+    margin-bottom: 32px;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.current-value {
+    font-size: 3em;
+    font-weight: 900;
+    font-family: 'Oswald', sans-serif;
+    display: block;
+    margin-bottom: 8px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    transition: all 0.3s ease;
+    animation: value-pulse 0.3s ease-out;
+}
+
+@keyframes value-pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.current-value.value-changing {
+    animation: value-pulse 0.3s ease-out;
+}
+
+.value-description {
+    font-size: 0.95em;
+    color: #d1d5db;
+    font-weight: 500;
+    line-height: 1.4;
+}
+
+/* Slider Styles */
+.slider-container {
+    margin: 24px 0;
+}
+
+.slider-track-background {
+    position: relative;
+    padding: 0 8px;
+}
+
+.insurance-slider {
+    width: 100%;
+    height: 8px;
+    background: transparent;
+    outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.insurance-slider:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+/* Webkit Slider Track */
+.insurance-slider::-webkit-slider-track {
+    width: 100%;
+    height: 8px;
+    background: linear-gradient(to right, #374151, #4b5563, #6b7280);
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Webkit Slider Thumb */
+.insurance-slider::-webkit-slider-thumb {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 28px;
+    height: 28px;
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    border-radius: 50%;
+    cursor: pointer;
+    border: 3px solid white;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    transition: all 0.2s ease;
+    transform: translateY(-50%);
+    position: relative;
+    top: 50%;
+}
+
+.insurance-slider::-webkit-slider-thumb:hover {
+    transform: translateY(-50%) scale(1.1);
+    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.6);
+}
+
+.insurance-slider::-webkit-slider-thumb:active {
+    transform: translateY(-50%) scale(0.95);
+}
+
+/* Firefox Slider */
+.insurance-slider::-moz-range-track {
+    width: 100%;
+    height: 8px;
+    background: linear-gradient(to right, #374151, #4b5563, #6b7280);
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.insurance-slider::-moz-range-thumb {
+    width: 28px;
+    height: 28px;
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    border-radius: 50%;
+    cursor: pointer;
+    border: 3px solid white;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    transition: all 0.2s ease;
+}
+
+.insurance-slider::-moz-range-thumb:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.6);
+}
+
+/* Slider Markers */
+.slider-markers {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 8px;
+    padding: 0 14px;
+}
+
+.marker-label {
+    font-size: 0.8em;
+    color: #9ca3af;
+    font-weight: 500;
+}
+
+/* Quick Jump Buttons */
+.quick-jump-container {
+    margin: 24px 0;
+}
+
+.quick-jump-label {
+    font-size: 0.9em;
+    color: #d1d5db;
+    margin-bottom: 12px;
+    font-weight: 600;
+}
+
+.quick-jump-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+}
+
+.quick-jump-button {
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    color: white;
+    font-weight: 600;
+    font-size: 0.9em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 50px;
+    touch-action: manipulation;
+}
+
+.quick-jump-button:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.quick-jump-button:active {
+    transform: translateY(0);
+}
+
+.quick-jump-button.active {
+    color: white;
+    font-weight: 700;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    transform: translateY(-1px);
+}
+
+/* Action Buttons */
+.action-buttons {
+    display: flex;
+    gap: 12px;
+    margin-top: 32px;
+}
+
+.submit-button {
+    flex: 2;
+    padding: 16px 24px;
+    border: none;
+    border-radius: 12px;
+    color: white;
+    font-weight: 700;
+    font-size: 1.1em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    touch-action: manipulation;
+    font-family: 'Oswald', sans-serif;
+}
+
+.submit-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+
+.submit-button:active {
+    transform: translateY(0);
+}
+
+.pass-button {
+    flex: 1;
+    padding: 16px 20px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 12px;
+    color: #d1d5db;
+    font-weight: 600;
+    font-size: 1em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    touch-action: manipulation;
+}
+
+.pass-button:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    transform: translateY(-1px);
+}
+
+.pass-button:active {
+    transform: translateY(0);
+}
+
+/* Helper Text */
+.helper-text {
+    text-align: center;
+    font-size: 0.85em;
+    color: #9ca3af;
+    margin-top: 20px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.adjustment-note {
+    font-size: 0.8em;
+    color: #6b7280;
+    text-align: center;
+    margin: 16px 0 0 0;
+    font-style: italic;
+    line-height: 1.4;
+}
+
+/* Mobile Optimizations */
+@media (max-width: 768px) {
+    .insurance-prompt-content {
+        padding: 24px;
+        margin: 20px;
+    }
+    
+    .current-value {
+        font-size: 2.5em;
+    }
+    
+    .insurance-slider::-webkit-slider-thumb {
+        width: 32px;
+        height: 32px;
+    }
+    
+    .insurance-slider::-moz-range-thumb {
+        width: 32px;
+        height: 32px;
+    }
+    
+    .quick-jump-buttons {
+        gap: 6px;
+    }
+    
+    .quick-jump-button {
+        padding: 10px 14px;
+        min-width: 45px;
+        font-size: 0.85em;
+    }
+    
+    .action-buttons {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .submit-button,
+    .pass-button {
+        flex: none;
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .insurance-prompt-content {
+        padding: 20px;
+        margin: 10px;
+    }
+    
+    .current-value {
+        font-size: 2em;
+    }
+    
+    .insurance-prompt-title {
+        font-size: 1.3em;
+    }
+    
+    .quick-jump-buttons {
+        justify-content: space-between;
+    }
+    
+    .quick-jump-button {
+        flex: 1;
+        min-width: auto;
+        padding: 8px 4px;
+        font-size: 0.8em;
+    }
+}
