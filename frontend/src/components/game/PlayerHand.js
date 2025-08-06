@@ -208,7 +208,7 @@ const PlayerHand = ({
             }
             return { ...prev, translateX: newTranslateX, translateY: newTranslateY, isInDropZone: newIsInDropZone };
         });
-    }, [dropZoneRef, usePhysics, dragState.isDragging, dragState.draggedCard]);
+    }, [dropZoneRef, usePhysics]);
 
     const handleDragEnd = useCallback(() => {
         // CRITICAL FIX: Re-enable body scrolling after drag
@@ -262,7 +262,7 @@ const PlayerHand = ({
         document.removeEventListener('mouseup', handleDragEnd, { passive: false });
         document.removeEventListener('touchmove', handleDragMove, { passive: false });
         document.removeEventListener('touchend', handleDragEnd, { passive: false });
-    }, [emitEvent, dropZoneRef, handleDragMove, usePhysics, dragState.isDragging, dragState.draggedCard]);
+    }, [emitEvent, dropZoneRef, handleDragMove, usePhysics]);
 
     useEffect(() => {
         if (state !== "Frog Widow Exchange") setSelectedDiscards([]);

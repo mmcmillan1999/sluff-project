@@ -13,9 +13,7 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent, showTrum
         bidWinnerInfo,
         playerOrderActive,
         trickTurnPlayerName,
-        forfeiture,
-        hands,
-        state,
+        forfeiture
     } = currentTableState;
 
     const playerEntry = Object.values(players).find(p => p.playerName === playerName);

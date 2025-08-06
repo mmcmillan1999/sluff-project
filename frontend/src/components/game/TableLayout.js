@@ -70,7 +70,7 @@ const TableLayout = ({
         
         // Update previous state
         setPreviousTrumpBroken(trumpBroken);
-    }, [currentTableState.trumpBroken, previousTrumpBroken]);
+    }, [currentTableState, previousTrumpBroken]);
 
     const handleTrickPileClick = (clickedPile) => {
         const { lastCompletedTrick, bidWinnerInfo } = currentTableState;
@@ -257,45 +257,7 @@ const TableLayout = ({
         );
     };
 
-    const renderWidowDisplay = () => {
-        const { state, widow, originalDealtWidow, roundSummary } = currentTableState;
-        
-        const hiddenStates = ["Waiting for Players", "Ready to Start", "Dealing Pending", "Frog Widow Exchange"];
-        if (hiddenStates.includes(state)) {
-            return null;
-        }
-
-        const isRoundOver = state === 'Awaiting Next Round Trigger' || state === 'Game Over';
-        
-        const cardsToDisplay = isRoundOver ? roundSummary?.widowForReveal : (widow || originalDealtWidow);
-        const widowSize = cardsToDisplay?.length || 0;
-
-        if (widowSize === 0) {
-            return null;
-        }
-
-        return (
-            <div className="widow-display-container">
-                <div className="widow-pile">
-                    {isRoundOver 
-                        ? (
-                            cardsToDisplay.map((card, i) => (
-                                <div key={card + i} style={{ transform: `translateX(${i * 12}px)`, position: 'absolute', top: 0, left: 0 }}>
-                                    {renderCard(card, { small: true })}
-                                </div>
-                            ))
-                        ) : (
-                            Array.from({ length: widowSize }).map((_, i) => (
-                                <div key={i} style={{ transform: `translateX(${i * 12}px)`, position: 'absolute', top: 0, left: 0 }}>
-                                    {renderCard(null, { isFaceDown: true, small: true })}
-                                </div>
-                            ))
-                        )
-                    }
-                </div>
-            </div>
-        );
-    };
+    // renderWidowDisplay removed - widow cards now rendered inside renderWidowSeat
 
     const renderTrumpIndicatorPuck = () => {
         const { trumpSuit, trumpBroken, bidWinnerInfo } = currentTableState;

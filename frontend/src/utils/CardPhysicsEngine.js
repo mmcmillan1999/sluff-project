@@ -35,7 +35,7 @@ class CardPhysicsEngine {
         const marginLeft = parseFloat(computedStyle.marginLeft) || 0;
         
         // Store initial rect for reference
-        const initialRect = { ...rect, left: rect.left, top: rect.top };
+        // Initial rect tracking removed - not needed
         
         // Get the actual current center based on rendered position
         const actualCenter = {
@@ -233,7 +233,6 @@ class CardPhysicsEngine {
         }
         
         // Don't call applyTransform here - we already set the correct transform above
-        const card = this.activeCards.get(cardId);
         
         // Debug: Check if pencil marker is at finger position after transform
         if (process.env.NODE_ENV === 'development') {
@@ -745,9 +744,7 @@ class CardPhysicsEngine {
                 const currentRotation = card.rotation;
                 const rotationDirection = Math.sign(card.angularVelocity) || 1;
                 
-                // Calculate how many quarter turns we need
-                const quarterTurns = Math.ceil(Math.abs(currentRotation) / (Math.PI / 2));
-                const targetRotation = quarterTurns * (Math.PI / 2) * Math.sign(currentRotation);
+                // Quarter turns calculation removed - not used
                 
                 // If we're very close to upright already, just use current position
                 const uprightPositions = [0, Math.PI/2, Math.PI, 3*Math.PI/2];
@@ -830,7 +827,7 @@ class CardPhysicsEngine {
             // Calculate magnetic docking physics
             const MAGNETIC_RANGE = 300; // Good magnetic capture range
             const MAGNETIC_STRENGTH = 1200; // Stronger pull to guide cards in
-            const DOCKING_ZONE = 150; // Larger zone for final approach
+            // DOCKING_ZONE removed - not used
             
             // Check for successful docking conditions FIRST
             const dockCenterX = card.targetPosition.x + card.cardDimensions.width / 2;
@@ -846,7 +843,7 @@ class CardPhysicsEngine {
             // Natural docking check - like real card games
             const ACCEPT_ZONE = 200; // Very large, forgiving zone
             const ACCEPT_SPEED = 300; // Allow fast throwing speeds
-            const ACCEPT_ANY_ANGLE = true; // Cards can land at any angle
+            // ACCEPT_ANY_ANGLE removed - not used
             
             // Progressive docking - get more lenient as cards get closer
             const progressiveFactor = Math.max(0, 1 - (distToDock / 300));
