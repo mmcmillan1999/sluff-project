@@ -1185,6 +1185,19 @@ button.card-display:disabled {
 
 /* Desktop mode optimizations - both portrait and landscape */
 @media (min-width: 1024px) {
+    /* Stretch table to fill width */
+    .game-table {
+        width: 100vw;
+        max-width: 100vw;
+        padding: 0;
+    }
+    
+    .table-oval {
+        max-width: calc(100vw - 40px);  /* Stretch table, leave small margin */
+        width: calc(100vw - 40px);
+        min-width: 1200px;  /* Ensure minimum width */
+    }
+    
     /* Adjust player seat positions to accommodate 3x size */
     .player-seat-left { 
         left: 10px;  /* Move in slightly */

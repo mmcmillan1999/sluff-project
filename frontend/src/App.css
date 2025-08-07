@@ -17,6 +17,14 @@ body {
   padding-bottom: 20px;
 }
 
+/* Desktop mode: Remove side padding to stretch table to full width */
+@media (min-width: 1024px) {
+  .app-content-container {
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
 /* Responsive adjustments for different ad sizes */
 @media (max-width: 768px) and (min-width: 481px) {
   .app-content-container {
@@ -42,6 +50,44 @@ body {
     /* Ultra small: Account for 53px header height */
     padding-top: 53px;
     min-height: calc(100vh - 53px);
+  }
+}
+
+/* LANDSCAPE ORIENTATION FIXES */
+
+/* Mobile landscape mode - use mobile ad size */
+@media (orientation: landscape) and (max-height: 500px) {
+  .app-content-container {
+    /* Mobile landscape: Account for 58px mobile header height */
+    padding-top: 58px;
+    min-height: calc(100vh - 58px);
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-bottom: 8px;
+  }
+}
+
+/* Desktop/Laptop landscape mode - use desktop ad size */
+@media (orientation: landscape) and (min-height: 501px) and (min-width: 769px) {
+  .app-content-container {
+    /* Desktop landscape: Account for 106px desktop header height */
+    padding-top: 106px;
+    min-height: calc(100vh - 106px);
+    padding-left: 20px;
+    padding-right: 20px;
+    padding-bottom: 20px;
+  }
+}
+
+/* Tablet landscape mode - use tablet ad size */
+@media (orientation: landscape) and (min-height: 501px) and (max-width: 768px) {
+  .app-content-container {
+    /* Tablet landscape: Account for 72px tablet header height */
+    padding-top: 72px;
+    min-height: calc(100vh - 72px);
+    padding-left: 15px;
+    padding-right: 15px;
+    padding-bottom: 15px;
   }
 }
 
