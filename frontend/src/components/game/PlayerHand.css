@@ -147,3 +147,145 @@
         border-radius: 4px;
     }
 }
+
+/* LANDSCAPE ORIENTATION FIXES FOR PLAYER HAND */
+
+/* Mobile landscape mode optimizations */
+@media (orientation: landscape) and (max-height: 500px) {
+    .player-hand-container {
+        padding: 2px 0;
+        /* Maintain physics touch handling in landscape */
+        touch-action: none;
+        -webkit-touch-callout: none;
+    }
+    
+    .player-hand-cards {
+        height: 75px; /* Reduced height for landscape */
+        padding: 6px 0;
+    }
+    
+    /* Tighter card spacing for landscape mobile */
+    .player-hand-card-wrapper:not(:first-child) {
+        margin-left: var(--card-margin-left, -32px);
+    }
+    
+    /* Reduced hover effect for landscape mobile */
+    .player-hand-card-wrapper-static:hover {
+        transform: translateY(-6px);
+    }
+    
+    /* Compact my turn indicator for landscape */
+    .player-hand-cards.my-turn {
+        border-radius: 6px;
+        background-color: rgba(59, 130, 246, 0.06);
+    }
+    
+    /* Enhanced physics for landscape mobile */
+    .player-hand-card-wrapper.physics-active {
+        will-change: transform;
+    }
+    
+    .illegal-move::after {
+        border-radius: 4px;
+    }
+}
+
+/* Desktop mode optimizations */
+@media (min-width: 1024px) {
+    .player-hand-container {
+        padding: 20px 0;  /* 75% of 30px */
+        touch-action: none;
+        min-height: 250px;  /* 25% taller than 200px */
+        /* Keep player hand centered in panel - remove offset */
+    }
+    
+    .player-hand-cards {
+        height: 262px; /* Reduced by 25% from 350px */
+        padding: 26px 10px;  /* Reduced padding by 25% */
+        align-items: center;  /* Center cards vertically */
+    }
+    
+    /* Adjust card spacing for desktop */
+    .player-hand-card-wrapper:not(:first-child) {
+        margin-left: var(--card-margin-left, -35px); /* Adjusted for 112px wide cards */
+    }
+    
+    /* Ensure hover still works with larger cards */
+    .player-hand-card-wrapper-static:hover {
+        transform: translateY(-20px);  /* More lift for larger cards */
+        z-index: 100;
+    }
+}
+
+/* Desktop/Laptop landscape mode optimizations */
+@media (orientation: landscape) and (min-height: 501px) and (min-width: 769px) {
+    .player-hand-container {
+        padding: 8px 0;
+        touch-action: none; /* Still needed for touch devices */
+    }
+    
+    .player-hand-cards {
+        height: 120px; /* Standard height for non-desktop landscape */
+        padding: 12px 0;
+    }
+    
+    /* Standard card spacing for desktop landscape */
+    .player-hand-card-wrapper:not(:first-child) {
+        margin-left: var(--card-margin-left, -25px);
+    }
+    
+    /* Standard hover effect for desktop */
+    .player-hand-card-wrapper-static:hover {
+        transform: translateY(-12px);
+        z-index: 100;
+    }
+    
+    /* Standard my turn indicator for desktop */
+    .player-hand-cards.my-turn {
+        border-radius: 12px;
+        background-color: rgba(59, 130, 246, 0.1);
+    }
+    
+    .player-hand-card-wrapper.physics-active {
+        will-change: transform, opacity;
+    }
+}
+
+/* Tablet landscape mode optimizations */
+@media (orientation: landscape) and (min-height: 501px) and (max-width: 768px) {
+    .player-hand-container {
+        padding: 4px 0;
+        touch-action: none;
+        -webkit-touch-callout: none;
+    }
+    
+    .player-hand-cards {
+        height: 90px; /* Medium height for tablet landscape */
+        padding: 8px 0;
+    }
+    
+    /* Medium card spacing for tablet landscape */
+    .player-hand-card-wrapper:not(:first-child) {
+        margin-left: var(--card-margin-left, -28px);
+    }
+    
+    /* Medium hover effect for tablet */
+    .player-hand-card-wrapper-static:hover {
+        transform: translateY(-8px);
+        z-index: 100;
+    }
+    
+    /* Medium my turn indicator for tablet */
+    .player-hand-cards.my-turn {
+        border-radius: 10px;
+        background-color: rgba(59, 130, 246, 0.08);
+    }
+    
+    .player-hand-card-wrapper.physics-active {
+        will-change: transform;
+    }
+    
+    .illegal-move::after {
+        border-radius: 5px;
+    }
+}

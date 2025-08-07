@@ -9,6 +9,38 @@ class CardPhysicsEngine {
         this.minThrowVelocity = 100; // Reduced - magnetic field helps capture cards
         this.maxRotationSpeed = 15; // Increased to allow more spin from finger movements
         
+        // Sophisticated Flight Physics Constants
+        this.CARD_WIDTH = 80; // Standard card width in pixels
+        this.CARD_HEIGHT = 120; // Standard card height in pixels
+        this.MIN_DISTANCE_FOR_VALID_THROW = 2 * this.CARD_HEIGHT; // 240px
+        // Make MAX_AIM_OFFSET responsive to screen size
+        this.calculateMaxAimOffset = () => {
+            const screenWidth = window.innerWidth;
+            const screenHeight = window.innerHeight;
+            const isMobile = screenWidth < 768;
+            const isTablet = screenWidth >= 768 && screenWidth < 1024;
+            
+            if (isMobile) {
+                return 3.5 * this.CARD_WIDTH; // 280px for mobile
+            } else if (isTablet) {
+                return 5 * this.CARD_WIDTH; // 400px for tablet
+            } else {
+                // Desktop - more forgiving due to larger screens
+                return 8 * this.CARD_WIDTH; // 640px for desktop
+            }
+        };
+        this.MAX_AIM_OFFSET = this.calculateMaxAimOffset();
+        this.DOCKING_TIME_LIMIT = 2.5; // seconds - extra time for non-vertical cards to dock
+        
+        // Velocity thresholds for throw classification
+        this.VELOCITY_SLOW_THRESHOLD = 300; // px/s - Below this is slow
+        this.VELOCITY_MEDIUM_THRESHOLD = 1200; // px/s - Below this is medium, above is fast
+        
+        // Distance-based correction zones (in card widths)
+        this.ZONE_MINIMAL_CORRECTION = 2.0 * this.CARD_WIDTH;
+        this.ZONE_MODERATE_CORRECTION = 3.5 * this.CARD_WIDTH;
+        this.ZONE_STRONG_CORRECTION = 5.0 * this.CARD_WIDTH;
+        
         // Air resistance factors - tuned for shuffleboard feel
         this.airResistanceAway = 0.94; // Moderate drag when moving away (6% loss/frame)
         this.airResistanceAwayFar = 0.88; // Heavy drag when far and moving away (12% loss/frame)
@@ -23,10 +55,218 @@ class CardPhysicsEngine {
         // Touch tracking
         this.touchHistory = [];
         this.maxTouchHistory = 5;
+        
+        // Flight physics state
+        this.airbornCards = new Set(); // Track cards currently in flight
+        this.playerPickingUp = false; // Flag for immediate card return
+        
+        // Bezier curve helpers for smooth arcs
+        this.bezierCache = new Map(); // Cache computed bezier paths
+        
+        // Debug visualization elements
+        this.debugContainer = null;
+        this.fingerTrackingLine = null;
+        this.trajectoryPath = null;
+        this.actualPathLine = null;
+        this.actualPathSvg = null;
+        this.initDebugVisualization();
     }
     
-    // Start tracking a card when touched
+    // Initialize debug visualization container
+    initDebugVisualization() {
+        // Create container for debug lines if it doesn't exist
+        if (!document.getElementById('card-physics-debug')) {
+            this.debugContainer = document.createElement('div');
+            this.debugContainer.id = 'card-physics-debug';
+            this.debugContainer.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                pointer-events: none;
+                z-index: 9999;
+            `;
+            document.body.appendChild(this.debugContainer);
+        } else {
+            this.debugContainer = document.getElementById('card-physics-debug');
+        }
+    }
+    
+    // Clear all debug visualizations
+    clearDebugVisualizations() {
+        if (this.debugContainer) {
+            this.debugContainer.innerHTML = '';
+        }
+        this.fingerTrackingLine = null;
+        this.trajectoryPath = null;
+        this.actualPathLine = null;
+        this.actualPathSvg = null;
+    }
+    
+    // Start tracking actual card path
+    startActualPathTracking(startPos) {
+        // Create SVG for actual path
+        this.actualPathSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        this.actualPathSvg.style.cssText = `
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        `;
+        
+        this.actualPathLine = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+        this.actualPathLine.setAttribute('stroke', '#ff6600'); // Orange for actual path
+        this.actualPathLine.setAttribute('stroke-width', '3');
+        this.actualPathLine.setAttribute('fill', 'none');
+        this.actualPathLine.setAttribute('opacity', '0.8');
+        this.actualPathLine.setAttribute('points', `${startPos.x},${startPos.y}`);
+        
+        this.actualPathSvg.appendChild(this.actualPathLine);
+        this.debugContainer.appendChild(this.actualPathSvg);
+    }
+    
+    // Update actual card path
+    updateActualPath(position) {
+        if (this.actualPathLine && position && !isNaN(position.x) && !isNaN(position.y)) {
+            const currentPoints = this.actualPathLine.getAttribute('points');
+            this.actualPathLine.setAttribute('points', `${currentPoints} ${position.x},${position.y}`);
+        }
+    }
+    
+    // Create or update finger tracking line
+    updateFingerTrackingLine(touchPoint) {
+        if (!this.fingerTrackingLine) {
+            // Create SVG for finger tracking
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.style.cssText = `
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                pointer-events: none;
+            `;
+            
+            this.fingerTrackingLine = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+            this.fingerTrackingLine.setAttribute('stroke', '#00ff00');
+            this.fingerTrackingLine.setAttribute('stroke-width', '2');
+            this.fingerTrackingLine.setAttribute('fill', 'none');
+            this.fingerTrackingLine.setAttribute('points', `${touchPoint.x},${touchPoint.y}`);
+            
+            svg.appendChild(this.fingerTrackingLine);
+            this.debugContainer.appendChild(svg);
+        } else {
+            // Add point to existing line
+            const currentPoints = this.fingerTrackingLine.getAttribute('points');
+            this.fingerTrackingLine.setAttribute('points', `${currentPoints} ${touchPoint.x},${touchPoint.y}`);
+        }
+    }
+    
+    // Draw trajectory path from release point to dock
+    drawTrajectoryPath(startPos, endPos, curveType, velocity) {
+        // Create SVG for trajectory
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.style.cssText = `
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        `;
+        
+        // Calculate control points based on curve type and velocity
+        let pathData;
+        const dx = endPos.x - startPos.x;
+        const dy = endPos.y - startPos.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (curveType === 'straight') {
+            pathData = `M ${startPos.x} ${startPos.y} L ${endPos.x} ${endPos.y}`;
+        } else {
+            // Calculate initial trajectory direction based on velocity
+            const speed = velocity ? Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y) : 0;
+            let initialReach = Math.min(distance * 0.4, speed * 0.3); // How far the card goes before curving
+            
+            // First control point follows initial velocity direction
+            const cp1 = velocity && speed > 0 ? {
+                x: startPos.x + (velocity.x / speed) * initialReach,
+                y: startPos.y + (velocity.y / speed) * initialReach
+            } : {
+                x: startPos.x + dx * 0.3,
+                y: startPos.y + dy * 0.3
+            };
+            
+            // Second control point pulls toward dock
+            const cp2 = {
+                x: endPos.x - dx * 0.2,
+                y: endPos.y - dy * 0.2
+            };
+            
+            if (curveType === 'moderate_s' || curveType === 'strong_arc') {
+                // More dramatic curve for off-target
+                const perpX = -dy / distance * 100;
+                const perpY = dx / distance * 100;
+                cp1.x += perpX * 0.5;
+                cp1.y += perpY * 0.5;
+            }
+            
+            pathData = `M ${startPos.x} ${startPos.y} C ${cp1.x} ${cp1.y}, ${cp2.x} ${cp2.y}, ${endPos.x} ${endPos.y}`;
+        }
+        
+        this.trajectoryPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        this.trajectoryPath.setAttribute('d', pathData);
+        this.trajectoryPath.setAttribute('stroke', '#ff00ff');
+        this.trajectoryPath.setAttribute('stroke-width', '2');
+        this.trajectoryPath.setAttribute('stroke-dasharray', '10,5');
+        this.trajectoryPath.setAttribute('fill', 'none');
+        
+        svg.appendChild(this.trajectoryPath);
+        this.debugContainer.appendChild(svg);
+    }
+    
+    // Start tracking a card when touched with airborne card management
     grabCard(cardId, touchPoint, cardElement, cardCenter) {
+        // Clear all debug visualizations when picking up a new card
+        this.clearDebugVisualizations();
+        
+        // Start tracking finger movement
+        this.updateFingerTrackingLine(touchPoint);
+        
+        // SOPHISTICATED PHYSICS: Return all airborne cards when picking up new card
+        if (this.airbornCards.size > 0 && !this.airbornCards.has(cardId)) {
+            console.log(`Returning ${this.airbornCards.size} airborne cards before grabbing ${cardId}`);
+            this.returnAllAirborneCards();
+        }
+        
+        // Comprehensive error handling
+        try {
+            if (!cardId || !touchPoint || !cardElement) {
+                throw new Error(`Invalid parameters for grabCard: cardId=${cardId}, touchPoint=${touchPoint}, cardElement=${cardElement}`);
+            }
+            
+            if (typeof touchPoint.x !== 'number' || typeof touchPoint.y !== 'number') {
+                throw new Error(`Invalid touch point coordinates: x=${touchPoint.x}, y=${touchPoint.y}`);
+            }
+            
+            return this.originalGrabCard(cardId, touchPoint, cardElement, cardCenter);
+            
+        } catch (error) {
+            console.error('Error in grabCard:', error);
+            // Cleanup any partial state
+            this.airbornCards.delete(cardId);
+            if (this.activeCards.has(cardId)) {
+                this.cleanupCard(cardId);
+            }
+            throw error;
+        }
+    }
+    
+    // Original grab card implementation
+    originalGrabCard(cardId, touchPoint, cardElement, cardCenter) {
         // Get the visual position (includes margins)
         const rect = cardElement.getBoundingClientRect();
         
@@ -56,6 +296,10 @@ class CardPhysicsEngine {
         // Start with no rotation to avoid initial snap
         const initialRotation = 0;
         
+        // Adjust docking position on desktop (15% higher)
+        const isDesktop = window.innerWidth >= 1024;
+        const dockingOffset = isDesktop ? -rect.height * 0.15 : 0;
+        
         // Initialize card physics state
         this.activeCards.set(cardId, {
             element: cardElement,
@@ -70,13 +314,16 @@ class CardPhysicsEngine {
             initialCardPos: { x: rect.left, y: rect.top },
             cardDimensions: { width: rect.width, height: rect.height },
             isDragging: true,
-            originalPosition: { x: rect.left, y: rect.top },
+            originalPosition: { x: rect.left, y: rect.top + dockingOffset },
             cardCenter: actualCenter,
             grabTime: performance.now(),
             lifted: true,
             scale: 1.0, // Start at normal scale to avoid snap
             targetScale: 1.05, // Target scale for smooth animation
-            totalRotation: 0 // Track total rotation for continuous spinning
+            totalRotation: 0, // Track total rotation for continuous spinning
+            forceDocking: false, // Reset force docking flag
+            forceDockStartPos: null,
+            forceDockStartTime: null
         });
         
         // CRITICAL: Apply positioning styles and calculate initial position
@@ -291,6 +538,9 @@ class CardPhysicsEngine {
         const card = this.activeCards.get(cardId);
         if (!card || !card.isDragging) return;
         
+        // Update finger tracking line
+        this.updateFingerTrackingLine(touchPoint);
+        
         // Track touch history for velocity
         this.addTouchPoint(touchPoint);
         
@@ -315,7 +565,7 @@ class CardPhysicsEngine {
         }
     }
     
-    // Release card and calculate trajectory
+    // Release card and calculate trajectory with sophisticated physics
     releaseCard(cardId, dropZoneCenter, onComplete) {
         const card = this.activeCards.get(cardId);
         if (!card) return;
@@ -323,16 +573,12 @@ class CardPhysicsEngine {
         // Critical check - if no drop zone, return card home
         if (!dropZoneCenter) {
             console.error('No dropZoneCenter provided - card will return home');
-            card.targetPosition = card.originalPosition;
-            card.isReturning = true;
-            card.onComplete = () => {
-                this.cleanupCard(cardId);
-                if (typeof onComplete === 'function') {
-                    onComplete(false);
-                }
-            };
+            this.returnCardHome(card, cardId, onComplete, 'No drop zone');
             return;
         }
+        
+        // Add card to airborne tracking
+        this.airbornCards.add(cardId);
         
         card.isDragging = false;
         card.releaseTime = performance.now();
@@ -341,87 +587,99 @@ class CardPhysicsEngine {
         const velocity = this.calculateVelocity();
         card.velocity = velocity;
         
-        // Detect throw intention based on velocity and drag duration
-        const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2);
-        const dragDuration = (performance.now() - card.grabTime) / 1000; // seconds
+        // Debug: Log velocity angle
+        const releaseAngle = Math.atan2(velocity.y, velocity.x) * 180 / Math.PI;
+        console.log('Release velocity:', {
+            vx: velocity.x.toFixed(1),
+            vy: velocity.y.toFixed(1),
+            angle: releaseAngle.toFixed(1) + '°',
+            interpretation: releaseAngle > 45 && releaseAngle < 135 ? 'DOWNWARD' : 
+                           releaseAngle < -45 && releaseAngle > -135 ? 'UPWARD' :
+                           Math.abs(releaseAngle) < 45 ? 'RIGHTWARD' : 'LEFTWARD'
+        });
         
-        // Determine if this is an intentional throw vs a drop/misclick
-        const isIntentionalThrow = speed > 150 || // Moving fast enough
-                                   (speed > 50 && dragDuration > 0.2); // Or moderate speed with deliberate drag
-        
-        // Mark the card's throw intention
-        card.isIntentionalThrow = isIntentionalThrow;
-        
-        // Boost velocity slightly for better feel (only for intentional throws)
-        if (isIntentionalThrow) {
-            card.velocity.x *= 1.5;
-            card.velocity.y *= 1.5;
-        }
-        
-        // IMPORTANT: Preserve angular momentum from dragging
-        // The angular velocity should continue from whatever spin the user imparted
-        // Don't reset or modify it here - let it carry through to the flight
-        
-        // Get current card center
+        // Get current card position for calculations
         const rect = card.element.getBoundingClientRect();
         const currentCenter = {
             x: rect.left + rect.width / 2,
             y: rect.top + rect.height / 2
         };
         
+        // SOPHISTICATED FLIGHT PHYSICS: Invalid throw detection
+        const invalidThrowResult = this.detectInvalidThrow(currentCenter, dropZoneCenter, velocity, card);
+        
+        if (invalidThrowResult.isInvalid) {
+            console.log(`Invalid throw detected: ${invalidThrowResult.reason}`);
+            this.returnCardHome(card, cardId, onComplete, invalidThrowResult.reason);
+            return;
+        }
+        
+        // Classify throw velocity
+        const throwClassification = this.classifyThrowVelocity(velocity);
+        card.throwType = throwClassification.type;
+        card.throwSpeed = throwClassification.speed;
+        
+        // Determine if throw is on-target or off-target
+        const aimAnalysis = this.analyzeThrowAim(currentCenter, dropZoneCenter, velocity);
+        card.aimOffset = aimAnalysis.offset;
+        card.isOnTarget = aimAnalysis.isOnTarget;
+        
+        console.log(`Throw Analysis: ${throwClassification.type} ${aimAnalysis.isOnTarget ? 'on-target' : 'off-target'} throw`, {
+            speed: throwClassification.speed.toFixed(1),
+            offset: aimAnalysis.offset.toFixed(1),
+            reason: aimAnalysis.reason
+        });
+        
+        // IMPORTANT: Preserve angular momentum from dragging
+        // The angular velocity should continue from whatever spin the user imparted
+        // Don't reset or modify it here - let it carry through to the flight
+        
         console.log('Card released:', {
             cardId,
-            speed: speed.toFixed(1),
-            dragDuration: dragDuration.toFixed(2),
-            isIntentionalThrow,
+            speed: throwClassification.speed.toFixed(1),
+            dragDuration: ((performance.now() - card.grabTime) / 1000).toFixed(2),
+            throwType: throwClassification.type,
             currentCenter: { x: currentCenter.x.toFixed(1), y: currentCenter.y.toFixed(1) },
             dropZoneCenter: dropZoneCenter ? { x: dropZoneCenter.x.toFixed(1), y: dropZoneCenter.y.toFixed(1) } : null,
             angularVelocity: (card.angularVelocity * 180 / Math.PI).toFixed(1) + '°/s'
         });
         
-        // Check if throw will reach drop zone
-        const trajectory = this.predictTrajectory({
-            ...card,
-            position: currentCenter
-        }, dropZoneCenter);
-        
-        console.log('Trajectory prediction result:', {
-            cardId,
-            willReach: trajectory.willReach,
-            finalDistance: trajectory.distance.toFixed(1),
-            finalSpeed: trajectory.speed.toFixed(1),
-            boostedVelocity: { x: card.velocity.x.toFixed(1), y: card.velocity.y.toFixed(1) }
-        });
-        
-        // ALWAYS attempt to dock - let the physics decide if it makes it
-        // This is crucial for drag-and-drop and forgiving gameplay
+        // Setup sophisticated flight physics based on throw analysis
         card.targetPosition = {
             x: dropZoneCenter.x - rect.width / 2,
             y: dropZoneCenter.y - rect.height / 2
         };
-        card.dropZoneCenter = dropZoneCenter; // Store for physics calculations
+        card.dropZoneCenter = dropZoneCenter;
         card.isReturning = false;
+        card.flightStartTime = performance.now();
+        card.currentPosition = { ...currentCenter };
         
-        // Mark cards that need extra help
-        if (!trajectory.willReach) {
-            console.log('Card needs assistance to reach dock:', {
-                cardId,
-                reason: trajectory.reason || 'Unknown',
-                distance: trajectory.distance
-            });
-            card.needsMagneticAssist = true;
-        }
+        // Initialize flight physics based on throw type and aim
+        this.initializeFlightPhysics(card, currentCenter, dropZoneCenter, aimAnalysis, throwClassification);
+        
+        // Draw the intended trajectory path
+        const curveType = card.flightPhysics && card.flightPhysics.curveType ? 
+                         card.flightPhysics.curveType : 
+                         aimAnalysis.isOnTarget ? 'gentle' : 'moderate_s';
+        this.drawTrajectoryPath(currentCenter, dropZoneCenter, curveType, velocity);
+        
+        // Start tracking actual card path
+        this.startActualPathTracking(currentCenter);
         
         card.onComplete = (success) => {
             console.log('Card onComplete callback called:', {
                 cardId,
                 success,
-                calledFrom: 'dock attempt'
+                calledFrom: 'sophisticated flight physics'
             });
-            // Don't clean up here - pass success to game first
+            
+            // Remove from airborne tracking
+            this.airbornCards.delete(cardId);
+            
             if (typeof onComplete === 'function') {
                 onComplete(success !== false);
             }
+            
             // Clean up after a delay to let game process the play
             setTimeout(() => {
                 this.cleanupCard(cardId);
@@ -432,6 +690,865 @@ class CardPhysicsEngine {
         this.touchHistory = [];
     }
     
+    // SOPHISTICATED FLIGHT PHYSICS METHODS
+    
+    /**
+     * Detect invalid throws that should immediately return home
+     * @param {Object} startPos - Current card position
+     * @param {Object} targetPos - Target drop zone position  
+     * @param {Object} velocity - Throw velocity
+     * @param {Object} card - Card object
+     * @returns {Object} - {isInvalid: boolean, reason: string}
+     */
+    detectInvalidThrow(startPos, targetPos, velocity, card) {
+        try {
+            // Validate inputs
+            if (!startPos || !targetPos || !velocity) {
+                return { isInvalid: true, reason: 'Invalid input parameters' };
+            }
+            
+            if (!this.isValidPosition(startPos) || !this.isValidPosition(targetPos)) {
+                return { isInvalid: true, reason: 'Invalid position coordinates' };
+            }
+            
+            if (!this.isValidVelocity(velocity)) {
+                return { isInvalid: true, reason: 'Invalid velocity values' };
+            }
+            
+            const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2);
+            
+            // Check 1: Downward throws (pointing mostly down, between 45° and 135°)
+            // In screen coordinates: 0° = right, 90° = down, 180° = left, -90° = up
+            const throwAngle = Math.atan2(velocity.y, velocity.x);
+            const throwAngleDegrees = throwAngle * 180 / Math.PI;
+            
+            // Reject if pointing downward (between 45° and 135°)
+            if (throwAngle > Math.PI / 4 && throwAngle < 3 * Math.PI / 4) {
+                console.log(`Invalid downward throw: angle=${throwAngleDegrees.toFixed(1)}°`);
+                return { isInvalid: true, reason: 'Downward throw angle' };
+            }
+            
+            // Check 2: Insufficient velocity to travel minimum distance
+            const distanceToTarget = Math.sqrt(
+                Math.pow(targetPos.x - startPos.x, 2) + 
+                Math.pow(targetPos.y - startPos.y, 2)
+            );
+            
+            if (speed < 50 && distanceToTarget > this.MIN_DISTANCE_FOR_VALID_THROW) {
+                return { isInvalid: true, reason: 'Insufficient velocity for distance' };
+            }
+            
+            // Check 3: Aim offset beyond acceptable range
+            const aimOffset = this.calculateAimOffset(startPos, targetPos, velocity);
+            // Recalculate MAX_AIM_OFFSET in case screen size changed
+            const currentMaxOffset = this.calculateMaxAimOffset();
+            if (aimOffset > currentMaxOffset) {
+                return { isInvalid: true, reason: `Aim offset too large: ${aimOffset.toFixed(1)}px` };
+            }
+            
+            return { isInvalid: false, reason: '' };
+            
+        } catch (error) {
+            console.error('Error in detectInvalidThrow:', error);
+            return { isInvalid: true, reason: 'Error in throw detection' };
+        }
+    }
+    
+    /**
+     * Validate position object
+     * @param {Object} pos - Position to validate
+     * @returns {boolean} - True if valid
+     */
+    isValidPosition(pos) {
+        return pos && 
+               typeof pos.x === 'number' && 
+               typeof pos.y === 'number' && 
+               isFinite(pos.x) && 
+               isFinite(pos.y);
+    }
+    
+    /**
+     * Validate velocity object
+     * @param {Object} vel - Velocity to validate
+     * @returns {boolean} - True if valid
+     */
+    isValidVelocity(vel) {
+        return vel && 
+               typeof vel.x === 'number' && 
+               typeof vel.y === 'number' && 
+               isFinite(vel.x) && 
+               isFinite(vel.y);
+    }
+    
+    /**
+     * Classify throw velocity into Fast/Medium/Slow categories
+     * @param {Object} velocity - Throw velocity vector
+     * @returns {Object} - {type: string, speed: number}
+     */
+    classifyThrowVelocity(velocity) {
+        const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2);
+        
+        if (speed >= this.VELOCITY_MEDIUM_THRESHOLD) {
+            return { type: 'Fast', speed };
+        } else if (speed >= this.VELOCITY_SLOW_THRESHOLD) {
+            return { type: 'Medium', speed };
+        } else {
+            return { type: 'Slow', speed };
+        }
+    }
+    
+    /**
+     * Analyze throw aim to determine if it's on-target or off-target
+     * @param {Object} startPos - Starting position
+     * @param {Object} targetPos - Target position
+     * @param {Object} velocity - Throw velocity
+     * @returns {Object} - {isOnTarget: boolean, offset: number, reason: string}
+     */
+    analyzeThrowAim(startPos, targetPos, velocity) {
+        const aimOffset = this.calculateAimOffset(startPos, targetPos, velocity);
+        const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2);
+        
+        // For truly fast throws, be more conservative about calling them "on-target"
+        // Fast throws need tighter aim to be considered on-target
+        const speedAdjustedThreshold = speed > 1200 ? 
+            this.ZONE_MINIMAL_CORRECTION : // Fast throws: only perfect aim is "on-target"
+            this.ZONE_MODERATE_CORRECTION;  // Normal/Medium speed: more forgiving
+        
+        const isOnTarget = aimOffset <= speedAdjustedThreshold;
+        
+        let reason;
+        if (aimOffset <= this.ZONE_MINIMAL_CORRECTION) {
+            reason = speed > 1200 ? 'Fast but well-aimed' : 'Perfect aim';
+        } else if (aimOffset <= this.ZONE_MODERATE_CORRECTION) {
+            reason = speed > 1200 ? 'Fast and slightly off' : 'Good aim';
+        } else if (aimOffset <= this.ZONE_STRONG_CORRECTION) {
+            reason = 'Moderate off-target';
+        } else {
+            reason = 'Significantly off-target';
+        }
+        
+        return { isOnTarget, offset: aimOffset, reason };
+    }
+    
+    /**
+     * Calculate the perpendicular distance between throw trajectory and target
+     * @param {Object} startPos - Starting position
+     * @param {Object} targetPos - Target position
+     * @param {Object} velocity - Throw velocity
+     * @returns {number} - Aim offset in pixels
+     */
+    calculateAimOffset(startPos, targetPos, velocity) {
+        // Calculate the closest point on the trajectory line to the target
+        const dx = targetPos.x - startPos.x;
+        const dy = targetPos.y - startPos.y;
+        const vx = velocity.x;
+        const vy = velocity.y;
+        
+        // If velocity is zero, return direct distance
+        if (vx === 0 && vy === 0) {
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+        
+        // Parameter t for closest approach
+        const t = (dx * vx + dy * vy) / (vx * vx + vy * vy);
+        
+        // If t < 0, trajectory points away from target
+        if (t < 0) {
+            return Math.sqrt(dx * dx + dy * dy); // Return direct distance
+        }
+        
+        // Calculate closest point on trajectory
+        const closestX = startPos.x + vx * t;
+        const closestY = startPos.y + vy * t;
+        
+        // Return distance from closest point to target
+        return Math.sqrt(
+            Math.pow(closestX - targetPos.x, 2) + 
+            Math.pow(closestY - targetPos.y, 2)
+        );
+    }
+    
+    /**
+     * Initialize sophisticated flight physics based on throw analysis
+     * @param {Object} card - Card object
+     * @param {Object} startPos - Starting position
+     * @param {Object} targetPos - Target position
+     * @param {Object} aimAnalysis - Aim analysis result
+     * @param {Object} throwClassification - Throw velocity classification
+     */
+    initializeFlightPhysics(card, startPos, targetPos, aimAnalysis, throwClassification) {
+        card.flightPhysics = {
+            startPos: { ...startPos },
+            targetPos: { ...targetPos },
+            aimOffset: aimAnalysis.offset,
+            isOnTarget: aimAnalysis.isOnTarget,
+            throwType: throwClassification.type,
+            initialVelocity: { ...card.velocity },
+            guidanceActive: false,
+            guidanceStartTime: null,
+            correctionIntensity: this.calculateCorrectionIntensity(aimAnalysis.offset),
+            bezierPath: null,
+            pathProgress: 0,
+            useGuidance: this.shouldUseGuidance(throwClassification, aimAnalysis)
+        };
+        
+        // Pre-calculate bezier path for off-target throws
+        if (!aimAnalysis.isOnTarget && card.flightPhysics.useGuidance) {
+            card.flightPhysics.bezierPath = this.calculateBezierPath(startPos, targetPos, card.velocity, aimAnalysis.offset);
+        }
+        
+        console.log('Flight physics initialized:', {
+            throwType: throwClassification.type,
+            aimOffset: aimAnalysis.offset.toFixed(1),
+            correctionIntensity: card.flightPhysics.correctionIntensity,
+            useGuidance: card.flightPhysics.useGuidance,
+            hasBezierPath: !!card.flightPhysics.bezierPath
+        });
+    }
+    
+    /**
+     * Calculate correction intensity based on aim offset
+     * @param {number} aimOffset - Aim offset in pixels
+     * @returns {number} - Correction intensity (0-1)
+     */
+    calculateCorrectionIntensity(aimOffset) {
+        if (aimOffset <= this.ZONE_MINIMAL_CORRECTION) {
+            return 0.2; // Minimal correction
+        } else if (aimOffset <= this.ZONE_MODERATE_CORRECTION) {
+            return 0.5; // Moderate S-curve
+        } else if (aimOffset <= this.ZONE_STRONG_CORRECTION) {
+            return 0.8; // Strong curve/horseshoe
+        } else {
+            return 1.0; // Maximum correction
+        }
+    }
+    
+    /**
+     * Determine if guidance should be used based on throw characteristics
+     * @param {Object} throwClassification - Throw velocity classification
+     * @param {Object} aimAnalysis - Aim analysis result
+     * @returns {boolean} - Whether to use guidance
+     */
+    shouldUseGuidance(throwClassification, aimAnalysis) {
+        // Always use guidance for off-target throws
+        if (!aimAnalysis.isOnTarget) return true;
+        
+        // Use gentle guidance for slow on-target throws
+        if (throwClassification.type === 'Slow') return true;
+        
+        // Minimal guidance for fast/medium on-target throws
+        return throwClassification.type !== 'Fast';
+    }
+    
+    /**
+     * Calculate bezier curve path for smooth arcing trajectories
+     * @param {Object} startPos - Starting position
+     * @param {Object} targetPos - Target position
+     * @param {Object} initialVelocity - Initial velocity vector
+     * @param {number} aimOffset - Aim offset for curve calculation
+     * @returns {Object} - Bezier path data
+     */
+    calculateBezierPath(startPos, targetPos, initialVelocity, aimOffset) {
+        const dx = targetPos.x - startPos.x;
+        const dy = targetPos.y - startPos.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // Control point calculation for horseshoe effect
+        // Currently not used but may be needed for future bezier adjustments
+        // const midX = startPos.x + dx * 0.5;
+        // const midY = startPos.y + dy * 0.5;
+        
+        // Perpendicular vector for arc displacement
+        const perpX = -dy / distance;
+        const perpY = dx / distance;
+        
+        // Arc intensity based on offset and distance
+        const arcIntensity = Math.min(aimOffset * 0.5, distance * 0.3);
+        
+        // Create bezier control points for toilet bowl effect
+        const cp1X = startPos.x + dx * 0.25 + perpX * arcIntensity;
+        const cp1Y = startPos.y + dy * 0.25 + perpY * arcIntensity;
+        const cp2X = startPos.x + dx * 0.75 + perpX * arcIntensity * 0.5;
+        const cp2Y = startPos.y + dy * 0.75 + perpY * arcIntensity * 0.5;
+        
+        return {
+            p0: { ...startPos },
+            cp1: { x: cp1X, y: cp1Y },
+            cp2: { x: cp2X, y: cp2Y },
+            p3: { ...targetPos },
+            totalLength: distance,
+            arcIntensity
+        };
+    }
+    
+    /**
+     * Return card home immediately with direct path
+     * @param {Object} card - Card object
+     * @param {string} cardId - Card ID
+     * @param {Function} onComplete - Completion callback
+     * @param {string} reason - Reason for return
+     */
+    returnCardHome(card, cardId, onComplete, reason) {
+        console.log(`Returning card home: ${reason}`);
+        
+        card.targetPosition = card.originalPosition;
+        card.isReturning = true;
+        card.velocity = { x: 0, y: 0 }; // Stop current motion
+        card.returnReason = reason;
+        
+        // Direct line return - no arc
+        card.onComplete = () => {
+            this.airbornCards.delete(cardId);
+            this.cleanupCard(cardId);
+            if (typeof onComplete === 'function') {
+                onComplete(false);
+            }
+        };
+    }
+    
+    /**
+     * Force immediate return of all airborne cards (when player picks up another card)
+     */
+    returnAllAirborneCards() {
+        console.log(`Returning ${this.airbornCards.size} airborne cards immediately`);
+        
+        this.airbornCards.forEach(cardId => {
+            const card = this.activeCards.get(cardId);
+            if (card && !card.isReturning) {
+                this.returnCardHome(card, cardId, card.onComplete, 'Player picked up another card');
+            }
+        });
+    }
+    
+    /**
+     * Update sophisticated flight physics with intelligent guidance
+     * @param {Object} card - Card object
+     * @param {number} deltaTime - Time delta in seconds
+     * @param {number} distance - Distance to target
+     * @param {Object} toTarget - Vector to target
+     */
+    updateSophisticatedFlightPhysics(card, deltaTime, distance, toTarget) {
+        const physics = card.flightPhysics;
+        const flightTime = (performance.now() - card.flightStartTime) / 1000;
+        
+        // DOCK CAPTURE ZONE - Prevent skip-over
+        const DOCK_CAPTURE_RADIUS = 100; // Generous capture zone
+        const MAX_DOCK_SPEED = 500; // Max speed for docking
+        
+        if (distance < DOCK_CAPTURE_RADIUS) {
+            const currentSpeed = Math.sqrt(card.velocity.x ** 2 + card.velocity.y ** 2);
+            
+            // Check if we're approaching the dock
+            const approachingDock = (toTarget.x * card.velocity.x + toTarget.y * card.velocity.y) > 0;
+            
+            if (approachingDock) {
+                // Within capture zone and approaching - ensure smooth docking
+                if (currentSpeed > MAX_DOCK_SPEED) {
+                    // Too fast - apply braking
+                    const brakeFactor = MAX_DOCK_SPEED / currentSpeed;
+                    card.velocity.x *= brakeFactor;
+                    card.velocity.y *= brakeFactor;
+                    console.log('Braking for dock approach:', currentSpeed.toFixed(1), '->', MAX_DOCK_SPEED);
+                }
+                
+                // Magnetic pull toward dock center
+                const magneticStrength = (1 - distance / DOCK_CAPTURE_RADIUS) * 200;
+                const dirX = toTarget.x / distance;
+                const dirY = toTarget.y / distance;
+                card.velocity.x += dirX * magneticStrength * deltaTime;
+                card.velocity.y += dirY * magneticStrength * deltaTime;
+                
+                // Check for immediate docking - more forgiving for rotated cards
+                const rotationFactor = Math.abs(Math.cos(card.rotation)); // 1 when vertical, 0 when horizontal
+                const dockingThreshold = 20 + (1 - rotationFactor) * 15; // 20-35 based on rotation
+                if (distance < dockingThreshold) {
+                    this.completeDocking(card, 'Magnetic dock capture');
+                    return;
+                }
+            }
+        }
+        
+        // Apply different physics based on throw characteristics
+        if (physics.isOnTarget) {
+            this.updateOnTargetThrow(card, deltaTime, distance, toTarget, flightTime);
+        } else {
+            this.updateOffTargetThrow(card, deltaTime, distance, toTarget, flightTime);
+        }
+        
+        // Apply motion
+        const nextX = card.position.x + card.velocity.x * deltaTime;
+        const nextY = card.position.y + card.velocity.y * deltaTime;
+        
+        // Smooth final approach when very close - expanded range for rotated cards
+        const currentSpeed = Math.sqrt(card.velocity.x ** 2 + card.velocity.y ** 2);
+        const rotationFactor = Math.abs(Math.cos(card.rotation)); // Account for card rotation
+        const approachThreshold = 30 + (1 - rotationFactor) * 20; // 30-50 based on rotation
+        if (distance < approachThreshold && !physics.wrapAroundActive) {  
+            // Very close - ensure smooth docking
+            const dockX = card.targetPosition.x + card.cardDimensions.width / 2;
+            const dockY = card.targetPosition.y + card.cardDimensions.height / 2;
+            
+            // Blend toward dock position smoothly
+            const magnetFactor = Math.min(0.4, (approachThreshold - distance) / approachThreshold); // Stronger as we get closer
+            const targetSpeed = Math.min(currentSpeed, 200); // Cap speed for final approach
+            
+            const dirX = (dockX - card.position.x) / Math.max(distance, 1);
+            const dirY = (dockY - card.position.y) / Math.max(distance, 1);
+            
+            // Blend velocity instead of replacing it
+            card.velocity.x = card.velocity.x * (1 - magnetFactor) + dirX * targetSpeed * magnetFactor;
+            card.velocity.y = card.velocity.y * (1 - magnetFactor) + dirY * targetSpeed * magnetFactor;
+        }
+        
+        // Safe to move
+        card.position.x = nextX;
+        card.position.y = nextY;
+        
+        // Track actual path for debug visualization
+        const cardCenterX = card.position.x + (card.cardDimensions ? card.cardDimensions.width / 2 : 40);
+        const cardCenterY = card.position.y + (card.cardDimensions ? card.cardDimensions.height / 2 : 60);
+        this.updateActualPath({ x: cardCenterX, y: cardCenterY });
+        
+        // Maintain angular momentum (never alter spin)
+        // More forgiving damping for non-vertical cards
+        // rotationFactor already calculated above for approach threshold
+        if (distance > approachThreshold) {
+            card.angularVelocity *= 0.998; // Almost no damping during flight
+        } else {
+            // Less damping for rotated cards to let them settle naturally
+            const dampingRate = 0.92 + (1 - rotationFactor) * 0.03; // 0.92-0.95 based on rotation
+            card.angularVelocity *= dampingRate;
+        }
+        
+        card.rotation += card.angularVelocity * deltaTime;
+    }
+    
+    /**
+     * Update physics for on-target throws
+     * @param {Object} card - Card object
+     * @param {number} deltaTime - Time delta
+     * @param {number} distance - Distance to target
+     * @param {Object} toTarget - Vector to target
+     * @param {number} flightTime - Total flight time
+     */
+    updateOnTargetThrow(card, deltaTime, distance, toTarget, flightTime) {
+        const physics = card.flightPhysics;
+        
+        // CORE DOCKING TIME GUARANTEE
+        const elapsedTime = flightTime;
+        const remainingTime = this.DOCKING_TIME_LIMIT - elapsedTime;
+        
+        if (remainingTime <= 0) {
+            // Smoothly transition to dock if time's up
+            if (!card.forceDocking) {
+                card.forceDocking = true;
+                card.forceDockStartPos = { ...card.position };
+                card.forceDockStartTime = performance.now();
+            }
+            
+            // Smooth transition over 100ms
+            const forceDockElapsed = (performance.now() - card.forceDockStartTime) / 100;
+            const forceDockProgress = Math.min(forceDockElapsed, 1.0);
+            const easeProgress = this.easeInOutQuad(forceDockProgress);
+            
+            const targetX = card.targetPosition.x + card.cardDimensions.width / 2;
+            const targetY = card.targetPosition.y + card.cardDimensions.height / 2;
+            
+            card.position.x = card.forceDockStartPos.x + (targetX - card.forceDockStartPos.x) * easeProgress;
+            card.position.y = card.forceDockStartPos.y + (targetY - card.forceDockStartPos.y) * easeProgress;
+            
+            if (forceDockProgress >= 1.0) {
+                this.completeDocking(card, 'Time limit reached - smooth docking');
+            }
+            return;
+        }
+        
+        // Calculate if we'll make it in time
+        const currentSpeed = Math.sqrt(card.velocity.x ** 2 + card.velocity.y ** 2);
+        const estimatedTimeToDoc = distance / currentSpeed;
+        
+        if (physics.throwType === 'Slow' || estimatedTimeToDoc > remainingTime) {
+            // Need acceleration to meet 1.5s deadline
+            if (!physics.guidanceActive) {
+                physics.guidanceActive = true;
+                physics.guidanceStartTime = performance.now();
+                console.log('Activating guidance to meet 1.5s deadline');
+            }
+            
+            // Calculate required speed to reach dock in remaining time
+            const requiredSpeed = distance / remainingTime;
+            
+            // Smooth acceleration using ease-in curve
+            const guidanceTime = (performance.now() - physics.guidanceStartTime) / 1000;
+            const accelerationCurve = this.easeInQuad(Math.min(guidanceTime / remainingTime, 1.0));
+            
+            // Gradually increase speed to meet deadline
+            const targetSpeed = currentSpeed + (requiredSpeed - currentSpeed) * accelerationCurve;
+            const speedMultiplier = targetSpeed / currentSpeed;
+            
+            // Apply acceleration while initially maintaining direction
+            if (currentSpeed > 0) {
+                card.velocity.x *= speedMultiplier;
+                card.velocity.y *= speedMultiplier;
+            }
+            
+            // Progressive angle adjustment that steepens over time
+            const progressiveFactor = accelerationCurve * accelerationCurve; // Quadratic ramp
+            const correctionStrength = 150 * progressiveFactor;
+            
+            // Apply direction correction toward dock
+            const dirX = toTarget.x / distance;
+            const dirY = toTarget.y / distance;
+            card.velocity.x += dirX * correctionStrength * deltaTime;
+            card.velocity.y += dirY * correctionStrength * deltaTime;
+            
+        } else {
+            // Fast/Medium throws - need stronger guidance for high speeds
+            const currentSpeed = Math.sqrt(card.velocity.x ** 2 + card.velocity.y ** 2);
+            
+            // Immediate guidance for fast throws (no waiting)
+            if (!physics.guidanceActive) {
+                physics.guidanceActive = true;
+                physics.guidanceStartTime = performance.now();
+                console.log(`${physics.throwType} on-target throw: Speed=${currentSpeed.toFixed(0)}, activating guidance`);
+            }
+            
+            if (physics.guidanceActive) {
+                const guidanceTime = (performance.now() - physics.guidanceStartTime) / 1000;
+                
+                // Calculate desired velocity to reach dock
+                const timeRemaining = Math.max(0.5, remainingTime); // At least 0.5s
+                const desiredSpeed = distance / timeRemaining;
+                
+                // Blend current velocity toward desired direction
+                const targetVelX = (toTarget.x / distance) * desiredSpeed;
+                const targetVelY = (toTarget.y / distance) * desiredSpeed;
+                
+                // Smooth blending factor - starts gentle, increases over time
+                const blendFactor = Math.min(guidanceTime * 2, 1.0) * 0.3; // Max 30% blend per frame
+                
+                // Debug: Log velocity before and after guidance
+                const velBefore = { x: card.velocity.x, y: card.velocity.y };
+                
+                // Blend toward target velocity
+                card.velocity.x = card.velocity.x * (1 - blendFactor) + targetVelX * blendFactor;
+                card.velocity.y = card.velocity.y * (1 - blendFactor) + targetVelY * blendFactor;
+                
+                // Log every 10th frame to avoid spam
+                if (Math.random() < 0.1) {
+                    const currentSpeed = Math.sqrt(card.velocity.x ** 2 + card.velocity.y ** 2);
+                    console.log('Guidance blending:', {
+                        velBefore: { x: velBefore.x.toFixed(1), y: velBefore.y.toFixed(1) },
+                        velAfter: { x: card.velocity.x.toFixed(1), y: card.velocity.y.toFixed(1) },
+                        targetVel: { x: targetVelX.toFixed(1), y: targetVelY.toFixed(1) },
+                        blendFactor: blendFactor.toFixed(3),
+                        distance: distance.toFixed(1),
+                        currentSpeed: currentSpeed.toFixed(1),
+                        desiredSpeed: desiredSpeed.toFixed(1)
+                    });
+                }
+            }
+        }
+        
+        // Natural air resistance
+        card.velocity.x *= 0.995;
+        card.velocity.y *= 0.995;
+    }
+    
+    /**
+     * Update physics for off-target throws with graduated response
+     * @param {Object} card - Card object
+     * @param {number} deltaTime - Time delta
+     * @param {number} distance - Distance to target
+     * @param {Object} toTarget - Vector to target
+     * @param {number} flightTime - Total flight time
+     */
+    updateOffTargetThrow(card, deltaTime, distance, toTarget, flightTime) {
+        const physics = card.flightPhysics;
+        
+        // CORE DOCKING TIME GUARANTEE
+        const elapsedTime = flightTime;
+        const remainingTime = this.DOCKING_TIME_LIMIT - elapsedTime;
+        
+        if (remainingTime <= 0) {
+            // Smoothly transition to dock if time's up
+            if (!card.forceDocking) {
+                card.forceDocking = true;
+                card.forceDockStartPos = { ...card.position };
+                card.forceDockStartTime = performance.now();
+            }
+            
+            // Smooth transition over 100ms
+            const forceDockElapsed = (performance.now() - card.forceDockStartTime) / 100;
+            const forceDockProgress = Math.min(forceDockElapsed, 1.0);
+            const easeProgress = this.easeInOutQuad(forceDockProgress);
+            
+            const targetX = card.targetPosition.x + card.cardDimensions.width / 2;
+            const targetY = card.targetPosition.y + card.cardDimensions.height / 2;
+            
+            card.position.x = card.forceDockStartPos.x + (targetX - card.forceDockStartPos.x) * easeProgress;
+            card.position.y = card.forceDockStartPos.y + (targetY - card.forceDockStartPos.y) * easeProgress;
+            
+            if (forceDockProgress >= 1.0) {
+                this.completeDocking(card, 'Time limit reached - smooth docking');
+            }
+            return;
+        }
+        
+        // Calculate current speed first (needed for multiple checks)
+        const currentSpeed = Math.sqrt(card.velocity.x ** 2 + card.velocity.y ** 2);
+        
+        // Check if card is going offscreen (check screen bounds)
+        const screenPadding = 100; // Start wrapping before fully offscreen
+        const isOffscreen = card.position.x < -screenPadding || 
+                           card.position.x > window.innerWidth + screenPadding ||
+                           card.position.y < -screenPadding || 
+                           card.position.y > window.innerHeight + screenPadding;
+        
+        if (isOffscreen || distance > 600) {
+            // Initiate horseshoe wrap-around trajectory
+            if (!physics.wrapAroundActive) {
+                physics.wrapAroundActive = true;
+                physics.wrapStartTime = performance.now();
+                console.log('Card offscreen - initiating horseshoe wrap-around');
+                
+                // Store initial velocity for smooth transition
+                physics.wrapInitialVelocity = { ...card.velocity };
+            }
+            
+            const wrapTime = (performance.now() - physics.wrapStartTime) / 1000;
+            const wrapProgress = Math.min(wrapTime / 1.0, 1.0); // 1 second for full wrap
+            
+            // Create horseshoe curve by blending velocities
+            // Start with current direction, gradually curve back
+            const curveFactor = this.easeInOutCubic(wrapProgress);
+            
+            // Calculate perpendicular force for horseshoe effect (with safety check)
+            const safeSpeed = Math.max(currentSpeed, 1); // Avoid division by zero
+            const perpX = -card.velocity.y / safeSpeed;
+            const perpY = card.velocity.x / safeSpeed;
+            
+            // Blend original velocity with return direction
+            const returnForce = 400 + (600 * curveFactor); // Increasing pull
+            const curveForce = 300 * Math.sin(wrapProgress * Math.PI); // Arc shape
+            
+            const dirX = toTarget.x / distance;
+            const dirY = toTarget.y / distance;
+            
+            // Apply horseshoe forces
+            card.velocity.x = physics.wrapInitialVelocity.x * (1 - curveFactor) + // Fade original
+                             dirX * returnForce * curveFactor + // Add return force
+                             perpX * curveForce; // Add curve
+            
+            card.velocity.y = physics.wrapInitialVelocity.y * (1 - curveFactor) +
+                             dirY * returnForce * curveFactor +
+                             perpY * curveForce;
+            
+            // Don't skip other guidance - let it blend
+        }
+        
+        // Calculate if we'll make it in time (currentSpeed already calculated above)
+        const estimatedTimeToDoc = currentSpeed > 0 ? distance / currentSpeed : 999;
+        
+        if (physics.throwType === 'Slow' || estimatedTimeToDoc > remainingTime) {
+            // Need acceleration to meet 1.5s deadline
+            if (!physics.guidanceActive) {
+                physics.guidanceActive = true;
+                physics.guidanceStartTime = performance.now();
+                console.log('Off-target: Activating guidance to meet 1.5s deadline');
+            }
+            
+            // Calculate required speed
+            const requiredSpeed = distance / remainingTime;
+            
+            // Smooth acceleration
+            const guidanceTime = (performance.now() - physics.guidanceStartTime) / 1000;
+            const accelerationCurve = this.easeInQuad(Math.min(guidanceTime / remainingTime, 1.0));
+            
+            // Speed adjustment
+            const targetSpeed = currentSpeed + (requiredSpeed - currentSpeed) * accelerationCurve;
+            const speedMultiplier = targetSpeed / currentSpeed;
+            
+            if (currentSpeed > 0) {
+                card.velocity.x *= speedMultiplier;
+                card.velocity.y *= speedMultiplier;
+            }
+            
+            // Aggressive angle correction for off-target
+            const aggressiveFactor = accelerationCurve * physics.correctionIntensity;
+            const correctionStrength = 300 * aggressiveFactor;
+            
+            const dirX = toTarget.x / distance;
+            const dirY = toTarget.y / distance;
+            card.velocity.x += dirX * correctionStrength * deltaTime;
+            card.velocity.y += dirY * correctionStrength * deltaTime;
+            
+        } else {
+            // Fast/Medium off-target: Use graduated S-curve based on aim offset
+            if (!physics.guidanceActive) {
+                physics.guidanceActive = true;
+                physics.guidanceStartTime = performance.now();
+                
+                // Instead of horseshoe, use momentum-respecting arc
+                const aimOffsetWidths = physics.aimOffset / this.CARD_WIDTH;
+                
+                if (aimOffsetWidths < 2.5) {
+                    physics.curveType = 'gentle_s';
+                    physics.curveStrength = 0.3;
+                } else if (aimOffsetWidths < 3.5) {
+                    physics.curveType = 'moderate_s';
+                    physics.curveStrength = 0.6;
+                } else {
+                    physics.curveType = 'strong_arc';
+                    physics.curveStrength = 0.8;
+                }
+                
+                console.log(`Off-target ${physics.throwType}: ${physics.curveType} curve`);
+            }
+            
+            if (physics.guidanceActive) {
+                const guidanceTime = (performance.now() - physics.guidanceStartTime) / 1000;
+                const curveProgress = Math.min(guidanceTime / 1.2, 1.0);
+                
+                // Momentum-respecting curve (not toilet bowl)
+                const curveFactor = this.easeInOutQuad(curveProgress) * physics.curveStrength;
+                const lateralCorrection = 200 * curveFactor;
+                
+                // Apply graduated correction
+                const dirX = toTarget.x / distance;
+                const dirY = toTarget.y / distance;
+                card.velocity.x += dirX * lateralCorrection * deltaTime;
+                card.velocity.y += dirY * lateralCorrection * deltaTime;
+            }
+        }
+        
+        // Natural air resistance
+        card.velocity.x *= 0.99;
+        card.velocity.y *= 0.99;
+    }
+    
+    /**
+     * Apply bezier curve guidance for smooth horseshoe/toilet bowl arcs
+     * @param {Object} card - Card object
+     * @param {number} deltaTime - Time delta
+     * @param {number} distance - Distance to target
+     * @param {Object} toTarget - Vector to target
+     * @param {number} flightTime - Total flight time
+     */
+    applyBezierCurveGuidance(card, deltaTime, distance, toTarget, flightTime) {
+        const physics = card.flightPhysics;
+        const bezier = physics.bezierPath;
+        
+        // Calculate progress along bezier curve (0 to 1)
+        const guidanceTime = (performance.now() - physics.guidanceStartTime) / 1000;
+        const totalGuidanceTime = 1.2; // Total time for bezier guidance
+        physics.pathProgress = Math.min(guidanceTime / totalGuidanceTime, 1.0);
+        
+        // Calculate desired position on bezier curve
+        const t = this.easeInOutCubic(physics.pathProgress);
+        const desiredPos = this.calculateBezierPoint(bezier, t);
+        
+        // Calculate correction force toward desired position
+        const toDesired = {
+            x: desiredPos.x - card.position.x,
+            y: desiredPos.y - card.position.y
+        };
+        const distanceToDesired = Math.sqrt(toDesired.x ** 2 + toDesired.y ** 2);
+        
+        if (distanceToDesired > 0) {
+            // Apply bezier curve guidance force
+            const curveForce = 150 * physics.correctionIntensity;
+            const dirX = toDesired.x / distanceToDesired;
+            const dirY = toDesired.y / distanceToDesired;
+            
+            card.velocity.x += dirX * curveForce * deltaTime;
+            card.velocity.y += dirY * curveForce * deltaTime;
+        }
+        
+        // Add direct correction toward target as we progress
+        const directCorrectionFactor = physics.pathProgress * physics.pathProgress; // Quadratic ramp
+        const directForce = 100 * directCorrectionFactor;
+        
+        const dirToTarget = {
+            x: toTarget.x / distance,
+            y: toTarget.y / distance
+        };
+        
+        card.velocity.x += dirToTarget.x * directForce * deltaTime;
+        card.velocity.y += dirToTarget.y * directForce * deltaTime;
+    }
+    
+    /**
+     * Calculate a point on a bezier curve
+     * @param {Object} bezier - Bezier curve data
+     * @param {number} t - Parameter (0 to 1)
+     * @returns {Object} - Point on curve
+     */
+    calculateBezierPoint(bezier, t) {
+        const { p0, cp1, cp2, p3 } = bezier;
+        const u = 1 - t;
+        const tt = t * t;
+        const uu = u * u;
+        const uuu = uu * u;
+        const ttt = tt * t;
+        
+        return {
+            x: uuu * p0.x + 3 * uu * t * cp1.x + 3 * u * tt * cp2.x + ttt * p3.x,
+            y: uuu * p0.y + 3 * uu * t * cp1.y + 3 * u * tt * cp2.y + ttt * p3.y
+        };
+    }
+    
+    /**
+     * Ease-in-out cubic function for smooth acceleration/deceleration
+     * @param {number} t - Input parameter (0 to 1)
+     * @returns {number} - Eased output (0 to 1)
+     */
+    easeInOutCubic(t) {
+        return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    }
+    
+    easeInQuad(t) {
+        return t * t;
+    }
+    
+    easeInCubic(t) {
+        return t * t * t;
+    }
+    
+    easeInOutQuad(t) {
+        return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    }
+    
+    /**
+     * Complete the docking sequence
+     * @param {Object} card - Card object
+     * @param {string} reason - Reason for docking
+     */
+    completeDocking(card, reason) {
+        if (card.isDocking) return; // Already docking
+        
+        console.log(`Docking completed: ${reason}`);
+        card.position = { ...card.targetPosition };
+        card.velocity = { x: 0, y: 0 };
+        card.isDocking = true;
+        
+        // Smooth rotation to nearest upright position
+        const currentRotation = card.rotation;
+        const nearestUpright = Math.round(currentRotation / (Math.PI / 2)) * (Math.PI / 2);
+        card.dockTargetRotation = nearestUpright;
+        card.dockStartRotation = currentRotation;
+        card.dockStartTime = performance.now();
+        
+        // Complete after brief docking animation
+        setTimeout(() => {
+            if (card.onComplete && typeof card.onComplete === 'function' && !card.dockingCompleted) {
+                card.dockingCompleted = true;
+                card.onComplete(true);
+            }
+        }, 200); // Quick completion for responsive feel
+    }
+    
+    // LEGACY METHOD - kept for backward compatibility
     // Predict if card will reach drop zone with magnetic assistance
     predictTrajectory(card, dropZoneCenter) {
         const distance = Math.sqrt(
@@ -721,15 +1838,36 @@ class CardPhysicsEngine {
         }
     }
     
-    // Update physics after release
+    // Update physics after release with sophisticated flight physics
     updateThrowPhysics(card, deltaTime) {
+        // Calculate target info first - use center positions for consistency
+        const cardCenterX = card.position.x + (card.cardDimensions ? card.cardDimensions.width / 2 : 40);
+        const cardCenterY = card.position.y + (card.cardDimensions ? card.cardDimensions.height / 2 : 60);
+        const targetCenterX = card.targetPosition.x + (card.cardDimensions ? card.cardDimensions.width / 2 : 40);
+        const targetCenterY = card.targetPosition.y + (card.cardDimensions ? card.cardDimensions.height / 2 : 60);
+        
         const toTarget = {
-            x: card.targetPosition.x - card.position.x,
-            y: card.targetPosition.y - card.position.y
+            x: targetCenterX - cardCenterX,
+            y: targetCenterY - cardCenterY
         };
         
         const distance = Math.sqrt(toTarget.x ** 2 + toTarget.y ** 2);
         
+        // Use sophisticated flight physics if available (let it handle time limits)
+        if (card.flightPhysics && !card.isReturning) {
+            this.updateSophisticatedFlightPhysics(card, deltaTime, distance, toTarget);
+            return;
+        }
+        
+        // Check for time limit only for legacy physics
+        const flightTime = (performance.now() - card.flightStartTime) / 1000;
+        if (flightTime > this.DOCKING_TIME_LIMIT && !card.isReturning && !card.isDocking) {
+            console.log(`Docking time limit exceeded: ${flightTime.toFixed(2)}s`);
+            this.returnCardHome(card, card.element.id, card.onComplete, 'Docking time limit exceeded');
+            return;
+        }
+        
+        // Legacy physics path (fallback)
         if (distance < 5) {
             // Reached target - but don't complete immediately
             card.position = { ...card.targetPosition };
@@ -1335,73 +2473,180 @@ class CardPhysicsEngine {
         };
     }
     
-    // Cleanup card after animation
+    // Enhanced cleanup with sophisticated physics state management
     cleanupCard(cardId) {
         if (!cardId) {
             console.warn('cleanupCard called without cardId');
             return;
         }
         
-        const card = this.activeCards.get(cardId);
-        if (card && card.element) {
-            // CRITICAL FIX: Use requestAnimationFrame for cleanup to avoid React conflicts
-            requestAnimationFrame(() => {
-                // Remove pencil stab marker
-                if (card.stabMarker && card.stabMarker.parentNode) {
-                    card.stabMarker.remove();
-                }
-                
-                // Remove arrow element
-                if (card.arrowElement && card.arrowElement.parentNode) {
-                    card.arrowElement.remove();
-                }
-                
-                // Remove vertical line
-                if (card.verticalLine && card.verticalLine.parentNode) {
-                    card.verticalLine.remove();
-                }
-                
-                // Reset styles
-                card.element.style.transition = '';
-                card.element.style.transform = '';
-                card.element.style.zIndex = '';
-                card.element.style.filter = '';
-                card.element.style.transformOrigin = '';
-                card.element.style.pointerEvents = '';
-                card.element.style.touchAction = '';
-                card.element.style.position = '';
-                card.element.style.left = '';
-                card.element.style.top = '';
-                card.element.style.margin = ''; // Restore original margin
-                
-                // CRITICAL FIX: Remove physics control marker
-                card.element.removeAttribute('data-physics-controlled');
-                
-                // Force style recalculation
-                void card.element.offsetHeight; // eslint-disable-line no-void
-            });
+        try {
+            // Remove from airborne tracking
+            this.airbornCards.delete(cardId);
             
-            // Restore parent overflows
-            if (card.parentOverflows) {
-                card.parentOverflows.forEach(({ element, originalOverflow }) => {
-                    element.style.overflow = originalOverflow;
+            // Clear bezier cache for this card
+            this.bezierCache.delete(cardId);
+            
+            const card = this.activeCards.get(cardId);
+            if (card && card.element) {
+                // CRITICAL FIX: Use requestAnimationFrame for cleanup to avoid React conflicts
+                requestAnimationFrame(() => {
+                    // Remove pencil stab marker
+                    if (card.stabMarker && card.stabMarker.parentNode) {
+                        card.stabMarker.remove();
+                    }
+                    
+                    // Remove arrow element
+                    if (card.arrowElement && card.arrowElement.parentNode) {
+                        card.arrowElement.remove();
+                    }
+                    
+                    // Remove vertical line
+                    if (card.verticalLine && card.verticalLine.parentNode) {
+                        card.verticalLine.remove();
+                    }
+                    
+                    // Reset styles
+                    card.element.style.transition = '';
+                    card.element.style.transform = '';
+                    card.element.style.zIndex = '';
+                    card.element.style.filter = '';
+                    card.element.style.transformOrigin = '';
+                    card.element.style.pointerEvents = '';
+                    card.element.style.touchAction = '';
+                    card.element.style.position = '';
+                    card.element.style.left = '';
+                    card.element.style.top = '';
+                    card.element.style.margin = ''; // Restore original margin
+                    
+                    // CRITICAL FIX: Remove physics control marker
+                    card.element.removeAttribute('data-physics-controlled');
+                    
+                    // Force style recalculation
+                    void card.element.offsetHeight; // eslint-disable-line no-void
                 });
+                
+                // Restore parent overflows
+                if (card.parentOverflows) {
+                    card.parentOverflows.forEach(({ element, originalOverflow }) => {
+                        element.style.overflow = originalOverflow;
+                    });
+                }
             }
             
+            this.activeCards.delete(cardId);
+        } catch (error) {
+            console.error('Error in cleanupCard:', error);
+            // Force cleanup even on error
+            this.airbornCards.delete(cardId);
+            this.bezierCache.delete(cardId);
             this.activeCards.delete(cardId);
         }
     }
     
-    // Cancel all active animations
+    // Enhanced cancel all with sophisticated physics cleanup
     cancelAll() {
-        this.activeCards.forEach((card, cardId) => {
-            this.cleanupCard(cardId);
+        try {
+            console.log(`Cancelling ${this.activeCards.size} active cards and ${this.airbornCards.size} airborne cards`);
+            
+            // Cleanup all active cards
+            this.activeCards.forEach((card, cardId) => {
+                this.cleanupCard(cardId);
+            });
+            
+            // Clear all tracking sets
+            this.airbornCards.clear();
+            this.bezierCache.clear();
+            
+            // Cancel animation frame
+            if (this.animationFrame) {
+                cancelAnimationFrame(this.animationFrame);
+                this.animationFrame = null;
+            }
+            
+            // Clear touch history
+            this.touchHistory = [];
+            
+            console.log('All card physics cleaned up successfully');
+            
+        } catch (error) {
+            console.error('Error in cancelAll:', error);
+            // Force cleanup even on error
+            this.activeCards.clear();
+            this.airbornCards.clear();
+            this.bezierCache.clear();
+            this.touchHistory = [];
+            if (this.animationFrame) {
+                cancelAnimationFrame(this.animationFrame);
+                this.animationFrame = null;
+            }
+        }
+    }
+    
+    /**
+     * Component unmount cleanup - ensure no memory leaks
+     */
+    destroy() {
+        console.log('Destroying CardPhysicsEngine');
+        this.cancelAll();
+        
+        // Additional cleanup for sophisticated physics
+        this.playerPickingUp = false;
+        
+        // Clear any remaining timeouts or intervals
+        if (this.cleanupTimeout) {
+            clearTimeout(this.cleanupTimeout);
+        }
+    }
+    
+    /**
+     * Get current flight physics status for debugging
+     * @returns {Object} - Flight physics status
+     */
+    getFlightPhysicsStatus() {
+        const airborneCards = Array.from(this.airbornCards);
+        const activeFlights = [];
+        
+        airborneCards.forEach(cardId => {
+            const card = this.activeCards.get(cardId);
+            if (card && card.flightPhysics) {
+                const flightTime = (performance.now() - card.flightStartTime) / 1000;
+                activeFlights.push({
+                    cardId,
+                    throwType: card.flightPhysics.throwType,
+                    isOnTarget: card.flightPhysics.isOnTarget,
+                    guidanceActive: card.flightPhysics.guidanceActive,
+                    flightTime: flightTime.toFixed(2),
+                    aimOffset: card.flightPhysics.aimOffset.toFixed(1)
+                });
+            }
         });
         
-        if (this.animationFrame) {
-            cancelAnimationFrame(this.animationFrame);
-            this.animationFrame = null;
-        }
+        return {
+            totalAirborne: this.airbornCards.size,
+            totalActive: this.activeCards.size,
+            activeFlights,
+            bezierCacheSize: this.bezierCache.size
+        };
+    }
+    
+    /**
+     * Emergency return all cards home (for error recovery)
+     */
+    emergencyReturnAll() {
+        console.warn('Emergency return all cards activated');
+        
+        this.activeCards.forEach((card, cardId) => {
+            if (card && !card.isReturning && !card.isDocking) {
+                try {
+                    this.returnCardHome(card, cardId, card.onComplete, 'Emergency return');
+                } catch (error) {
+                    console.error(`Error in emergency return for card ${cardId}:`, error);
+                    // Force cleanup on error
+                    this.cleanupCard(cardId);
+                }
+            }
+        });
     }
     
     // Calculate the center of mass for a playing card

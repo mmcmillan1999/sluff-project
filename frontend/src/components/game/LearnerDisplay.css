@@ -8,12 +8,19 @@
     text-align: center;
     font-family: 'Oswald', sans-serif;
     border: 2px solid #555; /* Default border */
+    display: flex;
+    flex-direction: column;
+    visibility: visible;
+    opacity: 1;
+    position: relative;
+    z-index: 10;
 }
 
 /* --- NEW TEAM-BASED BORDER STYLES --- */
 .score-progress-container.team-bidder {
     border-color: #ca8a04; /* Gold */
 }
+
 .score-progress-container.team-defender {
     border-color: #2563eb; /* Blue */
 }
@@ -42,4 +49,42 @@
     height: 100%;
     border-radius: 4px;
     transition: width 0.5s ease-in-out;
+}
+
+
+/* Desktop: 200% bigger progress bars */
+@media (min-width: 1024px) {
+    .score-progress-container {
+        padding: 10px 16px;  /* 2x padding */
+        border-radius: 16px;  /* 2x radius */
+        border-width: 4px;    /* 2x border */
+        width: 260px;
+    }
+    
+    .score-progress-container.team-bidder {
+        border-color: #ca8a04;
+    }
+    
+    .score-progress-container.team-defender {
+        border-color: #2563eb;
+    }
+    
+    .score-progress-label {
+        font-size: 1.8em;     /* 2x font */
+        margin-bottom: 8px;   /* 2x margin */
+    }
+    
+    .score-progress-label.team-label {
+        font-size: 2em;       /* 2x font */
+    }
+    
+    .score-progress-bar-background {
+        height: 24px;         /* 2x height */
+        border-radius: 10px;  /* 2x radius */
+        border-width: 2px;    /* 2x border */
+    }
+    
+    .score-progress-bar-foreground {
+        border-radius: 8px;   /* 2x radius */
+    }
 }

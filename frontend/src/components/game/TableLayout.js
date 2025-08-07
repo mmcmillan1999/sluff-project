@@ -461,6 +461,39 @@ const TableLayout = ({
                 />
                 
                 {renderWidowSeat()}
+                
+                {/* Desktop-only: Render widow cards separately from seat */}
+                {window.innerWidth >= 1024 && (() => {
+                    const { playerOrderActive, state, widow, originalDealtWidow, roundSummary } = currentTableState;
+                    if (!playerOrderActive || playerOrderActive.length >= 4) return null;
+                    const hiddenStates = ["Waiting for Players", "Ready to Start", "Dealing Pending"];
+                    if (hiddenStates.includes(state)) return null;
+                    
+                    const isRoundOver = state === 'Awaiting Next Round Trigger' || state === 'Game Over';
+                    const cardsToDisplay = isRoundOver ? roundSummary?.widowForReveal : (widow || originalDealtWidow);
+                    const widowSize = cardsToDisplay?.length || 0;
+                    
+                    if (widowSize > 0) {
+                        return (
+                            <div className="widow-cards-desktop">
+                                {isRoundOver 
+                                    ? cardsToDisplay.map((card, i) => (
+                                        <div key={card + i} style={{ marginLeft: i > 0 ? '10px' : '0' }}>
+                                            {renderCard(card, { small: false })}
+                                        </div>
+                                    ))
+                                    : Array.from({ length: widowSize }).map((_, i) => (
+                                        <div key={i} style={{ marginLeft: i > 0 ? '10px' : '0' }}>
+                                            {renderCard(null, { isFaceDown: true, small: false })}
+                                        </div>
+                                    ))
+                                }
+                            </div>
+                        );
+                    }
+                    return null;
+                })()}
+                
                 {renderTrickTallyPiles()}
                 {renderLastTrickOverlay()}
                 {renderPlayerPucks()}

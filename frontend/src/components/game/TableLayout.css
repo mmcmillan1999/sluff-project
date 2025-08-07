@@ -225,16 +225,7 @@
 }
 
 .progress-bar-area {
-    position: absolute;
-    bottom: 5px; /* Tight to bottom of table */
-    left: 50%;
-    transform: translateX(-50%);
-    width: 90%;
-    max-width: 500px;
-    display: flex;
-    justify-content: space-between;
-    gap: 20%;
-    pointer-events: none;
+    display: none; /* Decouple the bars - hide this container */
 }
 
 /* Removed .progress-bar-area-mobile - using single class now */
@@ -420,6 +411,13 @@
 .played-card-left { top: 50%; left: 30%; transform: translateY(-50%); }
 .played-card-right { top: 50%; right: 30%; transform: translateY(-50%); }
 
+/* Desktop: Scale played cards area to match 2x card sizes */
+@media (min-width: 1024px) {
+    .played-card-bottom { bottom: 25%; }  /* Adjust positioning for larger cards */
+    .played-card-left { left: 25%; }      /* Move inward for larger cards */
+    .played-card-right { right: 25%; }    /* Move inward for larger cards */
+}
+
 .puck-container-bottom, .puck-container-left, .puck-container-right {
     position: absolute;
     z-index: 9;
@@ -538,6 +536,16 @@ button.card-display:disabled {
     opacity: 0;
     pointer-events: none;
     box-shadow: 0 0 20px 10px rgba(139, 195, 247, 0.5);
+}
+
+/* Desktop: 50% bigger drop zone for 50% bigger cards */
+@media (min-width: 1024px) {
+    .card-drop-zone-visual {
+        width: 180px;   /* 50% bigger (was 120px) */
+        height: 240px;  /* 50% bigger (was 160px) */
+        border-width: 5px;
+        border-radius: 12px;
+    }
 }
 
 /* Magnetic range indicator - outer circle */
@@ -1028,6 +1036,402 @@ button.card-display:disabled {
 .dealer-deck-card-wrapper:nth-child(30) { filter: drop-shadow(0 7px 8px rgba(0, 0, 0, 0.4)); }
 .dealer-deck-card-wrapper:nth-child(35) { filter: drop-shadow(0 8px 9px rgba(0, 0, 0, 0.45)); }
 .dealer-deck-card-wrapper:nth-child(36) { filter: drop-shadow(0 9px 10px rgba(0, 0, 0, 0.5)); }
+
+/* LANDSCAPE ORIENTATION FIXES FOR TABLE LAYOUT */
+
+/* Mobile landscape mode optimizations */
+@media (orientation: landscape) and (max-height: 500px) {
+    .table-oval {
+        min-width: 420px; /* Wider minimum for landscape */
+        aspect-ratio: 5/3; /* Landscape-friendly aspect ratio */
+        border-width: 4px; /* Thinner border for constrained height */
+        border-radius: 120px; /* Adjusted for landscape ratio */
+    }
+    
+    .action-prompt-container {
+        top: 80px; /* Reduced positioning for landscape */
+        min-width: 160px;
+        max-width: calc(100vw - 120px);
+        padding: 6px 10px;
+        font-size: 0.8em;
+    }
+    
+    .action-prompt-container h4 {
+        font-size: 0.9em;
+        margin: 0 0 4px 0;
+    }
+    
+    .action-prompt-container p {
+        font-size: 0.75em;
+        margin: 2px 0;
+    }
+    
+    .action-prompt-container .game-button {
+        padding: 6px 8px;
+        font-size: 0.75em;
+        margin: 2px;
+        min-height: 44px;
+        min-width: 44px;
+    }
+    
+    /* Adjust player seat positions for landscape */
+    .player-seat-left { left: 15px; top: 50%; transform: translateY(-50%); }
+    .player-seat-right { right: 15px; top: 50%; transform: translateY(-50%); }
+    .player-seat-bottom { bottom: 8%; }
+    
+    /* Compact pucks for landscape */
+    .puck {
+        width: 24px;
+        height: 24px;
+        font-size: 0.65em;
+    }
+    
+    /* Compact trick piles */
+    .trick-pile-container {
+        transform: scale(0.85);
+        bottom: 2%;
+    }
+    
+    .defender-pile { left: 8%; }
+    .bidder-pile { right: 8%; }
+    
+    /* Compact trump indicator */
+    .trump-indicator-puck {
+        width: 35px;
+        height: 35px;
+        font-size: 0.9em;
+        border-width: 2px;
+    }
+    
+    /* Compact widow seat */
+    .widow-seat {
+        top: 0px;
+        transform: translateX(-50%);
+    }
+    
+    .widow-seat-plate {
+        min-width: 160px;
+        padding: 4px 8px;
+        font-size: 0.8em;
+        border-width: 3px;
+    }
+    
+    .widow-name {
+        font-size: 0.9em;
+    }
+    
+    .widow-stats-line {
+        font-size: 0.7em;
+        gap: 4px;
+    }
+    
+    /* Compact dealer deck */
+    .dealer-deck-container {
+        opacity: 0.85;
+    }
+    
+    .dealer-deck-label {
+        font-size: 0.8em;
+        padding: 3px 6px;
+        margin-bottom: 4px;
+    }
+    
+    .dealer-deck-pile {
+        transform: scale(0.8);
+    }
+    
+    .dealer-deck-bottom { bottom: 10%; }
+    .dealer-deck-left { left: 8%; }
+    .dealer-deck-right { right: 8%; }
+}
+
+/* Desktop: Create invisible container for trick plates and goal bars */
+@media (min-width: 1024px) {
+    /* Invisible container for trick piles and goal bars */
+    .trick-goals-container {
+        position: absolute;
+        width: 100%;
+        height: 50%;
+        bottom: 5%;
+        left: 0;
+        pointer-events: none; /* Invisible container */
+        z-index: 5;
+    }
+    
+    /* Allow interaction with child elements */
+    .trick-goals-container > * {
+        pointer-events: auto;
+    }
+    
+    /* Decouple progress bars - position independently */
+    .score-progress-container.team-defender {
+        position: absolute !important;
+        left: 2% !important; /* Far left against outer wall */
+        bottom: 8% !important;
+        z-index: 10 !important;
+        width: 260px !important;
+        pointer-events: auto !important;
+    }
+    
+    .score-progress-container.team-bidder {
+        position: absolute !important;
+        right: 2% !important; /* Far right against outer wall */
+        bottom: 8% !important;
+        z-index: 10 !important;
+        width: 260px !important;
+        pointer-events: auto !important;
+    }
+}
+
+/* Desktop mode optimizations - both portrait and landscape */
+@media (min-width: 1024px) {
+    /* Adjust player seat positions to accommodate 3x size */
+    .player-seat-left { 
+        left: 10px;  /* Move in slightly */
+        width: auto; /* Remove width constraint */
+    }
+    
+    .player-seat-right { 
+        right: 10px; /* Move in slightly */
+        width: auto; /* Remove width constraint */
+    }
+    
+    .player-seat-bottom { 
+        bottom: 10%; /* Move down by half card height (was 15%) */
+    }
+    
+    /* Position trick piles at bottom of table */
+    .trick-pile-container.defender-pile {
+        position: absolute;
+        bottom: 5%;  /* Move to bottom of table */
+        left: 12%;    /* Align right edge with west player right edge */
+        transform: translateX(0);
+    }
+    
+    .trick-pile-container.bidder-pile {
+        position: absolute;
+        bottom: 5%;  /* Move to bottom of table */
+        right: 12%;   /* Align left edge with east player left edge */
+        left: auto;
+        transform: translateX(0);
+    }
+    
+    /* Fix trick collection plates size - remove width/height constraints and make containers big enough */
+    .trick-pile-cards {
+        width: 140px !important;  /* Big enough for 112×150px cards plus padding */
+        height: 180px !important; /* Minimum to hold cards properly */
+        min-width: 140px;
+        min-height: 180px;
+        padding: 10px;  /* Padding for cards */
+    }
+    
+    .trick-pile-glow {
+        width: 140px;  /* Match container size */
+        height: 180px; /* Match container size */
+    }
+    
+    /* Ensure trick count fits inside */
+    .trick-pile-count {
+        font-size: 1.8em;  /* Bigger font for desktop */
+        bottom: 10px;
+        right: 10px;
+    }
+    
+    /* Hide inline widow cards on desktop */
+    .widow-cards-inline {
+        display: none !important;
+    }
+    
+    /* Create new desktop widow cards container - horizontal 3x1 layout */
+    .widow-cards-desktop {
+        position: absolute;
+        top: 30px;
+        left: calc(50% + 200px); /* To the right of the widow seat */
+        z-index: 15;
+        display: flex !important;
+        flex-direction: row !important; /* 3x1 horizontal layout */
+        gap: 15px; /* Space between cards */
+        padding: 10px;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 8px;
+        border: 2px solid #666;
+        align-items: center;
+        justify-content: center;
+        height: auto;
+        width: auto;
+    }
+    
+    /* Ensure widow cards display horizontally */
+    .widow-cards-desktop > div {
+        display: inline-block;
+        position: relative !important;
+        transform: none !important;
+        margin: 0 !important;
+    }
+    
+    /* Widow seat without cards on desktop */
+    .widow-seat {
+        transform: translateX(-50%) scale(1.3); /* Center the seat itself */
+    }
+    
+    .widow-seat-plate {
+        min-width: 250px;  /* Bigger for desktop */
+        padding: 12px 18px;
+        font-size: 1.3em;
+        border-width: 6px;
+    }
+    
+    .widow-name {
+        font-size: 1.4em;
+    }
+    
+    .widow-stats-line {
+        font-size: 1.1em;
+        gap: 12px;
+    }
+    
+    /* Remove separate widow display container since we're using desktop positioning */
+    .widow-display-container {
+        display: none !important;
+    }
+    
+    .widow-pile {
+        display: flex;
+        gap: 8px;
+    }
+    
+    /* Larger trick piles for desktop - remove transform scale to avoid interference */
+    .trick-pile-container {
+        bottom: 5%;
+        transform: none; /* Remove scale to avoid interference */
+    }
+    
+    .trick-pile-count {
+        font-size: 2.5em;        /* Even larger count display */
+    }
+    
+    .trick-pile-base {
+        padding: 8px 16px;      /* Much larger base padding */
+        border-radius: 10px;
+        border-width: 2px;
+    }
+    
+    .defender-pile { left: 12%; }  /* Consistent with positioning */
+    .bidder-pile { right: 12%; }
+    
+    /* Scale up trump indicator */
+    .trump-indicator-puck {
+        width: 65px;           /* Increased from 50px */
+        height: 65px;
+        font-size: 1.5em;
+        border-width: 4px;
+    }
+}
+
+/* Desktop/Laptop landscape mode optimizations */
+@media (orientation: landscape) and (min-height: 501px) and (min-width: 769px) {
+    .table-oval {
+        min-width: 500px;
+        aspect-ratio: 5/3;
+        border-width: 10px; /* Full border for desktop */
+        border-radius: 150px;
+    }
+    
+    .action-prompt-container {
+        top: 120px;
+        min-width: 240px;
+        max-width: calc(100vw - 100px);
+        padding: 12px 16px;
+        font-size: 1em;
+    }
+    
+    /* Standard sizing for non-desktop landscape */
+    .puck {
+        width: 32px;
+        height: 32px;
+        font-size: 0.75em;
+    }
+    
+    .trump-indicator-puck {
+        width: 50px;
+        height: 50px;
+        font-size: 1.2em;
+        border-width: 3px;
+    }
+    
+    .widow-seat-plate {
+        min-width: 200px;
+        padding: 8px 12px;
+        font-size: 1em;
+        border-width: 5px;
+    }
+    
+    .dealer-deck-container {
+        opacity: 0.95;
+    }
+    
+    .dealer-deck-label {
+        font-size: 1.1em;
+        padding: 6px 12px;
+        margin-bottom: 8px;
+    }
+    
+    .dealer-deck-pile {
+        transform: none;
+    }
+}
+
+/* Tablet landscape mode optimizations */
+@media (orientation: landscape) and (min-height: 501px) and (max-width: 768px) {
+    .table-oval {
+        min-width: 450px;
+        aspect-ratio: 5/3;
+        border-width: 8px;
+        border-radius: 135px;
+    }
+    
+    .action-prompt-container {
+        top: 100px;
+        min-width: 200px;
+        max-width: calc(100vw - 80px);
+        padding: 10px 14px;
+        font-size: 0.9em;
+    }
+    
+    .puck {
+        width: 30px;
+        height: 30px;
+        font-size: 0.7em;
+    }
+    
+    .trump-indicator-puck {
+        width: 45px;
+        height: 45px;
+        font-size: 1.1em;
+        border-width: 2px;
+    }
+    
+    .widow-seat-plate {
+        min-width: 180px;
+        padding: 6px 10px;
+        font-size: 0.9em;
+        border-width: 4px;
+    }
+    
+    .dealer-deck-container {
+        opacity: 0.9;
+    }
+    
+    .dealer-deck-label {
+        font-size: 0.95em;
+        padding: 5px 9px;
+        margin-bottom: 6px;
+    }
+    
+    .dealer-deck-pile {
+        transform: scale(0.9);
+    }
+}
 
 /* Mobile optimizations for dealer deck */
 @media (orientation: portrait) {

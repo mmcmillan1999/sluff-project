@@ -214,12 +214,21 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         
         // Responsive card sizes based on viewport
         const isMobile = window.innerWidth <= 768;
+        const isDesktop = window.innerWidth >= 1024;
+        
+        // Enhanced desktop sizes - 50% bigger than current (75px -> 112px)
+        // On desktop, all cards same size including widow/trick
         const baseWidth = isMobile ? 
             (large ? '60px' : (small ? '35px' : '50px')) :
-            (large ? '65px' : (small ? '37.5px' : '45px'));
+            (isDesktop ? 
+                '112px' :  // Desktop: all cards 50% bigger (was 75px)
+                (large ? '65px' : (small ? '37.5px' : '45px'))); // Tablet: original
+        
         const baseHeight = isMobile ?
             (large ? '80px' : (small ? '45px' : '65px')) :
-            (large ? '85px' : (small ? '50px' : '70px'));
+            (isDesktop ?
+                '150px' : // Desktop: all cards 50% bigger (was 100px)
+                (large ? '85px' : (small ? '50px' : '70px')));    // Tablet: original
         
         const width = responsive ? baseWidth : (large ? '65px' : (small ? '37.5px' : '45px'));
         const height = responsive ? baseHeight : (large ? '85px' : (small ? '50px' : '70px'));
@@ -245,12 +254,20 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         const backgroundColor = isSelected ? 'lightblue' : (SUIT_BACKGROUNDS[suit] || 'white');
         const cardClasses = ['card-display', className].filter(Boolean).join(' ');
         const cardContent = <>{rank !== '?' && rank}<span className="card-symbol">{symbol}</span></>;
+        // Scale font size with card size for desktop
+        const getFontSize = () => {
+            if (isDesktop) {
+                return '1.8em'; // Bigger font for 50% bigger cards
+            }
+            return large ? '1.2em' : (small ? '0.8em' : '1em');
+        };
+        
         const style = { 
             backgroundColor, 
             color, 
             minWidth: width, 
             height,
-            fontSize: large ? '1.2em' : (small ? '0.8em' : '1em'),
+            fontSize: getFontSize(),
             ...customStyle
         };
         
@@ -403,19 +420,13 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                     dropZoneRef={dropZoneRef}
                 />
                 <div className="footer-controls-wrapper">
-                    {!chatOpen && (
-                        <button className="chat-tab-button" onClick={openChatWindow}>
-                            <span>Chat</span>
-                            {unreadChat > 0 && <span className="unread-badge">{unreadChat}</span>}
-                        </button>
-                    )}
-                    <div className="right-controls-group">
-                        <InsuranceControls
-                            insuranceState={currentTableState.insurance}
-                            selfPlayerName={selfPlayerName}
-                            isSpectator={isSpectator}
-                            emitEvent={emitEvent}
-                        />
+                    <InsuranceControls
+                        insuranceState={currentTableState.insurance}
+                        selfPlayerName={selfPlayerName}
+                        isSpectator={isSpectator}
+                        emitEvent={emitEvent}
+                    />
+                    <div className="button-panel">
                         <button className="hamburger-btn" onClick={() => setShowGameMenu(prev => !prev)}>
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <line x1="3" y1="12" x2="21" y2="12"></line>
@@ -423,6 +434,12 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                                 <line x1="3" y1="18" x2="21" y2="18"></line>
                             </svg>
                         </button>
+                        {!chatOpen && (
+                            <button className="chat-tab-button" onClick={openChatWindow}>
+                                <span>Chat</span>
+                                {unreadChat > 0 && <span className="unread-badge">{unreadChat}</span>}
+                            </button>
+                        )}
                     </div>
                 </div>
                 {showGameMenu && <GameMenu />}

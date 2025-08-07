@@ -18,6 +18,18 @@
     transition: all 0.3s ease;
 }
 
+/* Desktop: 2x bigger insurance panel */
+@media (min-width: 1024px) {
+    .insurance-controls-container {
+        padding: 16px 24px;  /* 2x padding */
+        gap: 30px;           /* 2x gap */
+        min-height: 100px;   /* 2x height */
+        border-radius: 20px;
+        border-width: 2px;
+        max-width: none;     /* Remove width restrictions */
+    }
+}
+
 .insurance-controls-container:hover {
     border-color: rgba(255, 255, 255, 0.25);
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
@@ -37,6 +49,18 @@
     min-width: 40px;
     text-align: center;
     line-height: 1;
+}
+
+/* Desktop: Scale up text and controls */
+@media (min-width: 1024px) {
+    .deal-made-text {
+        font-size: 2.4em;  /* 2x size */
+    }
+    
+    .value-display {
+        font-size: 3.2em;  /* 2x size */
+        min-width: 80px;   /* 2x width */
+    }
 }
 
 .value-display.player-value-get {
@@ -79,6 +103,21 @@
     transition: all 0.3s ease;
     touch-action: manipulation;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* Desktop: 2x bigger buttons */
+@media (min-width: 1024px) {
+    .adjust-button {
+        width: 72px;      /* 2x size */
+        height: 72px;     /* 2x size */
+        font-size: 3em;   /* 2x font */
+        border-radius: 20px;
+        border-width: 3px;
+    }
+    
+    .gap-value {
+        padding-right: 30px;  /* 2x padding */
+    }
 }
 
 .adjust-button:hover {

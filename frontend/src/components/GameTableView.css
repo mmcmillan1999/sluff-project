@@ -12,6 +12,8 @@
     height: 100vh;
     background-color: #333;
     overflow: hidden;
+    position: relative; /* Ensure proper stacking context */
+    z-index: 1; /* Base z-index for game view */
 }
 
 /* In-Game Ad Container */
@@ -227,6 +229,11 @@
     stroke: white;
 }
 
+/* Button panel doesn't exist on mobile - elements are inline */
+.button-panel {
+    display: contents; /* On mobile, button panel acts as if it doesn't exist */
+}
+
 @media (max-width: 768px) {
     .in-game-ad-container {
         bottom: 160px; /* Adjust for mobile player hand height */
@@ -253,15 +260,23 @@
     
     .footer-controls-wrapper {
         width: 100%;
+        display: flex;
         justify-content: space-between;
+        align-items: center;
         background-color: #1a1a1a;
         padding: 5px 10px;
         border-top: 2px solid #424242;
     }
-    .right-controls-group {
+    
+    /* On mobile portrait, button panel acts as transparent container */
+    .button-panel {
         display: flex;
         align-items: center;
         gap: 10px;
+        background: none;
+        border: none;
+        padding: 0;
+        box-shadow: none;
     }
     
     /* Enhanced mobile chat positioning */
@@ -332,4 +347,218 @@
     z-index: 7; /* Below played cards but above table */
     pointer-events: none; /* Allows clicks to pass through */
     box-shadow: 0 0 20px 10px rgba(139, 195, 247, 0.5); /* --- MODIFIED: Amplified base glow --- */
+}
+
+/* LANDSCAPE ORIENTATION FIXES FOR GAME VIEW */
+
+/* Mobile landscape mode optimizations */
+@media (orientation: landscape) and (max-height: 500px) {
+    .game-view {
+        /* Ensure no overflow issues in mobile landscape */
+        height: calc(100vh - 58px);
+        height: calc(100dvh - 58px);
+        max-height: 100vh;
+        overflow: hidden;
+    }
+    
+    .game-footer {
+        flex-direction: row;
+        padding: 3px 6px;
+        gap: 8px;
+        font-size: 0.8em;
+    }
+    
+    .footer-controls-wrapper {
+        flex-direction: row;
+        justify-content: space-between;
+        width: auto;
+        background-color: transparent;
+        padding: 0;
+        border-top: none;
+    }
+    
+    .game-view-chat-container {
+        width: min(280px, calc(100vw - 20px));
+        bottom: 6px;
+        left: 6px;
+        max-height: calc(100vh - 180px);
+    }
+    
+    .game-menu-popup {
+        width: 85vw;
+        max-width: 320px;
+        right: 5vw;
+        bottom: calc(100% + 8px);
+        font-size: 0.85em;
+    }
+    
+    .chat-tab-button {
+        padding: 4px 8px;
+        font-size: 0.8em;
+        min-height: 36px;
+        min-width: 36px;
+    }
+    
+    .hamburger-btn {
+        min-height: 36px;
+        min-width: 36px;
+        padding: 4px;
+    }
+    
+    .unread-badge {
+        width: 16px;
+        height: 16px;
+        font-size: 0.65em;
+    }
+}
+
+/* Desktop mode optimizations */
+@media (min-width: 1024px) {
+    .game-footer {
+        padding: 10px 20px;
+        min-height: 120px;  /* Ensure footer is tall enough for scaled elements */
+    }
+    
+    .footer-controls-wrapper {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 20px;
+        width: 100%;
+        justify-content: space-between;  /* Space items evenly */
+        height: 100%;
+    }
+    
+    /* Create a button panel for menu and chat */
+    .button-panel {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        padding: 12px 20px;
+        background: linear-gradient(135deg, rgba(31, 41, 55, 0.8) 0%, rgba(17, 24, 39, 0.8) 100%);
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(4px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    
+    /* Insurance panel should be centered */
+    .insurance-controls-container {
+        order: 1;
+        flex-grow: 0;
+        flex-shrink: 0;
+        margin: 0 auto;  /* Center the insurance panel */
+    }
+    
+    .hamburger-btn {
+        min-height: 50px;
+        min-width: 50px;
+        padding: 10px;
+        order: 1;  /* First in button panel */
+    }
+    
+    /* Ensure chat button stays with menu button */
+    .chat-tab-button {
+        min-height: 50px;
+        padding: 8px 16px;
+        font-size: 1.1em;
+        order: 2;  /* Second in button panel */
+    }
+}
+
+/* Desktop/Laptop landscape mode optimizations */
+@media (orientation: landscape) and (min-height: 501px) and (min-width: 769px) {
+    .game-view {
+        height: calc(100vh - 106px);
+        max-height: 100vh;
+        overflow: hidden;
+    }
+    
+    .game-footer {
+        flex-direction: row;
+        padding: 8px 12px;
+        gap: 12px;
+    }
+    
+    .footer-controls-wrapper {
+        flex-direction: row;
+        justify-content: space-between;
+        width: auto;
+        background-color: transparent;
+        padding: 0;
+        border-top: none;
+    }
+    
+    .game-view-chat-container {
+        width: 350px;
+        bottom: 12px;
+        left: 12px;
+        max-height: calc(100vh - 280px);
+    }
+    
+    .game-menu-popup {
+        width: 280px;
+        right: 12px;
+        bottom: calc(100% + 12px);
+        font-size: 1em;
+    }
+}
+
+/* Tablet landscape mode optimizations */
+@media (orientation: landscape) and (min-height: 501px) and (max-width: 768px) {
+    .game-view {
+        height: calc(100vh - 72px);
+        max-height: 100vh;
+        overflow: hidden;
+    }
+    
+    .game-footer {
+        flex-direction: row;
+        padding: 6px 10px;
+        gap: 10px;
+        font-size: 0.9em;
+    }
+    
+    .footer-controls-wrapper {
+        flex-direction: row;
+        justify-content: space-between;
+        width: auto;
+        background-color: transparent;
+        padding: 0;
+        border-top: none;
+    }
+    
+    .game-view-chat-container {
+        width: min(320px, calc(100vw - 20px));
+        bottom: 8px;
+        left: 8px;
+        max-height: calc(100vh - 220px);
+    }
+    
+    .game-menu-popup {
+        width: 90vw;
+        max-width: 340px;
+        right: 5vw;
+        bottom: calc(100% + 10px);
+        font-size: 0.9em;
+    }
+    
+    .chat-tab-button {
+        padding: 5px 10px;
+        font-size: 0.9em;
+        min-height: 40px;
+        min-width: 40px;
+    }
+    
+    .hamburger-btn {
+        min-height: 40px;
+        min-width: 40px;
+        padding: 6px;
+    }
+    
+    .unread-badge {
+        width: 18px;
+        height: 18px;
+        font-size: 0.7em;
+    }
 }
