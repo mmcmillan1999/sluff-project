@@ -354,52 +354,52 @@
 /* Desktop mode optimizations - both portrait and landscape */
 @media (min-width: 1024px) {
     .player-seat {
-        min-width: 450px !important;  /* 3x bigger - was 150px - !important to override base */
-        width: 450px !important;      /* Fixed width to ensure it grows */
-        padding: 24px 32px !important; /* 3x padding */
-        font-size: 1.8em !important;   /* Adjusted for better readability */
-        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.4);
-        border-width: 6px !important;  /* Thicker border */
-        gap: 12px !important;          /* Larger gap between elements */
+        min-width: 225px !important;  /* 50% of previous 450px - similar to widow */
+        width: 225px !important;      /* Fixed width */
+        padding: 12px 16px !important; /* 50% of previous padding */
+        font-size: 1.1em !important;   /* Similar to widow size */
+        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+        border-width: 4px !important;  /* Medium border */
+        gap: 6px !important;           /* Medium gap between elements */
     }
     
     .player-name {
-        font-size: 1.6em !important;   /* Bigger name */
-        gap: 20px !important;
+        font-size: 1.2em !important;   /* Medium name */
+        gap: 10px !important;
     }
     
     .player-stats-line {
-        font-size: 1.3em !important;   /* Bigger stats */
-        gap: 20px !important;
+        font-size: 1.0em !important;   /* Medium stats */
+        gap: 10px !important;
     }
     
     .token-icon-inline {
-        height: 36px !important;       /* 3x bigger icons */
+        height: 18px !important;       /* Medium icons */
         width: auto;
     }
     
-    /* Larger pucks for desktop */
+    /* Medium pucks for desktop */
     .puck {
-        width: 60px !important;        /* Larger to match scale */
-        height: 60px !important;
-        font-size: 1.2em !important;
-        top: -20px !important;
+        width: 35px !important;        /* Medium size */
+        height: 35px !important;
+        font-size: 0.9em !important;
+        top: -12px !important;
     }
     
     .dealer-puck {
-        right: -20px !important;
+        right: -12px !important;
     }
     
-    /* Ensure timeout controls scale too */
+    /* Medium timeout controls */
     .start-timer-button {
-        padding: 8px 16px !important;
-        font-size: 1.2em !important;
-        min-height: 60px !important;
-        min-width: 120px !important;
+        padding: 6px 10px !important;
+        font-size: 0.9em !important;
+        min-height: 44px !important;
+        min-width: 80px !important;
     }
     
     .timeout-display {
-        font-size: 1.4em !important;
+        font-size: 1.0em !important;
     }
 }
 
