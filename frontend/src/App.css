@@ -17,14 +17,6 @@ body {
   padding-bottom: 20px;
 }
 
-/* Desktop mode: Remove side padding to stretch table to full width */
-@media (min-width: 1024px) {
-  .app-content-container {
-    padding-left: 0;
-    padding-right: 0;
-  }
-}
-
 /* Responsive adjustments for different ad sizes */
 @media (max-width: 768px) and (min-width: 481px) {
   .app-content-container {

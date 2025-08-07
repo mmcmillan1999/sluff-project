@@ -1185,16 +1185,14 @@ button.card-display:disabled {
 
 /* Desktop mode optimizations - both portrait and landscape */
 @media (min-width: 1024px) {
-    /* Stretch table to fill width */
+    /* Stretch only the green felt background */
     .game-table {
-        width: 100vw;
-        max-width: 100vw;
-        padding: 0;
+        padding: 0 0;  /* Remove side padding to stretch background */
     }
     
     .table-oval {
-        max-width: calc(100vw - 40px);  /* Stretch table, leave small margin */
-        width: calc(100vw - 40px);
+        max-width: 1600px;  /* Wider table for desktop */
+        width: calc(100% - 40px);  /* Use most of available width */
         min-width: 1200px;  /* Ensure minimum width */
     }
     
