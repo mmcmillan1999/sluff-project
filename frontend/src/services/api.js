@@ -15,7 +15,6 @@ const getServerUrl = () => {
     
     // Detect based on where the frontend is running
     const hostname = window.location.hostname;
-    const protocol = window.location.protocol;
     
     // Local development
     if (hostname === 'localhost' || hostname === '127.0.0.1') {

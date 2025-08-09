@@ -1,0 +1,22 @@
+[build]
+  base = "frontend"
+  command = "CI= npm run build"
+  publish = "build"
+
+[build.environment]
+  NODE_VERSION = "18"
+  NPM_VERSION = "9"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[context.production.environment]
+  REACT_APP_SERVER_URL = "https://api.playsluff.com"
+
+[context.deploy-preview.environment]
+  REACT_APP_SERVER_URL = "https://api.playsluff.com"
+
+[context.branch-deploy.environment]
+  REACT_APP_SERVER_URL = "https://api.playsluff.com"
