@@ -24,37 +24,41 @@ const getServerUrl = () => {
     
     // Production domains
     if (hostname === 'playsluff.com' || hostname === 'www.playsluff.com') {
-        return 'https://api.playsluff.com';
+        return 'https://sluff-backend.onrender.com';
     }
     
-    // Staging or preview deployments
-    if (hostname.includes('staging') || hostname.includes('preview')) {
-        // You might want to set up a staging API later
-        return 'https://api.playsluff.com'; // For now, use production
+    // Netlify Stage deployment
+    if (hostname === 'sluff-pilot.netlify.app') {
+        return 'https://sluff-backend-pilot.onrender.com';
     }
     
-    // Netlify deployments (branch previews, etc)
+    // Netlify Production deployment  
+    if (hostname === 'sluff.netlify.app') {
+        return 'https://sluff-backend.onrender.com';
+    }
+    
+    // Generic Netlify branch deploys - use stage backend
     if (hostname.includes('netlify')) {
-        return 'https://api.playsluff.com';
+        return 'https://sluff-backend-pilot.onrender.com';
     }
     
-    // Render.com deployment
+    // Render.com deployment (if frontend is on Render)
     if (hostname.includes('onrender.com')) {
         return 'https://sluff-backend.onrender.com';
     }
     
-    // Vercel deployments
+    // Vercel deployments (if you use Vercel)
     if (hostname.includes('vercel.app')) {
-        return 'https://api.playsluff.com';
+        return 'https://sluff-backend-pilot.onrender.com';
     }
     
     // GitHub Pages
     if (hostname.includes('github.io')) {
-        return 'https://api.playsluff.com';
+        return 'https://sluff-backend.onrender.com';
     }
     
-    // Default to production API for any unknown domains
-    return 'https://api.playsluff.com';
+    // Default to stage backend for any unknown domains
+    return 'https://sluff-backend-pilot.onrender.com';
 };
 
 const SERVER_URL = getServerUrl();
