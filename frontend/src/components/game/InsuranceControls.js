@@ -6,12 +6,9 @@ import './InsuranceControls.css'; // Import the new CSS file
  * focusing on values and buttons with no text labels.
  */
 const InsuranceControls = ({ insuranceState, selfPlayerName, isSpectator, emitEvent }) => {
+    const isActive = !!(insuranceState && insuranceState.isActive && !isSpectator);
 
-    if (!insuranceState || !insuranceState.isActive || isSpectator) {
-        return null;
-    }
-
-    const { bidderPlayerName, bidderRequirement, defenderOffers, dealExecuted } = insuranceState;
+    const { bidderPlayerName, bidderRequirement, defenderOffers, dealExecuted } = insuranceState || {};
     const isBidder = selfPlayerName === bidderPlayerName;
     const myOffer = defenderOffers ? defenderOffers[selfPlayerName] : undefined;
     const isDefender = myOffer !== undefined;
@@ -33,7 +30,7 @@ const InsuranceControls = ({ insuranceState, selfPlayerName, isSpectator, emitEv
     };
 
     const sumOfOffers = Object.values(defenderOffers || {}).reduce((sum, offer) => sum + offer, 0);
-    const gapToDeal = bidderRequirement - sumOfOffers;
+    const gapToDeal = (bidderRequirement ?? 0) - sumOfOffers;
     const playerValue = isBidder ? bidderRequirement : myOffer;
 
     // --- Build className strings dynamically ---
@@ -67,23 +64,25 @@ const InsuranceControls = ({ insuranceState, selfPlayerName, isSpectator, emitEv
 
 
     return (
-        <div className="insurance-controls-container">
-            {dealExecuted ? (
-                <div className="deal-made-text">DEAL!</div>
+        <div className={['insurance-controls-container', isActive ? '' : 'is-inactive'].join(' ').trim()}>
+            {isActive ? (
+                dealExecuted ? (
+                    <div className="deal-made-text">DEAL!</div>
+                ) : (
+                    <>
+                        <div className={gapValueClasses} title="Gap to Deal">{gapToDeal}</div>
+                        {(isBidder || isDefender) && (
+                            <>
+                                <div className={playerValueClasses.join(' ')} title={isBidder ? 'Your Ask' : 'Your Offer'}>{playerValue}</div>
+                                <button onClick={() => handleAdjustInsurance(-1)} className={decreaseButtonClasses.join(' ')} title="Decrease">-</button>
+                                <button onClick={() => handleAdjustInsurance(1)} className={increaseButtonClasses.join(' ')} title="Increase">+</button>
+                            </>
+                        )}
+                    </>
+                )
             ) : (
-                <>
-                    {/* Gap to Deal Value */}
-                    <div className={gapValueClasses} title="Gap to Deal">{gapToDeal}</div>
-
-                    {/* Player Controls */}
-                    {(isBidder || isDefender) && (
-                        <>
-                            <div className={playerValueClasses.join(' ')} title={isBidder ? 'Your Ask' : 'Your Offer'}>{playerValue}</div>
-                            <button onClick={() => handleAdjustInsurance(-1)} className={decreaseButtonClasses.join(' ')} title="Decrease">-</button>
-                            <button onClick={() => handleAdjustInsurance(1)} className={increaseButtonClasses.join(' ')} title="Increase">+</button>
-                        </>
-                    )}
-                </>
+                // Placeholder to reserve space when inactive
+                <div className="insurance-placeholder" aria-hidden="true">Insurance</div>
             )}
         </div>
     );

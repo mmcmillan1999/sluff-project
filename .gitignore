@@ -69,3 +69,16 @@ backend/src/check-insurance-logs.js
 # Package lock files (keeping for now)
 # package-lock.json
 # yarn.lock
+
+# Python
+venv/
+*.pyc
+__pycache__/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/

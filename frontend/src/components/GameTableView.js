@@ -12,6 +12,7 @@ import InsurancePrompt from './game/InsurancePrompt';
 import IosPwaPrompt from './game/IosPwaPrompt';
 import LobbyChat from './LobbyChat';
 import AdminObserverMode from './AdminObserverMode';
+import LayoutDevPanel from './LayoutDevPanel';
 import { getLobbyChatHistory } from '../services/api';
 import { SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS } from '../constants';
 
@@ -30,6 +31,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const [chatMessages, setChatMessages] = useState([]);
     const [observedPlayerId, setObservedPlayerId] = useState(playerId);
     const [isObserverMode, setIsObserverMode] = useState(false);
+    const [showLayoutDev, setShowLayoutDev] = useState(false);
     const turnPlayerRef = useRef(null);
     const trickWinnerRef = useRef(null);
     const cardCountRef = useRef(null);
@@ -92,6 +94,18 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         const timer = setTimeout(() => setShowGameMenu(false), 3000);
         return () => clearTimeout(timer);
     }, [showGameMenu]);
+
+    // Keyboard accessibility: allow ESC to close chat when open
+    useEffect(() => {
+        const onKeyDown = (e) => {
+            if (e.key === 'Escape' && chatOpen) {
+                e.stopPropagation();
+                setChatOpen(false);
+            }
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [chatOpen]);
     
     const getPlayerNameByUserId = useCallback((targetPlayerId) => {
         if (!currentTableState?.players || !targetPlayerId) return String(targetPlayerId);
@@ -324,6 +338,14 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 >
                     Submit Feedback
                 </button>
+                {user?.is_admin && (
+                    <button
+                        onClick={() => { setShowLayoutDev(true); setShowGameMenu(false); }}
+                        className="game-menu-button"
+                    >
+                        🎨 Layout Dev
+                    </button>
+                )}
                 <button 
                     onClick={() => { emitEvent("requestDraw"); setShowGameMenu(false); }}
                     className="game-menu-button primary"
@@ -355,18 +377,29 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
 
             <IosPwaPrompt show={showIosPwaPrompt} onClose={() => setShowIosPwaPrompt(false)} />
 
+            {/* Debug: Check admin status (log removed to avoid console spam) */}
+            
             {user?.is_admin && (
-                <AdminObserverMode
-                    players={Object.values(currentTableState.players || {})}
-                    currentObservedPlayer={observedPlayerId}
-                    onPlayerSwitch={handlePlayerSwitch}
-                    onStartBotGame={handleStartBotGame}
-                    onMoveToSpectator={handleMoveToSpectator}
-                    gameInProgress={currentTableState.gameStarted || (currentTableState.state !== 'Waiting for Players' && currentTableState.state !== 'Ready to Start')}
-                    isAdmin={user.is_admin}
-                    isSpectator={currentTableState.players?.[playerId]?.isSpectator}
-                    userId={playerId}
-                />
+                <>
+                    <AdminObserverMode
+                        players={Object.values(currentTableState.players || {})}
+                        currentObservedPlayer={observedPlayerId}
+                        onPlayerSwitch={handlePlayerSwitch}
+                        onStartBotGame={handleStartBotGame}
+                        onMoveToSpectator={handleMoveToSpectator}
+                        gameInProgress={currentTableState.gameStarted || (currentTableState.state !== 'Waiting for Players' && currentTableState.state !== 'Ready to Start')}
+                        isAdmin={user.is_admin}
+                        isSpectator={currentTableState.players?.[playerId]?.isSpectator}
+                        userId={playerId}
+                    />
+                    {showLayoutDev && (
+                        <LayoutDevPanel 
+                            onClose={() => setShowLayoutDev(false)}
+                            emitEvent={emitEvent}
+                            currentTableState={currentTableState}
+                        />
+                    )}
+                </>
             )}
             {/* console.log('[DEBUG] GameTableView render - user:', user) */}
             {/* console.log('[DEBUG] GameTableView render - user.is_admin:', user?.is_admin) */}
@@ -415,6 +448,8 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                     }}
                     selfPlayerName={isObserverMode ? perspectivePlayer?.playerName : selfPlayerName}
                     isSpectator={isObserverMode ? false : isSpectator}
+                    playerId={playerId}
+                    isObserverMode={isObserverMode}
                     emitEvent={emitEvent}
                     renderCard={renderCard}
                     dropZoneRef={dropZoneRef}

@@ -5,10 +5,12 @@
     top: 0;
     left: 0;
     width: 100%;
-    background-color: #ffffff;
-    border-bottom: 1px solid #e0e0e0;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    z-index: 1000;
+    background-color: #1a1a1a; /* Match lobby header background */
+    /* Removed white bottom border per request */
+    border-bottom: none;
+    /* Subtle shadow only if needed; keep dark theme */
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+    z-index: 2000; /* Above lobby header/tabs */
     display: flex;
     justify-content: center;
     align-items: center;
@@ -55,6 +57,18 @@
     width: 100%;
     height: auto;
     max-width: 100%;
+}
+
+/* Attention CTA overlay to encourage ad watching for Mercy Token */
+/* Replace overlay with a subtle glow on the whole banner when eligible */
+.ad-attention {
+        animation: adGlow 2s ease-in-out infinite;
+}
+
+@keyframes adGlow {
+    0% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.35) inset, 0 0 0 0 rgba(255, 193, 7, 0.35); }
+    50% { box-shadow: 0 0 0 4px rgba(255, 193, 7, 0.18) inset, 0 0 0 6px rgba(255, 193, 7, 0.12); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.35) inset, 0 0 0 0 rgba(255, 193, 7, 0.35); }
 }
 
 /* Desktop: 728x90 Leaderboard */

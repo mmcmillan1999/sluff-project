@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sluff Responsive Layout Designer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Control Panel */
+        #control-panel {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        #control-panel select, #control-panel button {
+            padding: 8px 15px;
+            border: 2px solid #667eea;
+            border-radius: 5px;
+            background: white;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        #control-panel button:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        #control-panel button.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .custom-size-inputs {
+            display: none;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .custom-size-inputs input {
+            width: 80px;
+            padding: 5px;
+            border: 1px solid #667eea;
+            border-radius: 3px;
+        }
+
+        /* Main Container */
+        #main-container {
+            display: flex;
+            flex: 1;
+            padding: 20px;
+            gap: 20px;
+            overflow: auto;
+        }
+
+        /* Device Frame */
+        #device-wrapper {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 500px;
+        }
+
+        #device-frame {
+            background: white;
+            border: 3px solid #333;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            position: relative;
+            transition: all 0.3s;
+            overflow: hidden;
+        }
+
+        #game-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            background: #2a4d3a;
+            overflow: hidden;
+        }
+
+        /* Game Elements */
+        .element {
+            position: absolute;
+            border: 2px solid rgba(255,255,255,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: move;
+            transition: all 0.2s;
+            -webkit-user-select: none; /* Safari/iOS support */
+            user-select: none;
+        }
+
+        .element.unlocked {
+            border: 2px dashed #ffeb3b;
+            box-shadow: 0 0 10px rgba(255,235,59,0.5);
+        }
+
+        .element.overlapping {
+            border-color: #ff4444 !important;
+            background: rgba(255,0,0,0.2) !important;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        /* Specific Element Styles */
+        #table-oval {
+            background: radial-gradient(ellipse at center, #3a5f4a 0%, #2a4d3a 100%);
+            border-radius: 50%;
+            border: 3px solid #8b6914;
+        }
+
+        .player-seat {
+            background: linear-gradient(135deg, rgba(0,0,0,0.7), rgba(0,0,0,0.5));
+            border-radius: 10px;
+            padding: 5px;
+        }
+
+        #player-hand {
+            background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+            border-top: 2px solid #ffd700;
+        }
+
+        .trick-pile {
+            background: rgba(139,69,19,0.5);
+            border: 2px solid #8b4513;
+            border-radius: 5px;
+        }
+
+        #widow-cards {
+            background: rgba(255,215,0,0.3);
+            border: 2px solid #ffd700;
+            border-radius: 5px;
+        }
+
+        .ui-button {
+            background: rgba(102,126,234,0.8);
+            border-radius: 50%;
+            border: 2px solid white;
+        }
+
+        #insurance-slider {
+            background: linear-gradient(90deg, #4caf50, #ff9800, #f44336);
+            border-radius: 20px;
+            border: 2px solid white;
+        }
+
+        /* Resize Handles */
+        .resize-handle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: #ffeb3b;
+            border: 1px solid #333;
+            display: none;
+            cursor: pointer;
+        }
+
+        .element.unlocked .resize-handle {
+            display: block;
+        }
+
+        .resize-handle.nw { top: -5px; left: -5px; cursor: nw-resize; }
+        .resize-handle.ne { top: -5px; right: -5px; cursor: ne-resize; }
+        .resize-handle.sw { bottom: -5px; left: -5px; cursor: sw-resize; }
+        .resize-handle.se { bottom: -5px; right: -5px; cursor: se-resize; }
+
+        /* Side Panel */
+        #side-panel {
+            width: 350px;
+            background: rgba(255,255,255,0.95);
+            border-radius: 10px;
+            padding: 20px;
+            overflow-y: auto;
+            max-height: calc(100vh - 120px);
+        }
+
+        #side-panel h3 {
+            color: #333;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #667eea;
+        }
+
+        /* Overlap Report */
+        #overlap-list {
+            list-style: none;
+            margin-top: 10px;
+        }
+
+        #overlap-list li {
+            padding: 8px;
+            margin: 5px 0;
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+            border-radius: 3px;
+            font-size: 13px;
+        }
+
+        #overlap-list li.no-overlap {
+            background: #e8f5e9;
+            border-left-color: #4caf50;
+        }
+
+        /* Export Panel */
+        #export-panel {
+            margin-top: 20px;
+        }
+
+        #export-code {
+            width: 100%;
+            height: 200px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            resize: vertical;
+        }
+
+        #copy-btn {
+            margin-top: 10px;
+            padding: 8px 15px;
+            background: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        #copy-btn:hover {
+            background: #45a049;
+        }
+
+        /* Grid Overlay */
+        #grid-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: none;
+            opacity: 0.2;
+        }
+
+        .grid-line-h, .grid-line-v {
+            position: absolute;
+            background: white;
+        }
+
+        .grid-line-h {
+            width: 100%;
+            height: 1px;
+        }
+
+        .grid-line-v {
+            width: 1px;
+            height: 100%;
+        }
+
+        /* Status Bar */
+        #status-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+        }
+
+        #device-info {
+            display: flex;
+            gap: 20px;
+        }
+
+        .info-item {
+            display: flex;
+            gap: 5px;
+        }
+
+        .info-label {
+            opacity: 0.7;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            #main-container {
+                flex-direction: column;
+            }
+            
+            #side-panel {
+                width: 100%;
+                max-height: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Control Panel -->
+    <div id="control-panel">
+    <select id="device-selector" aria-label="Device preset selector" title="Device preset">
+            <option value="iphone-se">iPhone SE (375×667)</option>
+            <option value="iphone-14">iPhone 14 (393×852)</option>
+            <option value="samsung-galaxy">Samsung Galaxy (360×800)</option>
+            <option value="ipad">iPad (810×1080)</option>
+            <option value="desktop-hd">Desktop HD (1920×1080)</option>
+            <option value="small-android">Small Android (320×568)</option>
+            <option value="ultrawide">Ultrawide (2560×1080)</option>
+            <option value="square">Square/Facebook (810×810)</option>
+            <option value="custom">Custom Size...</option>
+        </select>
+        
+        <div class="custom-size-inputs" id="custom-size-inputs">
+            <input type="number" id="custom-width" placeholder="Width" min="200" max="3000">
+            <span>×</span>
+            <input type="number" id="custom-height" placeholder="Height" min="200" max="2000">
+            <button id="apply-custom">Apply</button>
+        </div>
+        
+        <button id="rotate-btn">🔄 Rotate</button>
+        <button id="unlock-btn">🔓 Unlock Mode</button>
+        <button id="grid-btn">⊞ Toggle Grid</button>
+        <button id="detect-overlaps">⚠️ Check Overlaps</button>
+        <button id="auto-layout">✨ Auto Layout</button>
+        <button id="reset-btn">🔄 Reset Layout</button>
+        <button id="export-btn">📤 Export Config</button>
+    </div>
+
+    <!-- Main Container -->
+    <div id="main-container">
+        <!-- Device Frame -->
+        <div id="device-wrapper">
+            <div id="device-frame">
+                <div id="game-container">
+                    <!-- Grid Overlay -->
+                    <div id="grid-overlay"></div>
+                    
+                    <!-- Game Elements -->
+                    <div class="element" id="table-oval">Table</div>
+                    
+                    <!-- Player Seats (3-player Sluff game) -->
+                    <div class="element player-seat" id="player-self">Self (You)</div>
+                    <div class="element player-seat" id="opponent-left">Opp Left</div>
+                    <div class="element player-seat" id="opponent-right">Opp Right</div>
+                    
+                    <!-- Widow Seat (4th position when needed) -->
+                    <div class="element player-seat" id="widow-seat">Widow Seat</div>
+                    
+                    <!-- Player Hand -->
+                    <div class="element" id="player-hand">Player Hand</div>
+                    
+                    <!-- Trick Piles -->
+                    <div class="element trick-pile" id="trick-pile-left">Tricks L</div>
+                    <div class="element trick-pile" id="trick-pile-right">Tricks R</div>
+                    
+                    <!-- Widow Cards -->
+                    <div class="element" id="widow-cards">Widow</div>
+                    
+                    <!-- UI Elements -->
+                    <div class="element ui-button" id="chat-button">💬</div>
+                    <div class="element ui-button" id="menu-button">☰</div>
+                    <div class="element" id="insurance-slider">Insurance</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Side Panel -->
+        <div id="side-panel">
+            <h3>Overlap Report</h3>
+            <ul id="overlap-list">
+                <li class="no-overlap">No overlaps detected</li>
+            </ul>
+
+            <div id="export-panel">
+                <h3>Export Configuration</h3>
+                <textarea id="export-code" placeholder="Layout configuration will appear here..."></textarea>
+                <button id="copy-btn">Copy to Clipboard</button>
+            </div>
+
+            <h3>Element Positions</h3>
+            <div id="element-positions"></div>
+        </div>
+    </div>
+
+    <!-- Status Bar -->
+    <div id="status-bar">
+        <div id="device-info">
+            <div class="info-item">
+                <span class="info-label">Device:</span>
+                <span id="current-device">iPhone SE</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Size:</span>
+                <span id="current-size">375×667</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Orientation:</span>
+                <span id="current-orientation">Portrait</span>
+            </div>
+        </div>
+        <div id="mode-info">
+            <span id="current-mode">🔒 Locked</span>
+        </div>
+    </div>
+
+    <script>
+        // Device Presets
+        const DEVICE_PRESETS = {
+            'iphone-se': { width: 375, height: 667, name: 'iPhone SE' },
+            'iphone-14': { width: 393, height: 852, name: 'iPhone 14' },
+            'samsung-galaxy': { width: 360, height: 800, name: 'Samsung Galaxy' },
+            'ipad': { width: 810, height: 1080, name: 'iPad' },
+            'desktop-hd': { width: 1920, height: 1080, name: 'Desktop HD' },
+            'small-android': { width: 320, height: 568, name: 'Small Android' },
+            'ultrawide': { width: 2560, height: 1080, name: 'Ultrawide' },
+            'square': { width: 810, height: 810, name: 'Square/Facebook' }
+        };
+
+        // Default Layouts for Different Screen Sizes (3-player Sluff game)
+        const DEFAULT_LAYOUTS = {
+            mobile: {
+                'table-oval': { x: '10%', y: '25%', width: '80%', height: '30%' },
+                'player-self': { x: '35%', y: '58%', width: '30%', height: '10%' },
+                'opponent-left': { x: '3%', y: '35%', width: '12%', height: '20%' },
+                'opponent-right': { x: '85%', y: '35%', width: '12%', height: '20%' },
+                'widow-seat': { x: '35%', y: '5%', width: '30%', height: '10%' },
+                'player-hand': { x: '0%', y: '80%', width: '100%', height: '20%' },
+                'trick-pile-left': { x: '5%', y: '70%', width: '15%', height: '8%' },
+                'trick-pile-right': { x: '80%', y: '70%', width: '15%', height: '8%' },
+                'widow-cards': { x: '40%', y: '70%', width: '20%', height: '8%' },
+                'chat-button': { x: '5%', y: '5%', width: '40px', height: '40px' },
+                'menu-button': { x: '85%', y: '5%', width: '40px', height: '40px' },
+                'insurance-slider': { x: '25%', y: '15%', width: '50%', height: '30px' }
+            },
+            tablet: {
+                'table-oval': { x: '15%', y: '20%', width: '70%', height: '40%' },
+                'player-self': { x: '37.5%', y: '63%', width: '25%', height: '12%' },
+                'opponent-left': { x: '5%', y: '35%', width: '15%', height: '20%' },
+                'opponent-right': { x: '80%', y: '35%', width: '15%', height: '20%' },
+                'widow-seat': { x: '37.5%', y: '5%', width: '25%', height: '12%' },
+                'player-hand': { x: '0%', y: '82%', width: '100%', height: '18%' },
+                'trick-pile-left': { x: '10%', y: '72%', width: '12%', height: '8%' },
+                'trick-pile-right': { x: '78%', y: '72%', width: '12%', height: '8%' },
+                'widow-cards': { x: '42%', y: '72%', width: '16%', height: '8%' },
+                'chat-button': { x: '5%', y: '5%', width: '50px', height: '50px' },
+                'menu-button': { x: '90%', y: '5%', width: '50px', height: '50px' },
+                'insurance-slider': { x: '30%', y: '10%', width: '40%', height: '35px' }
+            },
+            desktop: {
+                'table-oval': { x: '25%', y: '20%', width: '50%', height: '45%' },
+                'player-self': { x: '40%', y: '68%', width: '20%', height: '12%' },
+                'opponent-left': { x: '4%', y: '35%', width: '18%', height: '20%' },
+                'opponent-right': { x: '78%', y: '35%', width: '18%', height: '20%' },
+                'widow-seat': { x: '40%', y: '5%', width: '20%', height: '12%' },
+                'player-hand': { x: '20%', y: '83%', width: '60%', height: '17%' },
+                'trick-pile-left': { x: '15%', y: '72%', width: '10%', height: '8%' },
+                'trick-pile-right': { x: '75%', y: '72%', width: '10%', height: '8%' },
+                'widow-cards': { x: '44%', y: '72%', width: '12%', height: '8%' },
+                'chat-button': { x: '2%', y: '2%', width: '60px', height: '60px' },
+                'menu-button': { x: '94%', y: '2%', width: '60px', height: '60px' },
+                'insurance-slider': { x: '35%', y: '10%', width: '30%', height: '40px' }
+            }
+        };
+
+        // Global State
+        let currentDevice = 'iphone-se';
+        let currentSize = { ...DEVICE_PRESETS['iphone-se'] };
+        let isUnlocked = false;
+        let showGrid = false;
+        let isDragging = false;
+        let isResizing = false;
+        let currentElement = null;
+        let dragOffset = { x: 0, y: 0 };
+        let resizeStart = { width: 0, height: 0, x: 0, y: 0 };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeDevice();
+            setupEventListeners();
+            addResizeHandles();
+            applyDefaultLayout();
+            updateStatusBar();
+        });
+
+        function initializeDevice() {
+            const frame = document.getElementById('device-frame');
+            frame.style.width = currentSize.width + 'px';
+            frame.style.height = currentSize.height + 'px';
+        }
+
+        function setupEventListeners() {
+            // Device selector
+            document.getElementById('device-selector').addEventListener('change', (e) => {
+                if (e.target.value === 'custom') {
+                    document.getElementById('custom-size-inputs').style.display = 'flex';
+                } else {
+                    document.getElementById('custom-size-inputs').style.display = 'none';
+                    switchDevice(e.target.value);
+                }
+            });
+
+            // Custom size
+            document.getElementById('apply-custom').addEventListener('click', () => {
+                const width = parseInt(document.getElementById('custom-width').value);
+                const height = parseInt(document.getElementById('custom-height').value);
+                if (width && height) {
+                    currentSize = { width, height, name: 'Custom' };
+                    currentDevice = 'custom';
+                    applyDeviceSize();
+                }
+            });
+
+            // Rotate button
+            document.getElementById('rotate-btn').addEventListener('click', () => {
+                const temp = currentSize.width;
+                currentSize.width = currentSize.height;
+                currentSize.height = temp;
+                applyDeviceSize();
+            });
+
+            // Unlock button
+            document.getElementById('unlock-btn').addEventListener('click', toggleUnlockMode);
+
+            // Grid button
+            document.getElementById('grid-btn').addEventListener('click', toggleGrid);
+
+            // Detect overlaps
+            document.getElementById('detect-overlaps').addEventListener('click', detectAndReportOverlaps);
+
+            // Auto layout
+            document.getElementById('auto-layout').addEventListener('click', autoLayout);
+
+            // Reset layout
+            document.getElementById('reset-btn').addEventListener('click', applyDefaultLayout);
+
+            // Export button
+            document.getElementById('export-btn').addEventListener('click', exportConfiguration);
+
+            // Copy button
+            document.getElementById('copy-btn').addEventListener('click', copyToClipboard);
+
+            // Mouse events for dragging
+            document.addEventListener('mousedown', handleMouseDown);
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+        }
+
+        function switchDevice(deviceId) {
+            currentDevice = deviceId;
+            currentSize = { ...DEVICE_PRESETS[deviceId] };
+            applyDeviceSize();
+            applyDefaultLayout();
+        }
+
+        function applyDeviceSize() {
+            const frame = document.getElementById('device-frame');
+            frame.style.width = currentSize.width + 'px';
+            frame.style.height = currentSize.height + 'px';
+            updateStatusBar();
+            if (showGrid) drawGrid();
+        }
+
+        function toggleUnlockMode() {
+            isUnlocked = !isUnlocked;
+            const btn = document.getElementById('unlock-btn');
+            const elements = document.querySelectorAll('.element');
+            
+            if (isUnlocked) {
+                btn.textContent = '🔒 Lock Mode';
+                btn.classList.add('active');
+                elements.forEach(el => el.classList.add('unlocked'));
+                document.getElementById('current-mode').textContent = '🔓 Unlocked';
+            } else {
+                btn.textContent = '🔓 Unlock Mode';
+                btn.classList.remove('active');
+                elements.forEach(el => el.classList.remove('unlocked'));
+                document.getElementById('current-mode').textContent = '🔒 Locked';
+            }
+        }
+
+        function toggleGrid() {
+            showGrid = !showGrid;
+            const btn = document.getElementById('grid-btn');
+            const overlay = document.getElementById('grid-overlay');
+            
+            if (showGrid) {
+                btn.classList.add('active');
+                overlay.style.display = 'block';
+                drawGrid();
+            } else {
+                btn.classList.remove('active');
+                overlay.style.display = 'none';
+            }
+        }
+
+        function drawGrid() {
+            const overlay = document.getElementById('grid-overlay');
+            overlay.innerHTML = '';
+            
+            // Draw horizontal lines
+            for (let i = 0; i <= 10; i++) {
+                const line = document.createElement('div');
+                line.className = 'grid-line-h';
+                line.style.top = (i * 10) + '%';
+                overlay.appendChild(line);
+            }
+            
+            // Draw vertical lines
+            for (let i = 0; i <= 10; i++) {
+                const line = document.createElement('div');
+                line.className = 'grid-line-v';
+                line.style.left = (i * 10) + '%';
+                overlay.appendChild(line);
+            }
+        }
+
+        function addResizeHandles() {
+            document.querySelectorAll('.element').forEach(element => {
+                ['nw', 'ne', 'sw', 'se'].forEach(corner => {
+                    const handle = document.createElement('div');
+                    handle.className = `resize-handle ${corner}`;
+                    handle.dataset.corner = corner;
+                    element.appendChild(handle);
+                });
+            });
+        }
+
+        function handleMouseDown(e) {
+            if (!isUnlocked) return;
+            
+            if (e.target.classList.contains('resize-handle')) {
+                isResizing = true;
+                currentElement = e.target.parentElement;
+                resizeStart = {
+                    width: currentElement.offsetWidth,
+                    height: currentElement.offsetHeight,
+                    x: e.clientX,
+                    y: e.clientY,
+                    corner: e.target.dataset.corner
+                };
+                e.preventDefault();
+            } else if (e.target.classList.contains('element')) {
+                isDragging = true;
+                currentElement = e.target;
+                const rect = currentElement.getBoundingClientRect();
+                // Store the offset from the mouse to the element's top-left corner
+                dragOffset = {
+                    x: e.clientX - rect.left,
+                    y: e.clientY - rect.top
+                };
+                e.preventDefault();
+            }
+        }
+
+        function handleMouseMove(e) {
+            if (isDragging && currentElement) {
+                const container = document.getElementById('game-container');
+                const containerRect = container.getBoundingClientRect();
+                
+                // Calculate the new position relative to the container
+                let x = e.clientX - dragOffset.x - containerRect.left;
+                let y = e.clientY - dragOffset.y - containerRect.top;
+                
+                // Snap to grid if enabled
+                if (showGrid) {
+                    const gridSize = containerRect.width / 10;
+                    x = Math.round(x / gridSize) * gridSize;
+                    y = Math.round(y / gridSize) * gridSize;
+                }
+                
+                // Keep within bounds
+                x = Math.max(0, Math.min(x, containerRect.width - currentElement.offsetWidth));
+                y = Math.max(0, Math.min(y, containerRect.height - currentElement.offsetHeight));
+                
+                currentElement.style.left = x + 'px';
+                currentElement.style.top = y + 'px';
+                
+                updateElementPositions();
+            } else if (isResizing && currentElement) {
+                const deltaX = e.clientX - resizeStart.x;
+                const deltaY = e.clientY - resizeStart.y;
+                const corner = resizeStart.corner;
+                
+                let newWidth = resizeStart.width;
+                let newHeight = resizeStart.height;
+                
+                if (corner.includes('e')) newWidth += deltaX;
+                if (corner.includes('w')) newWidth -= deltaX;
+                if (corner.includes('s')) newHeight += deltaY;
+                if (corner.includes('n')) newHeight -= deltaY;
+                
+                newWidth = Math.max(30, newWidth);
+                newHeight = Math.max(30, newHeight);
+                
+                currentElement.style.width = newWidth + 'px';
+                currentElement.style.height = newHeight + 'px';
+                
+                if (corner.includes('w')) {
+                    currentElement.style.left = (currentElement.offsetLeft + deltaX) + 'px';
+                }
+                if (corner.includes('n')) {
+                    currentElement.style.top = (currentElement.offsetTop + deltaY) + 'px';
+                }
+                
+                updateElementPositions();
+            }
+        }
+
+        function handleMouseUp() {
+            isDragging = false;
+            isResizing = false;
+            currentElement = null;
+            if (isUnlocked) detectAndReportOverlaps();
+        }
+
+        function applyDefaultLayout() {
+            const layoutType = currentSize.width < 500 ? 'mobile' : 
+                              currentSize.width < 1024 ? 'tablet' : 'desktop';
+            const layout = DEFAULT_LAYOUTS[layoutType];
+            const container = document.getElementById('game-container');
+            
+            Object.entries(layout).forEach(([elementId, position]) => {
+                const element = document.getElementById(elementId);
+                if (element) {
+                    // Handle percentage values
+                    if (typeof position.x === 'string' && position.x.includes('%')) {
+                        element.style.left = position.x;
+                    } else if (typeof position.x === 'string' && position.x.includes('px')) {
+                        element.style.left = position.x;
+                    } else {
+                        element.style.left = (parseFloat(position.x) * container.offsetWidth / 100) + 'px';
+                    }
+                    
+                    if (typeof position.y === 'string' && position.y.includes('%')) {
+                        element.style.top = position.y;
+                    } else if (typeof position.y === 'string' && position.y.includes('px')) {
+                        element.style.top = position.y;
+                    } else {
+                        element.style.top = (parseFloat(position.y) * container.offsetHeight / 100) + 'px';
+                    }
+                    
+                    if (typeof position.width === 'string' && position.width.includes('%')) {
+                        element.style.width = position.width;
+                    } else if (typeof position.width === 'string' && position.width.includes('px')) {
+                        element.style.width = position.width;
+                    } else {
+                        element.style.width = (parseFloat(position.width) * container.offsetWidth / 100) + 'px';
+                    }
+                    
+                    if (typeof position.height === 'string' && position.height.includes('%')) {
+                        element.style.height = position.height;
+                    } else if (typeof position.height === 'string' && position.height.includes('px')) {
+                        element.style.height = position.height;
+                    } else {
+                        element.style.height = (parseFloat(position.height) * container.offsetHeight / 100) + 'px';
+                    }
+                }
+            });
+            
+            updateElementPositions();
+            detectAndReportOverlaps();
+        }
+
+        function autoLayout() {
+            // Smart auto-layout based on current screen size
+            const container = document.getElementById('game-container');
+            const containerWidth = container.offsetWidth;
+            const containerHeight = container.offsetHeight;
+            const isPortrait = containerHeight > containerWidth;
+            
+            // Table in center
+            const table = document.getElementById('table-oval');
+            const tableWidth = Math.min(containerWidth * 0.8, containerHeight * 0.5);
+            const tableHeight = tableWidth * 0.6;
+            table.style.width = tableWidth + 'px';
+            table.style.height = tableHeight + 'px';
+            table.style.left = ((containerWidth - tableWidth) / 2) + 'px';
+            table.style.top = ((containerHeight - tableHeight) / 2 - containerHeight * 0.1) + 'px';
+            
+            // Player seats for 3-player Sluff game
+            const seatWidth = Math.min(150, containerWidth * 0.3);
+            const seatHeight = Math.min(80, containerHeight * 0.12);
+            
+            // Player Self (bottom)
+            const self = document.getElementById('player-self');
+            self.style.width = seatWidth + 'px';
+            self.style.height = seatHeight + 'px';
+            self.style.left = ((containerWidth - seatWidth) / 2) + 'px';
+            self.style.top = (table.offsetTop + tableHeight + 20) + 'px';
+            
+            // Opponent Left
+            const oppLeft = document.getElementById('opponent-left');
+            oppLeft.style.width = seatHeight + 'px';
+            oppLeft.style.height = seatWidth + 'px';
+            oppLeft.style.left = '20px';
+            oppLeft.style.top = ((containerHeight - seatWidth) / 2) + 'px';
+            
+            // Opponent Right
+            const oppRight = document.getElementById('opponent-right');
+            oppRight.style.width = seatHeight + 'px';
+            oppRight.style.height = seatWidth + 'px';
+            oppRight.style.right = '20px';
+            oppRight.style.left = 'auto';
+            oppRight.style.top = ((containerHeight - seatWidth) / 2) + 'px';
+            
+            // Widow Seat (top)
+            const widow = document.getElementById('widow-seat');
+            widow.style.width = seatWidth + 'px';
+            widow.style.height = seatHeight + 'px';
+            widow.style.left = ((containerWidth - seatWidth) / 2) + 'px';
+            widow.style.top = '20px';
+            
+            // Player hand at bottom
+            const hand = document.getElementById('player-hand');
+            hand.style.width = '100%';
+            hand.style.height = Math.min(150, containerHeight * 0.18) + 'px';
+            hand.style.left = '0';
+            hand.style.bottom = '0';
+            hand.style.top = 'auto';
+            
+            // Other elements
+            autoPositionSecondaryElements();
+            
+            updateElementPositions();
+            detectAndReportOverlaps();
+        }
+
+        function autoPositionSecondaryElements() {
+            const container = document.getElementById('game-container');
+            const containerWidth = container.offsetWidth;
+            const containerHeight = container.offsetHeight;
+            
+            // Trick piles
+            const trickLeft = document.getElementById('trick-pile-left');
+            trickLeft.style.width = '80px';
+            trickLeft.style.height = '60px';
+            trickLeft.style.left = '40px';
+            trickLeft.style.bottom = '180px';
+            trickLeft.style.top = 'auto';
+            
+            const trickRight = document.getElementById('trick-pile-right');
+            trickRight.style.width = '80px';
+            trickRight.style.height = '60px';
+            trickRight.style.right = '40px';
+            trickRight.style.left = 'auto';
+            trickRight.style.bottom = '180px';
+            trickRight.style.top = 'auto';
+            
+            // Widow
+            const widow = document.getElementById('widow-cards');
+            widow.style.width = '100px';
+            widow.style.height = '60px';
+            widow.style.left = ((containerWidth - 100) / 2) + 'px';
+            widow.style.bottom = '180px';
+            widow.style.top = 'auto';
+            
+            // UI Buttons
+            const chat = document.getElementById('chat-button');
+            chat.style.width = '40px';
+            chat.style.height = '40px';
+            chat.style.left = '10px';
+            chat.style.top = '10px';
+            
+            const menu = document.getElementById('menu-button');
+            menu.style.width = '40px';
+            menu.style.height = '40px';
+            menu.style.right = '10px';
+            menu.style.left = 'auto';
+            menu.style.top = '10px';
+            
+            // Insurance slider
+            const insurance = document.getElementById('insurance-slider');
+            insurance.style.width = Math.min(300, containerWidth * 0.4) + 'px';
+            insurance.style.height = '30px';
+            insurance.style.left = ((containerWidth - insurance.offsetWidth) / 2) + 'px';
+            insurance.style.top = '100px';
+        }
+
+        function detectAndReportOverlaps() {
+            const elements = document.querySelectorAll('.element');
+            const overlaps = [];
+            
+            // Clear previous overlap styling
+            elements.forEach(el => el.classList.remove('overlapping'));
+            
+            // Check for overlaps
+            for (let i = 0; i < elements.length; i++) {
+                for (let j = i + 1; j < elements.length; j++) {
+                    if (isOverlapping(elements[i], elements[j])) {
+                        overlaps.push({
+                            el1: elements[i],
+                            el2: elements[j],
+                            el1Name: elements[i].textContent,
+                            el2Name: elements[j].textContent
+                        });
+                        elements[i].classList.add('overlapping');
+                        elements[j].classList.add('overlapping');
+                    }
+                }
+            }
+            
+            // Update report
+            const list = document.getElementById('overlap-list');
+            list.innerHTML = '';
+            
+            if (overlaps.length === 0) {
+                const li = document.createElement('li');
+                li.className = 'no-overlap';
+                li.textContent = '✅ No overlaps detected';
+                list.appendChild(li);
+            } else {
+                overlaps.forEach(overlap => {
+                    const li = document.createElement('li');
+                    li.textContent = `⚠️ ${overlap.el1Name} overlaps with ${overlap.el2Name}`;
+                    list.appendChild(li);
+                });
+            }
+            
+            return overlaps;
+        }
+
+        function isOverlapping(el1, el2) {
+            const rect1 = el1.getBoundingClientRect();
+            const rect2 = el2.getBoundingClientRect();
+            
+            return !(rect1.right < rect2.left || 
+                    rect1.left > rect2.right || 
+                    rect1.bottom < rect2.top || 
+                    rect1.top > rect2.bottom);
+        }
+
+        function updateElementPositions() {
+            const container = document.getElementById('game-container');
+            const positions = document.getElementById('element-positions');
+            positions.innerHTML = '';
+            
+            document.querySelectorAll('.element').forEach(element => {
+                const rect = element.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
+                
+                const info = document.createElement('div');
+                info.style.fontSize = '11px';
+                info.style.marginBottom = '5px';
+                info.style.padding = '5px';
+                info.style.background = '#f5f5f5';
+                info.style.borderRadius = '3px';
+                
+                const x = Math.round(rect.left - containerRect.left);
+                const y = Math.round(rect.top - containerRect.top);
+                const w = Math.round(rect.width);
+                const h = Math.round(rect.height);
+                
+                info.innerHTML = `
+                    <strong>${element.textContent}:</strong><br>
+                    x: ${x}px (${Math.round(x/containerRect.width*100)}%),
+                    y: ${y}px (${Math.round(y/containerRect.height*100)}%)<br>
+                    w: ${w}px (${Math.round(w/containerRect.width*100)}%),
+                    h: ${h}px (${Math.round(h/containerRect.height*100)}%)
+                `;
+                
+                positions.appendChild(info);
+            });
+        }
+
+        function exportConfiguration() {
+            const container = document.getElementById('game-container');
+            const config = {
+                timestamp: new Date().toISOString(),
+                device: currentDevice === 'custom' ? 'custom' : DEVICE_PRESETS[currentDevice].name,
+                size: { width: currentSize.width, height: currentSize.height },
+                orientation: currentSize.width > currentSize.height ? 'landscape' : 'portrait',
+                elements: {},
+                css: '',
+                react: {}
+            };
+            
+            document.querySelectorAll('.element').forEach(element => {
+                const rect = element.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
+                
+                const x = rect.left - containerRect.left;
+                const y = rect.top - containerRect.top;
+                
+                config.elements[element.id] = {
+                    x: Math.round(x),
+                    y: Math.round(y),
+                    width: Math.round(rect.width),
+                    height: Math.round(rect.height),
+                    xPercent: Math.round((x / containerRect.width) * 100),
+                    yPercent: Math.round((y / containerRect.height) * 100),
+                    widthPercent: Math.round((rect.width / containerRect.width) * 100),
+                    heightPercent: Math.round((rect.height / containerRect.height) * 100)
+                };
+            });
+            
+            // Generate CSS
+            config.css = generateCSS(config);
+            
+            // Generate React props
+            config.react = generateReactProps(config);
+            
+            // Display in textarea
+            document.getElementById('export-code').value = JSON.stringify(config, null, 2);
+            
+            return config;
+        }
+
+        function generateCSS(config) {
+            let css = `/* Layout for ${config.device} (${config.size.width}×${config.size.height}) */\n`;
+            css += `@media (width: ${config.size.width}px) and (height: ${config.size.height}px) {\n`;
+            
+            Object.entries(config.elements).forEach(([id, pos]) => {
+                css += `  #${id} {\n`;
+                css += `    position: absolute;\n`;
+                css += `    left: ${pos.xPercent}%;\n`;
+                css += `    top: ${pos.yPercent}%;\n`;
+                css += `    width: ${pos.widthPercent}%;\n`;
+                css += `    height: ${pos.heightPercent}%;\n`;
+                css += `  }\n\n`;
+            });
+            
+            css += `}`;
+            return css;
+        }
+
+        function generateReactProps(config) {
+            const props = {};
+            
+            Object.entries(config.elements).forEach(([id, pos]) => {
+                props[id] = {
+                    style: {
+                        position: 'absolute',
+                        left: `${pos.xPercent}%`,
+                        top: `${pos.yPercent}%`,
+                        width: `${pos.widthPercent}%`,
+                        height: `${pos.heightPercent}%`
+                    }
+                };
+            });
+            
+            return props;
+        }
+
+        function copyToClipboard() {
+            const textarea = document.getElementById('export-code');
+            textarea.select();
+            document.execCommand('copy');
+            
+            const btn = document.getElementById('copy-btn');
+            const originalText = btn.textContent;
+            btn.textContent = '✅ Copied!';
+            btn.style.background = '#4caf50';
+            
+            setTimeout(() => {
+                btn.textContent = originalText;
+                btn.style.background = '';
+            }, 2000);
+        }
+
+        function updateStatusBar() {
+            document.getElementById('current-device').textContent = 
+                currentDevice === 'custom' ? 'Custom' : DEVICE_PRESETS[currentDevice].name;
+            document.getElementById('current-size').textContent = 
+                `${currentSize.width}×${currentSize.height}`;
+            document.getElementById('current-orientation').textContent = 
+                currentSize.width > currentSize.height ? 'Landscape' : 'Portrait';
+        }
+    </script>
+</body>
+</html>

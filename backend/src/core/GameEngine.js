@@ -268,9 +268,27 @@ class GameEngine {
 
     submitFrogDiscards(userId, discards) {
         const player = this.players[userId];
-        if (!player || this.state !== "Frog Widow Exchange" || this.bidWinnerInfo?.userId !== userId || !Array.isArray(discards) || discards.length !== 3) return this._effects();
-        const currentHand = this.hands[player.playerName];
-        if (!discards.every(card => currentHand.includes(card))) return this._effects();
+        if (!player) {
+            console.warn(`[${this.tableId}] submitFrogDiscards REJECTED: Unknown player ${userId}`);
+            return this._effects();
+        }
+        if (this.state !== "Frog Widow Exchange") {
+            console.warn(`[${this.tableId}] submitFrogDiscards REJECTED: State is '${this.state}'`);
+            return this._effects();
+        }
+        if (this.bidWinnerInfo?.userId !== userId) {
+            console.warn(`[${this.tableId}] submitFrogDiscards REJECTED: User ${userId} is not bidder ${this.bidWinnerInfo?.userId}`);
+            return this._effects();
+        }
+        if (!Array.isArray(discards) || discards.length !== 3) {
+            console.warn(`[${this.tableId}] submitFrogDiscards REJECTED: Invalid payload ${JSON.stringify(discards)}`);
+            return this._effects();
+        }
+        const currentHand = this.hands[player.playerName] || [];
+        if (!discards.every(card => currentHand.includes(card))) {
+            console.warn(`[${this.tableId}] submitFrogDiscards REJECTED: One or more cards not in hand of ${player.playerName}. Hand=[${currentHand.join(',')}], discards=[${discards.join(',')}]`);
+            return this._effects();
+        }
         this.widowDiscardsForFrogBidder = discards;
         this.hands[player.playerName] = currentHand.filter(card => !discards.includes(card));
         this._transitionToPlayingPhase();

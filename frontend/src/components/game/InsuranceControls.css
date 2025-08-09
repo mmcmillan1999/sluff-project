@@ -13,9 +13,22 @@
     gap: 15px;
     border: 1px solid rgba(255, 255, 255, 0.15);
     min-height: 50px;
+    -webkit-backdrop-filter: blur(4px);
     backdrop-filter: blur(4px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     transition: all 0.3s ease;
+}
+
+/* Reserve space and dim when inactive */
+.insurance-controls-container.is-inactive {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.insurance-placeholder {
+    font-size: 0.9em;
+    color: rgba(255, 255, 255, 0.7);
+    font-style: italic;
 }
 
 /* Desktop: 2x bigger insurance panel */

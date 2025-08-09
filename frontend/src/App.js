@@ -16,7 +16,35 @@ import "./components/AdminView.css";
 import "./styles/mobile-optimizations.css";
 import { useSounds } from "./hooks/useSounds.js";
 
-const SERVER_URL = process.env.REACT_APP_SERVER_URL || "https://sluff-backend.onrender.com";
+// Import the same getServerUrl function logic from api.js
+const getServerUrl = () => {
+    if (process.env.REACT_APP_SERVER_URL) {
+        return process.env.REACT_APP_SERVER_URL;
+    }
+    
+    const hostname = window.location.hostname;
+    
+    // Local development
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        return 'http://localhost:3005';
+    }
+    
+    // Production
+    if (hostname === 'playsluff.com' || hostname === 'www.playsluff.com') {
+        return 'https://api.playsluff.com';
+    }
+    
+    // Render.com deployment
+    if (hostname.includes('onrender.com')) {
+        return 'https://sluff-backend.onrender.com';
+    }
+    
+    // Default to production
+    return 'https://api.playsluff.com';
+};
+
+const SERVER_URL = getServerUrl();
+console.log(`[Socket.IO] Connecting to: ${SERVER_URL}`);
 const socket = io(SERVER_URL, {
     autoConnect: false,
     reconnectionAttempts: 5,
@@ -83,6 +111,7 @@ function App() {
         // console.log("Advertisement clicked");
         // In a real implementation, this would send analytics data to your tracking service
     };
+
 
     const handleRequestFreeToken = () => {
         if (user && parseFloat(user.tokens) >= 5) {
@@ -229,7 +258,7 @@ function App() {
     if (!token || !user) {
         return (
             <>
-                <AdvertisingHeader onAdClick={handleAdClick} />
+                <AdvertisingHeader onAdClick={handleAdClick} eligibleForMercy={false} />
                 <div className="app-content-container">
                     <AuthContainer onLoginSuccess={handleLoginSuccess} />
                 </div>
@@ -239,7 +268,18 @@ function App() {
 
     return (
         <>
-            <AdvertisingHeader onAdClick={handleAdClick} />
+            <AdvertisingHeader
+                onAdClick={handleAdClick}
+                eligibleForMercy={Boolean(
+                    user && (
+                        parseFloat(user.tokens) < 5 ||
+                        user.can_watch_mercy_ad ||
+                        user.canWatchMercyAd ||
+                        user.mercyEligible ||
+                        (user.eligibility && user.eligibility.mercyAd)
+                    )
+                )}
+            />
             <div className="app-content-container">
                 <MercyWindow show={showMercyWindow} onClose={() => setShowMercyWindow(false)} emitEvent={emitEvent} />
                 <FeedbackModal show={showFeedbackModal} onClose={handleCloseFeedbackModal} onSubmit={handleSubmitFeedback} gameContext={feedbackGameContext} />

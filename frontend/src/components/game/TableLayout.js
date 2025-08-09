@@ -1,5 +1,6 @@
 // frontend/src/components/game/TableLayout.js
 import React, { useState, useEffect, useRef } from 'react';
+import { useViewport } from '../../hooks/useViewport';
 import ScoreProgressBar from './ScoreProgressBar';
 import './KeyAndModal.css';
 import './TableLayout.css';
@@ -33,6 +34,7 @@ const TableLayout = ({
 }) => {
     const [lastTrickVisible, setLastTrickVisible] = useState(false);
     const [trumpBrokenAnnouncementVisible, setTrumpBrokenAnnouncementVisible] = useState(false);
+    const { width, orientation } = useViewport();
     const [previousTrumpBroken, setPreviousTrumpBroken] = useState(false);
     const lastTrickTimerRef = useRef(null);
     const trumpAnnouncementTimerRef = useRef(null);
@@ -462,8 +464,8 @@ const TableLayout = ({
                 
                 {renderWidowSeat()}
                 
-                {/* Desktop-only: Render widow cards separately from seat */}
-                {window.innerWidth >= 1024 && (() => {
+                {/* Desktop-only: Render widow cards separately from seat (via viewport hook) */}
+                {width >= 1024 && (() => {
                     const { playerOrderActive, state, widow, originalDealtWidow, roundSummary } = currentTableState;
                     if (!playerOrderActive || playerOrderActive.length >= 4) return null;
                     const hiddenStates = ["Waiting for Players", "Ready to Start", "Dealing Pending"];

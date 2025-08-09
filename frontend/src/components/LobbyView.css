@@ -3,11 +3,15 @@
 .lobby-view {
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    /* Prefer dynamic viewport height to avoid mobile browser UI jump */
+    min-height: 100dvh;
     background-color: #212121;
     color: white;
-    /* --- MODIFICATION: Prevent any scrolling on the main container --- */
-    overflow: hidden; 
+    /* Keep root non-scrolling; inner regions manage scroll */
+    overflow: hidden;
+    /* Prefer vertical gestures, suppress horizontal panning */
+    touch-action: pan-y;
+    overscroll-behavior-x: none;
 }
 
 /* Header section */
@@ -18,6 +22,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    box-sizing: border-box;
 }
 
 .header-left, .header-right {
@@ -52,7 +57,33 @@
     padding: 5px 10px;
     border-radius: 20px;
     border: 1px solid #444;
+    color: #eaeaea;
+    cursor: pointer;
+    transition: transform 0.1s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
+
+.user-tokens:hover {
+    background-color: #353535;
+    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.25);
+}
+
+.user-tokens:active {
+    transform: translateY(1px);
+}
+
+/* Pulse highlight when user is eligible for a mercy ad */
+@keyframes pulseGlow {
+  0% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.45); }
+  70% { box-shadow: 0 0 0 8px rgba(255, 193, 7, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0); }
+}
+
+.user-tokens.pulse-eligible {
+    animation: pulseGlow 1.6s ease-out infinite;
+    border-color: #ffc107;
+}
+
+
 
 .token-icon {
     height: 22px;
@@ -88,6 +119,7 @@
     flex-shrink: 0;
     border-bottom: 1px solid #111;
     overflow-x: auto;
+    box-sizing: border-box;
 }
 
 .lobby-tab {
@@ -130,30 +162,28 @@
 /* --- MODIFICATION: Make the main area grow and scroll independently --- */
 .lobby-main {
     flex-grow: 1;
-    overflow-y: auto; 
+    overflow-y: auto;
     padding: 10px 15px;
+    /* Allow flex child to shrink so chat/footer remain visible */
+    min-height: 0;
+    /* Reserve room for sticky chat (and footer) so content doesn't hide under it) */
+    padding-bottom: 180px; /* ~150px chat + margin */
+        /* Prefer vertical gestures in the main scroll area */
+        touch-action: pan-y;
+        overscroll-behavior-x: none;
 }
 
-.collapsible-section {
-    margin-bottom: 10px;
-}
-
-.section-header {
-    font-family: 'Oswald', sans-serif;
-    font-size: 1.2em;
-    color: #ffc107;
-    background-color: #333;
-    padding: 8px 12px;
-    border-radius: 6px;
-    margin: 0 0 10px 0;
-    cursor: pointer;
-    user-select: none;
-}
+/* Removed collapsible headers; sections are always visible */
 
 .table-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
     gap: 15px;
+        width: 100%;
+        box-sizing: border-box;
+        /* Ensure grid doesn’t initiate horizontal panning */
+        touch-action: pan-y;
+        overscroll-behavior-x: none;
 }
 
 /* Lobby Menu */
@@ -168,6 +198,61 @@
     z-index: 110;
     box-shadow: 0 4px 12px rgba(0,0,0,0.5);
     width: 200px; /* Increased width for new button */
+
+/* Simple non-sticky collapse toggle for tables */
+.tables-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-weight: 600;
+    font-size: 16px;
+    line-height: 1.2;
+    padding: 12px 16px;
+    color: var(--lobby-text, #f5f5f5);
+    background: var(--lobby-surface, #1f1f1f);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+        -webkit-user-select: none;
+        user-select: none;
+    touch-action: manipulation;
+}
+
+.tables-toggle:focus {
+    outline: 2px solid #4c9ffe;
+    outline-offset: 2px;
+}
+
+.tables-toggle .toggle-title {
+    letter-spacing: 0.2px;
+}
+
+.tables-toggle .toggle-caret {
+    opacity: 0.9;
+}
+
+/* Bulletin toggle mirrors tables toggle */
+.bulletin-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-weight: 600;
+    font-size: 16px;
+    line-height: 1.2;
+    padding: 12px 16px;
+    color: var(--lobby-text, #f5f5f5);
+    background: var(--lobby-surface, #1f1f1f);
+    border-top: 1px solid rgba(255,255,255,0.08);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: manipulation;
+}
+
+.bulletin-toggle:focus {
+    outline: 2px solid #4c9ffe;
+    outline-offset: 2px;
+}
     display: flex;
     flex-direction: column;
     gap: 5px; /* Add space between buttons */
@@ -229,4 +314,76 @@
         right: 5vw;
         top: calc(100% + 5px);
     }
+}
+
+/* Orientation hooks (add rules here if needed) */
+@media (orientation: portrait) {
+    .table-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+}
+@media (orientation: landscape) {
+    .table-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+}
+
+/* Ensure chat stays reachable on short viewports by allowing page scroll */
+@media (max-height: 700px) {
+    .lobby-view {
+        overflow-x: hidden;
+        overflow-y: auto; /* Enable vertical scroll for the whole page */
+    }
+    .lobby-main {
+    overflow: visible; /* Avoid nested scroll when page is scrollable */
+    padding-bottom: 180px; /* keep space for sticky chat */
+    }
+}
+
+/* Portrait phones: make the page scrollable so chat is reachable */
+@media (orientation: portrait) and (max-width: 480px) {
+    .lobby-view {
+        overflow-y: auto;
+        overflow-x: hidden; /* avoid thin side gap */
+    }
+    .lobby-main {
+    overflow: visible;
+        padding-bottom: 200px; /* reserve space for fixed chat + footer */
+        padding-top: 120px;   /* reserve space for fixed header + tabs */
+        /* Make content full-bleed to match header/footer width */
+        padding-left: 0;
+        padding-right: 0;
+        overflow-x: hidden; /* reassert no horizontal scroll */
+    }
+    /* Keep footer visible; place it above the fixed chat */
+    .lobby-footer {
+        position: sticky;
+        bottom: 150px; /* roughly chat height so it appears above */
+        z-index: 900;
+        background-color: #111;
+    }
+
+    /* Sticky headers for small portrait devices */
+    .lobby-header {
+        position: fixed;
+        top: 58px; /* below mobile ad header */
+        left: 0;
+        right: 0;
+    width: 100%;
+    margin: 0;
+    padding-left: 10px; /* slightly smaller side padding on phones */
+    padding-right: 10px;
+        z-index: 1400; /* Above tabs and content */
+    }
+    .lobby-nav {
+        position: fixed;
+        top: 114px; /* ad (58) + header (~56) */
+        left: 0;
+        right: 0;
+    width: 100%;
+    margin: 0;
+    padding-left: 8px;
+    padding-right: 8px;
+        z-index: 1300;
+        background-color: #2a2a2a; /* ensure solid backdrop over content */
+        border-bottom: 1px solid #111;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    }
+    /* No sticky section headers on mobile after removal */
 }

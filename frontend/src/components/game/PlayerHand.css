@@ -19,6 +19,8 @@
     user-select: none;
     /* --- THE FIX: This single line solves the mobile scroll issue --- */
     touch-action: none;
+    /* Reserve space even when empty to prevent footer collapse */
+    min-height: 110px;
 }
 
 .player-hand-cards {
@@ -54,6 +56,15 @@
     margin-left: var(--card-margin-left, -25px);
 }
 
+/* When spacing threshold is met, center the row and use fixed 3px spacing */
+.player-hand-cards.centered-spacing {
+    justify-content: center;
+    column-gap: 3px; /* exact 3px visible gap between cards */
+}
+.player-hand-cards.centered-spacing .player-hand-card-wrapper:not(:first-child) {
+    margin-left: 0; /* gap controlled by column-gap above */
+}
+
 
 .player-hand-card-wrapper.is-dragging {
     transition: none;
@@ -84,6 +95,37 @@
     z-index: 100;
 }
 
+/* Two-row layout for mobile portrait during Frog discard (14 cards) */
+@media (orientation: portrait) and (max-width: 480px) {
+    .player-hand-cards.is-discarding.two-rows {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        /* Let rows size to content height based on aspect-ratio */
+        grid-auto-rows: auto;
+        row-gap: 6px;
+        column-gap: 6px;
+        align-items: end;
+        justify-items: center;
+        /* Allow the container to grow just enough for two rows */
+    height: auto;
+    padding: 6px 0; /* remove horizontal padding for full-bleed */
+    }
+    .player-hand-cards.is-discarding.two-rows .player-hand-card-wrapper-static {
+        margin: 0; /* grid spacing handles gaps */
+        width: 100%;
+        display: flex;
+        justify-content: center;
+    }
+    .player-hand-cards.is-discarding.two-rows .card-display {
+        /* Fill grid cell width but preserve intrinsic card ratio */
+        width: 100% !important;
+        min-width: 0 !important; /* override inline minWidth from renderCard */
+        height: auto !important;  /* override inline fixed height */
+        aspect-ratio: 10 / 13;    /* consistent with 50x65, 112x150, etc. */
+        font-size: 0.9em;
+    }
+}
+
 /* Mobile optimizations for player hand */
 @media (orientation: portrait) and (max-width: 768px) {
     .player-hand-container {
@@ -91,11 +133,13 @@
         /* Ensure physics interactions work on mobile */
         touch-action: none;
         -webkit-touch-callout: none;
+    min-height: 95px;
     }
     
     .player-hand-cards {
-        height: 95px;
-        padding: 8px 0;
+    height: 95px;
+    padding: 8px 0; /* vertical only */
+    justify-content: space-between; /* push first/last cards to edges */
     }
     
     /* Tighter card spacing on mobile */
@@ -125,11 +169,13 @@
 @media (orientation: portrait) and (max-width: 414px) {
     .player-hand-container {
         padding: 2px 0;
+    min-height: 85px;
     }
     
     .player-hand-cards {
-        height: 85px;
-        padding: 6px 0;
+    height: 85px;
+    padding: 6px 0; /* vertical only */
+    justify-content: space-between; /* ensure full-bleed on very small phones */
     }
     
     /* Even tighter spacing for small screens */
@@ -157,6 +203,7 @@
         /* Maintain physics touch handling in landscape */
         touch-action: none;
         -webkit-touch-callout: none;
+    min-height: 75px;
     }
     
     .player-hand-cards {

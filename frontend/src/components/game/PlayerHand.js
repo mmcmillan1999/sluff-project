@@ -5,6 +5,7 @@ import './PlayerHand.css';
 import { RANKS_ORDER, SUIT_SORT_ORDER } from '../../constants';
 import { getLegalMoves } from '../../utils/legalMoves';
 import CardPhysicsEngine from '../../utils/CardPhysicsEngine';
+import { useViewport } from '../../hooks/useViewport';
 
 const getSuitLocal = (cardStr) => cardStr.slice(-1);
 const getRankLocal = (cardStr) => cardStr.slice(0, -1);
@@ -24,6 +25,8 @@ const PlayerHand = ({
     currentTableState,
     selfPlayerName,
     isSpectator,
+    playerId,
+    isObserverMode,
     emitEvent,
     renderCard,
     dropZoneRef
@@ -31,8 +34,10 @@ const PlayerHand = ({
     const [selectedDiscards, setSelectedDiscards] = useState([]);
     const myHandRef = useRef(null);
     const [cardMargin, setCardMargin] = useState(-25);
+    const [centeredSpacing, setCenteredSpacing] = useState(false);
     const physicsEngineRef = useRef(null);
     const [usePhysics] = useState(true); // Feature flag for physics
+    const { width, orientation } = useViewport();
 
     const [dragState, setDragState] = useState({
         isDragging: false,
@@ -69,16 +74,43 @@ const PlayerHand = ({
         const calculateLayout = () => {
             if (!myHandRef.current || myHand.length === 0) return;
             const CARD_WIDTH = 65;
+            const n = myHand.length;
             const containerWidth = myHandRef.current.offsetWidth;
-            const totalCardWidth = myHand.length * CARD_WIDTH;
-            if (totalCardWidth > containerWidth) {
-                const overlap = (totalCardWidth - containerWidth) / (myHand.length - 1);
-                // Add extra 1pt reduction when 7+ cards to prevent overflow
-                const extraReduction = myHand.length >= 7 ? 1 : 0;
-                setCardMargin(-(overlap + extraReduction));
-            } else {
-                setCardMargin(10);
+            const totalCardWidth = n * CARD_WIDTH;
+
+            // Guard for single card
+            if (n === 1) {
+                setCardMargin(0);
+                setCenteredSpacing(true);
+                return;
             }
+
+            const gaps = n - 1;
+            const leftoverSpace = containerWidth - totalCardWidth; // can be negative
+
+            if (leftoverSpace < 0) {
+                // Need to overlap to fit all cards.
+                const overlapPerGap = (-leftoverSpace) / gaps;
+                const extraReduction = n >= 7 ? 1 : 0; // slight extra to prevent edge overflow
+                setCardMargin(-(overlapPerGap + extraReduction));
+                setCenteredSpacing(false);
+                return;
+            }
+
+            // If we can have at least 3px between cards, switch to centered 3px spacing.
+            const minGap = 3; // px
+            if (leftoverSpace >= minGap * gaps) {
+                setCardMargin(minGap);
+                setCenteredSpacing(true);
+                return;
+            }
+
+            // Otherwise, there isn't enough leftover space for 3px gaps.
+            // Use negative margin equal to the base flex gap so visible gap ~ 0,
+            // maintaining the compact overlapped look until threshold is reached.
+            const baseFlexGap = leftoverSpace / gaps; // >= 0 and < 3 here
+            setCardMargin(-baseFlexGap);
+            setCenteredSpacing(false);
         };
         calculateLayout();
         window.addEventListener('resize', calculateLayout);
@@ -289,6 +321,7 @@ const PlayerHand = ({
     };
     const handleSubmitDiscards = () => {
         if (selectedDiscards.length === 3) {
+            console.log('[Frog] Submitting discards:', selectedDiscards);
             emitEvent("submitFrogDiscards", { discards: selectedDiscards });
         }
     };
@@ -297,16 +330,24 @@ const PlayerHand = ({
         return <div className="player-hand-container"></div>;
     }
     
-    if (state === "Frog Widow Exchange" && bidWinnerInfo?.playerName === selfPlayerName) {
+    // Only allow the actual bidder (by userId) to perform the discards; observers should not submit
+    if (state === "Frog Widow Exchange" && bidWinnerInfo?.userId === playerId) {
+        // Mobile portrait two-row layout when holding 14 cards during Frog
+    const isMobilePortrait = orientation === 'portrait' && width <= 480;
+    const enableTwoRows = isMobilePortrait && (myHand?.length >= 14);
+    // Always use small cards in two-row mode to preserve aspect and fit 7 columns
+    const useSmallCards = enableTwoRows;
         return (
              <div className="player-hand-container" style={{ flexDirection: 'column' }}>
-                <div className="player-hand-cards is-discarding">
+        <div className={`player-hand-cards is-discarding ${enableTwoRows ? 'two-rows' : ''}`}>
                     {sortHandBySuit(myHand).map((card) => (
                         <div key={card} className="player-hand-card-wrapper-static">
                             {renderCard(card, {
                                 isButton: true,
                                 onClick: () => handleSelectDiscard(card),
-                                large: true,
+                // In two-row mode use small; otherwise large for normal hand view
+                large: !enableTwoRows,
+                small: useSmallCards,
                                 isSelected: selectedDiscards.includes(card)
                             })}
                         </div>
@@ -331,7 +372,7 @@ const PlayerHand = ({
     return (
         <div className="player-hand-container" ref={myHandRef}>
             <div
-                className={`player-hand-cards ${isMyTurnToPlay && !dragState.isDragging ? 'my-turn' : ''}`}
+                className={`player-hand-cards ${isMyTurnToPlay && !dragState.isDragging ? 'my-turn' : ''} ${centeredSpacing ? 'centered-spacing' : ''}`}
                 style={{ '--card-margin-left': `${cardMargin}px` }}
             >
                 {myHandToDisplay.map((card, index) => {

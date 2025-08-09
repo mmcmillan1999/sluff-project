@@ -16,7 +16,6 @@ class CardPhysicsEngine {
         // Make MAX_AIM_OFFSET responsive to screen size
         this.calculateMaxAimOffset = () => {
             const screenWidth = window.innerWidth;
-            const screenHeight = window.innerHeight;
             const isMobile = screenWidth < 768;
             const isTablet = screenWidth >= 768 && screenWidth < 1024;
             
@@ -63,19 +62,54 @@ class CardPhysicsEngine {
         // Bezier curve helpers for smooth arcs
         this.bezierCache = new Map(); // Cache computed bezier paths
         
-        // Debug visualization elements
+        // Debug visualization elements (can be toggled on at runtime)
         this.debugContainer = null;
         this.fingerTrackingLine = null;
         this.trajectoryPath = null;
         this.actualPathLine = null;
         this.actualPathSvg = null;
+        // Visual debug tracing is disabled by default; enable via
+        //   window.__SLUFF_DEBUG_TRACERS__ = true
+        // or localStorage.setItem('CARD_TRACERS', '1')
+        this.debugVisualsEnabled = false;
+    // Pivot/COM overlays toggle (pencil stab + arrow + vertical line)
+    //   window.__SLUFF_DEBUG_PIVOT__ = true
+    // or localStorage.setItem('DEBUG_CARD_PIVOT', '1')
+    this.debugPivotEnabled = false;
         this.initDebugVisualization();
+    }
+    
+    // Runtime toggle check for visual tracers
+    isVisualsEnabled() {
+        try {
+            const ls = typeof window !== 'undefined' && window.localStorage ? window.localStorage.getItem('CARD_TRACERS') === '1' : false;
+            const flag = typeof window !== 'undefined' ? window.__SLUFF_DEBUG_TRACERS__ === true : false;
+            return !!(this.debugVisualsEnabled || ls || flag);
+        } catch {
+            return !!this.debugVisualsEnabled;
+        }
+    }
+
+    // Runtime toggle check for pivot/COM overlays
+    isPivotDebugEnabled() {
+        try {
+            const ls = typeof window !== 'undefined' && window.localStorage ? window.localStorage.getItem('DEBUG_CARD_PIVOT') === '1' : false;
+            const flag = typeof window !== 'undefined' ? window.__SLUFF_DEBUG_PIVOT__ === true : false;
+            return !!(this.debugPivotEnabled || ls || flag);
+        } catch {
+            return !!this.debugPivotEnabled;
+        }
     }
     
     // Initialize debug visualization container
     initDebugVisualization() {
+        if (!this.isVisualsEnabled()) {
+            this.debugContainer = null;
+            return;
+        }
         // Create container for debug lines if it doesn't exist
-        if (!document.getElementById('card-physics-debug')) {
+        const existing = typeof document !== 'undefined' ? document.getElementById('card-physics-debug') : null;
+        if (!existing && typeof document !== 'undefined') {
             this.debugContainer = document.createElement('div');
             this.debugContainer.id = 'card-physics-debug';
             this.debugContainer.style.cssText = `
@@ -89,13 +123,13 @@ class CardPhysicsEngine {
             `;
             document.body.appendChild(this.debugContainer);
         } else {
-            this.debugContainer = document.getElementById('card-physics-debug');
+            this.debugContainer = existing;
         }
     }
     
     // Clear all debug visualizations
     clearDebugVisualizations() {
-        if (this.debugContainer) {
+    if (this.debugContainer) {
             this.debugContainer.innerHTML = '';
         }
         this.fingerTrackingLine = null;
@@ -106,6 +140,8 @@ class CardPhysicsEngine {
     
     // Start tracking actual card path
     startActualPathTracking(startPos) {
+    if (!this.isVisualsEnabled()) return;
+    if (!this.debugContainer) this.initDebugVisualization();
         // Create SVG for actual path
         this.actualPathSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         this.actualPathSvg.style.cssText = `
@@ -130,7 +166,8 @@ class CardPhysicsEngine {
     
     // Update actual card path
     updateActualPath(position) {
-        if (this.actualPathLine && position && !isNaN(position.x) && !isNaN(position.y)) {
+    if (!this.isVisualsEnabled()) return;
+    if (this.actualPathLine && position && !isNaN(position.x) && !isNaN(position.y)) {
             const currentPoints = this.actualPathLine.getAttribute('points');
             this.actualPathLine.setAttribute('points', `${currentPoints} ${position.x},${position.y}`);
         }
@@ -138,6 +175,8 @@ class CardPhysicsEngine {
     
     // Create or update finger tracking line
     updateFingerTrackingLine(touchPoint) {
+    if (!this.isVisualsEnabled()) return;
+    if (!this.debugContainer) this.initDebugVisualization();
         if (!this.fingerTrackingLine) {
             // Create SVG for finger tracking
             const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -167,6 +206,8 @@ class CardPhysicsEngine {
     
     // Draw trajectory path from release point to dock
     drawTrajectoryPath(startPos, endPos, curveType, velocity) {
+    if (!this.isVisualsEnabled()) return;
+    if (!this.debugContainer) this.initDebugVisualization();
         // Create SVG for trajectory
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         svg.style.cssText = `
@@ -358,94 +399,91 @@ class CardPhysicsEngine {
         cardElement.style.touchAction = 'none';
         cardElement.style.margin = '0'; // Remove any margins when dragging
         
-        // Add pencil stab visual marker using pixel positioning
-        const stabMarker = document.createElement('div');
-        stabMarker.className = 'pencil-stab-marker';
-        
-        // Calculate marker position in pixels from card's top-left
-        const markerLeft = (rect.width / 2) + pivotOffset.x;
-        const markerTop = (rect.height / 2) + pivotOffset.y;
-        
-        stabMarker.style.cssText = `
-            position: absolute;
-            width: 16px;
-            height: 16px;
-            background: radial-gradient(circle, #ff0000 0%, #ff0000 30%, transparent 40%, #8B0000 50%, transparent 60%);
-            border-radius: 50%;
-            left: ${markerLeft}px;
-            top: ${markerTop}px;
-            transform: translate(-50%, -50%);
-            z-index: 10;
-            pointer-events: none;
-            box-shadow: 0 0 4px rgba(0,0,0,0.5);
-        `;
-        cardElement.appendChild(stabMarker);
-        
-        // Add arrow pointing to center of mass
-        const arrowElement = document.createElement('div');
-        arrowElement.className = 'center-of-mass-arrow';
-        
-        // Calculate the true center of mass (accounting for card design)
-        const centerOfMass = this.calculateCenterOfMass(cardId, rect);
-        
-        // Arrow should show the direction of gravity pull - from COM to where it wants to go (down from pivot)
-        // When at rest, COM should be directly below pivot, so arrow points from pivot to COM
-        const arrowDx = centerOfMass.x - pivotOffset.x;
-        const arrowDy = centerOfMass.y - pivotOffset.y;
-        const arrowLength = Math.sqrt(arrowDx * arrowDx + arrowDy * arrowDy);
-        const arrowAngle = Math.atan2(arrowDy, arrowDx);
-        
-        arrowElement.style.cssText = `
-            position: absolute;
-            width: ${arrowLength}px;
-            height: 2px;
-            background: linear-gradient(to right, rgba(0,0,255,0.7) 0%, rgba(0,0,255,0.7) 85%, transparent 85%);
-            left: ${markerLeft}px;
-            top: ${markerTop}px;
-            transform-origin: 0 50%;
-            transform: rotate(${arrowAngle}rad) translateY(-1px);
-            z-index: 9;
-            pointer-events: none;
-        `;
-        
-        // Add arrowhead
-        const arrowhead = document.createElement('div');
-        arrowhead.style.cssText = `
-            position: absolute;
-            width: 0;
-            height: 0;
-            border-left: 8px solid rgba(0,0,255,0.7);
-            border-top: 4px solid transparent;
-            border-bottom: 4px solid transparent;
-            right: -8px;
-            top: 50%;
-            transform: translateY(-50%);
-        `;
-        arrowElement.appendChild(arrowhead);
-        
-        cardElement.appendChild(arrowElement);
-        
-        // Add a vertical reference line for debugging
-        const verticalLine = document.createElement('div');
-        verticalLine.className = 'vertical-reference-line';
-        verticalLine.style.cssText = `
-            position: absolute;
-            width: 1px;
-            height: 100px;
-            background: rgba(255, 0, 0, 0.3);
-            left: ${markerLeft}px;
-            top: ${markerTop}px;
-            transform-origin: 0 0;
-            z-index: 8;
-            pointer-events: none;
-        `;
-        cardElement.appendChild(verticalLine);
-        
-        // Store references for cleanup
-        this.activeCards.get(cardId).stabMarker = stabMarker;
-        this.activeCards.get(cardId).arrowElement = arrowElement;
-        this.activeCards.get(cardId).centerOfMass = centerOfMass;
-        this.activeCards.get(cardId).verticalLine = verticalLine;
+    // Always compute and store center of mass for physics
+    const centerOfMass = this.calculateCenterOfMass(cardId, rect);
+    this.activeCards.get(cardId).centerOfMass = centerOfMass;
+
+    // Optional debug overlays: pencil stab + COM arrow + vertical line
+    // Controlled by Debug_Card_Pivot toggle
+    if (this.isPivotDebugEnabled()) {
+            // Calculate marker position in pixels from card's top-left
+            const markerLeft = (rect.width / 2) + pivotOffset.x;
+            const markerTop = (rect.height / 2) + pivotOffset.y;
+
+            // Pencil stab marker
+            const stabMarker = document.createElement('div');
+            stabMarker.className = 'pencil-stab-marker';
+            stabMarker.style.cssText = `
+                position: absolute;
+                width: 16px;
+                height: 16px;
+                background: radial-gradient(circle, #ff0000 0%, #ff0000 30%, transparent 40%, #8B0000 50%, transparent 60%);
+                border-radius: 50%;
+                left: ${markerLeft}px;
+                top: ${markerTop}px;
+                transform: translate(-50%, -50%);
+                z-index: 10;
+                pointer-events: none;
+                box-shadow: 0 0 4px rgba(0,0,0,0.5);
+            `;
+            cardElement.appendChild(stabMarker);
+
+            const arrowDx = centerOfMass.x - pivotOffset.x;
+            const arrowDy = centerOfMass.y - pivotOffset.y;
+            const arrowLength = Math.sqrt(arrowDx * arrowDx + arrowDy * arrowDy);
+            const arrowAngle = Math.atan2(arrowDy, arrowDx);
+
+            // COM arrow
+            const arrowElement = document.createElement('div');
+            arrowElement.className = 'center-of-mass-arrow';
+            arrowElement.style.cssText = `
+                position: absolute;
+                width: ${arrowLength}px;
+                height: 2px;
+                background: linear-gradient(to right, rgba(0,0,255,0.7) 0%, rgba(0,0,255,0.7) 85%, transparent 85%);
+                left: ${markerLeft}px;
+                top: ${markerTop}px;
+                transform-origin: 0 50%;
+                transform: rotate(${arrowAngle}rad) translateY(-1px);
+                z-index: 9;
+                pointer-events: none;
+            `;
+            const arrowhead = document.createElement('div');
+            arrowhead.style.cssText = `
+                position: absolute;
+                width: 0;
+                height: 0;
+                border-left: 8px solid rgba(0,0,255,0.7);
+                border-top: 4px solid transparent;
+                border-bottom: 4px solid transparent;
+                right: -8px;
+                top: 50%;
+                transform: translateY(-50%);
+            `;
+            arrowElement.appendChild(arrowhead);
+            cardElement.appendChild(arrowElement);
+
+            // Vertical reference line
+            const verticalLine = document.createElement('div');
+            verticalLine.className = 'vertical-reference-line';
+            verticalLine.style.cssText = `
+                position: absolute;
+                width: 1px;
+                height: 100px;
+                background: rgba(255, 0, 0, 0.3);
+                left: ${markerLeft}px;
+                top: ${markerTop}px;
+                transform-origin: 0 0;
+                z-index: 8;
+                pointer-events: none;
+            `;
+            cardElement.appendChild(verticalLine);
+
+            // Store references for cleanup
+            this.activeCards.get(cardId).stabMarker = stabMarker;
+            this.activeCards.get(cardId).arrowElement = arrowElement;
+            this.activeCards.get(cardId).verticalLine = verticalLine;
+        }
         
         // Debug: Ensure parent containers don't constrain movement
         let parent = cardElement.parentElement;
@@ -482,12 +520,16 @@ class CardPhysicsEngine {
         // Don't call applyTransform here - we already set the correct transform above
         
         // Debug: Check if pencil marker is at finger position after transform
-        if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === 'development') {
             // Wait two frames to ensure all updates have been applied
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
                 const cardRect = cardElement.getBoundingClientRect();
-                const markerRect = stabMarker.getBoundingClientRect();
+        // If pivot debug is disabled, skip marker alignment logging
+        if (!this.isPivotDebugEnabled()) return;
+        const stab = this.activeCards.get(cardId)?.stabMarker;
+        if (!stab) return;
+        const markerRect = stab.getBoundingClientRect();
                 const markerCenter = {
                     x: markerRect.left + markerRect.width / 2,
                     y: markerRect.top + markerRect.height / 2
@@ -1075,9 +1117,55 @@ class CardPhysicsEngine {
             this.updateOffTargetThrow(card, deltaTime, distance, toTarget, flightTime);
         }
         
-        // Apply motion
-        const nextX = card.position.x + card.velocity.x * deltaTime;
-        const nextY = card.position.y + card.velocity.y * deltaTime;
+        // Apply motion with near-dock overshoot protection and viewport clamping
+        let nextX = card.position.x + card.velocity.x * deltaTime;
+        let nextY = card.position.y + card.velocity.y * deltaTime;
+
+        // Compute centers for overshoot detection
+        const cardHalfW = (card.cardDimensions ? card.cardDimensions.width : this.CARD_WIDTH) / 2;
+        const cardHalfH = (card.cardDimensions ? card.cardDimensions.height : this.CARD_HEIGHT) / 2;
+        const nextCenterX = nextX + cardHalfW;
+        const nextCenterY = nextY + cardHalfH;
+        const targetCenterX = card.targetPosition.x + cardHalfW;
+        const targetCenterY = card.targetPosition.y + cardHalfH;
+        const nextToTargetX = targetCenterX - nextCenterX;
+        const nextToTargetY = targetCenterY - nextCenterY;
+        const nextDistance = Math.sqrt(nextToTargetX * nextToTargetX + nextToTargetY * nextToTargetY);
+
+        // If we're close to dock, don't allow a single step to increase distance dramatically
+        // This avoids a last-frame spike that can shoot the card offscreen
+        const NEAR_DOCK_RADIUS = 180; // Slightly larger than capture radius
+        if (distance < NEAR_DOCK_RADIUS) {
+            // If proposed step increases distance notably, clamp step toward target and damp velocity
+            if (nextDistance > distance + 30) {
+                const dirX = distance > 0 ? toTarget.x / distance : 0;
+                const dirY = distance > 0 ? toTarget.y / distance : 0;
+                const maxStep = Math.max(20, distance * 0.5); // Limit how far we can move in one frame near dock
+                nextX = card.position.x + dirX * maxStep;
+                nextY = card.position.y + dirY * maxStep;
+                // Update velocity to reflect clamped step
+                if (deltaTime > 0) {
+                    card.velocity.x = (nextX - card.position.x) / deltaTime;
+                    card.velocity.y = (nextY - card.position.y) / deltaTime;
+                }
+            }
+        }
+
+        // Viewport safety clamp to prevent temporary offscreen jumps
+        const PAD = 60; // Allow a little leeway beyond edges
+        const maxX = (window.innerWidth || 0) - (card.cardDimensions ? card.cardDimensions.width : this.CARD_WIDTH) + PAD;
+        const maxY = (window.innerHeight || 0) - (card.cardDimensions ? card.cardDimensions.height : this.CARD_HEIGHT) + PAD;
+        const minX = -PAD;
+        const minY = -PAD;
+        if (isFinite(maxX) && isFinite(maxY)) {
+            if (nextX < minX || nextX > maxX || nextY < minY || nextY > maxY) {
+                // Softly steer back in-bounds by damping velocity
+                card.velocity.x *= 0.8;
+                card.velocity.y *= 0.8;
+                nextX = Math.min(Math.max(nextX, minX), maxX);
+                nextY = Math.min(Math.max(nextY, minY), maxY);
+            }
+        }
         
         // Smooth final approach when very close - expanded range for rotated cards
         const currentSpeed = Math.sqrt(card.velocity.x ** 2 + card.velocity.y ** 2);
@@ -1101,8 +1189,8 @@ class CardPhysicsEngine {
         }
         
         // Safe to move
-        card.position.x = nextX;
-        card.position.y = nextY;
+    card.position.x = nextX;
+    card.position.y = nextY;
         
         // Track actual path for debug visualization
         const cardCenterX = card.position.x + (card.cardDimensions ? card.cardDimensions.width / 2 : 40);

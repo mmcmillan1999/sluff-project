@@ -191,7 +191,26 @@ const registerGameHandlers = (io, gameService) => {
         socket.on("dealCards", ({tableId}) => gameService.dealCards(tableId, socket.user.id));
         socket.on("placeBid", ({tableId, bid}) => gameService.placeBid(tableId, socket.user.id, bid));
         socket.on("chooseTrump", ({tableId, suit}) => gameService.chooseTrump(tableId, socket.user.id, suit));
-        socket.on("submitFrogDiscards", ({tableId, discards}) => gameService.submitFrogDiscards(tableId, socket.user.id, discards));
+        socket.on("submitFrogDiscards", ({tableId, discards}) => {
+            try {
+                const engine = gameService.getEngineById(tableId);
+                const state = engine?.state;
+                const bidderId = engine?.bidWinnerInfo?.userId;
+                console.log(`[EVENT] submitFrogDiscards from user ${socket.user.id} on ${tableId} (state=${state}, bidder=${bidderId}) :: discards=${Array.isArray(discards) ? discards.join(',') : discards}`);
+                if (!engine) {
+                    return socket.emit('error', { message: 'Table not found.' });
+                }
+                if (state !== 'Frog Widow Exchange') {
+                    return socket.emit('error', { message: `Not accepting discards in state '${state}'.` });
+                }
+                if (bidderId !== socket.user.id) {
+                    return socket.emit('error', { message: 'Only the bidder can submit discards.' });
+                }
+            } catch (e) {
+                console.warn(`[EVENT] submitFrogDiscards logging failed:`, e);
+            }
+            gameService.submitFrogDiscards(tableId, socket.user.id, discards);
+        });
         socket.on("requestNextRound", ({tableId}) => gameService.requestNextRound(tableId, socket.user.id));
         socket.on("submitDrawVote", ({tableId, vote}) => gameService.submitDrawVote(tableId, socket.user.id, vote)); // THE FIX
 

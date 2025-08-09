@@ -1,0 +1,325 @@
+/* Layout Developer Panel - Highest Z-Index */
+.layout-dev-panel {
+    position: fixed;
+    width: 400px;
+    max-width: 90vw;
+    background: rgba(20, 20, 30, 0.98);
+    border: 2px solid #ffd700;
+    border-radius: 10px;
+    color: white;
+    z-index: 2147483647; /* Maximum z-index value */
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), 0 0 20px rgba(255, 215, 0, 0.5);
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    -webkit-user-select: none; /* Safari/iOS support */
+    user-select: none;
+}
+
+.layout-dev-panel-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 10px 15px;
+    border-radius: 8px 8px 0 0;
+    cursor: move;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid #ffd700;
+}
+
+.layout-dev-panel-header h3 {
+    margin: 0;
+    font-size: 16px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.layout-dev-close, .layout-dev-minimize {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid white;
+    color: white;
+    border-radius: 50%;
+    width: 25px;
+    height: 25px;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s;
+}
+
+.layout-dev-close:hover {
+    background: rgba(255, 0, 0, 0.8);
+    transform: scale(1.1);
+}
+
+.layout-dev-minimize:hover {
+    background: rgba(102, 126, 234, 0.8);
+    transform: scale(1.1);
+}
+
+/* Minimized state */
+.layout-dev-panel.minimized .layout-dev-panel-content {
+    display: none;
+}
+
+.layout-dev-panel.minimized {
+    height: auto !important;
+    overflow: hidden;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+    .layout-dev-panel {
+        font-size: 12px;
+    }
+    
+    .layout-dev-panel-header h3 {
+        font-size: 14px;
+    }
+    
+    .layout-dev-btn {
+        font-size: 11px;
+        padding: 4px 8px;
+    }
+    
+    .layout-dev-panel-content {
+        padding: 10px;
+    }
+    
+    .layout-dev-section-header {
+        font-size: 12px;
+    }
+}
+
+.layout-dev-panel-content {
+    padding: 15px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.layout-dev-info {
+    background: rgba(255, 215, 0, 0.1);
+    padding: 8px;
+    border-radius: 5px;
+    margin-bottom: 10px;
+    border: 1px solid rgba(255, 215, 0, 0.3);
+}
+
+.layout-dev-selection {
+    background: rgba(102, 126, 234, 0.1);
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 10px;
+    border: 1px solid rgba(102, 126, 234, 0.3);
+}
+
+.layout-dev-element-desc {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 5px 8px;
+    border-radius: 3px;
+    margin: 5px 0;
+    font-family: monospace;
+    font-size: 11px;
+    word-break: break-all;
+    color: #4fc3f7;
+}
+
+.layout-dev-btn {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border: 1px solid #ffd700;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+    margin: 5px 5px 5px 0;
+    transition: all 0.3s;
+    font-size: 12px;
+}
+
+.layout-dev-btn:hover {
+    background: linear-gradient(135deg, #764ba2, #667eea);
+    box-shadow: 0 2px 10px rgba(255, 215, 0, 0.3);
+    transform: translateY(-1px);
+}
+
+.layout-dev-changes {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.layout-dev-changes-list {
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 8px;
+}
+
+.layout-dev-change-item {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 5px 8px;
+    border-radius: 3px;
+    margin: 3px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+}
+
+.layout-dev-change-item:hover {
+    background: rgba(255, 215, 0, 0.1);
+}
+
+.layout-dev-revert {
+    background: rgba(255, 0, 0, 0.5);
+    border: 1px solid #ff4444;
+    color: white;
+    border-radius: 3px;
+    padding: 2px 6px;
+    cursor: pointer;
+    font-size: 10px;
+    transition: all 0.2s;
+}
+
+.layout-dev-revert:hover {
+    background: rgba(255, 0, 0, 0.8);
+    transform: scale(1.1);
+}
+
+.layout-dev-log {
+    background: linear-gradient(135deg, #4caf50, #45a049);
+    border-color: #4caf50;
+    width: 100%;
+    margin-top: 10px;
+    font-weight: bold;
+}
+
+.layout-dev-log:hover {
+    background: linear-gradient(135deg, #45a049, #4caf50);
+}
+
+.layout-dev-instructions {
+    margin-top: 10px;
+    padding: 8px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 5px;
+    color: #aaa;
+    text-align: center;
+}
+
+/* Selectable elements highlighting */
+.layout-dev-selectable {
+    outline: 1px dashed rgba(255, 215, 0, 0.3) !important;
+    transition: all 0.2s !important;
+}
+
+.layout-dev-selectable:hover {
+    outline: 2px dashed rgba(255, 215, 0, 0.6) !important;
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.3) !important;
+}
+
+.layout-dev-selected {
+    outline: 3px solid #ffd700 !important;
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.5) !important;
+    z-index: 999999 !important;
+}
+
+.layout-dev-undocked {
+    outline: 3px solid #4fc3f7 !important;
+    box-shadow: 0 0 30px rgba(79, 195, 247, 0.6) !important;
+    cursor: move !important;
+    z-index: 999998 !important;
+}
+
+/* Resize handle for undocked elements */
+.layout-dev-resize-handle {
+    position: absolute;
+    bottom: -5px;
+    right: -5px;
+    width: 15px;
+    height: 15px;
+    background: #ffd700;
+    border: 2px solid #333;
+    border-radius: 50%;
+    cursor: se-resize;
+    z-index: 999999;
+}
+
+.layout-dev-resize-handle:hover {
+    background: #ffeb3b;
+    transform: scale(1.2);
+}
+
+/* Scrollbar styling for the panel */
+.layout-dev-panel-content::-webkit-scrollbar,
+.layout-dev-changes-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.layout-dev-panel-content::-webkit-scrollbar-track,
+.layout-dev-changes-list::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+}
+
+.layout-dev-panel-content::-webkit-scrollbar-thumb,
+.layout-dev-changes-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 215, 0, 0.5);
+    border-radius: 4px;
+}
+
+.layout-dev-panel-content::-webkit-scrollbar-thumb:hover,
+.layout-dev-changes-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 215, 0, 0.8);
+}
+
+/* State tracking display */
+.layout-dev-state-info {
+    background: rgba(76, 175, 80, 0.1);
+    padding: 8px;
+    border-radius: 5px;
+    margin-bottom: 10px;
+    border: 1px solid rgba(76, 175, 80, 0.3);
+    font-size: 11px;
+}
+
+.layout-dev-state-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 0;
+}
+
+.layout-dev-state-label {
+    color: #4caf50;
+    font-weight: bold;
+}
+
+.layout-dev-state-value {
+    color: #81c784;
+}
+
+/* Layout Dev Button in Admin Controls */
+.layout-dev-button {
+    background: linear-gradient(135deg, #ffd700, #ffeb3b);
+    color: #333;
+    border: 2px solid #333;
+    padding: 8px 16px;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+    margin: 5px;
+    transition: all 0.3s;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+.layout-dev-button:hover {
+    background: linear-gradient(135deg, #ffeb3b, #ffd700);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+}
+
+.layout-dev-button:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+}

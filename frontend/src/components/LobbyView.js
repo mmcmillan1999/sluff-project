@@ -11,8 +11,9 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
     
     const [activeTab, setActiveTab] = useState('');
     const [showMenu, setShowMenu] = useState(false);
-    const [tablesExpanded, setTablesExpanded] = useState(true);
-    const [bulletinExpanded, setBulletinExpanded] = useState(true);
+    // Collapsible headers removed; add simple toggles for tables and bulletin visibility
+    const [tablesCollapsed, setTablesCollapsed] = useState(false);
+    const [bulletinCollapsed, setBulletinCollapsed] = useState(false);
     const [chatMessages, setChatMessages] = useState([]);
 
     useEffect(() => {
@@ -69,14 +70,38 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
             <header className="lobby-header">
                 <div className="header-left">
                     <img src="/SluffLogo.png" alt="Sluff Logo" className="lobby-logo" />
-                    <h2 className="lobby-title">Lobby</h2>
                 </div>
                 <div className="header-right">
                     <span className="user-welcome"><strong>{user.username}</strong></span>
-                    <div className="user-tokens">
-                        <img src="/Sluff_Token.png" alt="Tokens" className="token-icon" />
-                        <span>{parseFloat(user.tokens).toFixed(2)}</span>
-                    </div>
+                    {(() => {
+                        const mercyEligible = Boolean(
+                            user && (
+                                parseFloat(user.tokens) < 5 ||
+                                user.can_watch_mercy_ad ||
+                                user.canWatchMercyAd ||
+                                user.mercyEligible ||
+                                (user.eligibility && user.eligibility.mercyAd)
+                            )
+                        );
+                        return (
+                            <button
+                                type="button"
+                                className={`user-tokens ${mercyEligible ? 'pulse-eligible' : ''}`}
+                                onClick={handleRequestFreeToken}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        handleRequestFreeToken();
+                                    }
+                                }}
+                                aria-label="Request Free Token"
+                                title={mercyEligible ? 'Watch an ad for a Mercy Token' : 'Request Free Token'}
+                            >
+                                <img src="/Sluff_Token.png" alt="Tokens" className="token-icon" />
+                                <span>{parseFloat(user.tokens).toFixed(2)}</span>
+                            </button>
+                        );
+                    })()}
                     <div className="hamburger-menu-container">
                         <button className="hamburger-btn" onClick={() => setShowMenu(prev => !prev)}>
                              <svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M12,16A2,2 0 0,1 14,18A2,2 0 0,1 12,20A2,2 0 0,1 10,18A2,2 0 0,1 12,16M12,10A2,2 0 0,1 14,12A2,2 0 0,1 12,14A2,2 0 0,1 10,12A2,2 0 0,1 12,10M12,4A2,2 0 0,1 14,6A2,2 0 0,1 12,8A2,2 0 0,1 10,6A2,2 0 0,1 12,4Z" /></svg>
@@ -104,12 +129,21 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
             </nav>
 
             <main className="lobby-main">
-                <div className="collapsible-section">
-                    <h3 className="section-header" onClick={() => setTablesExpanded(!tablesExpanded)}>
-                        Game Tables {tablesExpanded ? '▼' : '►'}
-                    </h3>
-                    {tablesExpanded && (
-                        <div className="table-grid">
+                <div className="tables-section">
+                    <div
+                        className="tables-toggle"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setTablesCollapsed(v => !v)}
+                        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setTablesCollapsed(v => !v)}
+                        aria-expanded={!tablesCollapsed}
+                        aria-controls="tables-grid"
+                    >
+                        <span className="toggle-title">Game Tables</span>
+                        <span className="toggle-caret">{tablesCollapsed ? '►' : '▼'}</span>
+                    </div>
+                    {!tablesCollapsed && (
+                        <div className="table-grid" id="tables-grid">
                             {activeTheme ? activeTheme.tables.map(table => (
                                 <LobbyTableCard 
                                     key={table.tableId}
@@ -122,12 +156,24 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
                         </div>
                     )}
                 </div>
-                
-                <div className="collapsible-section">
-                    <h3 className="section-header" onClick={() => setBulletinExpanded(!bulletinExpanded)}>
-                        Bulletin {bulletinExpanded ? '▼' : '►'}
-                    </h3>
-                    {bulletinExpanded && <Bulletin />}
+                <div className="bulletin-section">
+                    <div
+                        className="bulletin-toggle"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setBulletinCollapsed(v => !v)}
+                        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setBulletinCollapsed(v => !v)}
+                        aria-expanded={!bulletinCollapsed}
+                        aria-controls="bulletin-content"
+                    >
+                        <span className="toggle-title">Bulletin</span>
+                        <span className="toggle-caret">{bulletinCollapsed ? '►' : '▼'}</span>
+                    </div>
+                    {!bulletinCollapsed && (
+                        <div id="bulletin-content">
+                            <Bulletin />
+                        </div>
+                    )}
                 </div>
             </main>
 

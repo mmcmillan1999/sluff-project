@@ -5,7 +5,75 @@
  * Handles all HTTP communication with the backend, providing a clean interface for components.
  */
 
-const SERVER_URL = process.env.REACT_APP_SERVER_URL || "https://sluff-backend.onrender.com";
+// Smart environment detection - no more manual changes needed!
+const getServerUrl = () => {
+    // Check if we have an explicit override in env
+    if (process.env.REACT_APP_SERVER_URL) {
+        console.log(`[API] Using override from .env: ${process.env.REACT_APP_SERVER_URL}`);
+        return process.env.REACT_APP_SERVER_URL;
+    }
+    
+    // Detect based on where the frontend is running
+    const hostname = window.location.hostname;
+    const protocol = window.location.protocol;
+    
+    // Local development
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        // For local dev, always use local backend
+        return 'http://localhost:3005';
+    }
+    
+    // Production domains
+    if (hostname === 'playsluff.com' || hostname === 'www.playsluff.com') {
+        return 'https://api.playsluff.com';
+    }
+    
+    // Staging or preview deployments
+    if (hostname.includes('staging') || hostname.includes('preview')) {
+        // You might want to set up a staging API later
+        return 'https://api.playsluff.com'; // For now, use production
+    }
+    
+    // Netlify deployments (branch previews, etc)
+    if (hostname.includes('netlify')) {
+        return 'https://api.playsluff.com';
+    }
+    
+    // Render.com deployment
+    if (hostname.includes('onrender.com')) {
+        return 'https://sluff-backend.onrender.com';
+    }
+    
+    // Vercel deployments
+    if (hostname.includes('vercel.app')) {
+        return 'https://api.playsluff.com';
+    }
+    
+    // GitHub Pages
+    if (hostname.includes('github.io')) {
+        return 'https://api.playsluff.com';
+    }
+    
+    // Default to production API for any unknown domains
+    return 'https://api.playsluff.com';
+};
+
+const SERVER_URL = getServerUrl();
+
+// Log the detected environment (helpful for debugging)
+console.log(`[API] Auto-detected environment:`, {
+    hostname: window.location.hostname,
+    api: SERVER_URL,
+    timestamp: new Date().toISOString()
+});
+
+// Optional: Test the connection on load (for development)
+if (window.location.hostname === 'localhost') {
+    fetch(`${SERVER_URL}/api/ping`)
+        .then(res => res.json())
+        .then(data => console.log('[API] Backend connection test:', data))
+        .catch(err => console.warn('[API] Backend not responding locally:', err.message));
+}
 
 /**
  * A generic, configured fetch request helper.

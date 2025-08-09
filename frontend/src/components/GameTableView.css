@@ -68,7 +68,7 @@
     background: none;
     border: none;
     font-size: 1.2em;
-    z-index: 35;
+    z-index: 2001; /* Ensure close button stays above chat content */
 }
 
 .chat-tab-button {
@@ -212,6 +212,12 @@
     background-color: #dc3545;
     border-color: #c82333;
     color: white;
+}
+
+/* Ensure embedded LobbyChat does not overlay the close button in game view */
+.game-view-chat-container .lobby-chat-container {
+    position: relative;
+    z-index: 10; /* Keep chat content below the close button */
 }
 
 .hamburger-btn {
@@ -438,7 +444,8 @@
         background: linear-gradient(135deg, rgba(31, 41, 55, 0.8) 0%, rgba(17, 24, 39, 0.8) 100%);
         border-radius: 12px;
         border: 1px solid rgba(255, 255, 255, 0.15);
-        backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     }
     
