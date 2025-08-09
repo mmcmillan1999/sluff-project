@@ -2,7 +2,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
-import reportWebVitals from './utils/reportWebVitals';  
+import reportWebVitals from './utils/reportWebVitals';
+import './utils/logger'; // Silences console in production  
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

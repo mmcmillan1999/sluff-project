@@ -189,6 +189,7 @@
             font-weight: bold;
             cursor: move;
             transition: all 0.2s;
+            -webkit-user-select: none; /* Safari/iOS support */
             user-select: none;
         }
 
@@ -453,6 +454,16 @@
             text-decoration: line-through;
         }
 
+        /* Visually hidden utility for accessible labels */
+        .visually-hidden {
+            position: absolute;
+            left: -10000px;
+            top: auto;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
             #main-container {
@@ -469,7 +480,8 @@
 <body>
     <!-- Control Panel -->
     <div id="control-panel">
-        <select id="device-selector">
+    <label for="device-selector" class="visually-hidden">Device preset</label>
+    <select id="device-selector" aria-label="Device preset" title="Device preset">
             <option value="iphone-se">iPhone SE (375×667)</option>
             <option value="iphone-14">iPhone 14 (393×852)</option>
             <option value="samsung-galaxy">Samsung Galaxy (360×800)</option>
@@ -498,8 +510,8 @@
         
         <!-- Browser UI Controls -->
         <div class="browser-ui-controls">
-            <label>Browser UI:</label>
-            <select id="browser-ui-selector">
+            <label for="browser-ui-selector">Browser UI:</label>
+            <select id="browser-ui-selector" aria-label="Browser UI" title="Browser UI">
                 <option value="none">None</option>
                 <option value="safari-mobile">Safari Mobile</option>
                 <option value="chrome-mobile">Chrome Mobile</option>

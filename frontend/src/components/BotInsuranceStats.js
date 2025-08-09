@@ -12,7 +12,7 @@ const BotInsuranceStats = ({ onClose }) => {
 
     const fetchStats = async () => {
         try {
-            const token = localStorage.getItem('token');
+            const token = localStorage.getItem('sluff_token');
             const serverUrl = process.env.REACT_APP_SERVER_URL || 'http://localhost:3005';
             const response = await fetch(`${serverUrl}/api/bot-insurance/stats`, {
                 headers: {
