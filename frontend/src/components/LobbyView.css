@@ -316,6 +316,18 @@
     }
 }
 
+/* Desktop mode adjustments for raised chat panel and larger cards */
+@media (min-width: 1024px) {
+    .lobby-main {
+        padding-bottom: 280px; /* Account for raised chat panel (200px height + 20px bottom + padding) */
+    }
+    
+    .table-grid {
+        grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); /* Larger minimum width for bigger cards */
+        gap: 30px; /* Double the gap between cards */
+    }
+}
+
 /* Orientation hooks (add rules here if needed) */
 @media (orientation: portrait) {
     .table-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }

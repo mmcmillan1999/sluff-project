@@ -86,6 +86,44 @@
     text-align: left; /* Explicitly align text to the left */
 }
 
+/* Desktop mode improvements - bigger font and higher position */
+@media (min-width: 1024px) {
+    .lobby-chat-container {
+        position: fixed;
+        bottom: 20px; /* Move it higher from the bottom */
+        left: 50%;
+        transform: translateX(-50%);
+        width: 90%;
+        max-width: 1000px;
+        border-radius: 8px 8px 0 0;
+        box-shadow: 0 -8px 20px rgba(0,0,0,0.6);
+    }
+    
+    .chat-log-window {
+        height: 200px; /* Taller window for desktop */
+    }
+    
+    .chat-line {
+        font-size: 1.1em; /* Bigger font for desktop */
+        margin-bottom: 6px;
+    }
+    
+    .section-header {
+        font-size: 1.3em; /* Bigger header font */
+        padding: 8px 16px;
+    }
+    
+    .chat-input {
+        font-size: 1.1em; /* Bigger input font */
+        padding: 10px;
+    }
+    
+    .chat-send-button {
+        width: 42px;
+        height: 42px;
+    }
+}
+
 /* Compact the chat on very small phones */
 @media (max-width: 480px) and (orientation: portrait) {
     .lobby-chat-container {

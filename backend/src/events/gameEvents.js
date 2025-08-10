@@ -255,7 +255,7 @@ const registerGameHandlers = (io, gameService) => {
         socket.on("requestUserSync", async () => {
             try {
                 const pool = gameService.pool;
-                const userQuery = "SELECT id, username, email, created_at, wins, losses, washes, is_admin FROM users WHERE id = $1";
+                const userQuery = "SELECT id, username, email, created_at, wins, losses, washes, is_admin, is_vip FROM users WHERE id = $1";
                 const userResult = await pool.query(userQuery, [socket.user.id]);
                 const updatedUser = userResult.rows[0];
                 if (updatedUser) {

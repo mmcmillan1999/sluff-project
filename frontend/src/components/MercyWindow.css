@@ -76,3 +76,47 @@
     background-color: #6c757d; /* Gray for disabled */
     cursor: not-allowed;
 }
+
+/* VIP Styles */
+.vip-badge {
+    font-size: 1.5em;
+    color: #ffd700;
+    text-align: center;
+    margin: 20px 0;
+    font-weight: bold;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+}
+
+.vip-redemption-button {
+    padding: 15px 30px;
+    background: linear-gradient(135deg, #ffd700, #ffed4e);
+    color: #333;
+    border: 2px solid #ffd700;
+    border-radius: 8px;
+    font-size: 1.2em;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: 15px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
+}
+
+.vip-redemption-button:hover {
+    background: linear-gradient(135deg, #ffed4e, #ffd700);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 215, 0, 0.6);
+}
+
+.vip-redemption-button:active {
+    transform: translateY(0);
+}

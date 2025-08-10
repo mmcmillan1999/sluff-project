@@ -82,7 +82,7 @@ module.exports = function(pool, bcrypt, jwt, io) {
                 return res.status(400).json({ message: "Email and password are required." });
             }
 
-            const userQuery = 'SELECT id, username, password_hash, is_admin, is_verified FROM users WHERE email = $1';
+            const userQuery = 'SELECT id, username, password_hash, is_admin, is_verified, is_vip FROM users WHERE email = $1';
             const userResult = await pool.query(userQuery, [email]);
 
             if (userResult.rows.length === 0) {
@@ -126,7 +126,8 @@ module.exports = function(pool, bcrypt, jwt, io) {
                     id: user.id,
                     username: user.username,
                     tokens: tokens,
-                    is_admin: user.is_admin
+                    is_admin: user.is_admin,
+                    is_vip: user.is_vip
                 }
             });
 
