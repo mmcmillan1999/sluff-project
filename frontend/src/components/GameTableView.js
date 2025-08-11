@@ -285,7 +285,19 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         const color = SUIT_COLORS[suit] || 'black';
         const backgroundColor = isSelected ? 'lightblue' : (SUIT_BACKGROUNDS[suit] || 'white');
         const cardClasses = ['card-display', className].filter(Boolean).join(' ');
-        const cardContent = <><span>{rank !== '?' && rank}</span><span className="card-symbol" style={{ marginLeft: '2px' }}>{symbol}</span></>;
+        const cardContent = (
+            <div style={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'flex-start',
+                position: 'absolute',
+                top: '2px',
+                left: '4px'
+            }}>
+                <span style={{ lineHeight: '1' }}>{rank !== '?' && rank}</span>
+                <span className="card-symbol" style={{ lineHeight: '1', marginTop: '-2px' }}>{symbol}</span>
+            </div>
+        );
         
         // Font size relative to card height
         const getFontSize = () => {
@@ -305,11 +317,8 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             backgroundColor, 
             color, 
             fontSize: getFontSize(),
-            display: 'inline-flex',  // Ensure proper box model
-            flexDirection: 'row',  // Override TableLayout.css column direction
-            alignItems: 'center',
-            justifyContent: 'center',
-            textAlign: 'center',  // Override TableLayout.css text-align: left
+            display: 'inline-block',  // Changed from inline-flex for proper positioning
+            position: 'relative',  // For absolute positioning of content
             padding: '2px',  // Override TableLayout.css padding
             boxSizing: 'border-box',
             flexShrink: 0,  // Prevent flex shrinking

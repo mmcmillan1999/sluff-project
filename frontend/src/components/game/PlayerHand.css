@@ -47,7 +47,7 @@
 }
 
 .player-hand-card-wrapper {
-    transition: transform 0.2s ease;
+    /* Removed transition to prevent jumping */
     cursor: grab;
     flex-shrink: 0;
     position: relative; /* CRITICAL FIX: Ensure proper positioning context */
@@ -98,10 +98,11 @@
 .player-hand-cards.is-discarding .player-hand-card-wrapper-static:first-child {
     margin-left: 0;
 }
+/* Hover effect removed - cards stay in place
 .player-hand-card-wrapper-static:hover {
     transform: translateY(-12px);
     z-index: 100;
-}
+} */
 
 /* Two-row layout for mobile portrait during Frog discard (14 cards) */
 @media (orientation: portrait) and (max-width: 480px) {
@@ -153,10 +154,7 @@
     /* Mobile uses JavaScript-calculated spacing */
     /* Spacing is handled by the --card-margin-left CSS variable */
     
-    /* Better hover/touch feedback on mobile */
-    .player-hand-card-wrapper-static:hover {
-        transform: translateY(-8px);
-    }
+    /* Hover effect removed - cards stay in place */
     
     /* Physics-enhanced mobile interactions */
     .player-hand-card-wrapper.physics-active {
@@ -187,10 +185,7 @@
     /* Small screens use JavaScript-calculated spacing */
     /* Spacing is handled by the --card-margin-left CSS variable */
     
-    /* Reduced hover effect for small screens */
-    .player-hand-card-wrapper-static:hover {
-        transform: translateY(-6px);
-    }
+    /* Hover effect removed - cards stay in place */
     
     /* Smaller illegal move overlay */
     .illegal-move::after {
@@ -218,10 +213,7 @@
     /* Landscape mobile uses JavaScript-calculated spacing */
     /* Spacing is handled by the --card-margin-left CSS variable */
     
-    /* Reduced hover effect for landscape mobile */
-    .player-hand-card-wrapper-static:hover {
-        transform: translateY(-6px);
-    }
+    /* Hover effect removed - cards stay in place */
     
     /* Compact my turn indicator for landscape */
     .player-hand-cards.my-turn {
@@ -257,11 +249,7 @@
     /* Desktop uses JavaScript-calculated spacing */
     /* Spacing is handled by the --card-margin-left CSS variable */
     
-    /* Ensure hover still works with larger cards */
-    .player-hand-card-wrapper-static:hover {
-        transform: translateY(-20px);  /* More lift for larger cards */
-        z-index: 100;
-    }
+    /* Hover effect removed - cards stay in place */
 }
 
 /* Desktop/Laptop landscape mode optimizations */
@@ -279,11 +267,7 @@
     /* Desktop landscape uses JavaScript-calculated spacing */
     /* Spacing is handled by the --card-margin-left CSS variable */
     
-    /* Standard hover effect for desktop */
-    .player-hand-card-wrapper-static:hover {
-        transform: translateY(-12px);
-        z-index: 100;
-    }
+    /* Hover effect removed - cards stay in place */
     
     /* Standard my turn indicator for desktop */
     .player-hand-cards.my-turn {
@@ -313,11 +297,7 @@
     /* Tablet landscape uses JavaScript-calculated spacing */
     /* Spacing is handled by the --card-margin-left CSS variable */
     
-    /* Medium hover effect for tablet */
-    .player-hand-card-wrapper-static:hover {
-        transform: translateY(-8px);
-        z-index: 100;
-    }
+    /* Hover effect removed - cards stay in place */
     
     /* Medium my turn indicator for tablet */
     .player-hand-cards.my-turn {

@@ -430,14 +430,14 @@
     z-index: 8;
 }
 .played-card-bottom { bottom: 30%; left: 50%; transform: translateX(-50%); }
-.played-card-left { top: 50%; left: 30%; transform: translateY(-50%); }
-.played-card-right { top: 50%; right: 30%; transform: translateY(-50%); }
+.played-card-left { top: 50%; left: 22%; transform: translateY(-50%); }  /* Moved further left */
+.played-card-right { top: 50%; right: 22%; transform: translateY(-50%); } /* Moved further right */
 
 /* Desktop: Scale played cards area to match 2x card sizes */
 @media (min-width: 1024px) {
     .played-card-bottom { bottom: 25%; }  /* Adjust positioning for larger cards */
-    .played-card-left { left: 25%; }      /* Move inward for larger cards */
-    .played-card-right { right: 25%; }    /* Move inward for larger cards */
+    .played-card-left { left: 18%; }      /* Spread out more for larger cards */
+    .played-card-right { right: 18%; }    /* Spread out more for larger cards */
 }
 
 .puck-container-bottom, .puck-container-left, .puck-container-right {
@@ -920,8 +920,8 @@ button.card-display:disabled {
         transform: translateY(-35px); /* Move up significantly above player name */
     }
 
-    .played-card-left { left: 25%; }
-    .played-card-right { right: 25%; }
+    .played-card-left { left: 18%; }  /* Spread out more on mobile */
+    .played-card-right { right: 18%; } /* Spread out more on mobile */
 
     .widow-display-container {
         /* Position just below widow name plate */
