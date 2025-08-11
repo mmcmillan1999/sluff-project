@@ -32,6 +32,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const [observedPlayerId, setObservedPlayerId] = useState(playerId);
     const [isObserverMode, setIsObserverMode] = useState(false);
     const [showLayoutDev, setShowLayoutDev] = useState(false);
+    const [showCardDebug, setShowCardDebug] = useState(false); // Hide debug overlay
     const turnPlayerRef = useRef(null);
     const trickWinnerRef = useRef(null);
     const cardCountRef = useRef(null);
@@ -226,26 +227,43 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const renderCard = (cardString, options = {}) => {
         const { isButton = false, onClick = null, disabled = false, isSelected = false, small = false, large = false, isFaceDown = false, style: customStyle = {}, className = '', responsive = true } = options;
         
-        // Responsive card sizes based on viewport
+        // Viewport-based card sizing with proper aspect ratio
+        // Standard playing card ratio is approximately 5:7 (0.714 width/height)
+        const CARD_ASPECT_RATIO = 0.714;
+        
+        // Base card height as percentage of viewport height
+        // Desktop: 15vh, Tablet: 12vh, Mobile: 10vh
         const isMobile = window.innerWidth <= 768;
         const isDesktop = window.innerWidth >= 1024;
         
-        // Enhanced desktop sizes - 50% bigger than current (75px -> 112px)
-        // On desktop, all cards same size including widow/trick
-        const baseWidth = isMobile ? 
-            (large ? '60px' : (small ? '35px' : '50px')) :
-            (isDesktop ? 
-                '112px' :  // Desktop: all cards 50% bigger (was 75px)
-                (large ? '65px' : (small ? '37.5px' : '45px'))); // Tablet: original
+        // Calculate heights based on viewport
+        const getCardHeight = () => {
+            const vh = window.innerHeight / 100;
+            
+            // Small cards (widow, trick piles) are 50% of normal size
+            if (small) {
+                if (isDesktop) return `${7.5 * vh}px`;  // 50% of 15vh
+                if (isMobile) return `${5 * vh}px`;     // 50% of 10vh
+                return `${6 * vh}px`;                   // 50% of 12vh
+            }
+            
+            if (large) return `${12 * vh}px`; // 12vh for large cards
+            
+            // Normal cards (player hand, played cards)
+            if (isDesktop) return `${15 * vh}px`;  // 15vh on desktop
+            if (isMobile) return `${10 * vh}px`;   // 10vh on mobile
+            return `${12 * vh}px`;                 // 12vh on tablet
+        };
         
-        const baseHeight = isMobile ?
-            (large ? '80px' : (small ? '45px' : '65px')) :
-            (isDesktop ?
-                '150px' : // Desktop: all cards 50% bigger (was 100px)
-                (large ? '85px' : (small ? '50px' : '70px')));    // Tablet: original
+        // Calculate width maintaining aspect ratio
+        const getCardWidth = () => {
+            const heightStr = getCardHeight();
+            const heightNum = parseFloat(heightStr);
+            return `${Math.round(heightNum * CARD_ASPECT_RATIO)}px`;
+        };
         
-        const width = responsive ? baseWidth : (large ? '65px' : (small ? '37.5px' : '45px'));
-        const height = responsive ? baseHeight : (large ? '85px' : (small ? '50px' : '70px'));
+        const width = responsive ? getCardWidth() : (large ? '65px' : (small ? '37.5px' : '45px'));
+        const height = responsive ? getCardHeight() : (large ? '85px' : (small ? '50px' : '70px'));
 
         if (isFaceDown) {
             return (
@@ -267,21 +285,34 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         const color = SUIT_COLORS[suit] || 'black';
         const backgroundColor = isSelected ? 'lightblue' : (SUIT_BACKGROUNDS[suit] || 'white');
         const cardClasses = ['card-display', className].filter(Boolean).join(' ');
-        const cardContent = <>{rank !== '?' && rank}<span className="card-symbol">{symbol}</span></>;
-        // Scale font size with card size for desktop
+        const cardContent = <><span>{rank !== '?' && rank}</span><span className="card-symbol" style={{ marginLeft: '2px' }}>{symbol}</span></>;
+        
+        // Font size relative to card height
         const getFontSize = () => {
-            if (isDesktop) {
-                return '1.8em'; // Bigger font for 50% bigger cards
-            }
-            return large ? '1.2em' : (small ? '0.8em' : '1em');
+            const heightNum = parseFloat(height);
+            // Font should be roughly 25-30% of card height for good readability
+            return `${Math.round(heightNum * 0.28)}px`;
         };
         
+        // Combine inline styles with !important overrides
         const style = { 
+            width: width,  // Set explicit width
+            height: height,  // Set explicit height
+            minWidth: width,  // Prevent shrinking
+            maxWidth: width,  // Prevent growing
+            minHeight: height,  // Prevent shrinking
+            maxHeight: height,  // Prevent growing
             backgroundColor, 
             color, 
-            minWidth: width, 
-            height,
             fontSize: getFontSize(),
+            display: 'inline-flex',  // Ensure proper box model
+            flexDirection: 'row',  // Override TableLayout.css column direction
+            alignItems: 'center',
+            justifyContent: 'center',
+            textAlign: 'center',  // Override TableLayout.css text-align: left
+            padding: '2px',  // Override TableLayout.css padding
+            boxSizing: 'border-box',
+            flexShrink: 0,  // Prevent flex shrinking
             ...customStyle
         };
         
@@ -360,6 +391,74 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
 
     return (
         <div className="game-view">
+            {/* Card position debug overlay */}
+            {showCardDebug && window.cardDebugPositions && window.cardDebugPositions.length > 0 && (
+                <div style={{
+                    position: 'fixed',
+                    bottom: '0',
+                    left: '0',
+                    right: '0',
+                    height: '200px',
+                    pointerEvents: 'none',
+                    zIndex: 10000,
+                    backgroundColor: 'rgba(0, 0, 0, 0.5)'
+                }}>
+                    <div style={{
+                        position: 'absolute',
+                        top: '10px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        color: 'yellow',
+                        fontSize: '16px',
+                        fontWeight: 'bold',
+                        backgroundColor: 'black',
+                        padding: '5px 10px',
+                        borderRadius: '5px'
+                    }}>
+                        CARD POSITION DEBUG
+                    </div>
+                    {window.cardDebugPositions.map((pos, i) => {
+                        // Alternate colors for better visibility
+                        const isEven = i % 2 === 0;
+                        const bgColor = isEven ? 'rgba(255, 255, 0, 0.3)' : 'rgba(0, 255, 255, 0.3)';
+                        const borderColor = isEven ? 'yellow' : 'cyan';
+                        const labelBgColor = isEven ? 'yellow' : 'cyan';
+                        const labelTextColor = 'black';
+                        
+                        return (
+                            <div
+                                key={i}
+                                style={{
+                                    position: 'absolute',
+                                    left: `${pos.left}px`,
+                                    bottom: `${50 + pos.height}px`, // Move up by one card height
+                                    width: `${pos.width}px`,
+                                    height: `${pos.height}px`,
+                                    border: `3px solid ${borderColor}`,
+                                    backgroundColor: bgColor,
+                                    boxSizing: 'border-box'
+                                }}
+                            >
+                                <span style={{
+                                    position: 'absolute',
+                                    top: '2px',
+                                    left: '2px',
+                                    color: labelTextColor,
+                                    fontSize: '16px',
+                                    fontWeight: 'bold',
+                                    backgroundColor: labelBgColor,
+                                    padding: '2px 4px',
+                                    borderRadius: '3px',
+                                    border: '1px solid black',
+                                    lineHeight: '1'
+                                }}>
+                                    {i+1}
+                                </span>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
             <InsurancePrompt 
                 show={showInsurancePrompt}
                 insuranceState={currentTableState.insurance}

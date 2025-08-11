@@ -481,12 +481,12 @@ const TableLayout = ({
                                 {isRoundOver 
                                     ? cardsToDisplay.map((card, i) => (
                                         <div key={card + i} style={{ marginLeft: i > 0 ? '10px' : '0' }}>
-                                            {renderCard(card, { small: false })}
+                                            {renderCard(card, { small: true })}
                                         </div>
                                     ))
                                     : Array.from({ length: widowSize }).map((_, i) => (
                                         <div key={i} style={{ marginLeft: i > 0 ? '10px' : '0' }}>
-                                            {renderCard(null, { isFaceDown: true, small: false })}
+                                            {renderCard(null, { isFaceDown: true, small: true })}
                                         </div>
                                     ))
                                 }

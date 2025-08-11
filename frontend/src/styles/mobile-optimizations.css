@@ -33,7 +33,7 @@
 /* Ensure all interactive elements meet 44px minimum touch target */
 button, 
 .game-button,
-.card-display,
+/* .card-display removed - let JS control size */
 .lobby-tab,
 .table-tile,
 .player-hand-card-wrapper,
@@ -55,8 +55,8 @@ button,
         font-size: 1.1em;
     }
     
-    /* Card size adjustments for mobile */
-    .card-display {
+    /* Card size adjustments for mobile - DISABLED to let JS control size */
+    /* .card-display {
         width: 60px;
         height: 80px;
         font-size: 0.9em;
@@ -65,11 +65,11 @@ button,
     .player-hand-card-wrapper .card-display {
         width: 65px;
         height: 85px;
-    }
+    } */
     
     /* Touch-friendly spacing */
     .player-hand-cards {
-        padding: 15px 0;
+        padding: 0; /* NO PADDING */
     }
     
     /* Larger pucks for easier touch */
@@ -115,7 +115,7 @@ button,
     
     /* Compact footer for small screens */
     .game-footer {
-        padding: 6px 8px;
+        padding: 0; /* NO PADDING */
         z-index: 20;
         font-size: 0.9em;
     }
@@ -128,15 +128,15 @@ button,
     
     .player-hand-cards {
         height: 80px;
-        padding: 10px 0;
+        padding: 0; /* NO PADDING */
     }
     
-    /* Smaller card sizing for small screens */
-    .player-hand-card-wrapper .card-display {
+    /* Smaller card sizing for small screens - DISABLED to let JS control size */
+    /* .player-hand-card-wrapper .card-display {
         width: min(55px, calc((100vw - 20px) / 9));
         height: min(75px, calc((100vw - 20px) / 6.5));
         font-size: 0.8em;
-    }
+    } */
     
     /* Compact player seats */
     .player-seat {
@@ -225,7 +225,7 @@ button,
     
     /* Ensure footer doesn't get clipped */
     .game-footer {
-        padding: 8px 10px;
+        padding: 0; /* NO PADDING */
         z-index: 20;
     }
     
@@ -247,11 +247,11 @@ button,
         height: 90px;
     }
     
-    /* Responsive card sizing based on hand size */
-    .player-hand-card-wrapper .card-display {
+    /* Responsive card sizing based on hand size - DISABLED to let JS control size */
+    /* .player-hand-card-wrapper .card-display {
         width: min(65px, calc((100vw - 40px) / 8));
         height: min(85px, calc((100vw - 40px) / 6));
-    }
+    } */
     
     /* Action prompt improvements for larger mobile */
     .action-prompt-container {

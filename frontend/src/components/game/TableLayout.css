@@ -177,6 +177,26 @@
 .defender-pile { left: 15%; }
 .bidder-pile { right: 15%; }
 
+/* Tablet: 6vh small cards */
+@media (min-width: 769px) and (max-width: 1023px) {
+    .trick-pile-cards {
+        width: calc(6vh * 0.714); /* 6vh * aspect ratio */
+        height: 6vh;
+    }
+}
+
+/* Desktop: 7.5vh small cards */
+@media (min-width: 1024px) {
+    .trick-pile-cards {
+        width: calc(7.5vh * 0.714); /* 7.5vh * aspect ratio */
+        height: 7.5vh;
+    }
+    
+    .trick-pile-count {
+        font-size: calc(2vh); /* Slightly larger on desktop */
+    }
+}
+
 /* Mobile hover adjustments */
 @media (orientation: portrait) and (max-width: 768px) {
     .trick-pile-container:hover { 
@@ -185,7 +205,7 @@
 }
 
 .trick-pile-base {
-    padding: 2px 4px;
+    padding: 0.3vh 0.5vh; /* Minimal viewport-based padding */
     border-radius: 6px;
     box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
     transition: box-shadow 0.3s;
@@ -211,15 +231,17 @@
 .trick-pile-cards {
     position: relative;
     display: inline-block;
-    width: 37.5px; /* Match small card width */
-    height: 50px; /* Match small card height */
+    /* Dynamic sizing based on viewport - matches small card size (50% of normal) */
+    width: calc(5vh * 0.714); /* Mobile: 5vh * aspect ratio */
+    height: 5vh;
+    padding: 0.5vh; /* Minimal padding */
 }
 /* Card wrapper positioning now handled inline */
 .trick-pile-count {
     color: white;
     font-family: 'Oswald', sans-serif;
     text-shadow: 1px 1px 2px black;
-    font-size: 1.5em;
+    font-size: calc(1.5vh); /* Scale with viewport */
     font-weight: bold;
     line-height: 1;
 }
@@ -527,8 +549,9 @@ button.card-display:disabled {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 80px;
-    height: 105px;
+    /* Dynamic sizing based on viewport - matches normal card size */
+    width: calc(10vh * 0.714); /* Mobile default: 10vh * aspect ratio */
+    height: 10vh;
     transform: translate(-50%, -50%);
     border-radius: 8px;
     border: 3px dashed rgba(139, 195, 247, 0.5);
@@ -538,11 +561,21 @@ button.card-display:disabled {
     box-shadow: 0 0 20px 10px rgba(139, 195, 247, 0.5);
 }
 
-/* Desktop: 50% bigger drop zone for 50% bigger cards */
+/* Tablet: 12vh cards */
+@media (min-width: 769px) and (max-width: 1023px) {
+    .card-drop-zone-visual {
+        width: calc(12vh * 0.714); /* 12vh * aspect ratio */
+        height: 12vh;
+        border-width: 4px;
+        border-radius: 10px;
+    }
+}
+
+/* Desktop: 15vh cards */
 @media (min-width: 1024px) {
     .card-drop-zone-visual {
-        width: 180px;   /* 50% bigger (was 120px) */
-        height: 240px;  /* 50% bigger (was 160px) */
+        width: calc(15vh * 0.714); /* 15vh * aspect ratio */
+        height: 15vh;
         border-width: 5px;
         border-radius: 12px;
     }
@@ -1217,25 +1250,12 @@ button.card-display:disabled {
         transform: translateX(0);
     }
     
-    /* Fix trick collection plates size - remove width/height constraints and make containers big enough */
-    .trick-pile-cards {
-        width: 140px !important;  /* Big enough for 112×150px cards plus padding */
-        height: 180px !important; /* Minimum to hold cards properly */
-        min-width: 140px;
-        min-height: 180px;
-        padding: 10px;  /* Padding for cards */
-    }
+    /* Desktop trick piles use viewport-based sizing */
+    /* Size is already set by the media query above (7.5vh) */
     
     .trick-pile-glow {
-        width: 140px;  /* Match container size */
-        height: 180px; /* Match container size */
-    }
-    
-    /* Ensure trick count fits inside */
-    .trick-pile-count {
-        font-size: 1.8em;  /* Bigger font for desktop */
-        bottom: 10px;
-        right: 10px;
+        width: 100%;  /* Match container size */
+        height: 100%; /* Match container size */
     }
     
     /* Hide inline widow cards on desktop */
@@ -1307,15 +1327,7 @@ button.card-display:disabled {
         transform: none; /* Remove scale to avoid interference */
     }
     
-    .trick-pile-count {
-        font-size: 2.5em;        /* Even larger count display */
-    }
-    
-    .trick-pile-base {
-        padding: 8px 16px;      /* Much larger base padding */
-        border-radius: 10px;
-        border-width: 2px;
-    }
+    /* Count and base already sized by viewport units above */
     
     .defender-pile { left: 12%; }  /* Consistent with positioning */
     .bidder-pile { right: 12%; }

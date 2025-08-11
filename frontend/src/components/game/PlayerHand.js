@@ -50,6 +50,8 @@ const PlayerHand = ({
         translateY: 0,
         isInDropZone: false,
     });
+    // Store debug positions globally for access from parent component
+    window.cardDebugPositions = window.cardDebugPositions || [];
     
     // Use ref for drag state to avoid stale closures
     const dragStateRef = useRef(dragState);
@@ -73,9 +75,38 @@ const PlayerHand = ({
     useEffect(() => {
         const calculateLayout = () => {
             if (!myHandRef.current || myHand.length === 0) return;
-            const CARD_WIDTH = 65;
+            
+            // Calculate dynamic card width based on viewport
+            const vh = window.innerHeight / 100;
+            const isMobile = window.innerWidth <= 768;
+            const isDesktop = window.innerWidth >= 1024;
+            
+            let cardHeight;
+            if (isDesktop) cardHeight = 15 * vh;
+            else if (isMobile) cardHeight = 10 * vh;
+            else cardHeight = 12 * vh; // tablet
+            
+            const CARD_WIDTH = Math.round(cardHeight * 0.714); // Maintain aspect ratio
+            
+            // Account for border (1px each side = 2px) and padding (2px each side = 4px) 
+            // Total extra width per card = 6px
+            const BORDER_WIDTH = 2; // 1px border on each side
+            const PADDING_WIDTH = 4; // 2px padding on each side  
+            const TOTAL_CARD_WIDTH = CARD_WIDTH + BORDER_WIDTH + PADDING_WIDTH;
+            
             const n = myHand.length;
-            const containerWidth = myHandRef.current.offsetWidth;
+            // Get the actual content width (no padding to worry about now)
+            const handCards = myHandRef.current.querySelector('.player-hand-cards');
+            if (!handCards) return;
+            // Use the hand-cards element's full width - no padding
+            const containerWidth = handCards.offsetWidth;
+            
+            // Debug logging for narrow screens
+            if (window.innerWidth <= 480) {
+                console.log('Container width:', containerWidth, 'Card width:', CARD_WIDTH, 'Num cards:', n);
+                console.log('Total cards width needed:', n * CARD_WIDTH);
+            }
+            
             const totalCardWidth = n * CARD_WIDTH;
 
             // Guard for single card
@@ -86,31 +117,83 @@ const PlayerHand = ({
             }
 
             const gaps = n - 1;
-            const leftoverSpace = containerWidth - totalCardWidth; // can be negative
-
-            if (leftoverSpace < 0) {
-                // Need to overlap to fit all cards.
-                const overlapPerGap = (-leftoverSpace) / gaps;
-                const extraReduction = n >= 7 ? 1 : 0; // slight extra to prevent edge overflow
-                setCardMargin(-(overlapPerGap + extraReduction));
-                setCenteredSpacing(false);
-                return;
-            }
-
-            // If we can have at least 3px between cards, switch to centered 3px spacing.
-            const minGap = 3; // px
-            if (leftoverSpace >= minGap * gaps) {
-                setCardMargin(minGap);
+            
+            // We need to fit n cards in containerWidth
+            // First card starts at position 0
+            // Last card's RIGHT edge must be at containerWidth
+            // So last card starts at: containerWidth - TOTAL_CARD_WIDTH (including borders/padding)
+            // Distance from first card start to last card start: containerWidth - TOTAL_CARD_WIDTH
+            // This distance is divided among (n-1) gaps
+            // Spacing between card starts: (containerWidth - TOTAL_CARD_WIDTH) / (n - 1)
+            
+            const spacing = (containerWidth - TOTAL_CARD_WIDTH) / gaps;
+            
+            // If spacing would create gaps >= 3px between cards, center them
+            if (spacing >= CARD_WIDTH + 3) {
+                setCardMargin(3);
                 setCenteredSpacing(true);
                 return;
             }
-
-            // Otherwise, there isn't enough leftover space for 3px gaps.
-            // Use negative margin equal to the base flex gap so visible gap ~ 0,
-            // maintaining the compact overlapped look until threshold is reached.
-            const baseFlexGap = leftoverSpace / gaps; // >= 0 and < 3 here
-            setCardMargin(-baseFlexGap);
+            
+            // The margin is how much each card moves left from its natural position
+            // If spacing < CARD_WIDTH, margin is negative (overlap)
+            // If spacing > CARD_WIDTH, margin is positive (gap)
+            const margin = spacing - CARD_WIDTH;
+            
+            setCardMargin(margin);
             setCenteredSpacing(false);
+            
+            // Store debug positions for visual overlay
+            const positions = [];
+            for (let i = 0; i < n; i++) {
+                const start = i * spacing;
+                positions.push({
+                    left: start,
+                    width: CARD_WIDTH,
+                    height: cardHeight
+                });
+            }
+            console.log('Setting debug positions:', positions);
+            window.cardDebugPositions = positions;
+            
+            // Debug for narrow screens
+            if (window.innerWidth <= 480) {
+                console.log('=== Card Layout Debug ===');
+                console.log('Container width:', containerWidth);
+                console.log('Card content width:', CARD_WIDTH);
+                console.log('Total card width (with borders/padding):', TOTAL_CARD_WIDTH);
+                console.log('Number of cards:', n);
+                console.log('Spacing between starts:', spacing);
+                console.log('CSS margin-left to apply:', margin);
+                console.log('Expected positions:');
+                for (let i = 0; i < n; i++) {
+                    const start = i * spacing;
+                    const end = start + TOTAL_CARD_WIDTH;
+                    console.log(`  Card ${i+1}: ${start}-${end}`);
+                }
+                console.log('Last card right edge:', ((n-1) * spacing) + TOTAL_CARD_WIDTH, 'should equal:', containerWidth);
+                
+                // Get actual positions after a short delay to ensure rendering
+                setTimeout(() => {
+                    console.log('=== Actual Card Positions ===');
+                    const cardElements = handCards.querySelectorAll('.player-hand-card-wrapper');
+                    cardElements.forEach((el, i) => {
+                        const rect = el.getBoundingClientRect();
+                        const containerRect = handCards.getBoundingClientRect();
+                        const relativeLeft = rect.left - containerRect.left;
+                        const relativeRight = relativeLeft + rect.width;
+                        console.log(`  Card ${i+1} actual: ${relativeLeft.toFixed(1)}-${relativeRight.toFixed(1)} (width: ${rect.width.toFixed(1)})`);
+                    });
+                    if (cardElements.length > 0) {
+                        const lastCard = cardElements[cardElements.length - 1];
+                        const lastRect = lastCard.getBoundingClientRect();
+                        const containerRect = handCards.getBoundingClientRect();
+                        const lastCardRight = (lastRect.left - containerRect.left) + lastRect.width;
+                        console.log('Last card actual right edge:', lastCardRight.toFixed(1), 'container width:', containerWidth);
+                        console.log('Difference:', (containerWidth - lastCardRight).toFixed(1), 'pixels');
+                    }
+                }, 100);
+            }
         };
         calculateLayout();
         window.addEventListener('resize', calculateLayout);
@@ -382,8 +465,42 @@ const PlayerHand = ({
                     
                     // CRITICAL FIX: Don't apply React transforms when physics is controlling the element
                     const isPhysicsControlled = usePhysics && isBeingDragged;
+                    
+                    // Calculate absolute position for this card
+                    const cardPosition = window.cardDebugPositions && window.cardDebugPositions[index];
+                    
+                    // Dynamic adjustment based on container width and card height
+                    // Always responsive to actual available space, regardless of device type
+                    // At 430px container width with 93px card height, we need 2px per card
+                    // Scale proportionally for all container sizes
+                    let adjustmentPerCard = 0;
+                    if (cardPosition) {
+                        // Get actual container width from parent element
+                        const handCards = myHandRef.current?.querySelector('.player-hand-cards');
+                        const containerWidth = handCards?.offsetWidth || window.innerWidth;
+                        const cardHeight = cardPosition.height;
+                        
+                        // Base values where we know the adjustment works
+                        const BASE_WIDTH = 430;
+                        const BASE_HEIGHT = 93;
+                        const BASE_ADJUSTMENT = 2;
+                        
+                        // Always calculate dynamic adjustment based on actual container width
+                        // This ensures cards fit properly in the available space
+                        const widthRatio = containerWidth / BASE_WIDTH;
+                        const heightRatio = cardHeight / BASE_HEIGHT;
+                        
+                        // Average the ratios for balanced scaling across all container sizes
+                        const scaleFactor = (widthRatio + heightRatio) / 2;
+                        adjustmentPerCard = BASE_ADJUSTMENT * scaleFactor;
+                    }
+                    
+                    const adjustmentOffset = index * adjustmentPerCard;
+                    
                     const dynamicStyle = {
-                        zIndex: isBeingDragged ? 2000 : index,
+                        position: cardPosition ? 'absolute' : 'relative',
+                        left: cardPosition ? `${cardPosition.left - adjustmentOffset}px` : 'auto',
+                        zIndex: isBeingDragged ? 2000 : (index + 1),
                         transform: (isBeingDragged && !usePhysics) ? `translate(${dragState.translateX}px, ${dragState.translateY}px) scale(1.1)` : 
                                   isPhysicsControlled ? 'none' : 'none', // Let physics engine handle transforms
                         transition: isPhysicsControlled ? 'none' : undefined // Disable transitions during physics

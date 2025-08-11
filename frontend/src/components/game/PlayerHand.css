@@ -11,32 +11,39 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 5px 0;
+    padding: 0; /* NO PADDING */
     width: 100%;
-    position: relative;
+    position: relative; /* IMPORTANT for debug overlay positioning */
     -webkit-user-select: none;
     -ms-user-select: none;
     user-select: none;
     /* --- THE FIX: This single line solves the mobile scroll issue --- */
     touch-action: none;
-    /* Reserve space even when empty to prevent footer collapse */
-    min-height: 110px;
+    /* Reserve space based on viewport height - match actual card height */
+    min-height: calc(10vh + 3vh); /* Card height + extra padding for safety */
+    overflow: visible; /* Don't clip cards */
 }
 
 .player-hand-cards {
     position: relative;
     display: flex;
-    justify-content: center;
+    justify-content: flex-start; /* Start from left edge */
     align-items: flex-end;
-    padding: 10px 0;
-    height: 110px;
-    width: 100%;
+    padding: 0; /* NO PADDING - cards flush to edges */
+    margin-left: 5px; /* Shift entire container 5px from left wall */
+    /* Height should accommodate full card height */
+    height: calc(10vh + 3vh); /* Card height (10vh) + padding */
+    width: calc(100% - 5px); /* Reduce width to account for margin */
+    box-sizing: border-box; /* Include padding in width calculation */
+    overflow: visible; /* Ensure cards aren't clipped */
 }
 
 .player-hand-cards.my-turn {
     animation: pulsing-glow 2s infinite;
     border-radius: 12px;
     background-color: rgba(59, 130, 246, 0.1);
+    height: 100%; /* Match full container height */
+    width: 100%; /* Match full container width */
 }
 
 .player-hand-card-wrapper {
@@ -51,10 +58,10 @@
     transition: none !important;
     will-change: auto !important;
 }
-/* Apply the dynamic margin from the parent's CSS variable */
-.player-hand-card-wrapper:not(:first-child) {
+/* Apply the dynamic margin from JavaScript calculation - DISABLED for absolute positioning */
+/* .player-hand-card-wrapper:not(:first-child) {
     margin-left: var(--card-margin-left, -25px);
-}
+} */
 
 /* When spacing threshold is met, center the row and use fixed 3px spacing */
 .player-hand-cards.centered-spacing {
@@ -85,7 +92,8 @@
 }
 
 .player-hand-cards.is-discarding .player-hand-card-wrapper-static {
-    margin-left: -40px;
+    /* Discarding mode - tighter 50% overlap */
+    margin-left: calc(-10vh * 0.714 * 0.5);
 }
 .player-hand-cards.is-discarding .player-hand-card-wrapper-static:first-child {
     margin-left: 0;
@@ -129,23 +137,21 @@
 /* Mobile optimizations for player hand */
 @media (orientation: portrait) and (max-width: 768px) {
     .player-hand-container {
-        padding: 3px 0;
+        padding: 0; /* NO PADDING */
         /* Ensure physics interactions work on mobile */
         touch-action: none;
         -webkit-touch-callout: none;
-    min-height: 95px;
+        min-height: calc(10vh + 1vh); /* Mobile portrait card height */
     }
     
     .player-hand-cards {
-    height: 95px;
-    padding: 8px 0; /* vertical only */
-    justify-content: space-between; /* push first/last cards to edges */
+        height: calc(10vh + 1vh); /* Mobile portrait card height */
+        padding: 0; /* NO PADDING */
+        justify-content: flex-start; /* Start from left edge */
     }
     
-    /* Tighter card spacing on mobile */
-    .player-hand-card-wrapper:not(:first-child) {
-        margin-left: var(--card-margin-left, -30px);
-    }
+    /* Mobile uses JavaScript-calculated spacing */
+    /* Spacing is handled by the --card-margin-left CSS variable */
     
     /* Better hover/touch feedback on mobile */
     .player-hand-card-wrapper-static:hover {
@@ -168,20 +174,18 @@
 /* Small mobile screens */
 @media (orientation: portrait) and (max-width: 414px) {
     .player-hand-container {
-        padding: 2px 0;
+        padding: 0; /* NO PADDING */
     min-height: 85px;
     }
     
     .player-hand-cards {
     height: 85px;
-    padding: 6px 0; /* vertical only */
-    justify-content: space-between; /* ensure full-bleed on very small phones */
+    padding: 0; /* NO PADDING */
+    justify-content: flex-start; /* Start from left edge */
     }
     
-    /* Even tighter spacing for small screens */
-    .player-hand-card-wrapper:not(:first-child) {
-        margin-left: var(--card-margin-left, -35px);
-    }
+    /* Small screens use JavaScript-calculated spacing */
+    /* Spacing is handled by the --card-margin-left CSS variable */
     
     /* Reduced hover effect for small screens */
     .player-hand-card-wrapper-static:hover {
@@ -199,22 +203,20 @@
 /* Mobile landscape mode optimizations */
 @media (orientation: landscape) and (max-height: 500px) {
     .player-hand-container {
-        padding: 2px 0;
+        padding: 0; /* NO PADDING */
         /* Maintain physics touch handling in landscape */
         touch-action: none;
         -webkit-touch-callout: none;
-    min-height: 75px;
+        min-height: calc(10vh + 3vh); /* Viewport-based minimum + padding */
     }
     
     .player-hand-cards {
-        height: 75px; /* Reduced height for landscape */
-        padding: 6px 0;
+        height: calc(10vh + 1vh); /* Viewport-based for landscape too */
+        padding: 0; /* NO PADDING */
     }
     
-    /* Tighter card spacing for landscape mobile */
-    .player-hand-card-wrapper:not(:first-child) {
-        margin-left: var(--card-margin-left, -32px);
-    }
+    /* Landscape mobile uses JavaScript-calculated spacing */
+    /* Spacing is handled by the --card-margin-left CSS variable */
     
     /* Reduced hover effect for landscape mobile */
     .player-hand-card-wrapper-static:hover {
@@ -240,22 +242,20 @@
 /* Desktop mode optimizations */
 @media (min-width: 1024px) {
     .player-hand-container {
-        padding: 20px 0;  /* 75% of 30px */
+        padding: 0;  /* NO PADDING */
         touch-action: none;
-        min-height: 250px;  /* 25% taller than 200px */
+        min-height: calc(15vh + 2vh);  /* Desktop card height + padding */
         /* Keep player hand centered in panel - remove offset */
     }
     
     .player-hand-cards {
-        height: 262px; /* Reduced by 25% from 350px */
-        padding: 26px 10px;  /* Reduced padding by 25% */
+        height: calc(15vh + 2vh); /* Desktop card height + padding */
+        padding: 0;  /* NO PADDING */
         align-items: center;  /* Center cards vertically */
     }
     
-    /* Adjust card spacing for desktop */
-    .player-hand-card-wrapper:not(:first-child) {
-        margin-left: var(--card-margin-left, -35px); /* Adjusted for 112px wide cards */
-    }
+    /* Desktop uses JavaScript-calculated spacing */
+    /* Spacing is handled by the --card-margin-left CSS variable */
     
     /* Ensure hover still works with larger cards */
     .player-hand-card-wrapper-static:hover {
@@ -267,19 +267,17 @@
 /* Desktop/Laptop landscape mode optimizations */
 @media (orientation: landscape) and (min-height: 501px) and (min-width: 769px) {
     .player-hand-container {
-        padding: 8px 0;
+        padding: 0; /* NO PADDING */
         touch-action: none; /* Still needed for touch devices */
     }
     
     .player-hand-cards {
-        height: 120px; /* Standard height for non-desktop landscape */
-        padding: 12px 0;
+        height: calc(15vh + 3vh); /* Desktop landscape height + padding */
+        padding: 0; /* NO PADDING */
     }
     
-    /* Standard card spacing for desktop landscape */
-    .player-hand-card-wrapper:not(:first-child) {
-        margin-left: var(--card-margin-left, -25px);
-    }
+    /* Desktop landscape uses JavaScript-calculated spacing */
+    /* Spacing is handled by the --card-margin-left CSS variable */
     
     /* Standard hover effect for desktop */
     .player-hand-card-wrapper-static:hover {
@@ -301,20 +299,19 @@
 /* Tablet landscape mode optimizations */
 @media (orientation: landscape) and (min-height: 501px) and (max-width: 768px) {
     .player-hand-container {
-        padding: 4px 0;
+        padding: 0; /* NO PADDING */
         touch-action: none;
         -webkit-touch-callout: none;
+        min-height: calc(12vh + 1vh); /* Tablet landscape card height */
     }
     
     .player-hand-cards {
-        height: 90px; /* Medium height for tablet landscape */
-        padding: 8px 0;
+        height: calc(12vh + 1vh); /* Tablet landscape card height */
+        padding: 0; /* NO PADDING */
     }
     
-    /* Medium card spacing for tablet landscape */
-    .player-hand-card-wrapper:not(:first-child) {
-        margin-left: var(--card-margin-left, -28px);
-    }
+    /* Tablet landscape uses JavaScript-calculated spacing */
+    /* Spacing is handled by the --card-margin-left CSS variable */
     
     /* Medium hover effect for tablet */
     .player-hand-card-wrapper-static:hover {
