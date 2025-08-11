@@ -16,26 +16,42 @@ export const bulletinContent = [
     },
     {
         type: 'header',
-        text: 'Latest Update: In-App Feedback'
+        text: 'Latest Update: v12.0.0 - Dynamic Card Sizing!'
     },
     {
         type: 'list-item',
-        text: 'You can now submit feedback directly from the Lobby Menu or the in-game Hamburger Menu (☰).'
+        text: 'Cards now dynamically resize based on your screen - perfect fit on any device!'
     },
     {
         type: 'list-item',
-        text: 'Submitting from a game will automatically include debug data to help us fix bugs faster.'
+        text: 'Edge-to-edge card layout ensures all 11 cards are always visible in your hand.'
+    },
+    {
+        type: 'list-item',
+        text: 'Enhanced physics engine with spinning cards and realistic drop animations.'
     },
     {
         type: 'header',
-        text: 'What\'s Next?'
+        text: 'Recent Improvements'
     },
     {
         type: 'list-item',
-        text: 'Bots are a little bit smarter now, be careful!'
+        text: 'In-app feedback system with automatic debug data collection.'
     },
     {
         type: 'list-item',
-        text: '11.2.0 beta L prep'
+        text: 'Smarter bot AI that adapts to your playing style.'
+    },
+    {
+        type: 'header',
+        text: 'Coming Soon'
+    },
+    {
+        type: 'list-item',
+        text: 'Tournament mode - compete for glory and prizes!'
+    },
+    {
+        type: 'list-item',
+        text: 'Mobile app release for iOS and Android.'
     },
 ];

@@ -1,8 +1,6 @@
 // backend/src/core/constants.js
 
-const SERVER_VERSION = "11.2.0 beta L pretp";
-
-
+const SERVER_VERSION = "12.0.0 Spinning Cards dynamic card size";
 
 const SUITS = { H: "Hearts", D: "Diamonds", C: "Clubs", S: "Spades" };
 const RANKS_ORDER = ["6", "7", "8", "9", "J", "Q", "K", "10", "A"];
