@@ -369,6 +369,10 @@
                 engine.pendingBotAction = setTimeout(async () => {
                     engine.pendingBotAction = null;
                     await actionFn.call(this, tableId, ...args);
+                    // Re-trigger bot check after action completes
+                    setTimeout(() => {
+                        this._triggerBots(tableId);
+                    }, 100);
                 }, delay);
             };
         
@@ -384,9 +388,15 @@
         
                 if (engine.state === 'Dealing Pending' && engine.dealer == botUserId) {
                     scheduleTurnAction(this.dealCards, standardDelay, botUserId);
-                } else if (engine.state === 'Awaiting Next Round Trigger' && engine.roundSummary?.dealerOfRoundId == botUserId) {
-                    // Always allow bots to trigger the next round
-                    scheduleTurnAction(this.requestNextRound, roundEndDelay, botUserId);
+                } else if (engine.state === 'Awaiting Next Round Trigger') {
+                    // Check if this bot should trigger next round
+                    if (engine.roundSummary && engine.roundSummary.dealerOfRoundId == botUserId) {
+                        console.log(`[BOT] ${bot.playerName} scheduling next round trigger as dealer`);
+                        scheduleTurnAction(this.requestNextRound, roundEndDelay, botUserId);
+                    } else if (!engine.roundSummary) {
+                        // Round summary not ready yet, will retry on next interval
+                        console.log(`[BOT] Waiting for round summary to be set before next round trigger`);
+                    }
                 } else if (engine.state === 'Game Over') {
                     // Handle game over state - reset the game after a delay
                     // Only do this once per game (check if no other bot has scheduled it)
