@@ -13,8 +13,24 @@ import IosPwaPrompt from './game/IosPwaPrompt';
 import LobbyChat from './LobbyChat';
 import AdminObserverMode from './AdminObserverMode';
 import LayoutDevPanel from './LayoutDevPanel';
+import FrogDiscardOverlay from './game/FrogDiscardOverlay';
 import { getLobbyChatHistory } from '../services/api';
-import { SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS } from '../constants';
+import { SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS, RANKS_ORDER, SUIT_SORT_ORDER } from '../constants';
+
+// Helper to sort cards by suit
+const getSuitLocal = (cardStr) => cardStr.slice(-1);
+const getRankLocal = (cardStr) => cardStr.slice(0, -1);
+const sortHandBySuit = (handArray) => {
+    if (!handArray) return [];
+    return [...handArray].sort((a, b) => {
+        const suitAIndex = SUIT_SORT_ORDER.indexOf(getSuitLocal(a));
+        const suitBIndex = SUIT_SORT_ORDER.indexOf(getSuitLocal(b));
+        const rankAIndex = RANKS_ORDER.indexOf(getRankLocal(a));
+        const rankBIndex = RANKS_ORDER.indexOf(getRankLocal(b));
+        if (suitAIndex !== suitBIndex) return suitAIndex - suitBIndex;
+        return rankAIndex - rankBIndex;
+    });
+};
 
 const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, emitEvent, playSound, socket, handleOpenFeedbackModal }) => {
     const [seatAssignments, setSeatAssignments] = useState({ self: null, opponentLeft: null, opponentRight: null });
@@ -34,7 +50,8 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const [showLayoutDev, setShowLayoutDev] = useState(false);
     const [showCardDebug, setShowCardDebug] = useState(false); // Hide debug overlay
     const [selectedFrogDiscards, setSelectedFrogDiscards] = useState([]);
-    const [viewportOverflow, setViewportOverflow] = useState(false);
+    const [showFrogOverlay, setShowFrogOverlay] = useState(false);
+    const [frogOverlayCards, setFrogOverlayCards] = useState([]);
     const turnPlayerRef = useRef(null);
     const trickWinnerRef = useRef(null);
     const cardCountRef = useRef(null);
@@ -98,39 +115,6 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         return () => clearTimeout(timer);
     }, [showGameMenu]);
 
-    // Development only: Check for viewport overflow
-    useEffect(() => {
-        if (process.env.NODE_ENV !== 'development') return;
-        
-        const checkViewportOverflow = () => {
-            const documentHeight = document.documentElement.scrollHeight;
-            const viewportHeight = window.innerHeight;
-            setViewportOverflow(documentHeight > viewportHeight);
-            
-            if (documentHeight > viewportHeight) {
-                console.error(`⚠️ VIEWPORT OVERFLOW DETECTED! Document: ${documentHeight}px, Viewport: ${viewportHeight}px, Overflow: ${documentHeight - viewportHeight}px`);
-            }
-        };
-        
-        // Check immediately and on any changes
-        checkViewportOverflow();
-        
-        // Check periodically to catch dynamic changes
-        const interval = setInterval(checkViewportOverflow, 1000);
-        
-        // Check on resize
-        window.addEventListener('resize', checkViewportOverflow);
-        
-        // Use MutationObserver to detect DOM changes
-        const observer = new MutationObserver(checkViewportOverflow);
-        observer.observe(document.body, { childList: true, subtree: true, attributes: true });
-        
-        return () => {
-            clearInterval(interval);
-            window.removeEventListener('resize', checkViewportOverflow);
-            observer.disconnect();
-        };
-    }, []);
 
     // Keyboard accessibility: allow ESC to close chat when open
     useEffect(() => {
@@ -235,7 +219,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
 
     useEffect(() => {
         if (!currentTableState || !selfPlayerName || isSpectator) return;
-        const { state, trickTurnPlayerName, lastCompletedTrick, currentTrickCards } = currentTableState;
+        const { state, trickTurnPlayerName, lastCompletedTrick, currentTrickCards, bidWinnerInfo, hands } = currentTableState;
         if ((state === "Playing Phase" || state === "Bidding Phase") && trickTurnPlayerName === selfPlayerName && turnPlayerRef.current !== selfPlayerName) playSound('turnAlert');
         turnPlayerRef.current = trickTurnPlayerName;
         const newCardCount = currentTrickCards?.length || 0;
@@ -245,11 +229,17 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         trickWinnerRef.current = lastCompletedTrick?.winnerName;
         if (state === 'Bidding Phase' && gameStateRef.current === 'Dealing Pending') playSound('cardDeal');
         gameStateRef.current = state;
-        // Clear Frog discards when state changes away from Frog Widow Exchange
-        if (state !== "Frog Widow Exchange") {
+        // Handle Frog Widow Exchange overlay
+        if (state === "Frog Widow Exchange" && bidWinnerInfo?.userId === playerId) {
+            const myHand = hands?.[selfPlayerName] || [];
+            setFrogOverlayCards(sortHandBySuit(myHand));
+            setShowFrogOverlay(true);
+        } else {
+            setShowFrogOverlay(false);
             setSelectedFrogDiscards([]);
+            setFrogOverlayCards([]);
         }
-    }, [currentTableState, selfPlayerName, isSpectator, playSound]);
+    }, [currentTableState, selfPlayerName, isSpectator, playSound, playerId]);
     
     if (!currentTableState) {
         return <div>Loading table...</div>;
@@ -277,7 +267,17 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             console.log('[Frog] Submitting discards:', selectedFrogDiscards);
             emitEvent("submitFrogDiscards", { discards: selectedFrogDiscards });
             setSelectedFrogDiscards([]); // Clear after submit
+            setShowFrogOverlay(false); // Close overlay
         }
+    };
+    
+    // Handler for overlay card selection
+    const handleOverlayCardSelect = (card) => {
+        setSelectedFrogDiscards(prev => {
+            if (prev.includes(card)) return prev.filter(c => c !== card);
+            if (prev.length < 3) return [...prev, card];
+            return prev;
+        });
     };
 
     const renderCard = (cardString, options = {}) => {
@@ -449,30 +449,6 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
 
     return (
         <div className="game-view">
-            {/* Development Warning Banner for Viewport Overflow */}
-            {process.env.NODE_ENV === 'development' && viewportOverflow && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    zIndex: 99999,
-                    background: 'repeating-linear-gradient(45deg, #ff0000, #ff0000 10px, #ffff00 10px, #ffff00 20px)',
-                    color: 'white',
-                    padding: '10px',
-                    textAlign: 'center',
-                    fontSize: '20px',
-                    fontWeight: 'bold',
-                    textShadow: '2px 2px 4px rgba(0,0,0,0.8)',
-                    pointerEvents: 'none'
-                }}>
-                    ⚠️ VIEWPORT OVERFLOW! Content exceeds 100vh - FIX YOUR CODE! ⚠️
-                    <br />
-                    <span style={{ fontSize: '14px' }}>
-                        Check console for details - Scroll needed!
-                    </span>
-                </div>
-            )}
             {/* Card position debug overlay */}
             {showCardDebug && window.cardDebugPositions && window.cardDebugPositions.length > 0 && (
                 <div style={{
@@ -557,6 +533,15 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             />
 
             <IosPwaPrompt show={showIosPwaPrompt} onClose={() => setShowIosPwaPrompt(false)} />
+
+            <FrogDiscardOverlay
+                isOpen={showFrogOverlay}
+                cards={frogOverlayCards}
+                selectedCards={selectedFrogDiscards}
+                onSelectCard={handleOverlayCardSelect}
+                onConfirm={handleSubmitFrogDiscards}
+                renderCard={renderCard}
+            />
 
             {/* Debug: Check admin status (log removed to avoid console spam) */}
             
