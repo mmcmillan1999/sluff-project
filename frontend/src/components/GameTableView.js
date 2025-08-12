@@ -33,6 +33,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const [isObserverMode, setIsObserverMode] = useState(false);
     const [showLayoutDev, setShowLayoutDev] = useState(false);
     const [showCardDebug, setShowCardDebug] = useState(false); // Hide debug overlay
+    const [selectedFrogDiscards, setSelectedFrogDiscards] = useState([]);
     const turnPlayerRef = useRef(null);
     const trickWinnerRef = useRef(null);
     const cardCountRef = useRef(null);
@@ -209,6 +210,10 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         trickWinnerRef.current = lastCompletedTrick?.winnerName;
         if (state === 'Bidding Phase' && gameStateRef.current === 'Dealing Pending') playSound('cardDeal');
         gameStateRef.current = state;
+        // Clear Frog discards when state changes away from Frog Widow Exchange
+        if (state !== "Frog Widow Exchange") {
+            setSelectedFrogDiscards([]);
+        }
     }, [currentTableState, selfPlayerName, isSpectator, playSound]);
     
     if (!currentTableState) {
@@ -222,6 +227,22 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
 
     const closeChatWindow = () => {
         setChatOpen(false);
+    };
+
+    const handleFrogDiscardSelect = (card) => {
+        setSelectedFrogDiscards(prev => {
+            if (prev.includes(card)) return prev.filter(c => c !== card);
+            if (prev.length < 3) return [...prev, card];
+            return prev;
+        });
+    };
+
+    const handleSubmitFrogDiscards = () => {
+        if (selectedFrogDiscards.length === 3) {
+            console.log('[Frog] Submitting discards:', selectedFrogDiscards);
+            emitEvent("submitFrogDiscards", { discards: selectedFrogDiscards });
+            setSelectedFrogDiscards([]); // Clear after submit
+        }
     };
 
     const renderCard = (cardString, options = {}) => {
@@ -535,6 +556,8 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 playSound={playSound}
                 dropZoneRef={dropZoneRef}
                 isAdmin={user?.is_admin}
+                selectedFrogDiscards={selectedFrogDiscards}
+                onSubmitFrogDiscards={handleSubmitFrogDiscards}
             />
             
             <footer className="game-footer">
@@ -554,6 +577,8 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                     emitEvent={emitEvent}
                     renderCard={renderCard}
                     dropZoneRef={dropZoneRef}
+                    selectedDiscards={selectedFrogDiscards}
+                    onSelectDiscard={handleFrogDiscardSelect}
                 />
                 <div className="footer-controls-wrapper">
                     <InsuranceControls

@@ -29,9 +29,14 @@ const PlayerHand = ({
     isObserverMode,
     emitEvent,
     renderCard,
-    dropZoneRef
+    dropZoneRef,
+    selectedDiscards,
+    onSelectDiscard
 }) => {
-    const [selectedDiscards, setSelectedDiscards] = useState([]);
+    // Use local state only if not provided from parent
+    const [localSelectedDiscards, setLocalSelectedDiscards] = useState([]);
+    const actualSelectedDiscards = selectedDiscards !== undefined ? selectedDiscards : localSelectedDiscards;
+    const actualSetSelectedDiscards = onSelectDiscard || setLocalSelectedDiscards;
     const myHandRef = useRef(null);
     const [cardMargin, setCardMargin] = useState(-25);
     const [centeredSpacing, setCenteredSpacing] = useState(false);
@@ -50,8 +55,6 @@ const PlayerHand = ({
         translateY: 0,
         isInDropZone: false,
     });
-    // Store debug positions globally for access from parent component
-    window.cardDebugPositions = window.cardDebugPositions || [];
     
     // Use ref for drag state to avoid stale closures
     const dragStateRef = useRef(dragState);
@@ -80,7 +83,10 @@ const PlayerHand = ({
         const calculateLayout = () => {
             if (!myHandRef.current || myHand.length === 0) return;
             
-            // Calculate dynamic card width based on viewport
+            const handCards = myHandRef.current.querySelector('.player-hand-cards');
+            if (!handCards) return;
+            
+            // Calculate viewport-based card dimensions
             const vh = window.innerHeight / 100;
             const isMobile = window.innerWidth <= 768;
             const isDesktop = window.innerWidth >= 1024;
@@ -90,119 +96,41 @@ const PlayerHand = ({
             else if (isMobile) cardHeight = 10 * vh;
             else cardHeight = 12 * vh; // tablet
             
-            const CARD_WIDTH = Math.round(cardHeight * 0.714); // Maintain aspect ratio
-            
-            // Account for border (1px each side = 2px) and padding (2px each side = 4px) 
-            // Total extra width per card = 6px
-            const BORDER_WIDTH = 2; // 1px border on each side
-            const PADDING_WIDTH = 4; // 2px padding on each side  
-            const TOTAL_CARD_WIDTH = CARD_WIDTH + BORDER_WIDTH + PADDING_WIDTH;
-            
-            const n = myHand.length;
-            // Get the actual content width (no padding to worry about now)
-            const handCards = myHandRef.current.querySelector('.player-hand-cards');
-            if (!handCards) return;
-            // Use the hand-cards element's full width - no padding
+            const cardWidth = Math.round(cardHeight * 0.714); // Maintain aspect ratio
             const containerWidth = handCards.offsetWidth;
+            const numCards = myHand.length;
             
-            // Debug logging for narrow screens
-            if (window.innerWidth <= 480) {
-                console.log('Container width:', containerWidth, 'Card width:', CARD_WIDTH, 'Num cards:', n);
-                console.log('Total cards width needed:', n * CARD_WIDTH);
-            }
-            
-            const totalCardWidth = n * CARD_WIDTH;
-
-            // Guard for single card
-            if (n === 1) {
+            // Handle single card case
+            if (numCards === 1) {
                 setCardMargin(0);
                 setCenteredSpacing(true);
                 return;
             }
-
-            const gaps = n - 1;
             
-            // We need to fit n cards in containerWidth
-            // First card starts at position 0
-            // Last card's RIGHT edge must be at containerWidth
-            // So last card starts at: containerWidth - TOTAL_CARD_WIDTH (including borders/padding)
-            // Distance from first card start to last card start: containerWidth - TOTAL_CARD_WIDTH
-            // This distance is divided among (n-1) gaps
-            // Spacing between card starts: (containerWidth - TOTAL_CARD_WIDTH) / (n - 1)
+            // Calculate spacing for edge-anchoring mode
+            // Left card at position 0, right card at position (containerWidth - cardWidth)
+            // All cards in between evenly spaced
+            const edgeSpacing = (containerWidth - cardWidth) / (numCards - 1);
             
-            const spacing = (containerWidth - TOTAL_CARD_WIDTH) / gaps;
+            // Check if we should use centered mode instead (when gaps would be > 2px)
+            const GAP_THRESHOLD = 2; // 2px gap threshold
             
-            // If spacing would create gaps >= 3px between cards, center them
-            if (spacing >= CARD_WIDTH + 3) {
-                setCardMargin(3);
+            if (edgeSpacing > cardWidth + GAP_THRESHOLD) {
+                // Use centered mode with 2px gaps
+                setCardMargin(GAP_THRESHOLD);
                 setCenteredSpacing(true);
-                return;
-            }
-            
-            // The margin is how much each card moves left from its natural position
-            // If spacing < CARD_WIDTH, margin is negative (overlap)
-            // If spacing > CARD_WIDTH, margin is positive (gap)
-            const margin = spacing - CARD_WIDTH;
-            
-            setCardMargin(margin);
-            setCenteredSpacing(false);
-            
-            // Store debug positions for visual overlay
-            const positions = [];
-            for (let i = 0; i < n; i++) {
-                const start = i * spacing;
-                positions.push({
-                    left: start,
-                    width: CARD_WIDTH,
-                    height: cardHeight
-                });
-            }
-            console.log('Setting debug positions:', positions);
-            window.cardDebugPositions = positions;
-            
-            // Debug for narrow screens
-            if (window.innerWidth <= 480) {
-                console.log('=== Card Layout Debug ===');
-                console.log('Container width:', containerWidth);
-                console.log('Card content width:', CARD_WIDTH);
-                console.log('Total card width (with borders/padding):', TOTAL_CARD_WIDTH);
-                console.log('Number of cards:', n);
-                console.log('Spacing between starts:', spacing);
-                console.log('CSS margin-left to apply:', margin);
-                console.log('Expected positions:');
-                for (let i = 0; i < n; i++) {
-                    const start = i * spacing;
-                    const end = start + TOTAL_CARD_WIDTH;
-                    console.log(`  Card ${i+1}: ${start}-${end}`);
-                }
-                console.log('Last card right edge:', ((n-1) * spacing) + TOTAL_CARD_WIDTH, 'should equal:', containerWidth);
-                
-                // Get actual positions after a short delay to ensure rendering
-                setTimeout(() => {
-                    console.log('=== Actual Card Positions ===');
-                    const cardElements = handCards.querySelectorAll('.player-hand-card-wrapper');
-                    cardElements.forEach((el, i) => {
-                        const rect = el.getBoundingClientRect();
-                        const containerRect = handCards.getBoundingClientRect();
-                        const relativeLeft = rect.left - containerRect.left;
-                        const relativeRight = relativeLeft + rect.width;
-                        console.log(`  Card ${i+1} actual: ${relativeLeft.toFixed(1)}-${relativeRight.toFixed(1)} (width: ${rect.width.toFixed(1)})`);
-                    });
-                    if (cardElements.length > 0) {
-                        const lastCard = cardElements[cardElements.length - 1];
-                        const lastRect = lastCard.getBoundingClientRect();
-                        const containerRect = handCards.getBoundingClientRect();
-                        const lastCardRight = (lastRect.left - containerRect.left) + lastRect.width;
-                        console.log('Last card actual right edge:', lastCardRight.toFixed(1), 'container width:', containerWidth);
-                        console.log('Difference:', (containerWidth - lastCardRight).toFixed(1), 'pixels');
-                    }
-                }, 100);
+            } else {
+                // Use edge-anchoring mode
+                const marginLeft = edgeSpacing - cardWidth; // Will be negative for overlap
+                setCardMargin(marginLeft);
+                setCenteredSpacing(false);
             }
         };
+        
         calculateLayout();
         window.addEventListener('resize', calculateLayout);
         return () => window.removeEventListener('resize', calculateLayout);
-    }, [myHand.length]);
+    }, [myHand.length, myHand.join(',')]);  // Recalculate on any hand change
 
 
     const handleDragStart = (e, card) => {
@@ -384,8 +312,15 @@ const PlayerHand = ({
     }, [emitEvent, dropZoneRef, handleDragMove, usePhysics]);
 
     useEffect(() => {
-        if (state !== "Frog Widow Exchange") setSelectedDiscards([]);
-    }, [state]);
+        if (state !== "Frog Widow Exchange") {
+            if (onSelectDiscard) {
+                // Clear through parent if parent is managing
+                // Parent should handle clearing when state changes
+            } else {
+                setLocalSelectedDiscards([]);
+            }
+        }
+    }, [state, onSelectDiscard]);
     
     // Cleanup touch listeners on unmount
     useEffect(() => {
@@ -400,16 +335,16 @@ const PlayerHand = ({
     }, []);
     
     const handleSelectDiscard = (card) => {
-        setSelectedDiscards(prev => {
-            if (prev.includes(card)) return prev.filter(c => c !== card);
-            if (prev.length < 3) return [...prev, card];
-            return prev;
-        });
-    };
-    const handleSubmitDiscards = () => {
-        if (selectedDiscards.length === 3) {
-            console.log('[Frog] Submitting discards:', selectedDiscards);
-            emitEvent("submitFrogDiscards", { discards: selectedDiscards });
+        if (onSelectDiscard) {
+            // If parent is managing state, call the parent handler
+            onSelectDiscard(card);
+        } else {
+            // Otherwise use local state
+            setLocalSelectedDiscards(prev => {
+                if (prev.includes(card)) return prev.filter(c => c !== card);
+                if (prev.length < 3) return [...prev, card];
+                return prev;
+            });
         }
     };
 
@@ -435,19 +370,11 @@ const PlayerHand = ({
                 // In two-row mode use small; otherwise large for normal hand view
                 large: !enableTwoRows,
                 small: useSmallCards,
-                                isSelected: selectedDiscards.includes(card)
+                                isSelected: actualSelectedDiscards.includes(card)
                             })}
                         </div>
                     ))}
                 </div>
-                <button
-                    onClick={handleSubmitDiscards}
-                    className="game-button"
-                    disabled={selectedDiscards.length !== 3}
-                    style={{ marginTop: '10px' }}
-                >
-                    Submit Discards ({selectedDiscards.length}/3)
-                </button>
             </div>
         );
     }
@@ -470,40 +397,7 @@ const PlayerHand = ({
                     // CRITICAL FIX: Don't apply React transforms when physics is controlling the element
                     const isPhysicsControlled = usePhysics && isBeingDragged;
                     
-                    // Calculate absolute position for this card
-                    const cardPosition = window.cardDebugPositions && window.cardDebugPositions[index];
-                    
-                    // Dynamic adjustment based on container width and card height
-                    // Always responsive to actual available space, regardless of device type
-                    // At 430px container width with 93px card height, we need 2px per card
-                    // Scale proportionally for all container sizes
-                    let adjustmentPerCard = 0;
-                    if (cardPosition) {
-                        // Get actual container width from parent element
-                        const handCards = myHandRef.current?.querySelector('.player-hand-cards');
-                        const containerWidth = handCards?.offsetWidth || window.innerWidth;
-                        const cardHeight = cardPosition.height;
-                        
-                        // Base values where we know the adjustment works
-                        const BASE_WIDTH = 430;
-                        const BASE_HEIGHT = 93;
-                        const BASE_ADJUSTMENT = 2;
-                        
-                        // Always calculate dynamic adjustment based on actual container width
-                        // This ensures cards fit properly in the available space
-                        const widthRatio = containerWidth / BASE_WIDTH;
-                        const heightRatio = cardHeight / BASE_HEIGHT;
-                        
-                        // Average the ratios for balanced scaling across all container sizes
-                        const scaleFactor = (widthRatio + heightRatio) / 2;
-                        adjustmentPerCard = BASE_ADJUSTMENT * scaleFactor;
-                    }
-                    
-                    const adjustmentOffset = index * adjustmentPerCard;
-                    
                     const dynamicStyle = {
-                        position: cardPosition ? 'absolute' : 'relative',
-                        left: cardPosition ? `${cardPosition.left - adjustmentOffset}px` : 'auto',
                         zIndex: isBeingDragged ? 2000 : (index + 1),
                         transform: (isBeingDragged && !usePhysics) ? `translate(${dragState.translateX}px, ${dragState.translateY}px) scale(1.1)` : 
                                   isPhysicsControlled ? 'none' : 'none', // Let physics engine handle transforms

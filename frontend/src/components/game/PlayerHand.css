@@ -95,6 +95,7 @@
     cursor: grab;
     flex-shrink: 0;
     position: relative;
+    transition: left 0.3s ease-out, margin-left 0.3s ease-out;
 }
 
 /* Apply dynamic margin from JavaScript calculation */
@@ -111,11 +112,11 @@
 /* Center cards with fixed spacing when threshold is met */
 .player-hand-cards.centered-spacing {
     justify-content: center;
-    column-gap: 0.35vh;
+    gap: 0; /* Gap is handled by margin-left on cards */
 }
 
 .player-hand-cards.centered-spacing .player-hand-card-wrapper:not(:first-child) {
-    margin-left: 0;
+    margin-left: var(--card-margin-left, 0.5vh); /* Use the dynamic margin */
 }
 
 .player-hand-card-wrapper.is-dragging {
