@@ -1,26 +1,26 @@
-/* AdvertisingHeader.css - Responsive advertising banner styles */
+/* AdvertisingHeader.css - VH-based responsive advertising banner */
 
 .advertising-header {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
-    background-color: #1a1a1a; /* Match lobby header background */
-    /* Removed white bottom border per request */
-    border-bottom: none;
-    /* Subtle shadow only if needed; keep dark theme */
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
-    z-index: 2000; /* Above lobby header/tabs */
+    background-color: #1a1a1a;
+    box-shadow: 0 0.12vh 0.25vh rgba(0, 0, 0, 0.25);
+    z-index: 2000;
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 8px 10px;
+    /* Unified vh-based padding - reduced to 75% */
+    padding: 0.75vh 0.9vh;
     box-sizing: border-box;
+    /* Unified height: 7.5vh (75% of 10vh) for consistent scaling */
+    height: 7.5vh;
 }
 
 .ad-container {
     width: 100%;
-    max-width: 1200px;
+    max-width: 150vh; /* Max width based on height */
     display: flex;
     justify-content: center;
     align-items: center;
@@ -32,154 +32,59 @@
     justify-content: center;
     align-items: center;
     background-color: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
+    border: 0.12vh solid #dee2e6;
+    border-radius: 0.5vh;
     overflow: hidden;
+    /* Ad takes up most of the header height - reduced to 75% */
+    height: 6vh;
+    /* Width scales with height to maintain aspect ratio */
+    width: calc(6vh * 8); /* 8:1 aspect ratio for banner ads */
+    max-width: 90vw; /* Don't exceed viewport width */
 }
 
 .ad-label {
     position: absolute;
-    top: 4px;
-    left: 8px;
-    font-size: 10px;
+    top: 0.4vh;
+    left: 0.75vh;
+    font-size: 0.9vh;
     color: #6c757d;
     background-color: rgba(255, 255, 255, 0.8);
-    padding: 2px 4px;
-    border-radius: 2px;
+    padding: 0.2vh 0.4vh;
+    border-radius: 0.2vh;
     font-family: Arial, sans-serif;
     z-index: 1;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.05vh;
 }
 
 .ad-image {
     display: block;
     width: 100%;
-    height: auto;
-    max-width: 100%;
+    height: 100%;
+    object-fit: contain;
 }
 
-/* Attention CTA overlay to encourage ad watching for Mercy Token */
-/* Replace overlay with a subtle glow on the whole banner when eligible */
+/* Attention CTA overlay for Mercy Token */
 .ad-attention {
-        animation: adGlow 2s ease-in-out infinite;
+    animation: adGlow 2s ease-in-out infinite;
 }
 
 @keyframes adGlow {
     0% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.35) inset, 0 0 0 0 rgba(255, 193, 7, 0.35); }
-    50% { box-shadow: 0 0 0 4px rgba(255, 193, 7, 0.18) inset, 0 0 0 6px rgba(255, 193, 7, 0.12); }
+    50% { box-shadow: 0 0 0 0.5vh rgba(255, 193, 7, 0.18) inset, 0 0 0 0.7vh rgba(255, 193, 7, 0.12); }
     100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.35) inset, 0 0 0 0 rgba(255, 193, 7, 0.35); }
 }
 
-/* Desktop: 728x90 Leaderboard */
-.desktop-ad {
-    display: block;
-    width: 728px;
-    height: 90px;
-}
-
+/* All ad sizes now unified - content scales within container */
+.desktop-ad,
 .tablet-ad,
 .mobile-ad {
-    display: none;
+    display: block;
+    width: 100%;
+    height: 100%;
 }
 
-/* Tablet: 468x60 Banner */
-@media (max-width: 768px) and (min-width: 481px) {
-    .advertising-header {
-        padding: 6px 8px;
-    }
-    
-    .desktop-ad {
-        display: none;
-    }
-    
-    .tablet-ad {
-        display: block;
-        width: 468px;
-        height: 60px;
-    }
-    
-    .mobile-ad {
-        display: none;
-    }
-    
-    .ad-placeholder {
-        width: 468px;
-        height: 60px;
-    }
-}
-
-/* Mobile: 320x50 Mobile Banner */
-@media (max-width: 480px) {
-    .advertising-header {
-        padding: 4px 6px;
-    }
-    
-    .desktop-ad,
-    .tablet-ad {
-        display: none;
-    }
-    
-    .mobile-ad {
-        display: block;
-        width: 320px;
-        height: 50px;
-    }
-    
-    .ad-placeholder {
-        width: min(320px, calc(100vw - 12px));
-        height: 50px;
-    }
-    
-    .ad-label {
-        font-size: 9px;
-        top: 2px;
-        left: 4px;
-        padding: 1px 3px;
-    }
-}
-
-/* Very small screens - ultra compact */
-@media (max-width: 320px) {
-    .ad-placeholder {
-        width: calc(100vw - 12px);
-        height: 45px;
-    }
-    
-    .mobile-ad {
-        width: 100%;
-        height: 45px;
-    }
-}
-
-/* Height calculations for different ad sizes */
-.advertising-header {
-    /* Desktop height: 90px ad + 16px padding */
-    height: 106px;
-}
-
-@media (max-width: 768px) and (min-width: 481px) {
-    .advertising-header {
-        /* Tablet height: 60px ad + 12px padding */
-        height: 72px;
-    }
-}
-
-@media (max-width: 480px) {
-    .advertising-header {
-        /* Mobile height: 50px ad + 8px padding */
-        height: 58px;
-    }
-}
-
-@media (max-width: 320px) {
-    .advertising-header {
-        /* Ultra small height: 45px ad + 8px padding */
-        height: 53px;
-    }
-}
-
-/* Hover effects for interactivity */
+/* Hover effects */
 .ad-placeholder:hover {
     background-color: #e9ecef;
     cursor: pointer;
@@ -202,7 +107,7 @@
     }
 }
 
-/* Fallback state for failed image loads */
+/* Fallback state */
 .ad-fallback {
     width: 100%;
     height: 100%;
@@ -211,19 +116,9 @@
     justify-content: center;
     background-color: #f8f9fa;
     color: #6c757d;
-    font-size: 14px;
+    font-size: 1.35vh;
     font-family: Arial, sans-serif;
-    border: 2px dashed #dee2e6;
+    border: 0.25vh dashed #dee2e6;
 }
 
-@media (max-width: 768px) and (min-width: 481px) {
-    .ad-fallback {
-        font-size: 12px;
-    }
-}
-
-@media (max-width: 480px) {
-    .ad-fallback {
-        font-size: 11px;
-    }
-}
+/* NO MEDIA QUERIES - Everything scales with vh units consistently */

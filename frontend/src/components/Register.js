@@ -31,9 +31,9 @@ const Register = ({ onRegisterSuccess, onSwitchToLogin }) => {
         return (
             <div className="auth-container">
                 <img src="/SluffLogo.png" alt="Sluff Logo" className="auth-logo" />
-                <div className="auth-form" style={{ textAlign: 'center' }}>
-                    <h3>✅ Registration Complete!</h3>
-                    <p>{successMessage}</p>
+                <div className="auth-form email-sent-message">
+                    <h3 className="auth-success-title">✅ Registration Complete!</h3>
+                    <p className="auth-success-text">{successMessage}</p>
                     {/* This button now correctly uses the onSwitchToLogin prop */}
                     <button onClick={onSwitchToLogin} className="auth-button login">Back to Login</button>
                 </div>

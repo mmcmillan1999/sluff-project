@@ -1,4 +1,6 @@
 /* App.css - Styles for the Sluff Card Game */
+/* Simplified VH-based responsive design */
+
 body {
   font-family: Arial, sans-serif;
   text-align: center;
@@ -7,109 +9,49 @@ body {
   margin: 0;
 }
 
-/* Main content container to account for fixed advertising header */
+/* Main content container - unified vh-based spacing */
 .app-content-container {
-  /* Desktop: Account for 106px header height */
-  padding-top: 106px;
-  min-height: calc(100vh - 106px);
-  padding-left: 20px;
-  padding-right: 20px;
-  padding-bottom: 20px;
+  /* Account for 7.5vh header height (75% of original) */
+  padding-top: 7.5vh;
+  min-height: calc(100vh - 7.5vh);
+  padding-left: 0; /* Full width - no horizontal padding */
+  padding-right: 0; /* Full width - no horizontal padding */
+  padding-bottom: 2.5vh;
 }
 
-/* Responsive adjustments for different ad sizes */
-@media (max-width: 768px) and (min-width: 481px) {
-  .app-content-container {
-    /* Tablet: Account for 72px header height */
-    padding-top: 72px;
-    min-height: calc(100vh - 72px);
-  }
-}
-
-@media (max-width: 480px) {
-  .app-content-container {
-    /* Mobile: Account for 58px header height */
-    padding-top: 58px;
-    min-height: calc(100vh - 58px);
-  padding-left: 0;
-  padding-right: 0;
-    padding-bottom: 10px;
-  }
-}
-
-@media (max-width: 320px) {
-  .app-content-container {
-    /* Ultra small: Account for 53px header height */
-    padding-top: 53px;
-    min-height: calc(100vh - 53px);
-  }
-}
-
-/* LANDSCAPE ORIENTATION FIXES */
-
-/* Mobile landscape mode - use mobile ad size */
-@media (orientation: landscape) and (max-height: 500px) {
-  .app-content-container {
-    /* Mobile landscape: Account for 58px mobile header height */
-    padding-top: 58px;
-    min-height: calc(100vh - 58px);
-    padding-left: 8px;
-    padding-right: 8px;
-    padding-bottom: 8px;
-  }
-}
-
-/* Desktop/Laptop landscape mode - use desktop ad size */
-@media (orientation: landscape) and (min-height: 501px) and (min-width: 769px) {
-  .app-content-container {
-    /* Desktop landscape: Account for 106px desktop header height */
-    padding-top: 106px;
-    min-height: calc(100vh - 106px);
-    padding-left: 20px;
-    padding-right: 20px;
-    padding-bottom: 20px;
-  }
-}
-
-/* Tablet landscape mode - use tablet ad size */
-@media (orientation: landscape) and (min-height: 501px) and (max-width: 768px) {
-  .app-content-container {
-    /* Tablet landscape: Account for 72px tablet header height */
-    padding-top: 72px;
-    min-height: calc(100vh - 72px);
-    padding-left: 15px;
-    padding-right: 15px;
-    padding-bottom: 15px;
-  }
-}
+/* NO MEDIA QUERIES - Everything scales with vh units consistently */
 
 h1 {
   color: #333;
+  font-size: 3vh;
+}
+
+h2 {
+  margin-top: 2.5vh;
+  font-size: 2.5vh;
 }
 
 button {
-  padding: 10px 15px;
-  margin: 5px;
+  padding: 1.2vh 1.8vh;
+  margin: 0.6vh;
   border: none;
   background-color: #007bff;
   color: white;
-  font-size: 16px;
+  font-size: 1.8vh;
   cursor: pointer;
-  border-radius: 5px;
+  border-radius: 0.6vh;
 }
 
 button:hover {
   background-color: #0056b3;
 }
 
-h2 {
-  margin-top: 20px;
-}
-
 input {
-  padding: 8px;
-  font-size: 16px;
-  margin-right: 10px;
+  padding: 1vh;
+  font-size: 1.8vh;
+  margin-right: 1.2vh;
+  border-radius: 0.5vh;
+  border: 0.12vh solid #ccc;
 }
 
 ul {
@@ -118,6 +60,6 @@ ul {
 }
 
 li {
-  font-size: 18px;
-  margin: 5px 0;
+  font-size: 2vh;
+  margin: 0.6vh 0;
 }

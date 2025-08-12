@@ -57,8 +57,12 @@ const PlayerHand = ({
     const dragStateRef = useRef(dragState);
     dragStateRef.current = dragState;
 
-    const { state, hands, bidWinnerInfo, trickTurnPlayerName, currentTrickCards, leadSuitCurrentTrick, trumpSuit, trumpBroken } = currentTableState;
+    const { state, hands, bidWinnerInfo, trickTurnPlayerName, currentTrickCards, leadSuitCurrentTrick, trumpSuit, trumpBroken, players } = currentTableState;
     const myHand = hands[selfPlayerName] || [];
+    
+    // Determine if player is bidder or defender
+    const isBidder = bidWinnerInfo?.playerName === selfPlayerName;
+    const isDefender = bidWinnerInfo && !isBidder && Object.values(players || {}).some(p => p.playerName === selfPlayerName);
     
     // Initialize physics engine
     useEffect(() => {
@@ -455,7 +459,7 @@ const PlayerHand = ({
     return (
         <div className="player-hand-container" ref={myHandRef}>
             <div
-                className={`player-hand-cards ${isMyTurnToPlay && !dragState.isDragging ? 'my-turn' : ''} ${centeredSpacing ? 'centered-spacing' : ''}`}
+                className={`player-hand-cards ${isMyTurnToPlay && !dragState.isDragging ? 'my-turn' : ''} ${isBidder ? 'team-bidder' : ''} ${isDefender ? 'team-defender' : ''} ${centeredSpacing ? 'centered-spacing' : ''}`}
                 style={{ '--card-margin-left': `${cardMargin}px` }}
             >
                 {myHandToDisplay.map((card, index) => {

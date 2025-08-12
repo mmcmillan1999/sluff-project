@@ -231,28 +231,21 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         // Standard playing card ratio is approximately 5:7 (0.714 width/height)
         const CARD_ASPECT_RATIO = 0.714;
         
-        // Base card height as percentage of viewport height
-        // Desktop: 15vh, Tablet: 12vh, Mobile: 10vh
-        const isMobile = window.innerWidth <= 768;
-        const isDesktop = window.innerWidth >= 1024;
-        
-        // Calculate heights based on viewport
+        // Unified card sizing based on viewport height
         const getCardHeight = () => {
             const vh = window.innerHeight / 100;
             
             // Small cards (widow, trick piles) are 50% of normal size
             if (small) {
-                if (isDesktop) return `${7.5 * vh}px`;  // 50% of 15vh
-                if (isMobile) return `${5 * vh}px`;     // 50% of 10vh
-                return `${6 * vh}px`;                   // 50% of 12vh
+                return `${6 * vh}px`;  // 6vh for small cards
             }
             
-            if (large) return `${12 * vh}px`; // 12vh for large cards
+            if (large) {
+                return `${10 * vh}px`; // 10vh for large cards
+            }
             
-            // Normal cards (player hand, played cards)
-            if (isDesktop) return `${15 * vh}px`;  // 15vh on desktop
-            if (isMobile) return `${10 * vh}px`;   // 10vh on mobile
-            return `${12 * vh}px`;                 // 12vh on tablet
+            // Normal cards - unified 10vh height
+            return `${10 * vh}px`;
         };
         
         // Calculate width maintaining aspect ratio

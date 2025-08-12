@@ -1,26 +1,28 @@
 /* frontend/src/components/game/TableLayout.css */
+/* Simplified VH-based responsive design */
 
 @keyframes trick-pile-glow-blue {
-    0% { box-shadow: 0 0 6px #60a5fa; }
-    50% { box-shadow: 0 0 24px #3b82f6; }
-    100% { box-shadow: 0 0 6px #60a5fa; }
+    0% { box-shadow: 0 0 0.7vh #60a5fa; }
+    50% { box-shadow: 0 0 3vh #3b82f6; }
+    100% { box-shadow: 0 0 0.7vh #60a5fa; }
 }
 
 @keyframes trick-pile-glow-gold {
-    0% { box-shadow: 0 0 6px #facc15; }
-    50% { box-shadow: 0 0 24px #f59e0b; }
-    100% { box-shadow: 0 0 6px #facc15; }
+    0% { box-shadow: 0 0 0.7vh #facc15; }
+    50% { box-shadow: 0 0 3vh #f59e0b; }
+    100% { box-shadow: 0 0 0.7vh #facc15; }
 }
 
 .game-button {
-    padding: 8px 16px;
+    padding: 1vh 2vh;
     font-family: 'Oswald', sans-serif;
     background: linear-gradient(to bottom, #5c6bc0, #3f51b5);
     color: white;
-    border: 1px solid #303f9f;
-    border-radius: 5px;
+    border: 0.12vh solid #303f9f;
+    border-radius: 0.6vh;
     cursor: pointer;
-    margin: 5px;
+    margin: 0.6vh;
+    font-size: 1.8vh;
 }
 
 .game-button:disabled {
@@ -35,122 +37,82 @@
     justify-content: center;
     align-items: center;
     background: radial-gradient(circle, #424242, #212121);
-    padding: 5px;
+    padding: 0.6vh 0; /* Vertical padding only - use full width */
 }
 
 .table-oval {
     width: 100%;
     height: 100%;
-    max-width: 1200px;
-    min-width: 800px;
+    max-width: min(150vh, 95vw); /* Prevent overflow - cap at 95% viewport width */
+    min-width: min(100vh, 95vw); /* Prevent forcing width beyond screen */
     aspect-ratio: 3/2;
     background-color: #004d00;
-    border-radius: 150px;
-    border: 10px solid #3e2723;
+    border-radius: 18vh;
+    border: 1.2vh solid #3e2723;
     position: relative;
-    box-shadow: inset 0 0 25px rgba(0,0,0,0.5);
-    /* Prevent layout shifts by maintaining stable dimensions */
+    box-shadow: inset 0 0 3vh rgba(0,0,0,0.5);
     flex-shrink: 0;
 }
 
 .action-prompt-container {
     position: absolute;
-    top: 120px; /* Lowered from 70px to avoid widow hand overlap */
+    top: 15vh;
     left: 50%;
     transform: translateX(-50%);
     z-index: 15;
     background-color: rgba(0, 0, 0, 0.7);
     color: white;
-    padding: 15px 20px;
-    border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+    padding: 1.8vh 2.5vh;
+    border-radius: 1.2vh;
+    border: 0.12vh solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 0.5vh 1.2vh rgba(0, 0, 0, 0.4);
     text-align: center;
-    min-width: 280px;
-}
-
-/* Action prompt mobile optimization */
-@media (orientation: portrait) and (max-width: 414px) {
-    .puck-container-bottom {
-        bottom: 14%; /* Adjust for smaller screens */
-    }
-    
-    .puck-container-bottom .dealer-puck {
-        transform: translateY(-30px); /* Move up above player name on small screens */
-    }
-    
-    .action-prompt-container {
-        top: 100px; /* Lowered from 50px to avoid widow hand */
-        min-width: 200px;
-        max-width: calc(100vw - 80px); /* Reduced width to prevent covering player names */
-        padding: 8px 12px; /* More compact padding */
-        font-size: 0.8em; /* Smaller, more professional font */
-        font-family: 'Arial', 'Helvetica', sans-serif; /* Professional font family */
-    }
-    
-    .action-prompt-container h4 {
-        font-size: 1.0em; /* Smaller header */
-        margin: 0 0 6px 0;
-        font-weight: 500; /* Less bold, more professional */
-    }
-    
-    .action-prompt-container p {
-        font-size: 0.8em;
-        margin: 4px 0;
-    }
-    
-    /* Ensure buttons remain touch-friendly */
-    .action-prompt-container .game-button {
-        min-height: 44px;
-        min-width: 44px;
-        padding: 8px 12px;
-        font-size: 0.8em;
-        margin: 3px;
-    }
+    min-width: 35vh;
+    font-size: 1.8vh;
 }
 
 .action-prompt-container h4 {
     font-family: 'Oswald', sans-serif;
-    margin: 0 0 10px 0;
+    margin: 0 0 1.2vh 0;
     color: #ffc107;
-    font-size: 1.2em;
+    font-size: 2.2vh;
 }
 
+/* Player seats - unified positioning */
 .player-seat-left, .player-seat-right, .player-seat-bottom {
     position: absolute;
     z-index: 10;
 }
-.player-seat-left { top: 50%; left: 20px; transform: translateY(-50%); }
-.player-seat-right { top: 50%; right: 20px; transform: translateY(-50%); }
-.player-seat-bottom { bottom: 12%; left: 50%; transform: translateX(-50%); position: absolute; }
 
-/* Trump indicator positioning relative to player seats */
-.player-seat-left .trump-indicator-puck,
-.player-seat-right .trump-indicator-puck {
-    position: absolute;
-    top: -65px; /* Position above the player name */
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 21;
+.player-seat-left { 
+    top: 50%; 
+    left: 2.5vh; 
+    transform: translateY(-50%); 
 }
 
-.player-seat-bottom .trump-indicator-puck:not(.trump-indicator-inline .trump-indicator-puck) {
-    position: absolute;
-    top: -65px; /* Position above the player name */
-    right: -65px; /* Position to the right of the name */
-    transform: none;
-    z-index: 21;
+.player-seat-right { 
+    top: 50%; 
+    right: 2.5vh; 
+    transform: translateY(-50%); 
 }
+
+.player-seat-bottom { 
+    bottom: 12%; 
+    left: 50%; 
+    transform: translateX(-50%); 
+}
+
+/* Trump indicator is now positioned via puck containers - no seat-specific positioning */
 
 .card-back-container {
     display: inline-flex;
     justify-content: center;
     align-items: center;
     background-color: #1a1a1a;
-    border: 1px solid #888;
-    border-radius: 4px;
-    box-shadow: 1px 1px 3px rgba(0,0,0,0.5);
-    padding: 5px;
+    border: 0.12vh solid #888;
+    border-radius: 0.5vh;
+    box-shadow: 0.12vh 0.12vh 0.35vh rgba(0,0,0,0.5);
+    padding: 0.6vh;
     box-sizing: border-box;
 }
 
@@ -161,9 +123,10 @@
     transform: rotate(-70deg);
 }
 
+/* Trick pile containers - unified design */
 .trick-pile-container {
     position: absolute;
-    bottom: 1%;
+    bottom: 5%;
     z-index: 5;
     width: auto;
     display: flex;
@@ -172,174 +135,187 @@
     cursor: pointer;
     transition: transform 0.2s ease-in-out;
 }
-.trick-pile-container:hover { transform: translateY(-5px); }
 
-.defender-pile { left: 15%; }
-.bidder-pile { right: 15%; }
-
-/* Tablet: 6vh small cards */
-@media (min-width: 769px) and (max-width: 1023px) {
-    .trick-pile-cards {
-        width: calc(6vh * 0.714); /* 6vh * aspect ratio */
-        height: 6vh;
-    }
+.trick-pile-container:hover { 
+    transform: translateY(-0.6vh); 
 }
 
-/* Desktop: 7.5vh small cards */
-@media (min-width: 1024px) {
-    .trick-pile-cards {
-        width: calc(7.5vh * 0.714); /* 7.5vh * aspect ratio */
-        height: 7.5vh;
-    }
-    
-    .trick-pile-count {
-        font-size: calc(2vh); /* Slightly larger on desktop */
-    }
+/* Fixed trick pile positions - 4 containers total */
+
+/* Bottom positions */
+.pile-bottom-left {
+    left: 6%;
+    bottom: 5%;
 }
 
-/* Mobile hover adjustments */
-@media (orientation: portrait) and (max-width: 768px) {
-    .trick-pile-container:hover { 
-        transform: translateY(-3px); /* Remove scale to maintain size consistency with widow cards */
-    }
+.pile-bottom-right {
+    right: 6%;
+    left: auto;
+    bottom: 5%;
+}
+
+/* Top positions - mirrored from bottom */
+.pile-top-left {
+    left: 6%;
+    bottom: auto;
+    top: 6%;
+}
+
+.pile-top-right {
+    right: 6%;
+    left: auto;
+    bottom: auto;
+    top: 6%;
+}
+
+/* Hover effects for fixed positions */
+.pile-top-left:hover,
+.pile-top-right:hover {
+    transform: translateY(0.6vh);
+}
+
+.pile-bottom-left:hover,
+.pile-bottom-right:hover {
+    transform: translateY(-0.6vh);
+}
+
+/* Unified trick pile card sizing - 6vh height */
+.trick-pile-cards {
+    width: calc(6vh * 0.714);
+    height: 6vh;
 }
 
 .trick-pile-base {
-    padding: 0.3vh 0.5vh; /* Minimal viewport-based padding */
-    border-radius: 6px;
-    box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+    padding: 0.35vh 0.6vh;
+    border-radius: 0.7vh;
+    box-shadow: inset 0 0.12vh 0.35vh rgba(0,0,0,0.5);
     transition: box-shadow 0.3s;
 }
-.trick-pile-base.defender-base { background-color: #1e3a8a; border: 1px solid #60a5fa; }
-.trick-pile-base.bidder-base { background-color: #b45309; border: 1px solid #facc15; }
-.trick-pile-base.pulsating-blue { animation: trick-pile-glow-blue 1.5s infinite; }
-.trick-pile-base.pulsating-gold { animation: trick-pile-glow-gold 1.5s infinite; }
+
+.trick-pile-base.defender-base { 
+    background-color: #1e3a8a; 
+    border: 0.12vh solid #60a5fa; 
+}
+
+.trick-pile-base.bidder-base { 
+    background-color: #b45309; 
+    border: 0.12vh solid #facc15; 
+}
+
+.trick-pile-base.widow-base {
+    background-color: #2d2d2d; /* Dark grey/charcoal for widow */
+    border: 0.12vh solid #808080; /* Medium grey border */
+}
+
+.trick-pile-base.pulsating-blue { 
+    animation: trick-pile-glow-blue 1.5s infinite; 
+}
+
+.trick-pile-base.pulsating-gold { 
+    animation: trick-pile-glow-gold 1.5s infinite; 
+}
 
 .trick-pile-content-wrapper {
     display: flex;
     flex-direction: row;
     align-items: center;
     justify-content: center;
-    gap: 4px;
+    gap: 0.5vh;
 }
+
 .trick-pile {
     display: flex;
     flex-direction: column;
     align-items: center;
     position: relative;
 }
-.trick-pile-cards {
-    position: relative;
-    display: inline-block;
-    /* Dynamic sizing based on viewport - matches small card size (50% of normal) */
-    width: calc(5vh * 0.714); /* Mobile: 5vh * aspect ratio */
-    height: 5vh;
-    padding: 0.5vh; /* Minimal padding */
-}
-/* Card wrapper positioning now handled inline */
+
 .trick-pile-count {
     color: white;
     font-family: 'Oswald', sans-serif;
-    text-shadow: 1px 1px 2px black;
-    font-size: calc(1.5vh); /* Scale with viewport */
+    text-shadow: 0.12vh 0.12vh 0.25vh black;
+    font-size: 1.8vh;
     font-weight: bold;
     line-height: 1;
 }
 
 .progress-bar-area {
-    display: none; /* Decouple the bars - hide this container */
-}
-
-/* Removed .progress-bar-area-mobile - using single class now */
-
-/* Mobile optimizations for progress bars */
-@media (orientation: portrait) and (max-width: 768px) {
-    .progress-bar-area {
-        bottom: 3px; /* Very tight to bottom on mobile */
-        width: 95%;
-        max-width: 350px;
-        gap: 10%;
-        font-size: 0.9em;
-    }
-    
-    .player-seat-bottom {
-        bottom: 10% !important; /* Higher to avoid progress bar overlap */
-    }
-}
-
-.widow-display-container {
-    /* Widow cards now rendered inside widow seat - this container no longer used */
     display: none;
 }
+
+/* Widow display - desktop style unified */
+.widow-display-container {
+    display: none;
+}
+
 .widow-pile {
     display: flex;
     position: relative;
     justify-content: center;
 }
-/* widow-card-wrapper removed - cards now rendered directly without containers */
+
 .widow-pile-label {
     color: white;
     font-family: 'Oswald', sans-serif;
-    text-shadow: 1px 1px 2px black;
-    margin-top: 5px;
+    text-shadow: 0.12vh 0.12vh 0.25vh black;
+    margin-top: 0.6vh;
+    font-size: 1.8vh;
 }
 
 @keyframes attention-glow {
-    0% { box-shadow: 0 0 8px #ff4d4d; }
-    50% { box-shadow: 0 0 25px #ff4d4d; }
-    100% { box-shadow: 0 0 8px #ff4d4d; }
+    0% { box-shadow: 0 0 1vh #ff4d4d; }
+    50% { box-shadow: 0 0 3vh #ff4d4d; }
+    100% { box-shadow: 0 0 1vh #ff4d4d; }
 }
 
+/* Trump indicator - unified sizing */
 .trump-indicator-puck {
-    position: absolute;
+    position: relative !important; /* Force relative for flexbox layout */
     z-index: 20;
-    width: 50px;
-    height: 50px;
+    width: 4.5vh; /* Reduced by 25% from 6vh */
+    height: 4.5vh; /* Reduced by 25% from 6vh */
     background: linear-gradient(135deg, #b8860b, #ffd700);
-    border: 3px solid #daa520;
-    border-radius: 8px;
+    border: 0.25vh solid #daa520;
+    border-radius: 0.8vh;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    font-size: 1.2em;
+    font-size: 2.5vh; /* Increased icon size */
     color: #2c1810;
     cursor: help;
     transition: all 0.3s ease;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3), inset 0 1px 3px rgba(255, 255, 255, 0.3);
+    box-shadow: 0 0.4vh 0.8vh rgba(0, 0, 0, 0.3), inset 0 0.1vh 0.3vh rgba(255, 255, 255, 0.3);
     font-weight: bold;
-}
-
-/* Legacy positioning - now handled by player seat relative positioning */
-.trump-indicator-puck.trump-position-bottom {
-    /* Positioning handled by .player-seat-bottom .trump-indicator-puck */
-}
-.trump-indicator-puck.trump-position-left {
-    /* Positioning handled by .player-seat-left .trump-indicator-puck */
-}
-.trump-indicator-puck.trump-position-right {
-    /* Positioning handled by .player-seat-right .trump-indicator-puck */
 }
 
 .trump-content {
     line-height: 1;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+    text-shadow: 0.12vh 0.12vh 0.25vh rgba(0, 0, 0, 0.3);
+}
+
+/* Trump puck icon image styling */
+.trump-puck-icon {
+    width: 90%; /* Use most of the puck space */
+    height: 90%;
+    object-fit: contain; /* Maintain aspect ratio */
+    filter: drop-shadow(0.1vh 0.1vh 0.2vh rgba(0, 0, 0, 0.5)); /* Subtle shadow for depth */
 }
 
 .trump-state-indicator {
     position: absolute;
-    bottom: -2px;
+    bottom: -0.25vh;
     left: 50%;
     transform: translateX(-50%);
-    width: 30px;
-    height: 3px;
-    border-radius: 1px;
+    width: 3.5vh;
+    height: 0.35vh;
+    border-radius: 0.12vh;
     transition: all 0.3s ease;
 }
 
 .trump-state-indicator.connected {
     background-color: #2e7d32;
-    box-shadow: 0 0 4px rgba(46, 125, 50, 0.5);
+    box-shadow: 0 0 0.5vh rgba(46, 125, 50, 0.5);
 }
 
 .trump-state-indicator.broken {
@@ -353,9 +329,9 @@
     left: 50%;
     top: 50%;
     transform: translate(-50%, -50%);
-    font-size: 0.8em;
+    font-size: 1.2vh;
     color: #ff4444;
-    text-shadow: 0 0 3px rgba(255, 68, 68, 0.7);
+    text-shadow: 0 0 0.35vh rgba(255, 68, 68, 0.7);
     animation: subtle-flash 2s infinite;
 }
 
@@ -399,110 +375,221 @@
 
 @keyframes lightning-pulse {
     0%, 100% {
-        text-shadow: 0 0 5px #ffff00, 0 0 10px #ffff00, 0 0 15px #ffff00;
+        text-shadow: 0 0 0.6vh #ffff00, 0 0 1.2vh #ffff00, 0 0 1.8vh #ffff00;
         transform: scale(1);
     }
     50% {
-        text-shadow: 0 0 10px #ffff00, 0 0 20px #ffff00, 0 0 30px #ffff00, 0 0 40px #ffd700;
+        text-shadow: 0 0 1.2vh #ffff00, 0 0 2.5vh #ffff00, 0 0 3.5vh #ffff00, 0 0 5vh #ffd700;
         transform: scale(1.1);
     }
 }
 
-/* Hover effects - updated for new positioning */
-.player-seat-left .trump-indicator-puck:hover,
-.player-seat-right .trump-indicator-puck:hover {
-    transform: translateX(-50%) scale(1.1);
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4), inset 0 1px 3px rgba(255, 255, 255, 0.4);
-}
-
-.player-seat-bottom .trump-indicator-puck:not(.trump-indicator-inline .trump-indicator-puck):hover {
+/* Hover effects */
+.trump-indicator-puck:hover {
     transform: scale(1.1);
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4), inset 0 1px 3px rgba(255, 255, 255, 0.4);
+    box-shadow: 0 0.7vh 1.5vh rgba(0, 0, 0, 0.4), inset 0 0.12vh 0.35vh rgba(255, 255, 255, 0.4);
 }
 
-.trump-indicator-inline .trump-indicator-puck:hover {
-    transform: scale(1.05);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4), inset 0 1px 3px rgba(255, 255, 255, 0.4);
+.trump-indicator-puck:hover .trump-puck-icon {
+    filter: drop-shadow(0.15vh 0.15vh 0.3vh rgba(0, 0, 0, 0.7)); /* Enhance shadow on hover */
 }
 
-.played-card-bottom, .played-card-left, .played-card-right {
+/* Played cards positioning */
+.played-card-bottom, .played-card-left, .played-card-right, .played-card-top {
     position: absolute;
     z-index: 8;
 }
-.played-card-bottom { bottom: 30%; left: 50%; transform: translateX(-50%); }
-.played-card-left { top: 50%; left: 22%; transform: translateY(-50%); }  /* Moved further left */
-.played-card-right { top: 50%; right: 22%; transform: translateY(-50%); } /* Moved further right */
 
-/* Desktop: Scale played cards area to match 2x card sizes */
-@media (min-width: 1024px) {
-    .played-card-bottom { bottom: 25%; }  /* Adjust positioning for larger cards */
-    .played-card-left { left: 18%; }      /* Spread out more for larger cards */
-    .played-card-right { right: 18%; }    /* Spread out more for larger cards */
+.played-card-bottom { 
+    bottom: 30%; 
+    left: 50%; 
+    transform: translateX(-50%); 
 }
 
+.played-card-left { 
+    top: 50%; 
+    /* Dynamic padding: grows with viewport width */
+    /* Base offset: 50% + 3.57vh (card half) + 2.5vh (avg padding) */
+    right: calc(50% + 6.07vh); 
+    transform: translateY(-50%); 
+}
+
+.played-card-right { 
+    top: 50%; 
+    /* Dynamic padding: matches left side */
+    /* Base offset: 50% + 3.57vh (card half) + 2.5vh (avg padding) */
+    left: calc(50% + 6.07vh);
+    transform: translateY(-50%); 
+}
+
+.played-card-top {
+    top: 20%; /* Matching the test zone position */
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+/* Card drop zone test outlines - for development/testing */
+.card-drop-zone-test {
+    position: absolute;
+    /* Dynamic sizing - matches large cards (played cards are large: true) */
+    width: calc(10vh * 0.714); /* 10vh for large cards */
+    height: 10vh; /* Large card height */
+    border: 0.3vh dashed rgba(255, 255, 0, 0.6); /* Yellow dashed border */
+    border-radius: 1vh;
+    z-index: 6; /* Below actual cards */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    background-color: rgba(255, 255, 0, 0.05); /* Very light yellow background */
+}
+
+.card-drop-zone-test.bottom {
+    bottom: 30%;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.card-drop-zone-test.left {
+    top: 50%;
+    /* Match dynamic padding of played cards */
+    right: calc(50% + 6.07vh);
+    transform: translateY(-50%);
+}
+
+.card-drop-zone-test.right {
+    top: 50%;
+    /* Match dynamic padding of played cards */
+    left: calc(50% + 6.07vh);
+    transform: translateY(-50%);
+}
+
+.card-drop-zone-test.top {
+    top: 20%; /* Moved up from 30% to create more separation */
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.drop-zone-label {
+    font-family: 'Oswald', sans-serif;
+    font-size: 4vh;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.7);
+    text-shadow: 0 0 1vh rgba(255, 255, 0, 0.5);
+}
+
+/* Puck containers - positioned on table near player seats */
 .puck-container-bottom, .puck-container-left, .puck-container-right {
     position: absolute;
     z-index: 9;
     display: flex;
-    gap: 5px;
+    gap: 1.5vh; /* Increased gap for when both pucks present */
+    align-items: center;
 }
-.puck-container-bottom { bottom: 16%; left: 50%; transform: translateX(-50%); }
-.puck-container-left { top: 50%; left: 20%; transform: translateY(-50%); }
-.puck-container-right { top: 50%; right: 20%; transform: translateY(-50%); }
 
-.puck {
-    position: relative;
+/* Bottom player pucks - below the seat on the table */
+.puck-container-bottom { 
+    bottom: 3%; /* Very close to edge */
+    left: 50%; 
+    transform: translateX(-50%);
+    flex-direction: row; /* Horizontal layout */
+    gap: 3vh !important; /* Large gap to clearly separate dealer and bidder pucks */
+}
+
+/* Left player pucks - positioned from bottom, hugging left wall */
+.puck-container-left { 
+    bottom: 35%; /* 5% higher when no collision */
+    left: 1%; /* Hug the left wall */
+    transform: none; /* Remove vertical centering */
+    flex-direction: column; /* Vertical stack */
+}
+
+/* Right player pucks - positioned from bottom, hugging right wall */
+.puck-container-right { 
+    bottom: 35%; /* 5% higher when no collision */
+    right: 1%; /* Hug the right wall */
+    transform: none; /* Remove vertical centering */
+    flex-direction: column; /* Vertical stack */
+}
+
+/* Pucks in containers need relative positioning for flexbox */
+.puck-container-bottom .puck,
+.puck-container-left .puck,
+.puck-container-right .puck {
+    position: relative !important; /* Override absolute from PlayerSeat.css */
     border-radius: 50%;
-    width: 28px;
-    height: 28px;
+    width: 3.5vh;
+    height: 3.5vh;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.7em;
+    font-size: 1.5vh;
     font-weight: bold;
-    border: 1px solid black;
+    border: 0.12vh solid black;
     font-family: 'Oswald', sans-serif;
 }
+
 .dealer-puck { 
     background-color: ivory; 
     color: black; 
-    z-index: 15; /* Ensure dealer puck appears above player names */
+    z-index: 15;
 }
 
+/* Last trick overlay - positioned near the clicked pile */
 .last-trick-overlay-container {
     position: absolute;
-    bottom: 25%;
     z-index: 26;
     background-color: rgba(0,0,0,0.7);
-    padding: 5px 8px;
-    border-radius: 8px;
+    padding: 0.6vh 1vh;
+    border-radius: 1vh;
     text-align: center;
     transition: all 0.5s ease-in-out;
 }
-.last-trick-overlay-container.defender { left: 5%; }
-.last-trick-overlay-container.bidder { right: 5%; }
+
+/* Position overlay near each pile position */
+.last-trick-overlay-container.pile-bottom-left {
+    left: 6%; /* Match pile position */
+    bottom: 12%; /* Just above the pile */
+}
+
+.last-trick-overlay-container.pile-bottom-right {
+    right: 6%; /* Match pile position */
+    bottom: 12%; /* Just above the pile */
+}
+
+.last-trick-overlay-container.pile-top-left {
+    left: 6%; /* Match pile position */
+    top: 15%; /* Just below the pile */
+}
+
+.last-trick-overlay-container.pile-top-right {
+    right: 6%; /* Match pile position */
+    top: 15%; /* Just below the pile */
+}
 
 .last-trick-header {
-    margin: 0 0 5px 0;
-    font-size: 0.7em;
+    margin: 0 0 0.6vh 0;
+    font-size: 1.5vh;
     color: #e0e0e0;
 }
+
 .last-trick-cards {
     display: flex;
-    gap: 2px;
+    gap: 0.25vh;
 }
 
+/* Card display base styles */
 .card-display {
-    border: 1px solid #777;
-    border-radius: 6px;
+    border: 0.12vh solid #777;
+    border-radius: 0.7vh;
     font-weight: bold;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    box-shadow: 0 0.25vh 0.5vh rgba(0,0,0,0.2);
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     justify-content: flex-start;
     text-align: left;
-    padding: 4px;
+    padding: 0.5vh;
     box-sizing: border-box;
 }
 
@@ -520,7 +607,7 @@ button.card-display:disabled {
 .card-symbol {
     font-size: 150%;
     line-height: 1;
-    margin-top: 2px;
+    margin-top: 0.25vh;
 }
 
 .sluff-watermark {
@@ -529,17 +616,18 @@ button.card-display:disabled {
     left: 50%;
     transform: translate(-50%, -50%);
     width: 40%;
-    max-width: 350px;
+    max-width: 45vh;
     opacity: 0.1;
     pointer-events: none;
 }
 
+/* Card drop zone */
 .card-drop-zone-hitbox {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 500px; /* Expanded for magnetic range */
-    height: 500px; /* Expanded for magnetic range */
+    width: 60vh;
+    height: 60vh;
     transform: translate(-50%, -50%);
     z-index: 7;
     pointer-events: all; 
@@ -549,69 +637,46 @@ button.card-display:disabled {
     position: absolute;
     top: 50%;
     left: 50%;
-    /* Dynamic sizing based on viewport - matches normal card size */
-    width: calc(10vh * 0.714); /* Mobile default: 10vh * aspect ratio */
+    width: calc(10vh * 0.714);
     height: 10vh;
     transform: translate(-50%, -50%);
-    border-radius: 8px;
-    border: 3px dashed rgba(139, 195, 247, 0.5);
+    border-radius: 1vh;
+    border: 0.35vh dashed rgba(139, 195, 247, 0.5);
     transition: opacity 0.3s ease, box-shadow 0.2s ease, transform 0.2s ease;
     opacity: 0;
     pointer-events: none;
-    box-shadow: 0 0 20px 10px rgba(139, 195, 247, 0.5);
+    box-shadow: 0 0 2.5vh 1.2vh rgba(139, 195, 247, 0.5);
 }
 
-/* Tablet: 12vh cards */
-@media (min-width: 769px) and (max-width: 1023px) {
-    .card-drop-zone-visual {
-        width: calc(12vh * 0.714); /* 12vh * aspect ratio */
-        height: 12vh;
-        border-width: 4px;
-        border-radius: 10px;
-    }
-}
-
-/* Desktop: 15vh cards */
-@media (min-width: 1024px) {
-    .card-drop-zone-visual {
-        width: calc(15vh * 0.714); /* 15vh * aspect ratio */
-        height: 15vh;
-        border-width: 5px;
-        border-radius: 12px;
-    }
-}
-
-/* Magnetic range indicator - outer circle */
+/* Magnetic range indicators */
 .card-drop-zone-visual::before {
     content: '';
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 500px; /* Magnetic range diameter */
-    height: 500px;
+    width: 60vh;
+    height: 60vh;
     transform: translate(-50%, -50%);
-    border: 2px dotted rgba(139, 195, 247, 0.15);
+    border: 0.25vh dotted rgba(139, 195, 247, 0.15);
     border-radius: 50%;
     opacity: 0;
     transition: opacity 0.3s ease;
 }
 
-/* Docking zone indicator - inner circle */
 .card-drop-zone-visual::after {
     content: '';
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 300px; /* Docking zone diameter */
-    height: 300px;
+    width: 35vh;
+    height: 35vh;
     transform: translate(-50%, -50%);
-    border: 2px dashed rgba(139, 195, 247, 0.25);
+    border: 0.25vh dashed rgba(139, 195, 247, 0.25);
     border-radius: 50%;
     opacity: 0;
     transition: opacity 0.3s ease;
 }
 
-/* Show magnetic zones when card is being dragged */
 .card-drop-zone-visual.active {
     opacity: 1;
 }
@@ -621,39 +686,36 @@ button.card-display:disabled {
     opacity: 1;
 }
 
-/* Enhanced glow when card is in magnetic range */
 .card-drop-zone-visual.magnetic-pull {
     border-color: rgba(139, 195, 247, 0.8);
-    box-shadow: 0 0 40px 20px rgba(139, 195, 247, 0.8);
+    box-shadow: 0 0 5vh 2.5vh rgba(139, 195, 247, 0.8);
     transform: translate(-50%, -50%) scale(1.1);
 }
 
-/* Toilet bowl spiral animation */
 @keyframes spiral-pulse {
     0% { 
-        box-shadow: 0 0 40px 20px rgba(139, 195, 247, 0.8);
+        box-shadow: 0 0 5vh 2.5vh rgba(139, 195, 247, 0.8);
     }
     50% { 
-        box-shadow: 0 0 60px 30px rgba(139, 195, 247, 1.0);
+        box-shadow: 0 0 7.5vh 3.5vh rgba(139, 195, 247, 1.0);
     }
     100% { 
-        box-shadow: 0 0 40px 20px rgba(139, 195, 247, 0.8);
+        box-shadow: 0 0 5vh 2.5vh rgba(139, 195, 247, 0.8);
     }
 }
 
 .card-drop-zone-visual.spiral-active {
     animation: spiral-pulse 0.5s ease-in-out infinite;
     border-style: solid;
-    border-width: 4px;
+    border-width: 0.5vh;
 }
 
-/* Spiral completion indicator */
 .card-drop-zone-visual.spiral-complete {
     border-color: rgba(255, 215, 0, 0.8);
-    box-shadow: 0 0 50px 25px rgba(255, 215, 0, 0.6);
+    box-shadow: 0 0 6vh 3vh rgba(255, 215, 0, 0.6);
 }
 
-/* Trump Broken Announcement Styles */
+/* Trump Broken Announcement */
 .trump-broken-announcement {
     position: absolute;
     top: 50%;
@@ -663,139 +725,133 @@ button.card-display:disabled {
     animation: trump-broken-entrance 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards,
                trump-broken-exit 0.5s ease-in-out 2s forwards;
     pointer-events: none;
-    /* Mobile responsive sizing */
     max-width: 95vw;
 }
 
 .trump-broken-content {
     background: linear-gradient(135deg, #8b0000 0%, #dc143c 50%, #b8860b 100%);
-    border: 3px solid #ffd700;
-    border-radius: 15px;
-    padding: 20px 30px;
+    border: 0.35vh solid #ffd700;
+    border-radius: 1.8vh;
+    padding: 2.5vh 3.5vh;
     box-shadow: 
-        0 0 20px rgba(255, 215, 0, 0.6),
-        0 0 40px rgba(255, 215, 0, 0.4),
-        inset 0 2px 4px rgba(255, 255, 255, 0.2);
+        0 0 2.5vh rgba(255, 215, 0, 0.6),
+        0 0 5vh rgba(255, 215, 0, 0.4),
+        inset 0 0.25vh 0.5vh rgba(255, 255, 255, 0.2);
     display: flex;
     align-items: center;
-    gap: 15px;
-    min-width: 280px;
+    gap: 1.8vh;
+    min-width: 35vh;
     justify-content: center;
-}
-
-/* Mobile trump broken announcement */
-@media (orientation: portrait) and (max-width: 768px) {
-    .trump-broken-content {
-        padding: 15px 20px;
-        min-width: 0;
-        max-width: calc(100vw - 40px);
-        gap: 10px;
-        flex-wrap: wrap;
-    }
-    
-    .trump-broken-text {
-        font-size: min(1.8em, 6vw);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    
-    .trump-broken-lightning {
-        font-size: min(2em, 6.5vw);
-        flex-shrink: 0;
-    }
 }
 
 .trump-broken-text {
     font-family: 'Oswald', sans-serif;
-    font-size: 2.2em;
+    font-size: 3vh;
     font-weight: bold;
     color: #ffd700;
     text-shadow: 
-        2px 2px 0px #8b0000,
-        0 0 10px rgba(255, 215, 0, 0.8),
-        0 0 20px rgba(255, 215, 0, 0.6);
-    letter-spacing: 2px;
+        0.25vh 0.25vh 0 #8b0000,
+        0 0 1.2vh rgba(255, 215, 0, 0.8),
+        0 0 2.5vh rgba(255, 215, 0, 0.6);
+    letter-spacing: 0.25vh;
     white-space: nowrap;
 }
 
 .trump-broken-lightning {
-    font-size: 2.5em;
+    font-size: 3.5vh;
     color: #ffff00;
     animation: lightning-pulse 1.5s ease-in-out infinite;
-    filter: drop-shadow(0 0 8px #ffff00);
+    filter: drop-shadow(0 0 1vh #ffff00);
 }
 
-/* Widow Seat Styling - Player Seat Style with Black Border */
+/* Widow Seat - Dynamic positioning based on available space */
 .widow-seat {
     position: absolute;
-    top: 2px; /* Reduced from 8px to position higher */
-    left: 50%;
-    transform: translateX(-60%); /* Shifted left from -50% to center entire panel */
     z-index: 12;
     pointer-events: none;
+}
+
+/* Widow position classes */
+.widow-seat-top {
+    top: 0.25vh;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.widow-seat-bottom {
+    bottom: 12%;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.widow-seat-left {
+    top: 50%;
+    left: 2.5vh;
+    transform: translateY(-50%);
+}
+
+.widow-seat-right {
+    top: 50%;
+    right: 2.5vh;
+    transform: translateY(-50%);
 }
 
 .widow-name-row {
     display: flex;
     align-items: center;
-    gap: 15px;
     justify-content: center;
-}
-
-.widow-cards-inline {
-    position: relative;
-    height: 50px; /* Height for small cards */
-    width: 65px; /* Width to accommodate overlapping cards */
-    display: inline-block;
 }
 
 .widow-seat-plate {
     text-align: center;
-    padding: 8px 12px;
+    padding: 1vh 1.5vh;
     background-color: rgba(255, 255, 255, 0.9);
-    border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-    min-width: 200px; /* Wider to accommodate cards inline */
-    border: 5px solid #000000;
+    border-radius: 1vh;
+    box-shadow: 0 0.25vh 0.6vh rgba(0, 0, 0, 0.3);
+    width: 22vh; /* Match player seat fixed width */
+    min-width: 22vh;
+    max-width: 22vh;
+    border: 0.25vh solid #ccc; /* Match player seat default border */
     white-space: nowrap;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 4px;
+    gap: 0.5vh;
+    /* Allow natural width expansion like player seats */
+    width: auto;
 }
 
 .widow-name {
     font-family: 'Creepster', 'Chiller', 'Oswald', sans-serif;
     font-weight: bold;
-    font-size: 1.1em;
+    font-size: 1.8vh; /* Match player-name font-size */
     color: #000000;
     text-shadow: 
-        0 0 3px #8b0000,
-        1px 1px 1px #000000;
-    letter-spacing: 1px;
+        0 0 0.35vh #8b0000,
+        0.12vh 0.12vh 0.12vh #000000;
+    letter-spacing: 0.12vh;
     animation: widow-glow 3s ease-in-out infinite alternate;
 }
 
 @keyframes widow-glow {
     0% {
         text-shadow: 
-            0 0 3px #8b0000,
-            1px 1px 1px #000000;
+            0 0 0.35vh #8b0000,
+            0.12vh 0.12vh 0.12vh #000000;
     }
     100% {
         text-shadow: 
-            0 0 8px #dc143c,
-            0 0 15px rgba(220, 20, 60, 0.3),
-            1px 1px 1px #000000;
+            0 0 1vh #dc143c,
+            0 0 1.8vh rgba(220, 20, 60, 0.3),
+            0.12vh 0.12vh 0.12vh #000000;
     }
 }
 
 .widow-stats-line {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 0.9em;
+    gap: 1vh;
+    font-size: 1.5vh;
 }
 
 .widow-tokens {
@@ -809,184 +865,6 @@ button.card-display:disabled {
     font-weight: bold;
     color: #666;
     font-style: italic;
-}
-
-/* Enhanced mobile optimizations for widow seat */
-@media (orientation: portrait) {
-    .widow-seat {
-        top: 1px; /* Reduced from 5px to position higher */
-        transform: translateX(-60%); /* Keep left shift on mobile too */
-        z-index: 11;
-    }
-    
-    .widow-seat-plate {
-        min-width: 180px; /* Wider to accommodate cards inline */
-        padding: 6px 10px;
-        font-size: 0.9em;
-        border-width: 3px;
-    }
-    
-    .widow-name-row {
-        gap: 10px; /* Less gap on mobile */
-    }
-    
-    .widow-cards-inline {
-        width: 55px; /* Slightly smaller on mobile */
-    }
-    
-    .widow-name {
-        font-size: 1.0em;
-        letter-spacing: 1px;
-    }
-    
-    .widow-stats-line {
-        font-size: 0.8em;
-        gap: 6px;
-    }
-    
-    /* Better spacing for mobile table elements */
-    .widow-display-container {
-        /* Widow cards positioned at top */
-    }
-}
-
-@media (orientation: portrait) {
-    .table-oval { 
-        border-radius: 50px;
-        /* Ensure 5px borders are visible but proportional on mobile */
-        border-width: 5px;
-        /* Maintain stable dimensions on mobile */
-        min-width: 320px;
-        aspect-ratio: 4/3;
-    }
-
-    .player-seat-left, .player-seat-right {
-        transform: none;
-        top: 25%;
-        width: 160px;
-    }
-
-    .player-seat-left { left: -55px; }
-    .player-seat-right { right: -55px; padding-right: 5px; box-sizing: border-box; } /* --- FIX 3: ADD PADDING --- */
-
-    .player-seat-left .player-seat, .player-seat-right .player-seat {
-        transform-origin: center;
-    }
-    
-    .player-seat-left .player-seat { transform: rotate(90deg); }
-    .player-seat-right .player-seat { transform: rotate(-90deg); }
-    
-    .trick-pile-container { 
-        bottom: 12vh; /* Slightly higher to make room */
-        transform: none; /* Remove scale to match widow cards exactly */
-        transform-origin: bottom;
-    }
-
-    .defender-pile { left: 8%; } /* More centered */
-    .bidder-pile { right: 8%; } /* More centered */
-
-    .trick-pile-content-wrapper {
-        flex-direction: column;
-        gap: 0px; /* No gap for compactness */
-        align-items: center;
-        justify-content: center;
-    }
-
-    .trick-pile-count {
-        font-size: 1.0em;
-        margin-top: 0px;
-    }
-
-    .trick-pile-base {
-        padding: 1px 2px; /* Minimal padding */
-        border-radius: 3px;
-    }
-    
-    /* Cards in pile will size based on renderCard */
-
-    .puck-container-left, .puck-container-right {
-        flex-direction: column;
-        top: 50%;
-        transform: translateY(-50%);
-    }
-    .puck-container-left { left: 20px; }
-    .puck-container-right { right: 20px; }
-
-    .puck-container-left .dealer-puck, .puck-container-right .dealer-puck {
-        transform: translateY(-15px);
-    }
-    
-    .puck-container-bottom .dealer-puck {
-        transform: translateY(-35px); /* Move up significantly above player name */
-    }
-
-    .played-card-left { left: 18%; }  /* Spread out more on mobile */
-    .played-card-right { right: 18%; } /* Spread out more on mobile */
-
-    .widow-display-container {
-        /* Position just below widow name plate */
-        top: 65px; /* Below widow seat on mobile */
-        left: 50%;
-        transform: translateX(-50%);
-        margin-top: 0; /* Remove default margin for mobile */
-    }
-
-    .widow-pile {
-        justify-content: center; /* Center cards in the pile */
-    }
-
-    /* Trump indicator mobile positioning - relative to player seats */
-    .player-seat-left .trump-indicator-puck,
-    .player-seat-right .trump-indicator-puck {
-        top: -55px; /* Closer to player name on mobile */
-        transform: translateX(-50%) scale(0.9);
-    }
-    
-    .player-seat-bottom .trump-indicator-puck:not(.trump-indicator-inline .trump-indicator-puck) {
-        top: -55px;
-        right: -55px;
-        transform: scale(0.9);
-    }
-    
-    .trump-indicator-inline .trump-indicator-puck {
-        width: 30px;
-        height: 30px;
-        font-size: 0.8em;
-        border-width: 2px;
-    }
-
-    /* Smaller trump indicator on mobile */
-    .trump-indicator-puck {
-        width: 42px;
-        height: 42px;
-        font-size: 1.0em;
-        border-width: 2px; /* Thinner border for mobile */
-    }
-
-    .trump-state-indicator {
-        width: 22px;
-        height: 2px;
-    }
-
-    .trump-state-indicator.broken::before {
-        font-size: 0.65em;
-    }
-    
-    /* Widow seat mobile optimizations */
-    .widow-seat {
-        top: 0px; /* As high as possible on mobile */
-        transform: translateX(-60%); /* Keep left shift on small mobile */
-        z-index: 11; /* Ensure it doesn't interfere with trump indicators */
-    }
-    
-    .widow-display-container {
-        /* Position just below widow name plate */
-        top: 65px; /* Below widow seat on mobile portrait */
-        left: 50%;
-        transform: translateX(-50%);
-        margin-top: 0; /* Remove default margin for mobile */
-        z-index: 6; /* Below widow seat */
-    }
 }
 
 /* Dealer Deck Display */
@@ -1022,31 +900,31 @@ button.card-display:disabled {
     color: #ffd700;
     font-family: 'Oswald', sans-serif;
     font-weight: bold;
-    font-size: 1.1em;
-    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
-    margin-bottom: 8px;
+    font-size: 1.8vh;
+    text-shadow: 0.25vh 0.25vh 0.5vh rgba(0, 0, 0, 0.8);
+    margin-bottom: 1vh;
     background: rgba(0, 0, 0, 0.6);
-    padding: 6px 12px;
-    border-radius: 8px;
-    border: 2px solid #ffd700;
-    box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+    padding: 0.7vh 1.5vh;
+    border-radius: 1vh;
+    border: 0.25vh solid #ffd700;
+    box-shadow: 0 0 1.2vh rgba(255, 215, 0, 0.3);
     white-space: nowrap;
     animation: dealer-glow 2s ease-in-out infinite alternate;
 }
 
 @keyframes dealer-glow {
     0% {
-        box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+        box-shadow: 0 0 1.2vh rgba(255, 215, 0, 0.3);
     }
     100% {
-        box-shadow: 0 0 20px rgba(255, 215, 0, 0.6), 0 0 30px rgba(255, 215, 0, 0.3);
+        box-shadow: 0 0 2.5vh rgba(255, 215, 0, 0.6), 0 0 3.5vh rgba(255, 215, 0, 0.3);
     }
 }
 
 .dealer-deck-pile {
     position: relative;
-    height: 67.5px;
-    width: 48.75px;
+    height: 8vh;
+    width: calc(8vh * 0.714);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -1056,427 +934,141 @@ button.card-display:disabled {
     position: absolute;
     top: 0;
     left: 0;
-    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+    filter: drop-shadow(0 0.25vh 0.5vh rgba(0, 0, 0, 0.3));
 }
 
 /* Enhanced deck shadows for depth */
-.dealer-deck-card-wrapper:nth-child(1) { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1)); }
-.dealer-deck-card-wrapper:nth-child(5) { filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.15)); }
-.dealer-deck-card-wrapper:nth-child(10) { filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.2)); }
-.dealer-deck-card-wrapper:nth-child(15) { filter: drop-shadow(0 4px 5px rgba(0, 0, 0, 0.25)); }
-.dealer-deck-card-wrapper:nth-child(20) { filter: drop-shadow(0 5px 6px rgba(0, 0, 0, 0.3)); }
-.dealer-deck-card-wrapper:nth-child(25) { filter: drop-shadow(0 6px 7px rgba(0, 0, 0, 0.35)); }
-.dealer-deck-card-wrapper:nth-child(30) { filter: drop-shadow(0 7px 8px rgba(0, 0, 0, 0.4)); }
-.dealer-deck-card-wrapper:nth-child(35) { filter: drop-shadow(0 8px 9px rgba(0, 0, 0, 0.45)); }
-.dealer-deck-card-wrapper:nth-child(36) { filter: drop-shadow(0 9px 10px rgba(0, 0, 0, 0.5)); }
+.dealer-deck-card-wrapper:nth-child(1) { filter: drop-shadow(0 0.12vh 0.25vh rgba(0, 0, 0, 0.1)); }
+.dealer-deck-card-wrapper:nth-child(5) { filter: drop-shadow(0 0.25vh 0.35vh rgba(0, 0, 0, 0.15)); }
+.dealer-deck-card-wrapper:nth-child(10) { filter: drop-shadow(0 0.35vh 0.5vh rgba(0, 0, 0, 0.2)); }
+.dealer-deck-card-wrapper:nth-child(15) { filter: drop-shadow(0 0.5vh 0.6vh rgba(0, 0, 0, 0.25)); }
+.dealer-deck-card-wrapper:nth-child(20) { filter: drop-shadow(0 0.6vh 0.7vh rgba(0, 0, 0, 0.3)); }
+.dealer-deck-card-wrapper:nth-child(25) { filter: drop-shadow(0 0.7vh 0.85vh rgba(0, 0, 0, 0.35)); }
+.dealer-deck-card-wrapper:nth-child(30) { filter: drop-shadow(0 0.85vh 1vh rgba(0, 0, 0, 0.4)); }
+.dealer-deck-card-wrapper:nth-child(35) { filter: drop-shadow(0 1vh 1.1vh rgba(0, 0, 0, 0.45)); }
+.dealer-deck-card-wrapper:nth-child(36) { filter: drop-shadow(0 1.1vh 1.2vh rgba(0, 0, 0, 0.5)); }
 
-/* LANDSCAPE ORIENTATION FIXES FOR TABLE LAYOUT */
-
-/* Mobile landscape mode optimizations */
-@media (orientation: landscape) and (max-height: 500px) {
-    .table-oval {
-        min-width: 420px; /* Wider minimum for landscape */
-        aspect-ratio: 5/3; /* Landscape-friendly aspect ratio */
-        border-width: 4px; /* Thinner border for constrained height */
-        border-radius: 120px; /* Adjusted for landscape ratio */
-    }
-    
-    .action-prompt-container {
-        top: 80px; /* Reduced positioning for landscape */
-        min-width: 160px;
-        max-width: calc(100vw - 120px);
-        padding: 6px 10px;
-        font-size: 0.8em;
-    }
-    
-    .action-prompt-container h4 {
-        font-size: 0.9em;
-        margin: 0 0 4px 0;
-    }
-    
-    .action-prompt-container p {
-        font-size: 0.75em;
-        margin: 2px 0;
-    }
-    
-    .action-prompt-container .game-button {
-        padding: 6px 8px;
-        font-size: 0.75em;
-        margin: 2px;
-        min-height: 44px;
-        min-width: 44px;
-    }
-    
-    /* Adjust player seat positions for landscape */
-    .player-seat-left { left: 15px; top: 50%; transform: translateY(-50%); }
-    .player-seat-right { right: 15px; top: 50%; transform: translateY(-50%); }
-    .player-seat-bottom { bottom: 8%; }
-    
-    /* Compact pucks for landscape */
-    .puck {
-        width: 24px;
-        height: 24px;
-        font-size: 0.65em;
-    }
-    
-    /* Compact trick piles */
-    .trick-pile-container {
-        transform: scale(0.85);
-        bottom: 2%;
-    }
-    
-    .defender-pile { left: 8%; }
-    .bidder-pile { right: 8%; }
-    
-    /* Compact trump indicator */
-    .trump-indicator-puck {
-        width: 35px;
-        height: 35px;
-        font-size: 0.9em;
-        border-width: 2px;
-    }
-    
-    /* Compact widow seat */
-    .widow-seat {
-        top: 0px;
-        transform: translateX(-50%);
-    }
-    
-    .widow-seat-plate {
-        min-width: 160px;
-        padding: 4px 8px;
-        font-size: 0.8em;
-        border-width: 3px;
-    }
-    
-    .widow-name {
-        font-size: 0.9em;
-    }
-    
-    .widow-stats-line {
-        font-size: 0.7em;
-        gap: 4px;
-    }
-    
-    /* Compact dealer deck */
-    .dealer-deck-container {
-        opacity: 0.85;
-    }
-    
-    .dealer-deck-label {
-        font-size: 0.8em;
-        padding: 3px 6px;
-        margin-bottom: 4px;
-    }
-    
-    .dealer-deck-pile {
-        transform: scale(0.8);
-    }
-    
-    .dealer-deck-bottom { bottom: 10%; }
-    .dealer-deck-left { left: 8%; }
-    .dealer-deck-right { right: 8%; }
+/* Score progress containers - positioned independently */
+.score-progress-container.team-defender {
+    position: absolute !important;
+    left: 2% !important;
+    bottom: 8% !important;
+    z-index: 10 !important;
+    width: 32vh !important;
+    pointer-events: auto !important;
 }
 
-/* Desktop: Create invisible container for trick plates and goal bars */
-@media (min-width: 1024px) {
-    /* Invisible container for trick piles and goal bars */
-    .trick-goals-container {
-        position: absolute;
-        width: 100%;
-        height: 50%;
-        bottom: 5%;
-        left: 0;
-        pointer-events: none; /* Invisible container */
-        z-index: 5;
+.score-progress-container.team-bidder {
+    position: absolute !important;
+    right: 2% !important;
+    bottom: 8% !important;
+    z-index: 10 !important;
+    width: 32vh !important;
+    pointer-events: auto !important;
+}
+
+/* Dynamic collision-based rotation for player names */
+/* Calculate when player seats (22vh fixed width at 2.5vh from edge) */
+/* would collide with played cards (at 50% + card-width/2 + padding) */
+/* Card position from center: (10vh * 0.714 / 2) + 1vh = 4.57vh */
+/* Total distance from center to card edge: ~4.57vh */
+/* Player seat: 2.5vh edge + 22vh width = 24.5vh from edge */
+/* Collision occurs when: viewport-width < 2*(24.5vh + 4.57vh) = 58.14vh */
+/* At 1310x1538: width=85.2vh, needs 58.14vh minimum, should fit but tight */
+/* Add safety margin: use 65vh minimum width (aspect ratio ~0.65 or 13/20) */
+
+/* More precise calculation with fixed seat width */
+@media (max-aspect-ratio: 9/10) {
+    /* Left player - rotate and anchor to left edge */
+    .player-seat-left {
+        left: -7vh !important; /* Negative offset to pull seat to edge after rotation */
+        top: 40%; /* Positioned for optimal visibility */
+        transform: none !important; /* Remove the translateY */
+        width: 20vh; /* Width when rotated becomes height */
     }
     
-    /* Allow interaction with child elements */
-    .trick-goals-container > * {
-        pointer-events: auto;
+    .player-seat-left .player-seat {
+        transform-origin: center;
+        transform: rotate(90deg);
+        min-width: 20vh !important; /* Ensure adequate space when rotated */
     }
     
-    /* Decouple progress bars - position independently */
-    .score-progress-container.team-defender {
-        position: absolute !important;
-        left: 2% !important; /* Far left against outer wall */
-        bottom: 8% !important;
-        z-index: 10 !important;
-        width: 260px !important;
-        pointer-events: auto !important;
+    /* Override puck positions in collision mode - move down to 30% */
+    .puck-container-left {
+        bottom: 30% !important; /* Lower position in collision mode */
     }
     
-    .score-progress-container.team-bidder {
-        position: absolute !important;
-        right: 2% !important; /* Far right against outer wall */
-        bottom: 8% !important;
-        z-index: 10 !important;
-        width: 260px !important;
-        pointer-events: auto !important;
+    /* Right player - rotate and anchor to right edge */
+    .player-seat-right {
+        right: -7vh !important; /* Negative offset to pull seat to edge after rotation */
+        top: 40%; /* Positioned for optimal visibility */
+        transform: none !important; /* Remove the translateY */
+        width: 20vh; /* Width when rotated becomes height */
+    }
+    
+    .player-seat-right .player-seat {
+        transform-origin: center;
+        transform: rotate(-90deg);
+        min-width: 20vh !important; /* Ensure adequate space when rotated */
+    }
+    
+    /* Override puck positions in collision mode - move down to 30% */
+    .puck-container-right {
+        bottom: 30% !important; /* Lower position in collision mode */
     }
 }
 
-/* Desktop mode optimizations - both portrait and landscape */
-@media (min-width: 1024px) {
-    
-    /* Adjust player seat positions to accommodate 3x size */
-    .player-seat-left { 
-        left: 10px;  /* Move in slightly */
-        width: auto; /* Remove width constraint */
-    }
-    
-    .player-seat-right { 
-        right: 10px; /* Move in slightly */
-        width: auto; /* Remove width constraint */
-    }
-    
-    .player-seat-bottom { 
-        bottom: 10%; /* Move down by half card height (was 15%) */
-    }
-    
-    /* Position trick piles at bottom of table */
-    .trick-pile-container.defender-pile {
-        position: absolute;
-        bottom: 5%;  /* Move to bottom of table */
-        left: 12%;    /* Align right edge with west player right edge */
-        transform: translateX(0);
-    }
-    
-    .trick-pile-container.bidder-pile {
-        position: absolute;
-        bottom: 5%;  /* Move to bottom of table */
-        right: 12%;   /* Align left edge with east player left edge */
-        left: auto;
-        transform: translateX(0);
-    }
-    
-    /* Desktop trick piles use viewport-based sizing */
-    /* Size is already set by the media query above (7.5vh) */
-    
-    .trick-pile-glow {
-        width: 100%;  /* Match container size */
-        height: 100%; /* Match container size */
-    }
-    
-    /* Hide inline widow cards on desktop */
-    .widow-cards-inline {
-        display: none !important;
-    }
-    
-    /* Create new desktop widow cards container - horizontal 3x1 layout */
-    .widow-cards-desktop {
-        position: absolute;
-        top: 30px;
-        left: calc(50% + 200px); /* To the right of the widow seat */
-        z-index: 15;
-        display: flex !important;
-        flex-direction: row !important; /* 3x1 horizontal layout */
-        gap: 15px; /* Space between cards */
-        padding: 10px;
-        background: rgba(0, 0, 0, 0.3);
-        border-radius: 8px;
-        border: 2px solid #666;
-        align-items: center;
-        justify-content: center;
-        height: auto;
-        width: auto;
-    }
-    
-    /* Ensure widow cards display horizontally */
-    .widow-cards-desktop > div {
-        display: inline-block;
-        position: relative !important;
-        transform: none !important;
-        margin: 0 !important;
-    }
-    
-    /* Widow seat without cards on desktop */
-    .widow-seat {
-        transform: translateX(-50%) scale(1.3); /* Center the seat itself */
-    }
-    
-    .widow-seat-plate {
-        min-width: 250px;  /* Bigger for desktop */
-        padding: 12px 18px;
-        font-size: 1.3em;
-        border-width: 6px;
-    }
-    
-    .widow-name {
-        font-size: 1.4em;
-    }
-    
-    .widow-stats-line {
-        font-size: 1.1em;
-        gap: 12px;
-    }
-    
-    /* Remove separate widow display container since we're using desktop positioning */
-    .widow-display-container {
-        display: none !important;
-    }
-    
-    .widow-pile {
-        display: flex;
-        gap: 8px;
-    }
-    
-    /* Larger trick piles for desktop - remove transform scale to avoid interference */
-    .trick-pile-container {
-        bottom: 5%;
-        transform: none; /* Remove scale to avoid interference */
-    }
-    
-    /* Count and base already sized by viewport units above */
-    
-    .defender-pile { left: 12%; }  /* Consistent with positioning */
-    .bidder-pile { right: 12%; }
-    
-    /* Scale up trump indicator */
-    .trump-indicator-puck {
-        width: 65px;           /* Increased from 50px */
-        height: 65px;
-        font-size: 1.5em;
-        border-width: 4px;
+/* Additional breakpoint for very narrow screens where rotation isn't enough */
+/* Force smaller seats to prevent any collision */
+@media (max-aspect-ratio: 1/2) {
+    .player-seat-left .player-seat,
+    .player-seat-right .player-seat {
+        min-width: 15vh !important; /* Reduce size on extremely narrow screens */
+        font-size: 1.4vh !important;
     }
 }
 
-/* Desktop/Laptop landscape mode optimizations */
-@media (orientation: landscape) and (min-height: 501px) and (min-width: 769px) {
-    .table-oval {
-        min-width: 500px;
-        aspect-ratio: 5/3;
-        border-width: 10px; /* Full border for desktop */
-        border-radius: 150px;
-    }
-    
-    .action-prompt-container {
-        top: 120px;
-        min-width: 240px;
-        max-width: calc(100vw - 100px);
-        padding: 12px 16px;
-        font-size: 1em;
-    }
-    
-    /* Standard sizing for non-desktop landscape */
-    .puck {
-        width: 32px;
-        height: 32px;
-        font-size: 0.75em;
-    }
-    
-    .trump-indicator-puck {
-        width: 50px;
-        height: 50px;
-        font-size: 1.2em;
-        border-width: 3px;
-    }
-    
-    .widow-seat-plate {
-        min-width: 200px;
-        padding: 8px 12px;
-        font-size: 1em;
-        border-width: 5px;
-    }
-    
-    .dealer-deck-container {
-        opacity: 0.95;
-    }
-    
-    .dealer-deck-label {
-        font-size: 1.1em;
-        padding: 6px 12px;
-        margin-bottom: 8px;
-    }
-    
-    .dealer-deck-pile {
-        transform: none;
-    }
+/* Widow cards positioning - dynamically positioned based on widow seat */
+.widow-cards-display {
+    position: absolute;
+    z-index: 15;
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 0.5vh;
+    padding: 1.2vh;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 1vh;
+    border: 0.25vh solid #666;
+    align-items: center;
+    justify-content: center;
+    height: auto;
+    width: auto;
 }
 
-/* Tablet landscape mode optimizations */
-@media (orientation: landscape) and (min-height: 501px) and (max-width: 768px) {
-    .table-oval {
-        min-width: 450px;
-        aspect-ratio: 5/3;
-        border-width: 8px;
-        border-radius: 135px;
-    }
-    
-    .action-prompt-container {
-        top: 100px;
-        min-width: 200px;
-        max-width: calc(100vw - 80px);
-        padding: 10px 14px;
-        font-size: 0.9em;
-    }
-    
-    .puck {
-        width: 30px;
-        height: 30px;
-        font-size: 0.7em;
-    }
-    
-    .trump-indicator-puck {
-        width: 45px;
-        height: 45px;
-        font-size: 1.1em;
-        border-width: 2px;
-    }
-    
-    .widow-seat-plate {
-        min-width: 180px;
-        padding: 6px 10px;
-        font-size: 0.9em;
-        border-width: 4px;
-    }
-    
-    .dealer-deck-container {
-        opacity: 0.9;
-    }
-    
-    .dealer-deck-label {
-        font-size: 0.95em;
-        padding: 5px 9px;
-        margin-bottom: 6px;
-    }
-    
-    .dealer-deck-pile {
-        transform: scale(0.9);
-    }
+/* Widow cards position classes - offset from widow seat */
+.widow-cards-top {
+    top: 4vh;
+    left: calc(50% + 25vh);
 }
 
-/* Mobile optimizations for dealer deck */
-@media (orientation: portrait) {
-    .dealer-deck-container {
-        opacity: 0.9;
-    }
-    
-    .dealer-deck-label {
-        font-size: 0.9em;
-        padding: 4px 8px;
-        margin-bottom: 6px;
-    }
-    
-    .dealer-deck-bottom {
-        bottom: 20%;
-    }
-    
-    .dealer-deck-left {
-        left: 10%;
-    }
-    
-    .dealer-deck-right {
-        right: 10%;
-    }
-    
-    /* Slightly smaller deck pile on mobile for better fit */
-    .dealer-deck-pile {
-        transform: scale(0.9);
-    }
-    
-    /* Less dramatic shadow effects on mobile for performance */
-    .dealer-deck-card-wrapper {
-        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
-    }
+.widow-cards-bottom {
+    bottom: calc(12% - 10vh);
+    left: calc(50% + 25vh);
+}
+
+.widow-cards-left {
+    top: calc(50% - 10vh);
+    left: calc(2.5vh + 20vh);
+}
+
+.widow-cards-right {
+    top: calc(50% - 10vh);
+    right: calc(2.5vh + 20vh);
+}
+
+.widow-cards-display > div {
+    display: inline-block;
+    position: relative !important;
+    transform: none !important;
+    margin: 0 !important;
 }

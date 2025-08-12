@@ -1,216 +1,135 @@
 /* frontend/src/components/game/InsuranceControls.css */
+/* Simplified VH-based responsive design */
 
 .insurance-controls-container {
-    padding: 8px 12px;
+    padding: 0.5vh 0.8vh; /* Reduced padding */
     background: linear-gradient(135deg, rgba(31, 41, 55, 0.8) 0%, rgba(17, 24, 39, 0.8) 100%);
     color: white;
-    border-radius: 12px;
+    border-radius: 1vh;
     flex-basis: auto;
     flex-shrink: 1;
-    display: flex;
+    display: flex !important;
     align-items: center;
     justify-content: center;
-    gap: 15px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    min-height: 50px;
+    gap: 0.8vh; /* Reduced gap */
+    border: 0.12vh solid rgba(255, 255, 255, 0.15);
+    min-height: 5vh; /* Slightly smaller height */
+    max-width: 35vh; /* Limit maximum width */
     -webkit-backdrop-filter: blur(4px);
     backdrop-filter: blur(4px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 0.5vh 1.5vh rgba(0, 0, 0, 0.3);
     transition: all 0.3s ease;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
-/* Reserve space and dim when inactive */
+/* Reserve space when inactive - slightly dimmed */
 .insurance-controls-container.is-inactive {
-    opacity: 0.6;
+    opacity: 0.7;
     pointer-events: none;
 }
 
 .insurance-placeholder {
-    font-size: 0.9em;
+    font-size: 1.4vh; /* Reduced font */
     color: rgba(255, 255, 255, 0.7);
     font-style: italic;
 }
 
-/* Desktop: 2x bigger insurance panel */
-@media (min-width: 1024px) {
-    .insurance-controls-container {
-        padding: 16px 24px;  /* 2x padding */
-        gap: 30px;           /* 2x gap */
-        min-height: 100px;   /* 2x height */
-        border-radius: 20px;
-        border-width: 2px;
-        max-width: none;     /* Remove width restrictions */
-    }
-}
-
 .insurance-controls-container:hover {
     border-color: rgba(255, 255, 255, 0.25);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 0.7vh 2vh rgba(0, 0, 0, 0.4);
 }
 
 .deal-made-text {
-    color: #10b981; /* Green */
+    color: #10b981;
     font-weight: bold;
-    font-size: 1.2em;
+    font-size: 1.8vh; /* Reduced font */
     font-family: 'Oswald', sans-serif;
 }
 
 .value-display {
-    font-size: 1.6em;
+    font-size: 2.2vh; /* Reduced font size */
     font-weight: bold;
     font-family: 'Oswald', sans-serif;
-    min-width: 40px;
+    min-width: 3.5vh; /* Reduced min width */
     text-align: center;
     line-height: 1;
 }
 
-/* Desktop: Scale up text and controls */
-@media (min-width: 1024px) {
-    .deal-made-text {
-        font-size: 2.4em;  /* 2x size */
-    }
-    
-    .value-display {
-        font-size: 3.2em;  /* 2x size */
-        min-width: 80px;   /* 2x width */
-    }
-}
-
 .value-display.player-value-get {
-  color: #22c55e;
+    color: #22c55e;
 }
 
 .value-display.player-value-give {
-  color: #ef4444;
+    color: #ef4444;
 }
 
-
 .gap-value {
-    border-right: 1px solid rgba(255, 255, 255, 0.2);
-    padding-right: 15px;
+    border-right: 0.12vh solid rgba(255, 255, 255, 0.2);
+    padding-right: 0.8vh; /* Reduced padding */
 }
 
 .gap-value.positive {
-    color: #f59e0b; /* Amber */
+    color: #f59e0b;
 }
 
 .gap-value.zero-or-less {
-    color: #10b981; /* Green */
+    color: #10b981;
 }
 
 .adjust-button {
-    width: 36px;
-    height: 36px;
-    font-size: 1.5em;
+    width: 3.5vh; /* Reduced size */
+    height: 3.5vh;
+    font-size: 2vh; /* Reduced font */
     font-weight: bold;
     cursor: pointer;
     background: linear-gradient(135deg, #4a5568, #2d3748);
-    border: 2px solid #718096;
+    border: 0.2vh solid #718096;
     color: white;
-    border-radius: 12px;
+    border-radius: 1vh;
     display: flex;
     align-items: center;
     justify-content: center;
     line-height: 1;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+    text-shadow: 0.12vh 0.12vh 0.25vh rgba(0,0,0,0.5);
     transition: all 0.3s ease;
     touch-action: manipulation;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-}
-
-/* Desktop: 2x bigger buttons */
-@media (min-width: 1024px) {
-    .adjust-button {
-        width: 72px;      /* 2x size */
-        height: 72px;     /* 2x size */
-        font-size: 3em;   /* 2x font */
-        border-radius: 20px;
-        border-width: 3px;
-    }
-    
-    .gap-value {
-        padding-right: 30px;  /* 2x padding */
-    }
+    box-shadow: 0 0.25vh 0.7vh rgba(0, 0, 0, 0.3);
 }
 
 .adjust-button:hover {
     background: linear-gradient(135deg, #718096, #4a5568);
-    box-shadow: 0 4px 12px rgba(150, 160, 180, 0.5);
-    transform: translateY(-1px);
+    box-shadow: 0 0.5vh 1.5vh rgba(150, 160, 180, 0.5);
+    transform: translateY(-0.12vh);
 }
 
 .adjust-button:active {
-    transform: translateY(1px);
+    transform: translateY(0.12vh);
 }
 
 .adjust-button.adjust-green {
     background: linear-gradient(135deg, #34d399, #10b981);
     border-color: #10b981;
-    box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
+    box-shadow: 0 0.25vh 0.7vh rgba(16, 185, 129, 0.3);
 }
+
 .adjust-button.adjust-green:hover {
     background: linear-gradient(135deg, #4ade80, #22c55e);
-    box-shadow: 0 4px 12px rgba(34, 197, 94, 0.5);
-    transform: translateY(-1px);
+    box-shadow: 0 0.5vh 1.5vh rgba(34, 197, 94, 0.5);
+    transform: translateY(-0.12vh);
 }
 
 .adjust-button.adjust-red {
     background: linear-gradient(135deg, #f87171, #ef4444);
     border-color: #ef4444;
-    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3);
+    box-shadow: 0 0.25vh 0.7vh rgba(239, 68, 68, 0.3);
 }
+
 .adjust-button.adjust-red:hover {
     background: linear-gradient(135deg, #fb7185, #f43f5e);
-    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.5);
-    transform: translateY(-1px);
+    box-shadow: 0 0.5vh 1.5vh rgba(239, 68, 68, 0.5);
+    transform: translateY(-0.12vh);
 }
 
-/* Mobile optimizations for vertical phone mode */
-@media (orientation: portrait) and (max-width: 768px) {
-    .insurance-controls-container {
-        padding: 6px 8px;
-        gap: 8px;
-        min-height: 44px;
-        max-width: 200px; /* Limit width to prevent clipping */
-        font-size: 0.9em;
-    }
-    
-    .value-display {
-        font-size: 1.3em;
-        min-width: 30px;
-    }
-    
-    .deal-made-text {
-        font-size: 1em;
-    }
-    
-    .adjust-button {
-        width: 30px;
-        height: 30px;
-        font-size: 1.2em;
-    }
-    
-    .gap-value {
-        padding-right: 8px;
-    }
-}
-
-/* Extra small screens */
-@media (orientation: portrait) and (max-width: 414px) {
-    .insurance-controls-container {
-        max-width: 160px; /* Even more compact on small phones */
-        gap: 6px;
-        padding: 5px 6px;
-    }
-    
-    .value-display {
-        font-size: 1.1em;
-        min-width: 25px;
-    }
-    
-    .adjust-button {
-        width: 28px;
-        height: 28px;
-        font-size: 1.1em;
-    }
-}
+/* NO MEDIA QUERIES - Everything scales consistently with vh units */
+/* All elements maintain their proportions across all devices */

@@ -9,17 +9,18 @@
     font-family: "Merriweather", serif;
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    height: calc(100vh - 7.5vh); /* Account for header height */
     background-color: #333;
     overflow: hidden;
     position: relative; /* Ensure proper stacking context */
     z-index: 1; /* Base z-index for game view */
 }
 
-/* Ensure the main table area can shrink while footer stays sticky */
+/* Ensure the main table area fills available space */
 .game-table {
     flex: 1 1 auto; /* Can grow and shrink */
     min-height: 0; /* Critical: allows shrinking below content height */
+    max-height: calc(92.5vh - 20vh); /* Total minus footer height = 72.5vh */
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -30,7 +31,7 @@
 /* In-Game Ad Container */
 .in-game-ad-container {
     position: fixed;
-    bottom: 180px; /* Position above the player hand */
+    bottom: 22vh; /* Position above the player hand using vh */
     left: 50%;
     transform: translateX(-50%);
     z-index: 10;
@@ -47,65 +48,81 @@
 .game-footer {
     background-color: rgba(48, 48, 48, 0.8);
     padding: 0; /* NO PADDING - flush to edges */
-    border-top: 2px solid #424242;
+    border-top: 0.25vh solid #424242;
     flex: 0 0 auto; /* Never grow or shrink - always stays its natural height */
     color: white;
     position: relative;
     z-index: 10; /* Ensure footer stays above table content */
+    height: 20vh; /* Fixed height to accommodate player hand + controls */
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start; /* Stack children from top */
 }
 
 .footer-controls-wrapper {
-    display: grid;
-    grid-template-columns: 1fr; /* Default: single column */
-    grid-template-rows: auto auto; /* Two rows */
-    gap: 10px;
-    width: 100%;
+    position: absolute !important; /* Position absolutely within footer */
+    bottom: 0; /* Stick to bottom of footer */
+    left: 0;
+    right: 0;
+    display: flex !important; /* Force display */
+    flex-direction: row;
+    justify-content: space-between;
     align-items: center;
-    justify-items: center;
-    padding: 0; /* NO PADDING */
+    gap: 1vh; /* Reduced gap */
+    width: 100%;
+    padding: 0.5vh 1vh; /* Reduced padding */
+    box-sizing: border-box;
+    height: 7vh; /* Fixed height for controls */
+    background-color: rgba(40, 40, 40, 0.9); /* Slightly darker than footer */
+    visibility: visible !important; /* Force visibility */
+    opacity: 1 !important; /* Force opacity */
+    z-index: 100; /* High z-index to ensure visibility */
 }
 
 .game-view-chat-container {
-    width: 320px;
+    width: 35vh; /* vh-based width */
     position: absolute;
-    bottom: 10px;
-    left: 10px;
+    bottom: 1vh;
+    left: 1vh;
     z-index: 30;
+    max-height: calc(100vh - 30vh); /* Prevent overlap */
 }
 
 .chat-close-button {
     position: absolute;
-    top: 2px;
-    right: 6px;
+    top: 0.2vh;
+    right: 0.6vh;
     cursor: pointer;
     color: #fff;
     background: none;
     border: none;
-    font-size: 1.2em;
+    font-size: 2vh;
     z-index: 2001; /* Ensure close button stays above chat content */
 }
 
 .chat-tab-button {
     background-color: #333;
     color: #fff;
-    border: 1px solid #555;
-    border-radius: 4px;
-    padding: 5px 10px;
-    font-size: 1em;
+    border: 0.12vh solid #555;
+    border-radius: 0.5vh;
+    padding: 0.8vh 1.5vh;
+    font-size: 1.8vh;
     cursor: pointer;
     z-index: 25;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 1vh;
+    min-height: 5vh;
+    min-width: 8vh;
 }
 
 .unread-badge {
     background-color: #28a745;
     color: white;
     border-radius: 50%;
-    width: 20px;
-    height: 20px;
-    font-size: 0.8em;
+    width: 2.5vh;
+    height: 2.5vh;
+    font-size: 1.3vh;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -127,50 +144,51 @@
 
 .initial-prompt-modal {
     background-color: #fefcbf;
-    border: 2px solid #f59e0b;
-    border-radius: 8px;
-    padding: 20px;
+    border: 0.2vh solid #f59e0b;
+    border-radius: 1vh;
+    padding: 2vh;
     width: 90%;
-    max-width: 500px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    max-width: 50vh;
+    box-shadow: 0 0.4vh 1vh rgba(0,0,0,0.3);
     text-align: center;
 }
 
 .game-menu-popup {
     position: absolute;
-    bottom: calc(100% + 10px);
-    right: 10px;
+    bottom: calc(100% + 1.2vh);
+    right: 1.2vh;
     background-color: #212121;
-    border: 1px solid #555;
-    border-radius: 8px;
-    padding: 15px;
+    border: 0.12vh solid #555;
+    border-radius: 1vh;
+    padding: 1.8vh;
     z-index: 1010;
-    box-shadow: 0 -4px 12px rgba(0,0,0,0.5);
+    box-shadow: 0 -0.5vh 1.5vh rgba(0,0,0,0.5);
     color: white;
-    width: 250px; 
+    width: 30vh; 
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 1.2vh;
 }
 
 .game-menu-popup h3 {
-    margin: 0 0 5px 0;
-    padding-bottom: 10px;
-    border-bottom: 1px solid #444;
+    margin: 0 0 0.6vh 0;
+    padding-bottom: 1.2vh;
+    border-bottom: 0.12vh solid #444;
     font-family: 'Oswald', sans-serif;
     text-align: center;
+    font-size: 2vh;
 }
 
 .game-menu-info {
-    font-size: 0.9em;
+    font-size: 1.5vh;
     background-color: #333;
-    padding: 8px;
-    border-radius: 4px;
-    margin-bottom: 5px;
+    padding: 1vh;
+    border-radius: 0.5vh;
+    margin-bottom: 0.6vh;
 }
 
 .game-menu-info p {
-    margin: 0 0 5px 0;
+    margin: 0 0 0.6vh 0;
     display: flex;
     justify-content: space-between;
 }
@@ -181,19 +199,20 @@
 .game-menu-actions {
     display: flex;
     flex-direction: column; 
-    gap: 8px;
+    gap: 1vh;
 }
 
 .game-menu-button {
     width: 100%;
-    padding: 8px 12px;
+    padding: 1vh 1.5vh;
     text-align: left;
-    border: 1px solid #444;
-    border-radius: 4px;
+    border: 0.12vh solid #444;
+    border-radius: 0.5vh;
     font-family: 'Oswald', sans-serif;
-    font-size: 1em;
+    font-size: 1.8vh;
     cursor: pointer;
     transition: background-color 0.2s, border-color 0.2s;
+    min-height: 5vh;
 }
 
 .game-menu-button:hover:not(:disabled) {
@@ -236,567 +255,66 @@
 
 .hamburger-btn {
     background: none;
-    border: 1px solid #666;
-    padding: 8px;
+    border: 0.12vh solid #666;
+    padding: 1vh;
     cursor: pointer;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 5vh;
+    height: 5vh;
 }
 
 .hamburger-btn svg {
     stroke: white;
+    width: 2.5vh;
+    height: 2.5vh;
 }
 
 /* Button panel groups menu and chat buttons */
 .button-panel {
-    display: flex;
+    display: flex !important; /* Force display */
     align-items: center;
-    gap: 10px;
+    gap: 0.8vh; /* Reduced gap */
     justify-content: center;
+    flex-shrink: 0; /* Prevent shrinking */
+    padding: 0.5vh; /* Reduced padding */
+    background: linear-gradient(135deg, rgba(31, 41, 55, 0.8) 0%, rgba(17, 24, 39, 0.8) 100%);
+    border-radius: 0.8vh;
+    border: 0.1vh solid rgba(255, 255, 255, 0.15);
+    visibility: visible !important; /* Force visibility */
+    opacity: 1 !important; /* Force opacity */
 }
 
 /* Insurance controls container */
 .insurance-controls-container {
-    display: flex;
+    display: flex !important; /* Force display */
     align-items: center;
     justify-content: center;
-    gap: 10px;
-}
-
-@media (max-width: 768px) {
-    .in-game-ad-container {
-        bottom: 160px; /* Adjust for mobile player hand height */
-    }
-}
-
-@media (max-width: 414px) {
-    .in-game-ad-container {
-        bottom: 140px; /* Further adjustment for smaller screens */
-        transform: translateX(-50%) scale(0.9); /* Slightly smaller on very small screens */
-    }
-}
-
-/* Wide aspect ratios - switch to 2x1 grid for better space usage */
-@media (min-aspect-ratio: 3/2) {
-    .footer-controls-wrapper {
-        grid-template-columns: 1fr 1fr !important; /* Two columns */
-        grid-template-rows: auto !important; /* Single row */
-    }
-    
-    .game-footer {
-        min-height: 60px; /* Can be shorter with 2x1 */
-    }
-}
-
-/* Narrow/tall screens - insurance and buttons share a row */
-/* Catches 512x1117 (0.46), 816x1112 (0.73), and similar tall screens */
-@media (max-aspect-ratio: 4/5) {
-    .footer-controls-wrapper {
-        display: flex !important; /* Use flexbox for simpler layout */
-        flex-direction: row !important;
-        justify-content: center !important;
-        align-items: center !important;
-        gap: 15px !important;
-    }
-    
-    .game-footer {
-        min-height: 60px; /* Single row height */
-    }
-    
-    /* Both insurance controls and button panel in same row */
-    .footer-controls-wrapper > * {
-        flex: 0 0 auto; /* Don't grow or shrink */
-    }
-}
-
-/* Square-ish screens - let other rules decide */
-@media (min-aspect-ratio: 4/5) and (max-aspect-ratio: 3/2) {
-    /* Default grid layout applies based on device type */
-    /* This range covers aspect ratios from 0.8 to 1.5 */
-}
-
-@media (orientation: portrait) and (max-width: 768px) {
-    .in-game-ad-container {
-        bottom: 150px; /* Adjust for portrait orientation */
-    }
-    
-    /* In portrait mobile, use 1x2 grid */
-    .game-footer {
-        padding: 0; /* NO PADDING */
-        flex: 0 0 auto; /* Never shrink - always stays at bottom */
-    }
-    
-    .footer-controls-wrapper {
-        display: grid;
-        grid-template-columns: 1fr; /* Single column */
-        grid-template-rows: auto auto; /* Two rows */
-        gap: 8px;
-        width: 100%;
-        align-items: center;
-        justify-items: center;
-    }
-    
-    /* On mobile portrait, button panel is simpler */
-    .button-panel {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        background: none;
-        border: none;
-        padding: 0;
-        box-shadow: none;
-    }
-    
-    /* Enhanced mobile chat positioning */
-    .game-view-chat-container {
-        width: min(300px, calc(100vw - 20px));
-        bottom: 8px;
-        left: 8px;
-        max-height: calc(100vh - 250px); /* Prevent overlap with footer */
-    }
-}
-
-@media (max-width: 768px) {
-    .game-menu-popup {
-        width: 90vw;
-        max-width: 350px;
-        right: 5vw;
-        bottom: calc(100% + 5px);
-        font-size: 0.9em;
-    }
-    
-    /* Small screen game menu optimization */
-    .game-menu-button {
-        padding: 10px 12px;
-        font-size: 0.9em;
-        min-height: 44px; /* Maintain touch targets */
-    }
-}
-
-/* Narrow screens around 430px width */
-@media (min-width: 415px) and (max-width: 480px) {
-    .game-footer {
-        overflow-x: visible; /* Allow footer content to be visible */
-    }
-    
-    .footer-controls-wrapper {
-        overflow-x: visible;
-    }
-}
-
-/* Extra small screens */
-@media (max-width: 414px) {
-    .game-view-chat-container {
-        width: calc(100vw - 16px);
-        left: 8px;
-        bottom: 8px;
-    }
-    
-    .chat-tab-button {
-        padding: 6px 8px;
-        font-size: 0.9em;
-        min-height: 44px;
-        min-width: 44px;
-    }
-    
-    .hamburger-btn {
-        min-height: 44px;
-        min-width: 44px;
-        padding: 6px;
-    }
-    
-    .unread-badge {
-        width: 18px;
-        height: 18px;
-        font-size: 0.7em;
-    }
+    gap: 1vh;
+    flex-shrink: 0; /* Prevent shrinking */
+    white-space: nowrap;
+    visibility: visible !important; /* Force visibility */
+    opacity: 1 !important; /* Force opacity - override any inactive state */
 }
 
 .card-drop-zone {
     position: absolute;
     top: 50%;
     left: 50%;
-    /* Dynamic sizing based on viewport - matches normal card size */
-    width: calc(10vh * 0.714); /* Mobile default: 10vh * aspect ratio */
+    /* Always 10vh cards - no media queries */
+    width: calc(10vh * 0.714);
     height: 10vh;
     transform: translate(-50%, -50%);
-    border-radius: 8px;
-    border: 3px dashed rgba(139, 195, 247, 0.5);
+    border-radius: 1vh;
+    border: 0.3vh dashed rgba(139, 195, 247, 0.5);
     transition: opacity 0.3s ease, box-shadow 0.2s ease;
     opacity: 0; /* Hidden by default */
     z-index: 7; /* Below played cards but above table */
     pointer-events: none; /* Allows clicks to pass through */
-    box-shadow: 0 0 20px 10px rgba(139, 195, 247, 0.5); /* --- MODIFIED: Amplified base glow --- */
+    box-shadow: 0 0 2vh 1vh rgba(139, 195, 247, 0.5);
 }
 
-/* Tablet: 12vh cards */
-@media (min-width: 769px) and (max-width: 1023px) {
-    .card-drop-zone {
-        width: calc(12vh * 0.714);
-        height: 12vh;
-    }
-}
-
-/* Desktop: 15vh cards */
-@media (min-width: 1024px) {
-    .card-drop-zone {
-        width: calc(15vh * 0.714);
-        height: 15vh;
-    }
-}
-
-/* LANDSCAPE ORIENTATION FIXES FOR GAME VIEW */
-
-/* Mobile landscape mode optimizations */
-@media (orientation: landscape) and (max-height: 500px) {
-    .game-view {
-        /* Ensure no overflow issues in mobile landscape */
-        height: calc(100vh - 58px);
-        height: calc(100dvh - 58px);
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-    }
-    
-    .game-table {
-        flex: 1 1 auto;
-        min-height: 0; /* Critical for landscape too */
-    }
-    
-    .game-footer {
-        padding: 0; /* NO PADDING */
-        font-size: 0.8em;
-        flex: 0 0 auto; /* Never shrink in landscape either */
-    }
-    
-    /* Mobile landscape uses 2x1 grid */
-    .footer-controls-wrapper {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        grid-template-rows: auto;
-        gap: 10px;
-        align-items: center;
-        justify-items: center;
-    }
-    
-    .game-view-chat-container {
-        width: min(280px, calc(100vw - 20px));
-        bottom: 6px;
-        left: 6px;
-        max-height: calc(100vh - 180px);
-    }
-    
-    .game-menu-popup {
-        width: 85vw;
-        max-width: 320px;
-        right: 5vw;
-        bottom: calc(100% + 8px);
-        font-size: 0.85em;
-    }
-    
-    .chat-tab-button {
-        padding: 4px 8px;
-        font-size: 0.8em;
-        min-height: 36px;
-        min-width: 36px;
-    }
-    
-    .hamburger-btn {
-        min-height: 36px;
-        min-width: 36px;
-        padding: 4px;
-    }
-    
-    .unread-badge {
-        width: 16px;
-        height: 16px;
-        font-size: 0.65em;
-    }
-}
-
-/* Desktop mode optimizations */
-/* Tablet range (769px - 1023px) */
-@media (min-width: 769px) and (max-width: 1023px) {
-    /* Critical: Set proper height accounting for ad header */
-    .game-view {
-        height: calc(100vh - 72px); /* Tablet ad header height */
-        height: calc(100dvh - 72px);
-        max-height: 100vh;
-        overflow: hidden;
-    }
-    
-    .game-table {
-        flex: 1 1 auto;
-        min-height: 0; /* Critical for allowing shrink */
-        overflow: hidden;
-    }
-    
-    .game-footer {
-        padding: 0; /* NO PADDING */
-        flex: 0 0 auto;
-    }
-    
-    /* Use grid for better control */
-    .footer-controls-wrapper {
-        display: grid;
-        grid-template-columns: 1fr 1fr; /* Two columns for tablets */
-        grid-template-rows: auto;
-        gap: 15px;
-        align-items: center;
-        justify-items: center;
-    }
-    
-    .hamburger-btn {
-        min-height: 44px;
-        min-width: 44px;
-        padding: 8px;
-    }
-    
-    .chat-tab-button {
-        min-height: 44px;
-        padding: 6px 12px;
-        font-size: 1em;
-    }
-}
-
-/* Specific fix for narrow vertical screens like 512x1117 and 816x1112 */
-@media (max-width: 850px) and (min-height: 1100px) and (max-aspect-ratio: 4/5) {
-    .footer-controls-wrapper {
-        display: flex !important;
-        flex-direction: row !important;
-        justify-content: center !important;
-        align-items: center !important;
-        gap: 20px !important;
-    }
-    
-    .game-footer {
-        min-height: 60px;
-    }
-}
-
-/* Specific fix for tablet portrait resolutions around 769x1200 */
-@media (min-width: 769px) and (max-width: 850px) and (min-height: 1100px) and (max-height: 1300px) {
-    .game-view {
-        height: calc(100vh - 72px) !important;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-    }
-    
-    .game-table {
-        flex: 1 1 auto;
-        min-height: 0;
-        max-height: calc(100vh - 200px); /* Leave room for footer with grid */
-    }
-    
-    .game-footer {
-        flex: 0 0 auto;
-        min-height: 80px; /* Enough for 1x2 grid */
-        position: relative;
-        bottom: 0;
-        z-index: 100;
-    }
-    
-    .footer-controls-wrapper {
-        display: grid;
-        grid-template-columns: 1fr;
-        grid-template-rows: auto auto;
-        gap: 8px;
-        padding: 0; /* NO PADDING */
-    }
-}
-
-/* Portrait tablet (769px+ width in portrait) */
-@media (orientation: portrait) and (min-width: 769px) {
-    /* Critical: Set proper height accounting for ad header */
-    .game-view {
-        height: calc(100vh - 72px); /* Tablet ad header height */
-        height: calc(100dvh - 72px);
-        max-height: 100vh;
-        overflow: hidden;
-    }
-    
-    .game-table {
-        flex: 1 1 auto;
-        min-height: 0; /* Critical for allowing shrink */
-        overflow: hidden;
-    }
-    
-    .game-footer {
-        padding: 0; /* NO PADDING */
-        flex: 0 0 auto;
-        position: relative;
-        z-index: 10;
-    }
-    
-    /* Portrait tablets use 1x2 grid */
-    .footer-controls-wrapper {
-        display: grid;
-        grid-template-columns: 1fr;
-        grid-template-rows: auto auto;
-        gap: 10px;
-        width: 100%;
-        align-items: center;
-        justify-items: center;
-    }
-}
-
-/* Desktop mode optimizations */
-@media (min-width: 1024px) {
-    .game-footer {
-        padding: 0; /* NO PADDING */
-        min-height: 120px;  /* Ensure footer is tall enough for scaled elements */
-    }
-    
-    .footer-controls-wrapper {
-        display: grid;
-        grid-template-columns: 1fr 1fr; /* Two columns for desktop */
-        grid-template-rows: auto;
-        gap: 20px;
-        width: 100%;
-        align-items: center;
-        justify-items: center;
-    }
-    
-    /* Style the button panel on desktop */
-    .button-panel {
-        display: flex;
-        align-items: center;
-        gap: 15px;
-        padding: 12px 20px;
-        background: linear-gradient(135deg, rgba(31, 41, 55, 0.8) 0%, rgba(17, 24, 39, 0.8) 100%);
-        border-radius: 12px;
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        -webkit-backdrop-filter: blur(4px);
-        backdrop-filter: blur(4px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    }
-    
-    .hamburger-btn {
-        min-height: 50px;
-        min-width: 50px;
-        padding: 10px;
-        order: 1;  /* First in button panel */
-    }
-    
-    /* Ensure chat button stays with menu button */
-    .chat-tab-button {
-        min-height: 50px;
-        padding: 8px 16px;
-        font-size: 1.1em;
-        order: 2;  /* Second in button panel */
-    }
-}
-
-/* Desktop/Laptop landscape mode optimizations */
-@media (orientation: landscape) and (min-height: 501px) and (min-width: 769px) {
-    .game-view {
-        height: calc(100vh - 106px);
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-    }
-    
-    .game-table {
-        flex: 1 1 auto;
-        min-height: 0; /* Critical for desktop landscape */
-    }
-    
-    .game-footer {
-        padding: 0; /* NO PADDING */
-        flex: 0 0 auto; /* Never shrink */
-    }
-    
-    /* Desktop landscape uses 2x1 grid */
-    .footer-controls-wrapper {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        grid-template-rows: auto;
-        gap: 20px;
-        align-items: center;
-        justify-items: center;
-        width: 100%;
-    }
-    
-    .game-view-chat-container {
-        width: 350px;
-        bottom: 12px;
-        left: 12px;
-        max-height: calc(100vh - 280px);
-    }
-    
-    .game-menu-popup {
-        width: 280px;
-        right: 12px;
-        bottom: calc(100% + 12px);
-        font-size: 1em;
-    }
-}
-
-/* Tablet landscape mode optimizations */
-@media (orientation: landscape) and (min-height: 501px) and (max-width: 768px) {
-    .game-view {
-        height: calc(100vh - 72px);
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-    }
-    
-    .game-table {
-        flex: 1 1 auto;
-        min-height: 0; /* Critical for tablet landscape */
-    }
-    
-    .game-footer {
-        padding: 6px 10px;
-        font-size: 0.9em;
-        flex: 0 0 auto; /* Never shrink */
-    }
-    
-    /* Tablet landscape uses 2x1 grid */
-    .footer-controls-wrapper {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        grid-template-rows: auto;
-        gap: 15px;
-        align-items: center;
-        justify-items: center;
-        width: 100%;
-    }
-    
-    .game-view-chat-container {
-        width: min(320px, calc(100vw - 20px));
-        bottom: 8px;
-        left: 8px;
-        max-height: calc(100vh - 220px);
-    }
-    
-    .game-menu-popup {
-        width: 90vw;
-        max-width: 340px;
-        right: 5vw;
-        bottom: calc(100% + 10px);
-        font-size: 0.9em;
-    }
-    
-    .chat-tab-button {
-        padding: 5px 10px;
-        font-size: 0.9em;
-        min-height: 40px;
-        min-width: 40px;
-    }
-    
-    .hamburger-btn {
-        min-height: 40px;
-        min-width: 40px;
-        padding: 6px;
-    }
-    
-    .unread-badge {
-        width: 18px;
-        height: 18px;
-        font-size: 0.7em;
-    }
-}
+/* NO MEDIA QUERIES - Everything scales consistently with vh units */
+/* All elements maintain their proportions across all devices */

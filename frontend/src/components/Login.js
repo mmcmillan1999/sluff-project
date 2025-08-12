@@ -67,19 +67,19 @@ const Login = ({ onLoginSuccess, onSwitchToRegister, onSwitchToForgotPassword })
                 {error && <p className="auth-error">{error}</p>}
                 
                 {showResendLink && (
-                    <div style={{ textAlign: 'center', marginTop: '10px' }}>
-                        <button type="button" onClick={handleResend} className="switch-form-button" style={{color: '#ffc107'}}>
+                    <div className="auth-action-wrapper">
+                        <button type="button" onClick={handleResend} className="switch-form-button resend-button">
                             Resend verification email
                         </button>
                     </div>
                 )}
-                {resendStatus && <p style={{color: '#28a745', textAlign: 'center'}}>{resendStatus}</p>}
+                {resendStatus && <p className="auth-success-message">{resendStatus}</p>}
 
                 <button type="submit" className="auth-button login">Login</button>
 
-                <div style={{ textAlign: 'center', marginTop: '10px' }}>
+                <div className="auth-action-wrapper">
                     {/* Uses the prop for navigation */}
-                    <button type="button" onClick={onSwitchToForgotPassword} className="switch-form-button" style={{ fontSize: '0.9em', color: '#aaa' }}>
+                    <button type="button" onClick={onSwitchToForgotPassword} className="switch-form-button forgot-password-button">
                         Forgot Password?
                     </button>
                 </div>

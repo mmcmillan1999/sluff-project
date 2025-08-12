@@ -51,7 +51,9 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent, showTrum
 
     const seatClasses = [
         'player-seat',
-        isMyTurn && 'active-turn'
+        isMyTurn && 'active-turn',
+        isBidWinner && 'team-bidder',
+        isDefender && 'team-defender'
     ].filter(Boolean).join(' ');
 
     const nameClasses = ['player-name', isSelf && 'is-self'].filter(Boolean).join(' ');
@@ -73,11 +75,6 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent, showTrum
             <div className={seatClasses} style={dynamicStyles}>
                 <div className={nameClasses}>
                     {playerName}
-                    {isSelf && showTrumpIndicator && (
-                        <div className="trump-indicator-inline">
-                            {trumpIndicatorPuck}
-                        </div>
-                    )}
                 </div>
                 <div className="player-stats-line">
                     <span className="player-tokens">

@@ -6,26 +6,33 @@
 
 .player-seat {
     text-align: center;
-    padding: 8px 12px;
+    padding: 0.8vh 1vh; /* Reduced padding */
     background-color: rgba(255, 255, 255, 0.9);
-    border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-    min-width: 150px;
-    border: 2px solid #ccc;
+    border-radius: 1vh; /* Converted to vh units */
+    box-shadow: 0 0.25vh 0.6vh rgba(0, 0, 0, 0.3);
+    width: 22vh; /* Fixed width for longest content: MrNoobCrusher + 9999 + 120 */
+    max-width: 22vh; /* Prevent expansion */
+    min-width: 22vh; /* Consistent size */
+    border: 0.25vh solid #ccc; /* Converted to vh units */
     white-space: nowrap;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 4px;
+    gap: 0.4vh; /* Slightly reduced gap */
+    overflow: hidden; /* Prevent content overflow */
+    box-sizing: border-box; /* Include padding in width */
 }
 
 .player-name {
     font-weight: bold;
-    font-size: 1.1em;
+    font-size: 1.6vh; /* Slightly smaller to fit */
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 0.5vh; /* Reduced gap */
     justify-content: center;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .player-name.is-self {
     color: #15803d;
@@ -34,50 +41,106 @@
 .player-stats-line {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 0.9em;
+    gap: 0.6vh; /* Reduced gap */
+    font-size: 1.4vh; /* Slightly smaller */
+    white-space: nowrap;
 }
 
 .token-icon-inline {
-    height: 14px;
+    height: 1.6vh; /* Slightly smaller icon */
     vertical-align: middle;
+    flex-shrink: 0; /* Don't shrink icon */
 }
 .info-divider {
     color: #aaa;
 }
 
-/* Border styling is now handled dynamically in JavaScript */
-.player-seat.active-turn { animation: pulsing-glow 1.5s infinite; }
+/* Team-specific pulsing animations */
+@keyframes pulsing-glow-bidder {
+    0% { 
+        box-shadow: 0 0 0.7vh #f59e0b;
+        border-color: rgba(245, 158, 11, 0.3);
+    }
+    50% { 
+        box-shadow: 0 0 3vh #fbbf24;
+        border-color: rgba(251, 191, 36, 0.6);
+    }
+    100% { 
+        box-shadow: 0 0 0.7vh #f59e0b;
+        border-color: rgba(245, 158, 11, 0.3);
+    }
+}
 
+@keyframes pulsing-glow-defender {
+    0% { 
+        box-shadow: 0 0 0.7vh #3b82f6;
+        border-color: rgba(59, 130, 246, 0.3);
+    }
+    50% { 
+        box-shadow: 0 0 3vh #60a5fa;
+        border-color: rgba(96, 165, 250, 0.6);
+    }
+    100% { 
+        box-shadow: 0 0 0.7vh #3b82f6;
+        border-color: rgba(59, 130, 246, 0.3);
+    }
+}
+
+/* Apply team-specific animations */
+.player-seat.active-turn.team-bidder { animation: pulsing-glow-bidder 1.5s infinite; }
+.player-seat.active-turn.team-defender { animation: pulsing-glow-defender 1.5s infinite; }
+/* Fallback for when team is unknown */
+.player-seat.active-turn { animation: pulsing-glow-defender 1.5s infinite; }
+
+/* Puck base styles */
 .puck {
     position: absolute;
-    top: -12px;
     border-radius: 50%;
-    width: 28px;
-    height: 28px;
+    width: 2.25vh; /* Reduced by 25% from 3vh */
+    height: 2.25vh; /* Reduced by 25% from 3vh */
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.7em;
+    font-size: 1.2vh; /* Slightly smaller for dealer puck text */
     font-weight: bold;
-    border: 1px solid black;
-    z-index: 5;
+    border: 0.1vh solid black;
+    z-index: 25; /* Higher z-index to stay visible */
     font-family: 'Oswald', sans-serif;
 }
-.dealer-puck { right: -12px; background-color: ivory; color: black; }
+
+/* Dealer puck styling */
+.dealer-puck { 
+    background-color: ivory; 
+    color: black; 
+}
+
+/* Bidder puck styling - larger size for trump display */
+.bidder-puck {
+    background: linear-gradient(135deg, #b8860b, #ffd700);
+    color: #2c1810;
+    font-weight: bold;
+    box-shadow: 0 0.3vh 0.8vh rgba(0, 0, 0, 0.3);
+    width: 4.5vh; /* Larger for trump icons */
+    height: 4.5vh;
+    font-size: 2.5vh; /* Larger icon size */
+    border-radius: 0.8vh;
+}
+
+/* Pucks are now positioned on the table via puck-container classes in TableLayout.css */
+/* No seat-specific positioning needed */
 
 .disconnected-controls { margin-top: 5px; }
 .start-timer-button {
-    padding: 4px 8px;
-    font-size: 0.8em;
+    padding: 0.5vh 1vh;
+    font-size: 1.4vh;
     background-color: #ffc107;
     color: black;
-    border: 1px solid #c69500;
-    border-radius: 4px;
+    border: 0.1vh solid #c69500;
+    border-radius: 0.4vh;
     cursor: pointer;
     font-family: 'Oswald', sans-serif;
 }
-.timeout-display { font-weight: bold; color: #dc3545; font-size: 0.9em; }
+.timeout-display { font-weight: bold; color: #dc3545; font-size: 1.4vh; }
 
 .player-tokens, .player-score { font-weight: bold; display: flex; align-items: center; }
 .player-tokens { color: #b45309; }
@@ -92,21 +155,21 @@
     position: static;
     transform: none;
     margin: 0;
-    width: 35px;
-    height: 35px;
-    font-size: 0.9em;
+    width: 4vh;
+    height: 4vh;
+    font-size: 1.6vh;
 }
 
 .player-error-tooltip {
     position: absolute;
-    bottom: -35px;
+    bottom: -4vh;
     left: 50%;
     transform: translateX(-50%);
     background-color: #b91c1c;
     color: white;
-    padding: 6px 12px;
-    border-radius: 6px;
-    font-size: 0.9em;
+    padding: 0.8vh 1.5vh;
+    border-radius: 0.8vh;
+    font-size: 1.4vh;
     font-weight: bold;
     z-index: 15;
     white-space: nowrap;
@@ -118,44 +181,6 @@
     10% { opacity: 1; transform: translate(-50%, 0); }
     90% { opacity: 1; transform: translate(-50%, 0); }
     100% { opacity: 0; transform: translate(-50%, 10px); }
-}
-
-/* --- NEW: Portrait styles for opponent seats --- */
-@media (orientation: portrait) {
-    .opponent-seat {
-        flex-direction: column;
-        width: 45px;
-        height: 170px; /* Taller and thinner */
-        padding: 8px 4px;
-        justify-content: center;
-    }
-
-    .opponent-seat .player-name-wrapper {
-        writing-mode: vertical-rl; /* Vertical text */
-        transform: rotate(180deg);   /* Read top-to-bottom */
-        text-align: center;
-    }
-
-    .opponent-seat .player-stats-line {
-        writing-mode: vertical-rl; /* Vertical text */
-        transform: rotate(180deg);   /* Read top-to-bottom */
-        margin-top: 8px; /* Space between name and stats */
-    }
-    
-    /* Enhanced mobile border visibility */
-    .player-seat {
-        /* Stronger shadow to make borders more visible on mobile */
-        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.5);
-        /* Add subtle inner shadow for depth */
-        border-style: solid;
-    }
-    
-    /* Ensure 5px borders are clearly visible on mobile */
-    .player-seat[style*="border-width: 5px"] {
-        box-shadow: 
-            0 3px 8px rgba(0, 0, 0, 0.5),
-            inset 0 1px 0 rgba(255, 255, 255, 0.1);
-    }
 }
 
 /* Opponent cards styling */
@@ -209,338 +234,5 @@
     z-index: 1;
 }
 
-/* Small screen optimizations */
-@media (orientation: portrait) and (max-width: 414px) {
-    .player-seat {
-        min-width: 110px;
-        padding: 5px 8px;
-        font-size: 0.85em;
-    }
-    
-    .player-name {
-        font-size: 1.0em;
-    }
-    
-    .player-stats-line {
-        font-size: 0.8em;
-        gap: 6px;
-    }
-    
-    .token-icon-inline {
-        height: 12px;
-    }
-    
-    /* Ensure disconnected controls remain usable */
-    .start-timer-button {
-        padding: 6px 10px;
-        font-size: 0.75em;
-        min-height: 44px; /* Maintain touch target */
-        min-width: 44px;
-    }
-    
-    .timeout-display {
-        font-size: 0.8em;
-    }
-    
-    .trump-indicator-inline .trump-indicator-puck {
-        width: 28px;
-        height: 28px;
-        font-size: 0.75em;
-        border-width: 2px;
-    }
-    
-    .player-name {
-        gap: 6px;
-    }
-    
-    /* Adjust opponent cards for mobile */
-    .opponent-cards-container.left {
-        right: -8px;
-        top: -2px;
-        transform: scale(0.8);
-    }
-
-    .opponent-cards-container.right {
-        left: -8px;
-        top: -2px;
-        transform: scale(0.8);
-    }
-    
-    .opponent-card {
-        opacity: 0.8;
-    }
-}
-
-/* LANDSCAPE ORIENTATION FIXES FOR PLAYER SEATS */
-
-/* Mobile landscape mode optimizations */
-@media (orientation: landscape) and (max-height: 500px) {
-    .player-seat {
-        min-width: 90px;
-        padding: 4px 6px;
-        font-size: 0.8em;
-        /* Enhanced shadow for better visibility in landscape */
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
-    }
-    
-    .player-name {
-        font-size: 0.9em;
-        gap: 4px;
-    }
-    
-    .player-stats-line {
-        font-size: 0.75em;
-        gap: 4px;
-    }
-    
-    .token-icon-inline {
-        height: 10px;
-    }
-    
-    /* Compact pucks for landscape mobile */
-    .puck {
-        width: 22px;
-        height: 22px;
-        font-size: 0.6em;
-        top: -8px;
-    }
-    
-    .dealer-puck {
-        right: -8px;
-    }
-    
-    /* Compact timer controls */
-    .start-timer-button {
-        padding: 4px 6px;
-        font-size: 0.7em;
-        min-height: 36px;
-        min-width: 36px;
-    }
-    
-    .timeout-display {
-        font-size: 0.75em;
-    }
-    
-    /* Compact inline trump indicator */
-    .trump-indicator-inline .trump-indicator-puck {
-        width: 25px;
-        height: 25px;
-        font-size: 0.7em;
-        border-width: 2px;
-    }
-    
-    /* Compact opponent cards for landscape mobile */
-    .opponent-cards-container.left,
-    .opponent-cards-container.right {
-        transform: scale(0.7);
-        top: -5px;
-    }
-    
-    .opponent-cards-container.left { right: -5px; }
-    .opponent-cards-container.right { left: -5px; }
-    
-    .opponent-card {
-        opacity: 0.7;
-    }
-    
-    /* Compact error tooltip */
-    .player-error-tooltip {
-        bottom: -25px;
-        font-size: 0.8em;
-        padding: 4px 8px;
-    }
-}
-
-/* Desktop mode optimizations - both portrait and landscape */
-@media (min-width: 1024px) {
-    .player-seat {
-        min-width: 225px !important;  /* 50% of previous 450px - similar to widow */
-        width: 225px !important;      /* Fixed width */
-        padding: 12px 16px !important; /* 50% of previous padding */
-        font-size: 1.1em !important;   /* Similar to widow size */
-        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
-        border-width: 4px !important;  /* Medium border */
-        gap: 6px !important;           /* Medium gap between elements */
-    }
-    
-    .player-name {
-        font-size: 1.2em !important;   /* Medium name */
-        gap: 10px !important;
-    }
-    
-    .player-stats-line {
-        font-size: 1.0em !important;   /* Medium stats */
-        gap: 10px !important;
-    }
-    
-    .token-icon-inline {
-        height: 18px !important;       /* Medium icons */
-        width: auto;
-    }
-    
-    /* Medium pucks for desktop */
-    .puck {
-        width: 35px !important;        /* Medium size */
-        height: 35px !important;
-        font-size: 0.9em !important;
-        top: -12px !important;
-    }
-    
-    .dealer-puck {
-        right: -12px !important;
-    }
-    
-    /* Medium timeout controls */
-    .start-timer-button {
-        padding: 6px 10px !important;
-        font-size: 0.9em !important;
-        min-height: 44px !important;
-        min-width: 80px !important;
-    }
-    
-    .timeout-display {
-        font-size: 1.0em !important;
-    }
-}
-
-/* Desktop/Laptop landscape mode optimizations */
-@media (orientation: landscape) and (min-height: 501px) and (min-width: 769px) {
-    /* Keep existing landscape rules but they'll be overridden by desktop rules above for screens >= 1024px */
-    .player-seat {
-        min-width: 150px;
-        padding: 8px 12px;
-        font-size: 1em;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-    }
-    
-    .player-name {
-        font-size: 1.1em;
-        gap: 8px;
-    }
-    
-    .player-stats-line {
-        font-size: 0.9em;
-        gap: 8px;
-    }
-    
-    .token-icon-inline {
-        height: 14px;
-    }
-    
-    /* Standard pucks for non-desktop landscape */
-    .puck {
-        width: 32px;
-        height: 32px;
-        font-size: 0.75em;
-        top: -12px;
-    }
-    
-    .dealer-puck {
-        right: -12px;
-    }
-    
-    /* Standard controls for desktop */
-    .start-timer-button {
-        padding: 4px 8px;
-        font-size: 0.8em;
-        min-height: 44px;
-        min-width: 44px;
-    }
-    
-    .timeout-display {
-        font-size: 0.9em;
-    }
-    
-    /* Standard inline trump indicator */
-    .trump-indicator-inline .trump-indicator-puck {
-        width: 35px;
-        height: 35px;
-        font-size: 0.9em;
-        border-width: 3px;
-    }
-    
-    /* Standard opponent cards for desktop */
-    .opponent-cards-container.left,
-    .opponent-cards-container.right {
-        transform: none;
-        top: 35%;
-    }
-    
-    .opponent-card {
-        opacity: 0.9;
-    }
-}
-
-/* Tablet landscape mode optimizations */
-@media (orientation: landscape) and (min-height: 501px) and (max-width: 768px) {
-    .player-seat {
-        min-width: 120px;
-        padding: 6px 10px;
-        font-size: 0.9em;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
-    }
-    
-    .player-name {
-        font-size: 1.0em;
-        gap: 6px;
-    }
-    
-    .player-stats-line {
-        font-size: 0.8em;
-        gap: 6px;
-    }
-    
-    .token-icon-inline {
-        height: 12px;
-    }
-    
-    /* Medium pucks for tablet landscape */
-    .puck {
-        width: 26px;
-        height: 26px;
-        font-size: 0.65em;
-        top: -10px;
-    }
-    
-    .dealer-puck {
-        right: -10px;
-    }
-    
-    /* Medium controls for tablet */
-    .start-timer-button {
-        padding: 5px 8px;
-        font-size: 0.75em;
-        min-height: 40px;
-        min-width: 40px;
-    }
-    
-    .timeout-display {
-        font-size: 0.85em;
-    }
-    
-    /* Medium inline trump indicator */
-    .trump-indicator-inline .trump-indicator-puck {
-        width: 30px;
-        height: 30px;
-        font-size: 0.8em;
-        border-width: 2px;
-    }
-    
-    /* Medium opponent cards for tablet */
-    .opponent-cards-container.left,
-    .opponent-cards-container.right {
-        transform: scale(0.9);
-        top: 30%;
-    }
-    
-    .opponent-card {
-        opacity: 0.85;
-    }
-    
-    /* Medium error tooltip */
-    .player-error-tooltip {
-        bottom: -30px;
-        font-size: 0.85em;
-        padding: 5px 10px;
-    }
-}
+/* NO MORE MEDIA QUERIES - Everything scales with vh units consistently */
+/* Player seats are always 22vh wide regardless of device or orientation */

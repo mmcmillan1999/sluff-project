@@ -1,82 +1,127 @@
 /* frontend/src/components/game/PlayerHand.css */
+/* Simplified VH-based responsive design */
 
-@keyframes pulsing-glow {
-    0% { box-shadow: 0 0 6px #3b82f6; }
-    50% { box-shadow: 0 0 24px #60a5fa; }
-    100% { box-shadow: 0 0 6px #3b82f6; }
+/* Team-specific pulsing animations for player hand */
+@keyframes pulsing-glow-bidder {
+    0% { 
+        box-shadow: inset 0 0 0.7vh #f59e0b;
+        border-color: rgba(245, 158, 11, 0.3);
+    }
+    50% { 
+        box-shadow: inset 0 0 3vh #fbbf24;
+        border-color: rgba(251, 191, 36, 0.6);
+    }
+    100% { 
+        box-shadow: inset 0 0 0.7vh #f59e0b;
+        border-color: rgba(245, 158, 11, 0.3);
+    }
+}
+
+@keyframes pulsing-glow-defender {
+    0% { 
+        box-shadow: inset 0 0 0.7vh #3b82f6;
+        border-color: rgba(59, 130, 246, 0.3);
+    }
+    50% { 
+        box-shadow: inset 0 0 3vh #60a5fa;
+        border-color: rgba(96, 165, 250, 0.6);
+    }
+    100% { 
+        box-shadow: inset 0 0 0.7vh #3b82f6;
+        border-color: rgba(59, 130, 246, 0.3);
+    }
 }
 
 .player-hand-container {
-    flex-grow: 1;
+    flex-grow: 0; /* Don't grow - use fixed height */
+    flex-shrink: 0; /* Don't shrink either */
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 0; /* NO PADDING */
+    padding: 0 0 0 1vw; /* Add 1vw padding to left side */
     width: 100%;
-    position: relative; /* IMPORTANT for debug overlay positioning */
+    position: relative;
     -webkit-user-select: none;
     -ms-user-select: none;
     user-select: none;
-    /* --- THE FIX: This single line solves the mobile scroll issue --- */
     touch-action: none;
-    /* Reserve space based on viewport height - match actual card height */
-    min-height: calc(10vh + 3vh); /* Card height + extra padding for safety */
-    overflow: visible; /* Don't clip cards */
+    /* Fixed height for cards */
+    height: 13vh; /* Fixed height instead of min-height */
+    overflow: visible;
 }
 
 .player-hand-cards {
     position: relative;
     display: flex;
-    justify-content: flex-start; /* Start from left edge */
+    justify-content: flex-start;
     align-items: flex-end;
-    padding: 0; /* NO PADDING - cards flush to edges */
-    margin-left: 5px; /* Shift entire container 5px from left wall */
-    /* Height should accommodate full card height */
-    height: calc(10vh + 3vh); /* Card height (10vh) + padding */
-    width: calc(100% - 5px); /* Reduce width to account for margin */
-    box-sizing: border-box; /* Include padding in width calculation */
-    overflow: visible; /* Ensure cards aren't clipped */
+    padding: 0 0.6vh; /* Use padding instead of margins for consistent width calculation */
+    /* Unified card height */
+    height: calc(10vh + 2vh);
+    width: 100%; /* Use full width - padding is included in box-sizing */
+    box-sizing: border-box;
+    overflow: visible;
 }
 
-.player-hand-cards.my-turn {
-    animation: pulsing-glow 2s infinite;
-    border-radius: 12px;
+/* Team-specific turn indication */
+.player-hand-cards.my-turn.team-bidder {
+    animation: pulsing-glow-bidder 2s infinite;
+    border-radius: 1.5vh;
+    background-color: rgba(245, 158, 11, 0.1);
+    border: 0.2vh solid transparent;
+}
+
+.player-hand-cards.my-turn.team-defender {
+    animation: pulsing-glow-defender 2s infinite;
+    border-radius: 1.5vh;
     background-color: rgba(59, 130, 246, 0.1);
-    height: 100%; /* Match full container height */
-    width: 100%; /* Match full container width */
+    border: 0.2vh solid transparent;
+}
+
+/* Fallback when team is unknown */
+.player-hand-cards.my-turn {
+    animation: pulsing-glow-defender 2s infinite;
+    border-radius: 1.5vh;
+    background-color: rgba(59, 130, 246, 0.1);
+    border: 0.2vh solid transparent;
+    /* IMPORTANT: Use inset shadow to prevent layout shifts */
+    box-shadow: inset 0 0 0.7vh #3b82f6;
+    /* Keep exact same dimensions */
+    height: calc(10vh + 2vh);
+    width: 100%; /* Match the non-glowing state */
 }
 
 .player-hand-card-wrapper {
-    /* Removed transition to prevent jumping */
     cursor: grab;
     flex-shrink: 0;
-    position: relative; /* CRITICAL FIX: Ensure proper positioning context */
+    position: relative;
 }
 
-/* CRITICAL FIX: Disable transitions and React interference when physics is active */
+/* Apply dynamic margin from JavaScript calculation */
+.player-hand-card-wrapper:not(:first-child) {
+    margin-left: var(--card-margin-left, -3vh);
+}
+
+/* Disable transitions when physics is active */
 .player-hand-card-wrapper[data-physics-controlled] {
     transition: none !important;
     will-change: auto !important;
 }
-/* Apply the dynamic margin from JavaScript calculation - DISABLED for absolute positioning */
-/* .player-hand-card-wrapper:not(:first-child) {
-    margin-left: var(--card-margin-left, -25px);
-} */
 
-/* When spacing threshold is met, center the row and use fixed 3px spacing */
+/* Center cards with fixed spacing when threshold is met */
 .player-hand-cards.centered-spacing {
     justify-content: center;
-    column-gap: 3px; /* exact 3px visible gap between cards */
-}
-.player-hand-cards.centered-spacing .player-hand-card-wrapper:not(:first-child) {
-    margin-left: 0; /* gap controlled by column-gap above */
+    column-gap: 0.35vh;
 }
 
+.player-hand-cards.centered-spacing .player-hand-card-wrapper:not(:first-child) {
+    margin-left: 0;
+}
 
 .player-hand-card-wrapper.is-dragging {
     transition: none;
     cursor: grabbing;
-    will-change: transform; /* Only use will-change when actually dragging */
+    will-change: transform;
 }
 
 .illegal-move {
@@ -86,230 +131,52 @@
 .illegal-move::after {
     content: '';
     position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     background-color: rgba(0, 0, 0, 0.5);
-    border-radius: 6px;
+    border-radius: 0.7vh;
 }
 
+/* Discarding mode - tighter overlap */
 .player-hand-cards.is-discarding .player-hand-card-wrapper-static {
-    /* Discarding mode - tighter 50% overlap */
     margin-left: calc(-10vh * 0.714 * 0.5);
 }
+
 .player-hand-cards.is-discarding .player-hand-card-wrapper-static:first-child {
     margin-left: 0;
 }
-/* Hover effect removed - cards stay in place
-.player-hand-card-wrapper-static:hover {
-    transform: translateY(-12px);
-    z-index: 100;
-} */
 
-/* Two-row layout for mobile portrait during Frog discard (14 cards) */
-@media (orientation: portrait) and (max-width: 480px) {
-    .player-hand-cards.is-discarding.two-rows {
-        display: grid;
-        grid-template-columns: repeat(7, 1fr);
-        /* Let rows size to content height based on aspect-ratio */
-        grid-auto-rows: auto;
-        row-gap: 6px;
-        column-gap: 6px;
-        align-items: end;
-        justify-items: center;
-        /* Allow the container to grow just enough for two rows */
+/* Two-row layout for Frog discard (14 cards) - always use grid for consistency */
+.player-hand-cards.is-discarding.two-rows {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    grid-auto-rows: auto;
+    row-gap: 0.7vh;
+    column-gap: 0.7vh;
+    align-items: end;
+    justify-items: center;
     height: auto;
-    padding: 6px 0; /* remove horizontal padding for full-bleed */
-    }
-    .player-hand-cards.is-discarding.two-rows .player-hand-card-wrapper-static {
-        margin: 0; /* grid spacing handles gaps */
-        width: 100%;
-        display: flex;
-        justify-content: center;
-    }
-    .player-hand-cards.is-discarding.two-rows .card-display {
-        /* Fill grid cell width but preserve intrinsic card ratio */
-        width: 100% !important;
-        min-width: 0 !important; /* override inline minWidth from renderCard */
-        height: auto !important;  /* override inline fixed height */
-        aspect-ratio: 10 / 13;    /* consistent with 50x65, 112x150, etc. */
-        font-size: 0.9em;
-    }
+    padding: 0.7vh 0;
 }
 
-/* Mobile optimizations for player hand */
-@media (orientation: portrait) and (max-width: 768px) {
-    .player-hand-container {
-        padding: 0; /* NO PADDING */
-        /* Ensure physics interactions work on mobile */
-        touch-action: none;
-        -webkit-touch-callout: none;
-        min-height: calc(10vh + 1vh); /* Mobile portrait card height */
-    }
-    
-    .player-hand-cards {
-        height: calc(10vh + 1vh); /* Mobile portrait card height */
-        padding: 0; /* NO PADDING */
-        justify-content: flex-start; /* Start from left edge */
-    }
-    
-    /* Mobile uses JavaScript-calculated spacing */
-    /* Spacing is handled by the --card-margin-left CSS variable */
-    
-    /* Hover effect removed - cards stay in place */
-    
-    /* Physics-enhanced mobile interactions */
-    .player-hand-card-wrapper.physics-active {
-        /* Enhanced touch response */
-        will-change: transform, opacity;
-    }
-    
-    /* My turn indicator smaller on mobile */
-    .player-hand-cards.my-turn {
-        border-radius: 8px;
-        background-color: rgba(59, 130, 246, 0.08);
-    }
+.player-hand-cards.is-discarding.two-rows .player-hand-card-wrapper-static {
+    margin: 0;
+    width: 100%;
+    display: flex;
+    justify-content: center;
 }
 
-/* Small mobile screens */
-@media (orientation: portrait) and (max-width: 414px) {
-    .player-hand-container {
-        padding: 0; /* NO PADDING */
-    min-height: 85px;
-    }
-    
-    .player-hand-cards {
-    height: 85px;
-    padding: 0; /* NO PADDING */
-    justify-content: flex-start; /* Start from left edge */
-    }
-    
-    /* Small screens use JavaScript-calculated spacing */
-    /* Spacing is handled by the --card-margin-left CSS variable */
-    
-    /* Hover effect removed - cards stay in place */
-    
-    /* Smaller illegal move overlay */
-    .illegal-move::after {
-        border-radius: 4px;
-    }
+.player-hand-cards.is-discarding.two-rows .card-display {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: auto !important;
+    aspect-ratio: 10 / 13;
+    font-size: 1.5vh;
 }
 
-/* LANDSCAPE ORIENTATION FIXES FOR PLAYER HAND */
-
-/* Mobile landscape mode optimizations */
-@media (orientation: landscape) and (max-height: 500px) {
-    .player-hand-container {
-        padding: 0; /* NO PADDING */
-        /* Maintain physics touch handling in landscape */
-        touch-action: none;
-        -webkit-touch-callout: none;
-        min-height: calc(10vh + 3vh); /* Viewport-based minimum + padding */
-    }
-    
-    .player-hand-cards {
-        height: calc(10vh + 1vh); /* Viewport-based for landscape too */
-        padding: 0; /* NO PADDING */
-    }
-    
-    /* Landscape mobile uses JavaScript-calculated spacing */
-    /* Spacing is handled by the --card-margin-left CSS variable */
-    
-    /* Hover effect removed - cards stay in place */
-    
-    /* Compact my turn indicator for landscape */
-    .player-hand-cards.my-turn {
-        border-radius: 6px;
-        background-color: rgba(59, 130, 246, 0.06);
-    }
-    
-    /* Enhanced physics for landscape mobile */
-    .player-hand-card-wrapper.physics-active {
-        will-change: transform;
-    }
-    
-    .illegal-move::after {
-        border-radius: 4px;
-    }
-}
-
-/* Desktop mode optimizations */
-@media (min-width: 1024px) {
-    .player-hand-container {
-        padding: 0;  /* NO PADDING */
-        touch-action: none;
-        min-height: calc(15vh + 2vh);  /* Desktop card height + padding */
-        /* Keep player hand centered in panel - remove offset */
-    }
-    
-    .player-hand-cards {
-        height: calc(15vh + 2vh); /* Desktop card height + padding */
-        padding: 0;  /* NO PADDING */
-        align-items: center;  /* Center cards vertically */
-    }
-    
-    /* Desktop uses JavaScript-calculated spacing */
-    /* Spacing is handled by the --card-margin-left CSS variable */
-    
-    /* Hover effect removed - cards stay in place */
-}
-
-/* Desktop/Laptop landscape mode optimizations */
-@media (orientation: landscape) and (min-height: 501px) and (min-width: 769px) {
-    .player-hand-container {
-        padding: 0; /* NO PADDING */
-        touch-action: none; /* Still needed for touch devices */
-    }
-    
-    .player-hand-cards {
-        height: calc(15vh + 3vh); /* Desktop landscape height + padding */
-        padding: 0; /* NO PADDING */
-    }
-    
-    /* Desktop landscape uses JavaScript-calculated spacing */
-    /* Spacing is handled by the --card-margin-left CSS variable */
-    
-    /* Hover effect removed - cards stay in place */
-    
-    /* Standard my turn indicator for desktop */
-    .player-hand-cards.my-turn {
-        border-radius: 12px;
-        background-color: rgba(59, 130, 246, 0.1);
-    }
-    
-    .player-hand-card-wrapper.physics-active {
-        will-change: transform, opacity;
-    }
-}
-
-/* Tablet landscape mode optimizations */
-@media (orientation: landscape) and (min-height: 501px) and (max-width: 768px) {
-    .player-hand-container {
-        padding: 0; /* NO PADDING */
-        touch-action: none;
-        -webkit-touch-callout: none;
-        min-height: calc(12vh + 1vh); /* Tablet landscape card height */
-    }
-    
-    .player-hand-cards {
-        height: calc(12vh + 1vh); /* Tablet landscape card height */
-        padding: 0; /* NO PADDING */
-    }
-    
-    /* Tablet landscape uses JavaScript-calculated spacing */
-    /* Spacing is handled by the --card-margin-left CSS variable */
-    
-    /* Hover effect removed - cards stay in place */
-    
-    /* Medium my turn indicator for tablet */
-    .player-hand-cards.my-turn {
-        border-radius: 10px;
-        background-color: rgba(59, 130, 246, 0.08);
-    }
-    
-    .player-hand-card-wrapper.physics-active {
-        will-change: transform;
-    }
-    
-    .illegal-move::after {
-        border-radius: 5px;
-    }
+/* Physics-enhanced interactions */
+.player-hand-card-wrapper.physics-active {
+    will-change: transform, opacity;
 }

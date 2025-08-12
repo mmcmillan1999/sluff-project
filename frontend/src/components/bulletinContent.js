@@ -16,19 +16,23 @@ export const bulletinContent = [
     },
     {
         type: 'header',
-        text: 'Latest Update: v12.0.0 - Dynamic Card Sizing!'
+        text: 'Latest Update: v12.1.0 - Table Positioning Improvements!'
     },
     {
         type: 'list-item',
-        text: 'Cards now dynamically resize based on your screen - perfect fit on any device!'
+        text: 'Dealer and trump pucks now positioned on the table surface, not attached to player seats.'
     },
     {
         type: 'list-item',
-        text: 'Edge-to-edge card layout ensures all 11 cards are always visible in your hand.'
+        text: 'Team-colored pulsing animations - gold for bidder, blue for defenders.'
     },
     {
         type: 'list-item',
-        text: 'Enhanced physics engine with spinning cards and realistic drop animations.'
+        text: 'Dynamic trick pile positioning that follows the last trick overlay.'
+    },
+    {
+        type: 'list-item',
+        text: 'Improved widow pile with neutral grey/black color scheme.'
     },
     {
         type: 'header',

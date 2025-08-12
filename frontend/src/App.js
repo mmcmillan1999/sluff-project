@@ -13,7 +13,7 @@ import AdvertisingHeader from "./components/AdvertisingHeader.js";
 import { submitFeedback } from "./services/api.js";
 import "./App.css";
 import "./components/AdminView.css";
-import "./styles/mobile-optimizations.css";
+// Mobile optimizations removed - using vh-based scaling instead
 import { useSounds } from "./hooks/useSounds.js";
 
 // Import the same getServerUrl function logic from api.js

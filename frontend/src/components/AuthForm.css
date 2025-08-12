@@ -1,4 +1,5 @@
 /* frontend/src/components/AuthForm.css */
+/* Converted to VH-based responsive design */
 
 .auth-container {
     display: flex;
@@ -8,54 +9,57 @@
     height: 100vh;
     background-color: #333;
     color: white;
-    padding: 20px;
+    padding: 2vh;
     font-family: 'Merriweather', serif;
 }
 
 .auth-logo {
     width: 100%;
-    max-width: 300px;
-    margin-bottom: 20px;
+    max-width: 50vh; /* Increased from 30vh for better scaling on tablets/desktop */
+    margin-bottom: 2vh; /* Was 20px */
 }
 
 .auth-title {
     margin-top: 0;
     font-family: 'Oswald', sans-serif;
+    font-size: 4vh; /* Increased from 3vh for better visibility on tablets/desktop */
 }
 
 .auth-form {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 20px;
+    gap: 1vh; /* Was 10px */
+    padding: 2vh; /* Was 20px */
     background-color: #444;
-    border-radius: 8px;
-    min-width: 300px;
+    border-radius: 0.8vh; /* Was 8px */
+    min-width: 30vh; /* Was 300px */
     width: 100%;
-    max-width: 400px;
+    max-width: 60vh; /* Increased from 40vh for better scaling on tablets/desktop */
 }
 
 .auth-input {
-    padding: 10px;
-    border-radius: 4px;
+    padding: 1.5vh; /* Increased from 1vh for better touch targets */
+    border-radius: 0.6vh; /* Increased from 0.4vh */
     border: none;
-    font-size: 1em;
+    font-size: 2.2vh; /* Increased from 1.8vh for better readability */
 }
 
 .auth-error {
     color: #f87171; /* A lighter red for dark backgrounds */
     margin: 0;
     text-align: center;
+    font-size: 2vh; /* Increased from 1.6vh */
 }
 
 .auth-button {
-    padding: 10px;
+    padding: 1.5vh; /* Increased from 1vh */
     color: white;
     cursor: pointer;
     border: none;
-    border-radius: 4px;
-    font-size: 1.1em;
+    border-radius: 0.6vh; /* Increased from 0.4vh */
+    font-size: 2.5vh; /* Increased from 2vh for better visibility */
     font-family: 'Oswald', sans-serif;
+    min-height: 5vh; /* Increased from 4.5vh */
 }
 
 .auth-button.login {
@@ -70,9 +74,10 @@
     background: none;
     border: none;
     color: #007bff;
-    margin-top: 15px;
+    margin-top: 1.5vh; /* Was 15px */
     cursor: pointer;
-    font-size: 0.9em;
+    font-size: 2vh; /* Increased from 1.6vh */
+    min-height: 4.5vh; /* Increased from 4vh */
 }
 
 /* Specific to Register component */
@@ -80,20 +85,84 @@
     color: #856404;
     background-color: #fff3cd;
     border-color: #ffeeba;
-    padding: 15px;
-    border-radius: 8px;
-    margin: 10px 0;
+    padding: 1.5vh; /* Was 15px */
+    border-radius: 0.8vh; /* Was 8px */
+    margin: 1vh 0; /* Was 10px 0 */
     text-align: center;
 }
 
 .register-warning-title {
-    font-size: 1.1em;
+    font-size: 2.5vh; /* Increased from 2vh */
     display: block;
-    margin-bottom: 5px;
+    margin-bottom: 0.5vh; /* Was 5px */
     font-weight: bold;
 }
 
 .register-warning-text {
     margin: 0;
-    font-size: 0.95em;
+    font-size: 2.1vh; /* Increased from 1.7vh */
+}
+
+/* Add hover effects for better UX */
+.auth-button:hover {
+    opacity: 0.9;
+    transform: translateY(-0.1vh);
+}
+
+.switch-form-button:hover {
+    text-decoration: underline;
+}
+
+/* NO MEDIA QUERIES - Everything scales with vh units consistently */
+/* Dynamic sizing handles all screen heights automatically */
+
+/* Additional auth-related styles */
+.auth-action-wrapper {
+    text-align: center;
+    margin-top: 1vh;
+}
+
+.auth-success-message {
+    color: #28a745;
+    text-align: center;
+    font-size: 2vh; /* Increased from 1.6vh */
+    margin: 1vh 0;
+}
+
+.resend-button {
+    color: #ffc107;
+}
+
+.forgot-password-button {
+    font-size: 1.8vh; /* Increased from 1.4vh */
+    color: #aaa;
+}
+
+.email-sent-message {
+    text-align: center;
+}
+
+.auth-success-title {
+    font-size: 3.5vh; /* Increased from 2.5vh */
+    color: white;
+    margin: 1vh 0;
+}
+
+.auth-success-text {
+    font-size: 2.3vh; /* Increased from 1.8vh */
+    color: #e0e0e0;
+    margin: 1vh 0;
+}
+
+/* Password requirements list */
+.password-requirements {
+    font-size: 1.8vh; /* Increased from 1.4vh */
+    color: #ccc;
+    text-align: left;
+    margin: 1vh 0;
+    padding-left: 2vh;
+}
+
+.password-requirements li {
+    margin: 0.5vh 0;
 }
