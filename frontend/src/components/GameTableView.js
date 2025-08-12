@@ -34,6 +34,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const [showLayoutDev, setShowLayoutDev] = useState(false);
     const [showCardDebug, setShowCardDebug] = useState(false); // Hide debug overlay
     const [selectedFrogDiscards, setSelectedFrogDiscards] = useState([]);
+    const [viewportOverflow, setViewportOverflow] = useState(false);
     const turnPlayerRef = useRef(null);
     const trickWinnerRef = useRef(null);
     const cardCountRef = useRef(null);
@@ -96,6 +97,40 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         const timer = setTimeout(() => setShowGameMenu(false), 3000);
         return () => clearTimeout(timer);
     }, [showGameMenu]);
+
+    // Development only: Check for viewport overflow
+    useEffect(() => {
+        if (process.env.NODE_ENV !== 'development') return;
+        
+        const checkViewportOverflow = () => {
+            const documentHeight = document.documentElement.scrollHeight;
+            const viewportHeight = window.innerHeight;
+            setViewportOverflow(documentHeight > viewportHeight);
+            
+            if (documentHeight > viewportHeight) {
+                console.error(`⚠️ VIEWPORT OVERFLOW DETECTED! Document: ${documentHeight}px, Viewport: ${viewportHeight}px, Overflow: ${documentHeight - viewportHeight}px`);
+            }
+        };
+        
+        // Check immediately and on any changes
+        checkViewportOverflow();
+        
+        // Check periodically to catch dynamic changes
+        const interval = setInterval(checkViewportOverflow, 1000);
+        
+        // Check on resize
+        window.addEventListener('resize', checkViewportOverflow);
+        
+        // Use MutationObserver to detect DOM changes
+        const observer = new MutationObserver(checkViewportOverflow);
+        observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+        
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener('resize', checkViewportOverflow);
+            observer.disconnect();
+        };
+    }, []);
 
     // Keyboard accessibility: allow ESC to close chat when open
     useEffect(() => {
@@ -414,6 +449,30 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
 
     return (
         <div className="game-view">
+            {/* Development Warning Banner for Viewport Overflow */}
+            {process.env.NODE_ENV === 'development' && viewportOverflow && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    zIndex: 99999,
+                    background: 'repeating-linear-gradient(45deg, #ff0000, #ff0000 10px, #ffff00 10px, #ffff00 20px)',
+                    color: 'white',
+                    padding: '10px',
+                    textAlign: 'center',
+                    fontSize: '20px',
+                    fontWeight: 'bold',
+                    textShadow: '2px 2px 4px rgba(0,0,0,0.8)',
+                    pointerEvents: 'none'
+                }}>
+                    ⚠️ VIEWPORT OVERFLOW! Content exceeds 100vh - FIX YOUR CODE! ⚠️
+                    <br />
+                    <span style={{ fontSize: '14px' }}>
+                        Check console for details - Scroll needed!
+                    </span>
+                </div>
+            )}
             {/* Card position debug overlay */}
             {showCardDebug && window.cardDebugPositions && window.cardDebugPositions.length > 0 && (
                 <div style={{

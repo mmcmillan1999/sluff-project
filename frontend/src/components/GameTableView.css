@@ -54,6 +54,7 @@
     position: relative;
     z-index: 10; /* Ensure footer stays above table content */
     height: 20vh; /* Fixed height to accommodate player hand + controls */
+    box-sizing: border-box; /* Include border in height calculation */
     display: flex;
     flex-direction: column;
     justify-content: flex-start; /* Stack children from top */
