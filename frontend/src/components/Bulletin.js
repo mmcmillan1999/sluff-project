@@ -1,7 +1,7 @@
 import React from 'react';
 import './Bulletin.css';
 // --- MODIFICATION: Corrected the import path to be local ---
-import { bulletinContent } from './bulletinContent';
+import { bulletinContent } from './BulletinContent';
 
 /**
  * A component to display news and updates in the lobby.
