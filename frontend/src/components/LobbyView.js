@@ -6,6 +6,7 @@ import Bulletin from './Bulletin';
 import LobbyTableCard from './LobbyTableCard';
 import LobbyChat from './LobbyChat';
 import { getLobbyChatHistory } from '../services/api';
+import { useViewport } from '../hooks/useViewport';
 
 const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowAdmin, handleShowFeedback, errorMessage, emitEvent, socket, handleOpenFeedbackModal }) => {
     
@@ -15,6 +16,13 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
     const [tablesCollapsed, setTablesCollapsed] = useState(false);
     const [bulletinCollapsed, setBulletinCollapsed] = useState(false);
     const [chatMessages, setChatMessages] = useState([]);
+    const [chatMinimized, setChatMinimized] = useState(false);
+    
+    // Get viewport information for responsive behavior
+    const viewport = useViewport();
+    const isMobile = viewport.width < 768;
+    const isTablet = viewport.width >= 768 && viewport.width < 1024;
+    const isDesktop = viewport.width >= 1024;
 
     useEffect(() => {
         getLobbyChatHistory(50)
@@ -51,8 +59,126 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
         }
     }, [lobbyThemes, activeTab]);
 
+    // Keyboard shortcuts for desktop quick actions
+    useEffect(() => {
+        if (!isDesktop) return;
+
+        const handleKeyDown = (e) => {
+            // Only trigger if no input is focused and no modifiers are pressed
+            if (document.activeElement.tagName === 'INPUT' || 
+                document.activeElement.tagName === 'TEXTAREA' ||
+                e.ctrlKey || e.altKey || e.shiftKey || e.metaKey) {
+                return;
+            }
+
+            switch (e.key.toLowerCase()) {
+                case 'l':
+                    e.preventDefault();
+                    handleShowLeaderboard();
+                    break;
+                case 'f':
+                    e.preventDefault();
+                    handleOpenFeedbackModal();
+                    break;
+                case 't':
+                    e.preventDefault();
+                    handleRequestFreeToken();
+                    break;
+                case 's':
+                    e.preventDefault();
+                    emitEvent("requestUserSync");
+                    break;
+                case 'a':
+                    if (user?.is_admin) {
+                        e.preventDefault();
+                        handleShowAdmin();
+                    }
+                    break;
+                case 'q':
+                    e.preventDefault();
+                    handleLogout();
+                    break;
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isDesktop, user, handleShowLeaderboard, handleOpenFeedbackModal, handleRequestFreeToken, 
+        handleShowAdmin, handleLogout, emitEvent]);
+
     const activeTheme = lobbyThemes.find(theme => theme.id === activeTab);
 
+    // Desktop sidebar component
+    const DesktopSidebar = () => {
+        if (!isDesktop || !user) return null;
+        
+        const gamesPlayed = user.games_played || 0;
+        const gamesWon = user.games_won || 0;
+        const winRate = gamesPlayed > 0 ? ((gamesWon / gamesPlayed) * 100).toFixed(1) : '0.0';
+        const tokensEarned = user.tokens_earned || 0;
+        
+        return (
+            <div className="desktop-sidebar">
+                <div className="sidebar-section">
+                    <h3>Player Stats</h3>
+                    <div className="user-stats-card">
+                        <div className="stat-row">
+                            <span className="stat-label">Games Played:</span>
+                            <span className="stat-value">{gamesPlayed}</span>
+                        </div>
+                        <div className="stat-row">
+                            <span className="stat-label">Games Won:</span>
+                            <span className="stat-value">{gamesWon}</span>
+                        </div>
+                        <div className="stat-row">
+                            <span className="stat-label">Win Rate:</span>
+                            <span className="stat-value">{winRate}%</span>
+                        </div>
+                        <div className="stat-row">
+                            <span className="stat-label">Tokens Earned:</span>
+                            <span className="stat-value">{tokensEarned.toFixed(2)}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div className="sidebar-section">
+                    <h3>Quick Actions</h3>
+                    <div className="quick-actions">
+                        <button onClick={handleShowLeaderboard} className="quick-action-btn">
+                            Leaderboard
+                            <span className="keyboard-shortcut">L</span>
+                        </button>
+                        <button onClick={handleShowFeedback} className="quick-action-btn">
+                            Feedback Repository
+                        </button>
+                        <button onClick={handleOpenFeedbackModal} className="quick-action-btn">
+                            Submit Feedback
+                            <span className="keyboard-shortcut">F</span>
+                        </button>
+                        <button onClick={handleRequestFreeToken} className="quick-action-btn">
+                            Request Free Token
+                            <span className="keyboard-shortcut">T</span>
+                        </button>
+                        <button onClick={() => emitEvent("requestUserSync")} className="quick-action-btn">
+                            Sync Profile
+                            <span className="keyboard-shortcut">S</span>
+                        </button>
+                        {user?.is_admin && (
+                            <button onClick={handleShowAdmin} className="quick-action-btn admin">
+                                Admin Panel
+                                <span className="keyboard-shortcut">A</span>
+                            </button>
+                        )}
+                        <button onClick={handleLogout} className="quick-action-btn logout">
+                            Logout
+                            <span className="keyboard-shortcut">Q</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+    
     const LobbyMenu = () => (
         <div className="lobby-menu-popup">
             <button onClick={() => { handleShowLeaderboard(); setShowMenu(false); }} className="lobby-menu-button">Leaderboard</button>
@@ -129,6 +255,9 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
             </nav>
 
             <main className="lobby-main">
+                {/* Desktop sidebar - only shown on desktop */}
+                <DesktopSidebar />
+                
                 <div className="tables-section">
                     <div
                         className="tables-toggle"
@@ -156,6 +285,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
                         </div>
                     )}
                 </div>
+                
                 <div className="bulletin-section">
                     <div
                         className="bulletin-toggle"
@@ -175,12 +305,34 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
                         </div>
                     )}
                 </div>
+                
+                {/* Chat component with responsive positioning and minimize functionality */}
+                <div className={`lobby-chat-container ${isMobile && chatMinimized ? 'minimized' : ''}`}>
+                    <div 
+                        className="chat-header"
+                        onClick={isMobile ? () => setChatMinimized(prev => !prev) : undefined}
+                        style={{ cursor: isMobile ? 'pointer' : 'default' }}
+                    >
+                        <h3 className="chat-title">Lobby Chat</h3>
+                        {isMobile && (
+                            <button 
+                                className="chat-minimize-btn"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setChatMinimized(prev => !prev);
+                                }}
+                                aria-label={chatMinimized ? 'Expand chat' : 'Minimize chat'}
+                            >
+                                {chatMinimized ? '▲' : '▼'}
+                            </button>
+                        )}
+                    </div>
+                    <LobbyChat
+                        socket={socket}
+                        messages={chatMessages}
+                    />
+                </div>
             </main>
-
-            <LobbyChat
-                socket={socket}
-                messages={chatMessages}
-            />
             
             <footer className="lobby-footer">
                 <span>Server: {process.env.REACT_APP_SERVER_URL || 'wss://sluff-backend.onrender.com'}</span>

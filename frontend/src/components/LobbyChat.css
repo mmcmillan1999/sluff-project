@@ -1,15 +1,6 @@
 /* frontend/src/components/game/LobbyChat.css */
 
-.lobby-chat-container {
-    flex-shrink: 0; /* Prevents this area from shrinking */
-    background-color: #1a1a1a;
-    border-top: 1px solid #444;
-    /* Default: try sticky on desktop/tablet */
-    position: sticky;
-    bottom: 0;
-    z-index: 60;
-    box-shadow: 0 -6px 12px rgba(0,0,0,0.4);
-}
+/* Chat container positioning is now handled by LobbyView.css for responsive behavior */
 
 .chat-log-section {
     padding: 0 15px;
@@ -86,23 +77,8 @@
     text-align: left; /* Explicitly align text to the left */
 }
 
-/* Desktop mode improvements - bigger font and higher position */
+/* Desktop mode improvements - bigger fonts */
 @media (min-width: 1024px) {
-    .lobby-chat-container {
-        position: fixed;
-        bottom: 20px; /* Move it higher from the bottom */
-        left: 50%;
-        transform: translateX(-50%);
-        width: 90%;
-        max-width: 1000px;
-        border-radius: 8px 8px 0 0;
-        box-shadow: 0 -8px 20px rgba(0,0,0,0.6);
-    }
-    
-    .chat-log-window {
-        height: 200px; /* Taller window for desktop */
-    }
-    
     .chat-line {
         font-size: 1.1em; /* Bigger font for desktop */
         margin-bottom: 6px;
@@ -121,23 +97,5 @@
     .chat-send-button {
         width: 42px;
         height: 42px;
-    }
-}
-
-/* Compact the chat on very small phones */
-@media (max-width: 480px) and (orientation: portrait) {
-    .lobby-chat-container {
-        /* iOS Safari has issues with sticky + bottom; use fixed on small portrait */
-        position: fixed;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        width: 100%;
-        z-index: 1000;
-    /* Eliminate any side gaps */
-    margin: 0;
-    }
-    .chat-log-window {
-        height: 130px;
     }
 }

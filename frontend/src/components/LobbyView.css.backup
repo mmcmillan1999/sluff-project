@@ -1,0 +1,401 @@
+/* frontend/src/components/LobbyView.css */
+
+.lobby-view {
+    display: flex;
+    flex-direction: column;
+    /* Prefer dynamic viewport height to avoid mobile browser UI jump */
+    min-height: 100dvh;
+    background-color: #212121;
+    color: white;
+    /* Keep root non-scrolling; inner regions manage scroll */
+    overflow: hidden;
+    /* Prefer vertical gestures, suppress horizontal panning */
+    touch-action: pan-y;
+    overscroll-behavior-x: none;
+}
+
+/* Header section */
+.lobby-header {
+    padding: 5px 20px;
+    background-color: #1a1a1a;
+    flex-shrink: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-sizing: border-box;
+}
+
+.header-left, .header-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.lobby-logo {
+    height: 35px;
+}
+
+.lobby-title {
+    font-family: 'Oswald', sans-serif;
+    margin: 0;
+    font-size: 1.6em;
+    font-weight: 400;
+}
+
+.user-welcome {
+    font-size: 0.9em;
+    color: #ccc;
+}
+
+.user-tokens {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: bold;
+    font-family: 'Oswald', sans-serif;
+    background-color: #2c2c2c;
+    padding: 5px 10px;
+    border-radius: 20px;
+    border: 1px solid #444;
+    color: #eaeaea;
+    cursor: pointer;
+    transition: transform 0.1s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.user-tokens:hover {
+    background-color: #353535;
+    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.25);
+}
+
+.user-tokens:active {
+    transform: translateY(1px);
+}
+
+/* Pulse highlight when user is eligible for a mercy ad */
+@keyframes pulseGlow {
+  0% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.45); }
+  70% { box-shadow: 0 0 0 8px rgba(255, 193, 7, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0); }
+}
+
+.user-tokens.pulse-eligible {
+    animation: pulseGlow 1.6s ease-out infinite;
+    border-color: #ffc107;
+}
+
+
+
+.token-icon {
+    height: 22px;
+}
+
+.user-tokens span {
+    color: #ffc107;
+    font-size: 1.1em;
+}
+
+.hamburger-menu-container {
+    position: relative;
+}
+
+.hamburger-btn {
+    background: none;
+    /* --- MODIFICATION: Removed the border --- */
+    border: none;
+    padding: 5px;
+    cursor: pointer;
+    display: flex;
+}
+.hamburger-btn svg {
+    fill: #aaa;
+    width: 28px;
+    height: 28px;
+}
+
+/* Tab Navigation */
+.lobby-nav {
+    display: flex;
+    background-color: #2a2a2a;
+    flex-shrink: 0;
+    border-bottom: 1px solid #111;
+    overflow-x: auto;
+    box-sizing: border-box;
+}
+
+.lobby-tab {
+    flex: 0 0 auto;
+    padding: 8px 15px;
+    border: none;
+    background: transparent;
+    border-bottom: 4px solid transparent;
+    font-family: 'Oswald', sans-serif;
+    font-size: 1em;
+    cursor: pointer;
+    color: #aaa;
+    white-space: nowrap;
+}
+
+.lobby-tab.active {
+    color: white;
+    border-bottom-color: #0d6efd;
+}
+
+.lobby-tab-name {
+    font-size: 1.1em;
+}
+
+.lobby-tab-cost {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    opacity: 0.7;
+    font-size: 0.8em;
+}
+
+.tab-token-icon {
+    height: 12px;
+    width: 12px;
+}
+
+
+/* Main Content & Collapsible Sections */
+/* --- MODIFICATION: Make the main area grow and scroll independently --- */
+.lobby-main {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 10px 15px;
+    /* Allow flex child to shrink so chat/footer remain visible */
+    min-height: 0;
+    /* Reserve room for sticky chat (and footer) so content doesn't hide under it) */
+    padding-bottom: 180px; /* ~150px chat + margin */
+        /* Prefer vertical gestures in the main scroll area */
+        touch-action: pan-y;
+        overscroll-behavior-x: none;
+}
+
+/* Removed collapsible headers; sections are always visible */
+
+.table-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 15px;
+        width: 100%;
+        box-sizing: border-box;
+        /* Ensure grid doesn’t initiate horizontal panning */
+        touch-action: pan-y;
+        overscroll-behavior-x: none;
+}
+
+/* Lobby Menu */
+.lobby-menu-popup {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    background-color: #212121;
+    border: 1px solid #555;
+    border-radius: 8px;
+    padding: 10px;
+    z-index: 110;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    width: 200px; /* Increased width for new button */
+
+/* Simple non-sticky collapse toggle for tables */
+.tables-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-weight: 600;
+    font-size: 16px;
+    line-height: 1.2;
+    padding: 12px 16px;
+    color: var(--lobby-text, #f5f5f5);
+    background: var(--lobby-surface, #1f1f1f);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+        -webkit-user-select: none;
+        user-select: none;
+    touch-action: manipulation;
+}
+
+.tables-toggle:focus {
+    outline: 2px solid #4c9ffe;
+    outline-offset: 2px;
+}
+
+.tables-toggle .toggle-title {
+    letter-spacing: 0.2px;
+}
+
+.tables-toggle .toggle-caret {
+    opacity: 0.9;
+}
+
+/* Bulletin toggle mirrors tables toggle */
+.bulletin-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-weight: 600;
+    font-size: 16px;
+    line-height: 1.2;
+    padding: 12px 16px;
+    color: var(--lobby-text, #f5f5f5);
+    background: var(--lobby-surface, #1f1f1f);
+    border-top: 1px solid rgba(255,255,255,0.08);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: manipulation;
+}
+
+.bulletin-toggle:focus {
+    outline: 2px solid #4c9ffe;
+    outline-offset: 2px;
+}
+    display: flex;
+    flex-direction: column;
+    gap: 5px; /* Add space between buttons */
+}
+
+/* --- NEW STYLES FOR MENU BUTTONS --- */
+.lobby-menu-button {
+    width: 100%;
+    padding: 8px 12px;
+    text-align: left;
+    background-color: #333;
+    color: #e0e0e0;
+    border: 1px solid #444;
+    border-radius: 4px;
+    font-family: 'Oswald', sans-serif;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.lobby-menu-button:hover {
+    background-color: #444;
+    border-color: #666;
+}
+
+.lobby-menu-button.admin {
+    background-color: #a02c2c;
+    border-color: #c82333;
+}
+.lobby-menu-button.admin:hover {
+    background-color: #c82333;
+}
+
+.lobby-menu-button.logout {
+    background-color: #5a6268;
+    border-color: #6c757d;
+}
+.lobby-menu-button.logout:hover {
+    background-color: #6c757d;
+}
+/* --- END NEW STYLES --- */
+
+
+.lobby-footer {
+    padding: 4px 20px;
+    background-color: #111;
+    flex-shrink: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.7em;
+    color: #888;
+    font-family: monospace;
+}
+
+/* Responsive styles for the lobby menu */
+@media (max-width: 768px) {
+    .lobby-menu-popup {
+        width: 60vw;
+        right: 5vw;
+        top: calc(100% + 5px);
+    }
+}
+
+/* Desktop mode adjustments for raised chat panel and larger cards */
+@media (min-width: 1024px) {
+    .lobby-main {
+        padding-bottom: 280px; /* Account for raised chat panel (200px height + 20px bottom + padding) */
+    }
+    
+    .table-grid {
+        grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); /* Larger minimum width for bigger cards */
+        gap: 30px; /* Double the gap between cards */
+    }
+}
+
+/* Orientation hooks (add rules here if needed) */
+@media (orientation: portrait) {
+    .table-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+}
+@media (orientation: landscape) {
+    .table-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+}
+
+/* Ensure chat stays reachable on short viewports by allowing page scroll */
+@media (max-height: 700px) {
+    .lobby-view {
+        overflow-x: hidden;
+        overflow-y: auto; /* Enable vertical scroll for the whole page */
+    }
+    .lobby-main {
+    overflow: visible; /* Avoid nested scroll when page is scrollable */
+    padding-bottom: 180px; /* keep space for sticky chat */
+    }
+}
+
+/* Portrait phones: make the page scrollable so chat is reachable */
+@media (orientation: portrait) and (max-width: 480px) {
+    .lobby-view {
+        overflow-y: auto;
+        overflow-x: hidden; /* avoid thin side gap */
+    }
+    .lobby-main {
+    overflow: visible;
+        padding-bottom: 200px; /* reserve space for fixed chat + footer */
+        padding-top: 120px;   /* reserve space for fixed header + tabs */
+        /* Make content full-bleed to match header/footer width */
+        padding-left: 0;
+        padding-right: 0;
+        overflow-x: hidden; /* reassert no horizontal scroll */
+    }
+    /* Keep footer visible; place it above the fixed chat */
+    .lobby-footer {
+        position: sticky;
+        bottom: 150px; /* roughly chat height so it appears above */
+        z-index: 900;
+        background-color: #111;
+    }
+
+    /* Sticky headers for small portrait devices */
+    .lobby-header {
+        position: fixed;
+        top: 58px; /* below mobile ad header */
+        left: 0;
+        right: 0;
+    width: 100%;
+    margin: 0;
+    padding-left: 10px; /* slightly smaller side padding on phones */
+    padding-right: 10px;
+        z-index: 1400; /* Above tabs and content */
+    }
+    .lobby-nav {
+        position: fixed;
+        top: 114px; /* ad (58) + header (~56) */
+        left: 0;
+        right: 0;
+    width: 100%;
+    margin: 0;
+    padding-left: 8px;
+    padding-right: 8px;
+        z-index: 1300;
+        background-color: #2a2a2a; /* ensure solid backdrop over content */
+        border-bottom: 1px solid #111;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    }
+    /* No sticky section headers on mobile after removal */
+}

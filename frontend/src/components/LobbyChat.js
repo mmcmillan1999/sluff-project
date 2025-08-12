@@ -28,7 +28,7 @@ const LobbyChat = ({ socket, messages = [] }) => {
 
     // The stray brace has been removed from before this return statement
     return (
-        <div className="lobby-chat-container">
+        <>
             <div className="chat-log-window" ref={chatLogRef}>
                 {messages.length === 0 ? (
                     <p className="chat-placeholder-text">No messages yet.</p>
@@ -55,7 +55,7 @@ const LobbyChat = ({ socket, messages = [] }) => {
                     </svg>
                 </button>
             </div>
-        </div>
+        </>
     );
 };
 
