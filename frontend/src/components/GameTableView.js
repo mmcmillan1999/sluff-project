@@ -16,20 +16,9 @@ import LayoutDevPanel from './LayoutDevPanel';
 import { getLobbyChatHistory } from '../services/api';
 import { SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS, RANKS_ORDER, SUIT_SORT_ORDER } from '../constants';
 
-// Helper to sort cards by suit
+// Helper to get suit from card string
 const getSuitLocal = (cardStr) => cardStr.slice(-1);
 const getRankLocal = (cardStr) => cardStr.slice(0, -1);
-const sortHandBySuit = (handArray) => {
-    if (!handArray) return [];
-    return [...handArray].sort((a, b) => {
-        const suitAIndex = SUIT_SORT_ORDER.indexOf(getSuitLocal(a));
-        const suitBIndex = SUIT_SORT_ORDER.indexOf(getSuitLocal(b));
-        const rankAIndex = RANKS_ORDER.indexOf(getRankLocal(a));
-        const rankBIndex = RANKS_ORDER.indexOf(getRankLocal(b));
-        if (suitAIndex !== suitBIndex) return suitAIndex - suitBIndex;
-        return rankAIndex - rankBIndex;
-    });
-};
 
 const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, emitEvent, playSound, socket, handleOpenFeedbackModal }) => {
     const [seatAssignments, setSeatAssignments] = useState({ self: null, opponentLeft: null, opponentRight: null });
@@ -47,7 +36,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const [observedPlayerId, setObservedPlayerId] = useState(playerId);
     const [isObserverMode, setIsObserverMode] = useState(false);
     const [showLayoutDev, setShowLayoutDev] = useState(false);
-    const [showCardDebug, setShowCardDebug] = useState(false); // Hide debug overlay
+    const [showCardDebug] = useState(false); // Hide debug overlay
     const [selectedFrogDiscards, setSelectedFrogDiscards] = useState([]);
     const turnPlayerRef = useRef(null);
     const trickWinnerRef = useRef(null);
@@ -216,7 +205,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
 
     useEffect(() => {
         if (!currentTableState || !selfPlayerName || isSpectator) return;
-        const { state, trickTurnPlayerName, lastCompletedTrick, currentTrickCards, bidWinnerInfo, hands } = currentTableState;
+        const { state, trickTurnPlayerName, lastCompletedTrick, currentTrickCards } = currentTableState;
         if ((state === "Playing Phase" || state === "Bidding Phase") && trickTurnPlayerName === selfPlayerName && turnPlayerRef.current !== selfPlayerName) playSound('turnAlert');
         turnPlayerRef.current = trickTurnPlayerName;
         const newCardCount = currentTrickCards?.length || 0;

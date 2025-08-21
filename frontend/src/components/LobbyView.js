@@ -21,7 +21,6 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
     // Get viewport information for responsive behavior
     const viewport = useViewport();
     const isMobile = viewport.width < 768;
-    const isTablet = viewport.width >= 768 && viewport.width < 1024;
     const isDesktop = viewport.width >= 1024;
 
     useEffect(() => {
@@ -97,6 +96,9 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
                 case 'q':
                     e.preventDefault();
                     handleLogout();
+                    break;
+                default:
+                    // No action for other keys
                     break;
             }
         };

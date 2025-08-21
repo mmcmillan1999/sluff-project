@@ -1,0 +1,62 @@
+{
+  "timestamp": "2025-08-13T03:41:29.677Z",
+  "testResults": [
+    {
+      "model": "gpt-4o-mini",
+      "successRate": "100",
+      "avgResponseTime": 1574,
+      "errors": 0,
+      "errorSamples": []
+    },
+    {
+      "model": "gpt-4o",
+      "successRate": "100",
+      "avgResponseTime": 1070,
+      "errors": 0,
+      "errorSamples": []
+    },
+    {
+      "model": "llama-3.1-8b",
+      "successRate": "100",
+      "avgResponseTime": 741,
+      "errors": 0,
+      "errorSamples": []
+    },
+    {
+      "model": "gemini-2.0-flash",
+      "successRate": "100",
+      "avgResponseTime": 691,
+      "errors": 0,
+      "errorSamples": []
+    }
+  ],
+  "optimizedParameters": {
+    "gpt-4o-mini": {
+      "temperature": 0.5,
+      "max_tokens": 150,
+      "retries": 3,
+      "response_format": "json_object"
+    },
+    "gpt-4o": {
+      "temperature": 0.5,
+      "max_tokens": 150,
+      "retries": 3,
+      "response_format": "json_object"
+    },
+    "llama-3.1-8b": {
+      "temperature": 0.1,
+      "max_tokens": 150,
+      "retries": 3,
+      "response_format": "json_object"
+    },
+    "gemini-2.0-flash": {
+      "temperature": 0.2,
+      "max_tokens": 150,
+      "retries": 3,
+      "extractJSON": true
+    }
+  },
+  "productionReady": true,
+  "recommendedModel": "gpt-4o-mini",
+  "overallSuccessRate": 100
+}

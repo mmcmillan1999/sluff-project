@@ -1,0 +1,55 @@
+/* frontend/src/components/game/DebugWindow.css */
+.debug-window {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.85);
+    color: #00ff00;
+    padding: 20px 30px;
+    border-radius: 10px;
+    font-family: 'Courier New', monospace;
+    font-size: 24px;
+    z-index: 100000;
+    min-width: 400px;
+    border: 2px solid #00ff00;
+    box-shadow: 0 4px 20px rgba(0, 255, 0, 0.3);
+}
+
+.debug-title {
+    font-weight: bold;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #00ff00;
+    text-align: center;
+    color: #00ff00;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-size: 28px;
+}
+
+.debug-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.debug-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+}
+
+.debug-label {
+    color: #00ff00;
+    opacity: 0.7;
+    margin-right: 20px;
+    font-size: 22px;
+}
+
+.debug-value {
+    color: #00ff00;
+    font-weight: bold;
+    text-align: right;
+    font-size: 24px;
+}

@@ -1,0 +1,133 @@
+/* frontend/src/components/game/SuperBotModal.css */
+
+.superbot-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+}
+
+.superbot-modal {
+    background-color: #1a1a2e;
+    border-radius: 12px;
+    padding: 2rem;
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.superbot-modal h2 {
+    color: #fff;
+    margin-bottom: 1.5rem;
+    text-align: center;
+    font-size: 1.8rem;
+}
+
+.models-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.model-card {
+    background-color: #16213e;
+    border: 2px solid #2c3e50;
+    border-radius: 8px;
+    padding: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.model-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.model-card.selected {
+    border-width: 3px;
+    background-color: #1f2f4f;
+}
+
+.model-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.8rem;
+}
+
+.provider-badge {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    color: white;
+    font-weight: bold;
+}
+
+.speed-badge {
+    font-size: 0.9rem;
+    font-weight: bold;
+}
+
+.model-name {
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 500;
+    text-align: center;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.modal-actions button {
+    flex: 1;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.cancel-button {
+    background-color: #6c757d;
+    color: white;
+}
+
+.cancel-button:hover {
+    background-color: #5a6268;
+}
+
+.select-button {
+    color: white;
+}
+
+.select-button:hover:not(:disabled) {
+    opacity: 0.9;
+}
+
+.loading, .no-models {
+    text-align: center;
+    padding: 2rem;
+    color: #fff;
+}
+
+.no-models .hint {
+    color: #888;
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+}

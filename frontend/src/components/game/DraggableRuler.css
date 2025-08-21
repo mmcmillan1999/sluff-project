@@ -1,0 +1,57 @@
+/* frontend/src/components/game/DraggableRuler.css */
+
+.draggable-ruler {
+    position: fixed;
+    z-index: 10000;
+    cursor: move;
+    user-select: none;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ruler-bar {
+    position: absolute;
+    height: 4px;
+    background: linear-gradient(90deg, #ff0000, #ffff00, #00ff00);
+    border: 2px solid #000;
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.ruler-label {
+    position: absolute;
+    top: -25px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #000;
+    color: #00ff00;
+    padding: 4px 8px;
+    border: 2px solid #00ff00;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 14px;
+    font-weight: bold;
+    white-space: nowrap;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+}
+
+.ruler-end-marker {
+    position: absolute;
+    color: #fff;
+    font-size: 24px;
+    font-weight: bold;
+    text-shadow: 0 0 5px #000, 0 0 10px #000;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.ruler-end-marker.left {
+    left: -5px;
+}
+
+.ruler-end-marker.right {
+    right: -5px;
+}

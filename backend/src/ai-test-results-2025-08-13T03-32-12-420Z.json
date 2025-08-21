@@ -1,0 +1,262 @@
+{
+  "gpt-4o-mini": {
+    "card": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 2,
+      "errors": {
+        "Null response": 100
+      }
+    },
+    "bid": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 2,
+      "errors": {
+        "Null response": 100
+      }
+    },
+    "insurance": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 0,
+      "errors": {
+        "Null response": 100
+      }
+    }
+  },
+  "gpt-4o": {
+    "card": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 1,
+      "errors": {
+        "Null response": 100
+      }
+    },
+    "bid": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 2,
+      "errors": {
+        "Null response": 100
+      }
+    },
+    "insurance": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 0,
+      "errors": {
+        "Null response": 100
+      }
+    }
+  },
+  "gpt-3.5-turbo": {
+    "card": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 1,
+      "errors": {
+        "Null response": 100
+      }
+    },
+    "bid": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 1,
+      "errors": {
+        "Null response": 100
+      }
+    },
+    "insurance": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 1,
+      "errors": {
+        "Null response": 100
+      }
+    }
+  },
+  "claude-3.5-haiku": {
+    "card": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 1,
+      "errors": {
+        "Null response": 100
+      }
+    },
+    "bid": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 2,
+      "errors": {
+        "Null response": 100
+      }
+    },
+    "insurance": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 0,
+      "errors": {
+        "Null response": 100
+      }
+    }
+  },
+  "claude-3.5-sonnet": {
+    "card": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 1,
+      "errors": {
+        "Null response": 100
+      }
+    },
+    "bid": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 2,
+      "errors": {
+        "Null response": 100
+      }
+    },
+    "insurance": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 1,
+      "errors": {
+        "Null response": 100
+      }
+    }
+  },
+  "gemini-2.0-flash": {
+    "card": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 1,
+      "errors": {
+        "Null response": 100
+      }
+    },
+    "bid": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 1,
+      "errors": {
+        "Null response": 100
+      }
+    },
+    "insurance": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 0,
+      "errors": {
+        "Null response": 100
+      }
+    }
+  },
+  "gemini-1.5-flash": {
+    "card": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 1,
+      "errors": {
+        "Null response": 100
+      }
+    },
+    "bid": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 2,
+      "errors": {
+        "Null response": 100
+      }
+    },
+    "insurance": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 0,
+      "errors": {
+        "Null response": 100
+      }
+    }
+  },
+  "llama-3.3-70b": {
+    "card": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 3,
+      "errors": {
+        "Null response": 100
+      }
+    },
+    "bid": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 2,
+      "errors": {
+        "Null response": 100
+      }
+    },
+    "insurance": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 0,
+      "errors": {
+        "Null response": 100
+      }
+    }
+  },
+  "llama-3.1-8b": {
+    "card": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 1,
+      "errors": {
+        "Null response": 100
+      }
+    },
+    "bid": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 2,
+      "errors": {
+        "Null response": 100
+      }
+    },
+    "insurance": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 0,
+      "errors": {
+        "Null response": 100
+      }
+    }
+  },
+  "mixtral-8x7b": {
+    "card": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 2,
+      "errors": {
+        "Null response": 100
+      }
+    },
+    "bid": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 0,
+      "errors": {
+        "Null response": 100
+      }
+    },
+    "insurance": {
+      "successes": 0,
+      "failures": 100,
+      "totalTime": 1,
+      "errors": {
+        "Null response": 100
+      }
+    }
+  }
+}
