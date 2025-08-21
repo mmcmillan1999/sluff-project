@@ -13,7 +13,6 @@ import IosPwaPrompt from './game/IosPwaPrompt';
 import LobbyChat from './LobbyChat';
 import AdminObserverMode from './AdminObserverMode';
 import LayoutDevPanel from './LayoutDevPanel';
-import FrogDiscardOverlay from './game/FrogDiscardOverlay';
 import { getLobbyChatHistory } from '../services/api';
 import { SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS, RANKS_ORDER, SUIT_SORT_ORDER } from '../constants';
 
@@ -50,8 +49,6 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const [showLayoutDev, setShowLayoutDev] = useState(false);
     const [showCardDebug, setShowCardDebug] = useState(false); // Hide debug overlay
     const [selectedFrogDiscards, setSelectedFrogDiscards] = useState([]);
-    const [showFrogOverlay, setShowFrogOverlay] = useState(false);
-    const [frogOverlayCards, setFrogOverlayCards] = useState([]);
     const turnPlayerRef = useRef(null);
     const trickWinnerRef = useRef(null);
     const cardCountRef = useRef(null);
@@ -229,15 +226,9 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         trickWinnerRef.current = lastCompletedTrick?.winnerName;
         if (state === 'Bidding Phase' && gameStateRef.current === 'Dealing Pending') playSound('cardDeal');
         gameStateRef.current = state;
-        // Handle Frog Widow Exchange overlay
-        if (state === "Frog Widow Exchange" && bidWinnerInfo?.userId === playerId) {
-            const myHand = hands?.[selfPlayerName] || [];
-            setFrogOverlayCards(sortHandBySuit(myHand));
-            setShowFrogOverlay(true);
-        } else {
-            setShowFrogOverlay(false);
+        // Clear selected discards when leaving Frog Widow Exchange
+        if (state !== "Frog Widow Exchange") {
             setSelectedFrogDiscards([]);
-            setFrogOverlayCards([]);
         }
     }, [currentTableState, selfPlayerName, isSpectator, playSound, playerId]);
     
@@ -262,23 +253,6 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         });
     };
 
-    const handleSubmitFrogDiscards = () => {
-        if (selectedFrogDiscards.length === 3) {
-            console.log('[Frog] Submitting discards:', selectedFrogDiscards);
-            emitEvent("submitFrogDiscards", { discards: selectedFrogDiscards });
-            setSelectedFrogDiscards([]); // Clear after submit
-            setShowFrogOverlay(false); // Close overlay
-        }
-    };
-    
-    // Handler for overlay card selection
-    const handleOverlayCardSelect = (card) => {
-        setSelectedFrogDiscards(prev => {
-            if (prev.includes(card)) return prev.filter(c => c !== card);
-            if (prev.length < 3) return [...prev, card];
-            return prev;
-        });
-    };
 
     const renderCard = (cardString, options = {}) => {
         const { isButton = false, onClick = null, disabled = false, isSelected = false, small = false, large = false, isFaceDown = false, style: customStyle = {}, className = '', responsive = true } = options;
@@ -534,14 +508,6 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
 
             <IosPwaPrompt show={showIosPwaPrompt} onClose={() => setShowIosPwaPrompt(false)} />
 
-            <FrogDiscardOverlay
-                isOpen={showFrogOverlay}
-                cards={frogOverlayCards}
-                selectedCards={selectedFrogDiscards}
-                onSelectCard={handleOverlayCardSelect}
-                onConfirm={handleSubmitFrogDiscards}
-                renderCard={renderCard}
-            />
 
             {/* Debug: Check admin status (log removed to avoid console spam) */}
             
@@ -601,7 +567,6 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 dropZoneRef={dropZoneRef}
                 isAdmin={user?.is_admin}
                 selectedFrogDiscards={selectedFrogDiscards}
-                onSubmitFrogDiscards={handleSubmitFrogDiscards}
             />
             
             <footer className="game-footer">

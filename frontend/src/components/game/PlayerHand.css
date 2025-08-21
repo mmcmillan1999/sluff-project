@@ -140,41 +140,49 @@
     border-radius: 0.7vh;
 }
 
-/* Discarding mode - tighter overlap */
+/* Discarding mode - cards are absolutely positioned by JavaScript */
 .player-hand-cards.is-discarding .player-hand-card-wrapper-static {
-    margin-left: calc(-10vh * 0.714 * 0.5);
+    /* No margins - positioning handled by inline styles */
+    cursor: pointer;
 }
 
-.player-hand-cards.is-discarding .player-hand-card-wrapper-static:first-child {
-    margin-left: 0;
+/* Two-row layout now handled entirely in JavaScript with edge-anchoring logic */
+
+/* Frog confirm button - pure CSS positioning */
+.frog-confirm-button {
+    position: fixed !important;
+    bottom: 36vh !important;
+    left: 50vw !important;
+    transform: translateX(-50%) !important;
+    z-index: 100 !important;
+    
+    /* Sizing - all vh based */
+    padding: 1.5vh 3vh !important;
+    min-width: 20vh !important;
+    min-height: 5vh !important;
+    font-size: 2.5vh !important;
+    font-family: 'Oswald', sans-serif !important;
+    font-weight: bold !important;
+    
+    /* Styling */
+    background-color: #666 !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 0.8vh !important;
+    cursor: not-allowed !important;
+    box-shadow: 0 0.4vh 0.8vh rgba(0,0,0,0.3) !important;
+    opacity: 0.7 !important;
+    transition: background-color 0.3s ease, opacity 0.3s ease !important;
 }
 
-/* Two-row layout for Frog discard (14 cards) - always use grid for consistency */
-.player-hand-cards.is-discarding.two-rows {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    grid-auto-rows: auto;
-    row-gap: 0.7vh;
-    column-gap: 0.7vh;
-    align-items: end;
-    justify-items: center;
-    height: auto;
-    padding: 0.7vh 0;
+.frog-confirm-button[data-ready="true"] {
+    background-color: #4CAF50 !important;
+    cursor: pointer !important;
+    opacity: 1 !important;
 }
 
-.player-hand-cards.is-discarding.two-rows .player-hand-card-wrapper-static {
-    margin: 0;
-    width: 100%;
-    display: flex;
-    justify-content: center;
-}
-
-.player-hand-cards.is-discarding.two-rows .card-display {
-    width: 100% !important;
-    min-width: 0 !important;
-    height: auto !important;
-    aspect-ratio: 10 / 13;
-    font-size: 1.5vh;
+.frog-confirm-button:hover[data-ready="true"] {
+    background-color: #45a049 !important;
 }
 
 /* Physics-enhanced interactions */

@@ -354,22 +354,147 @@ const PlayerHand = ({
     
     // Only allow the actual bidder (by userId) to perform the discards; observers should not submit
     if (state === "Frog Widow Exchange" && bidWinnerInfo?.userId === playerId) {
-        // Mobile portrait two-row layout when holding 14 cards during Frog
-    const isMobilePortrait = orientation === 'portrait' && width <= 480;
-    const enableTwoRows = isMobilePortrait && (myHand?.length >= 14);
-    // Always use small cards in two-row mode to preserve aspect and fit 7 columns
-    const useSmallCards = enableTwoRows;
+        // Two-row layout when holding 14 cards during Frog - no device checks
+        const enableTwoRows = myHand?.length >= 14;
+        
+        if (enableTwoRows) {
+            // Split the 14 cards into two rows of 7 each
+            const sortedHand = sortHandBySuit(myHand);
+            const topRow = sortedHand.slice(0, 7);
+            const bottomRow = sortedHand.slice(7, 14);
+            
+            // Calculate ABSOLUTE POSITIONS for each row (same logic as normal play)
+            const calculateRowPositions = (numCards) => {
+                const vh = window.innerHeight / 100;
+                const cardHeight = 10 * vh; // Large cards
+                const cardWidth = Math.round(cardHeight * 0.714);
+                const viewportWidth = window.innerWidth;
+                
+                // Handle single card case
+                if (numCards === 1) {
+                    return {
+                        positions: [{ left: (viewportWidth - cardWidth) / 2 }],
+                        useCenter: true
+                    };
+                }
+                
+                // Edge-anchoring calculation
+                const edgeSpacing = (viewportWidth - cardWidth) / (numCards - 1);
+                const GAP_THRESHOLD = 2;
+                
+                if (edgeSpacing > cardWidth + GAP_THRESHOLD) {
+                    // CENTER MODE with gaps
+                    const totalWidth = (numCards * cardWidth) + ((numCards - 1) * GAP_THRESHOLD);
+                    const startX = (viewportWidth - totalWidth) / 2;
+                    const positions = [];
+                    
+                    for (let i = 0; i < numCards; i++) {
+                        positions.push({ left: startX + (i * (cardWidth + GAP_THRESHOLD)) });
+                    }
+                    
+                    return { positions, useCenter: true };
+                } else {
+                    // OVERLAP MODE - edge anchored
+                    const positions = [];
+                    
+                    for (let i = 0; i < numCards; i++) {
+                        positions.push({ left: i * edgeSpacing });
+                    }
+                    
+                    return { positions, useCenter: false };
+                }
+            };
+            
+            const topLayout = calculateRowPositions(7);
+            const bottomLayout = calculateRowPositions(7);
+            
+            return (
+                <div className="player-hand-container" style={{ position: 'relative' }}>
+                    {/* Confirm button - fixed viewport position */}
+                    <button
+                        className="frog-confirm-button"
+                        onClick={() => {
+                            if (actualSelectedDiscards.length === 3) {
+                                console.log('[Frog] Submitting discards:', actualSelectedDiscards);
+                                emitEvent("submitFrogDiscards", { discards: actualSelectedDiscards });
+                            }
+                        }}
+                        disabled={actualSelectedDiscards.length !== 3}
+                        data-ready={actualSelectedDiscards.length === 3}
+                    >
+                        {actualSelectedDiscards.length === 3 
+                            ? 'Confirm Discards' 
+                            : `Select ${3 - actualSelectedDiscards.length} more`}
+                    </button>
+                    
+                    {/* Top row - positioned 13vh above the normal hand position for better spacing */}
+                    <div className="player-hand-cards is-discarding"
+                         style={{ 
+                             position: 'absolute',
+                             bottom: '13vh', // 3vh higher for padding between rows
+                             width: '100%',
+                             height: '12vh', // Match normal hand height
+                             display: 'block' // Not flex - we're using absolute positioning
+                         }}>
+                        {topRow.map((card, index) => (
+                            <div key={card} 
+                                 className="player-hand-card-wrapper-static"
+                                 style={{
+                                     position: 'absolute',
+                                     left: `${topLayout.positions[index].left}px`,
+                                     top: '0',
+                                     zIndex: index + 1
+                                 }}>
+                                {renderCard(card, {
+                                    isButton: true,
+                                    onClick: () => handleSelectDiscard(card),
+                                    large: true,
+                                    isSelected: actualSelectedDiscards.includes(card)
+                                })}
+                            </div>
+                        ))}
+                    </div>
+                    
+                    {/* Bottom row - in the exact normal hand position */}
+                    <div className="player-hand-cards is-discarding"
+                         style={{ 
+                             position: 'relative',
+                             width: '100%',
+                             height: '12vh',
+                             display: 'block' // Not flex - we're using absolute positioning
+                         }}>
+                        {bottomRow.map((card, index) => (
+                            <div key={card} 
+                                 className="player-hand-card-wrapper-static"
+                                 style={{
+                                     position: 'absolute',
+                                     left: `${bottomLayout.positions[index].left}px`,
+                                     top: '0',
+                                     zIndex: index + 1
+                                 }}>
+                                {renderCard(card, {
+                                    isButton: true,
+                                    onClick: () => handleSelectDiscard(card),
+                                    large: true,
+                                    isSelected: actualSelectedDiscards.includes(card)
+                                })}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+        
+        // Single row layout for less than 14 cards (shouldn't happen in Frog, but fallback)
         return (
-             <div className="player-hand-container" style={{ flexDirection: 'column' }}>
-        <div className={`player-hand-cards is-discarding ${enableTwoRows ? 'two-rows' : ''}`}>
+            <div className="player-hand-container" style={{ flexDirection: 'column' }}>
+                <div className="player-hand-cards is-discarding">
                     {sortHandBySuit(myHand).map((card) => (
                         <div key={card} className="player-hand-card-wrapper-static">
                             {renderCard(card, {
                                 isButton: true,
                                 onClick: () => handleSelectDiscard(card),
-                // In two-row mode use small; otherwise large for normal hand view
-                large: !enableTwoRows,
-                small: useSmallCards,
+                                large: true,
                                 isSelected: actualSelectedDiscards.includes(card)
                             })}
                         </div>

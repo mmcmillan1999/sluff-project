@@ -30,9 +30,7 @@ const TableLayout = ({
     emitEvent,
     handleLeaveTable,
     playSound,
-    dropZoneRef,
-    selectedFrogDiscards,
-    onSubmitFrogDiscards
+    dropZoneRef
 }) => {
     const [lastTrickVisible, setLastTrickVisible] = useState(false);
     const [lastTrickPosition, setLastTrickPosition] = useState(null);
@@ -681,34 +679,6 @@ const TableLayout = ({
                 {renderProgressBars()}
                 
                 <div className="player-seat-bottom">
-                    {/* Frog discard submit button - positioned above player seat */}
-                    {currentTableState.state === "Frog Widow Exchange" && 
-                     currentTableState.bidWinnerInfo?.userId === playerId && 
-                     selectedFrogDiscards && onSubmitFrogDiscards && (
-                        <button
-                            onClick={onSubmitFrogDiscards}
-                            className="frog-discard-submit-button"
-                            disabled={selectedFrogDiscards.length !== 3}
-                            style={{
-                                position: 'absolute',
-                                top: '-5vh',
-                                left: '50%',
-                                transform: 'translateX(-50%)',
-                                padding: '1vh 2vh',
-                                fontSize: '1.8vh',
-                                fontFamily: 'Oswald, sans-serif',
-                                backgroundColor: selectedFrogDiscards.length === 3 ? '#4CAF50' : '#9E9E9E',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '0.8vh',
-                                cursor: selectedFrogDiscards.length === 3 ? 'pointer' : 'not-allowed',
-                                boxShadow: '0 0.3vh 0.6vh rgba(0,0,0,0.3)',
-                                zIndex: 100
-                            }}
-                        >
-                            Submit Discards ({selectedFrogDiscards.length}/3)
-                        </button>
-                    )}
                     <PlayerSeat 
                         playerName={seatAssignments.self} 
                         currentTableState={currentTableState} 
