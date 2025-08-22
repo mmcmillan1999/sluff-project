@@ -67,7 +67,7 @@
     right: 0;
     display: flex !important; /* Force display */
     flex-direction: row;
-    justify-content: space-between;
+    justify-content: center; /* Center all content */
     align-items: center;
     gap: 1vh; /* Reduced gap */
     width: 100%;
@@ -77,7 +77,7 @@
     background-color: rgba(40, 40, 40, 0.9); /* Slightly darker than footer */
     visibility: visible !important; /* Force visibility */
     opacity: 1 !important; /* Force opacity */
-    z-index: 100; /* High z-index to ensure visibility */
+    z-index: 5; /* Lower z-index to stay below player hand turn indicator */
 }
 
 .game-view-chat-container {

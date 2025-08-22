@@ -5,6 +5,7 @@ import './PlayerHand.css';
 import { RANKS_ORDER, SUIT_SORT_ORDER } from '../../constants';
 import { getLegalMoves } from '../../utils/legalMoves';
 import CardPhysicsEngine from '../../utils/CardPhysicsEngine';
+import CardSpacingEngine from '../../utils/CardSpacingEngine';
 import { useViewport } from '../../hooks/useViewport';
 
 const getSuitLocal = (cardStr) => cardStr.slice(-1);
@@ -38,9 +39,9 @@ const PlayerHand = ({
     const actualSelectedDiscards = selectedDiscards !== undefined ? selectedDiscards : localSelectedDiscards;
     const actualSetSelectedDiscards = onSelectDiscard || setLocalSelectedDiscards;
     const myHandRef = useRef(null);
-    const [cardMargin, setCardMargin] = useState(-25);
-    const [centeredSpacing, setCenteredSpacing] = useState(false);
+    const [cardLayout, setCardLayout] = useState(null);
     const physicsEngineRef = useRef(null);
+    const spacingEngineRef = useRef(null);
     const [usePhysics] = useState(true); // Feature flag for physics
     const { width, orientation } = useViewport();
 
@@ -67,11 +68,13 @@ const PlayerHand = ({
     const isBidder = bidWinnerInfo?.playerName === selfPlayerName;
     const isDefender = bidWinnerInfo && !isBidder && Object.values(players || {}).some(p => p.playerName === selfPlayerName);
     
-    // Initialize physics engine
+    // Initialize engines
     useEffect(() => {
         if (usePhysics) {
             physicsEngineRef.current = new CardPhysicsEngine();
         }
+        spacingEngineRef.current = new CardSpacingEngine();
+        
         return () => {
             if (physicsEngineRef.current) {
                 physicsEngineRef.current.cancelAll();
@@ -79,51 +82,27 @@ const PlayerHand = ({
         };
     }, [usePhysics]);
 
+    // Use CardSpacingEngine for layout calculations
     useEffect(() => {
         const calculateLayout = () => {
-            if (!myHandRef.current || myHand.length === 0) return;
+            if (!spacingEngineRef.current || myHand.length === 0) return;
             
-            const handCards = myHandRef.current.querySelector('.player-hand-cards');
-            if (!handCards) return;
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
             
-            // Calculate viewport-based card dimensions
-            const vh = window.innerHeight / 100;
-            const isMobile = window.innerWidth <= 768;
-            const isDesktop = window.innerWidth >= 1024;
+            // Calculate layout using the spacing engine
+            const layout = spacingEngineRef.current.calculateLayout(
+                viewportWidth,
+                viewportHeight,
+                myHand.length
+            );
             
-            let cardHeight;
-            if (isDesktop) cardHeight = 15 * vh;
-            else if (isMobile) cardHeight = 10 * vh;
-            else cardHeight = 12 * vh; // tablet
+            // Store the full layout for use in rendering
+            setCardLayout(layout);
             
-            const cardWidth = Math.round(cardHeight * 0.714); // Maintain aspect ratio
-            const containerWidth = handCards.offsetWidth;
-            const numCards = myHand.length;
-            
-            // Handle single card case
-            if (numCards === 1) {
-                setCardMargin(0);
-                setCenteredSpacing(true);
-                return;
-            }
-            
-            // Calculate spacing for edge-anchoring mode
-            // Left card at position 0, right card at position (containerWidth - cardWidth)
-            // All cards in between evenly spaced
-            const edgeSpacing = (containerWidth - cardWidth) / (numCards - 1);
-            
-            // Check if we should use centered mode instead (when gaps would be > 2px)
-            const GAP_THRESHOLD = 2; // 2px gap threshold
-            
-            if (edgeSpacing > cardWidth + GAP_THRESHOLD) {
-                // Use centered mode with 2px gaps
-                setCardMargin(GAP_THRESHOLD);
-                setCenteredSpacing(true);
-            } else {
-                // Use edge-anchoring mode
-                const marginLeft = edgeSpacing - cardWidth; // Will be negative for overlap
-                setCardMargin(marginLeft);
-                setCenteredSpacing(false);
+            // Debug logging in development
+            if (process.env.NODE_ENV === 'development') {
+                spacingEngineRef.current.logDebugInfo(layout);
             }
         };
         
@@ -363,50 +342,20 @@ const PlayerHand = ({
             const topRow = sortedHand.slice(0, 7);
             const bottomRow = sortedHand.slice(7, 14);
             
-            // Calculate ABSOLUTE POSITIONS for each row (same logic as normal play)
-            const calculateRowPositions = (numCards) => {
-                const vh = window.innerHeight / 100;
-                const cardHeight = 10 * vh; // Large cards
-                const cardWidth = Math.round(cardHeight * 0.714);
-                const viewportWidth = window.innerWidth;
-                
-                // Handle single card case
-                if (numCards === 1) {
-                    return {
-                        positions: [{ left: (viewportWidth - cardWidth) / 2 }],
-                        useCenter: true
-                    };
-                }
-                
-                // Edge-anchoring calculation
-                const edgeSpacing = (viewportWidth - cardWidth) / (numCards - 1);
-                const GAP_THRESHOLD = 2;
-                
-                if (edgeSpacing > cardWidth + GAP_THRESHOLD) {
-                    // CENTER MODE with gaps
-                    const totalWidth = (numCards * cardWidth) + ((numCards - 1) * GAP_THRESHOLD);
-                    const startX = (viewportWidth - totalWidth) / 2;
-                    const positions = [];
-                    
-                    for (let i = 0; i < numCards; i++) {
-                        positions.push({ left: startX + (i * (cardWidth + GAP_THRESHOLD)) });
-                    }
-                    
-                    return { positions, useCenter: true };
-                } else {
-                    // OVERLAP MODE - edge anchored
-                    const positions = [];
-                    
-                    for (let i = 0; i < numCards; i++) {
-                        positions.push({ left: i * edgeSpacing });
-                    }
-                    
-                    return { positions, useCenter: false };
-                }
-            };
+            // Use CardSpacingEngine for each row
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
             
-            const topLayout = calculateRowPositions(7);
-            const bottomLayout = calculateRowPositions(7);
+            const topLayout = spacingEngineRef.current?.calculateRowLayout(
+                viewportWidth, 
+                viewportHeight, 
+                7
+            );
+            const bottomLayout = spacingEngineRef.current?.calculateRowLayout(
+                viewportWidth,
+                viewportHeight,
+                7
+            );
             
             return (
                 <div className="player-hand-container" style={{ position: 'relative' }}>
@@ -433,15 +382,17 @@ const PlayerHand = ({
                              position: 'absolute',
                              bottom: '13vh', // 3vh higher for padding between rows
                              width: '100%',
-                             height: '12vh', // Match normal hand height
-                             display: 'block' // Not flex - we're using absolute positioning
+                             height: `${topLayout?.card.height || 137}px`,
+                             display: 'block', // Not flex - we're using absolute positioning
+                             paddingLeft: `${topLayout?.container.leftPadding || 0}px`,
+                             paddingRight: `${topLayout?.container.rightPadding || 0}px`
                          }}>
                         {topRow.map((card, index) => (
                             <div key={card} 
                                  className="player-hand-card-wrapper-static"
                                  style={{
                                      position: 'absolute',
-                                     left: `${topLayout.positions[index].left}px`,
+                                     left: `${topLayout?.layout.positions[index]?.left || 0}px`,
                                      top: '0',
                                      zIndex: index + 1
                                  }}>
@@ -460,15 +411,17 @@ const PlayerHand = ({
                          style={{ 
                              position: 'relative',
                              width: '100%',
-                             height: '12vh',
-                             display: 'block' // Not flex - we're using absolute positioning
+                             height: `${bottomLayout?.card.height || 137}px`,
+                             display: 'block', // Not flex - we're using absolute positioning
+                             paddingLeft: `${bottomLayout?.container.leftPadding || 0}px`,
+                             paddingRight: `${bottomLayout?.container.rightPadding || 0}px`
                          }}>
                         {bottomRow.map((card, index) => (
                             <div key={card} 
                                  className="player-hand-card-wrapper-static"
                                  style={{
                                      position: 'absolute',
-                                     left: `${bottomLayout.positions[index].left}px`,
+                                     left: `${bottomLayout?.layout.positions[index]?.left || 0}px`,
                                      top: '0',
                                      zIndex: index + 1
                                  }}>
@@ -508,12 +461,68 @@ const PlayerHand = ({
     const isMyTurnToPlay = state === "Playing Phase" && trickTurnPlayerName === selfPlayerName;
     const legalMoves = getLegalMoves(myHand, currentTrickCards.length === 0, leadSuitCurrentTrick, trumpSuit, trumpBroken);
 
+    // Calculate turn indicator bounds
+    const getTurnIndicatorStyle = () => {
+        if (!cardLayout || !isMyTurnToPlay || dragState.isDragging || myHandToDisplay.length === 0) {
+            return { display: 'none' };
+        }
+        
+        const positions = cardLayout.layout.positions;
+        const firstCardLeft = positions[0].left;
+        const lastCardLeft = positions[positions.length - 1].left;
+        const cardWidth = cardLayout.card.width;
+        const cardHeight = cardLayout.card.height;
+        const containerLeftPadding = cardLayout.container.leftPadding;
+        
+        // Add padding around the cards
+        const indicatorPadding = 8;
+        
+        // Calculate absolute position including container padding
+        // This allows the indicator to extend beyond container bounds if needed
+        const absoluteFirstCardLeft = firstCardLeft + containerLeftPadding;
+        const absoluteLastCardRight = lastCardLeft + containerLeftPadding + cardWidth;
+        
+        // Allow indicator to go closer to screen edges (minimum 5px from edge)
+        const minScreenPadding = 5;
+        const leftBound = Math.max(minScreenPadding - containerLeftPadding, firstCardLeft - indicatorPadding);
+        const rightEdge = lastCardLeft + cardWidth + indicatorPadding;
+        
+        // Calculate width based on actual card positions
+        const indicatorWidth = rightEdge - leftBound;
+        
+        return {
+            position: 'absolute',
+            left: `${leftBound}px`,
+            top: `-${indicatorPadding}px`,
+            width: `${indicatorWidth}px`,
+            height: `${cardHeight + (indicatorPadding * 2)}px`,
+            pointerEvents: 'none', // Don't interfere with card interactions
+            zIndex: 0, // Behind cards
+            boxSizing: 'border-box',
+        };
+    };
+
     return (
-        <div className="player-hand-container" ref={myHandRef}>
+        <div className="player-hand-container" ref={myHandRef}
+             style={cardLayout ? {
+                 paddingLeft: `${cardLayout.container.leftPadding}px`,
+                 paddingRight: `${cardLayout.container.rightPadding}px`
+             } : {}}>
             <div
-                className={`player-hand-cards ${isMyTurnToPlay && !dragState.isDragging ? 'my-turn' : ''} ${isBidder ? 'team-bidder' : ''} ${isDefender ? 'team-defender' : ''} ${centeredSpacing ? 'centered-spacing' : ''}`}
-                style={{ '--card-margin-left': `${cardMargin}px` }}
+                className={`player-hand-cards`}
+                style={cardLayout ? {
+                    ...spacingEngineRef.current.getCSSVariables(cardLayout),
+                    position: 'relative',
+                    display: 'block' // Not flex - using absolute positioning
+                } : {}}
             >
+                {/* Turn indicator overlay - absolute positioned behind cards */}
+                {isMyTurnToPlay && !dragState.isDragging && (
+                    <div 
+                        className={`turn-indicator-overlay ${isBidder ? 'team-bidder' : ''} ${isDefender ? 'team-defender' : ''}`}
+                        style={getTurnIndicatorStyle()}
+                    />
+                )}
                 {myHandToDisplay.map((card, index) => {
                     const isLegal = isMyTurnToPlay && legalMoves.includes(card);
                     const isBeingDragged = dragState.isDragging && dragState.draggedCard === card;
@@ -522,11 +531,17 @@ const PlayerHand = ({
                     // CRITICAL FIX: Don't apply React transforms when physics is controlling the element
                     const isPhysicsControlled = usePhysics && isBeingDragged;
                     
+                    // Get card position from layout
+                    const cardPosition = cardLayout?.layout.positions[index];
+                    
                     const dynamicStyle = {
+                        position: 'absolute',
+                        left: cardPosition ? `${cardPosition.left}px` : '0',
+                        top: '0',
                         zIndex: isBeingDragged ? 2000 : (index + 1),
                         transform: (isBeingDragged && !usePhysics) ? `translate(${dragState.translateX}px, ${dragState.translateY}px) scale(1.1)` : 
                                   isPhysicsControlled ? 'none' : 'none', // Let physics engine handle transforms
-                        transition: isPhysicsControlled ? 'none' : undefined // Disable transitions during physics
+                        transition: isPhysicsControlled ? 'none' : 'left 0.3s ease-out' // Smooth transitions for position changes
                     };
 
                     return (
