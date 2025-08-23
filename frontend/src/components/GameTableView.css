@@ -102,9 +102,9 @@
 }
 
 .chat-tab-button {
-    background-color: #333;
+    background: linear-gradient(145deg, #5a5a5a, #3a3a3a);
     color: #fff;
-    border: 0.12vh solid #555;
+    border: 0.12vh solid #2a2a2a;
     border-radius: 0.5vh;
     padding: 0.6vh 1.2vh; /* Reduced to fit in container */
     font-size: 1.6vh; /* Slightly smaller */
@@ -115,6 +115,35 @@
     gap: 0.6vh; /* Smaller gap */
     height: 3.8vh; /* Match menu button height */
     min-width: 6vh; /* Slightly wider for text */
+    position: relative;
+    box-shadow: 
+        0 0.3vh 0.5vh rgba(0, 0, 0, 0.4),
+        0 0.15vh 0.25vh rgba(0, 0, 0, 0.3),
+        inset 0 0.1vh 0.2vh rgba(255, 255, 255, 0.2),
+        inset 0 -0.1vh 0.2vh rgba(0, 0, 0, 0.3);
+    transition: all 0.15s ease;
+    transform: translateY(0);
+}
+
+.chat-tab-button:hover {
+    background: linear-gradient(145deg, #6a6a6a, #4a4a4a);
+    box-shadow: 
+        0 0.25vh 0.4vh rgba(0, 0, 0, 0.35),
+        0 0.1vh 0.2vh rgba(0, 0, 0, 0.25),
+        inset 0 0.1vh 0.25vh rgba(255, 255, 255, 0.25),
+        inset 0 -0.08vh 0.15vh rgba(0, 0, 0, 0.35);
+    transform: translateY(-0.05vh);
+    border-color: #333;
+}
+
+.chat-tab-button:active {
+    background: linear-gradient(145deg, #3a3a3a, #5a5a5a);
+    box-shadow: 
+        inset 0 0.3vh 0.5vh rgba(0, 0, 0, 0.5),
+        inset 0 0.1vh 0.3vh rgba(0, 0, 0, 0.4),
+        0 0.05vh 0.1vh rgba(0, 0, 0, 0.2);
+    transform: translateY(0.1vh);
+    border-color: #1a1a1a;
 }
 
 .unread-badge {
@@ -255,8 +284,8 @@
 }
 
 .game-menu-btn {
-    background: none;
-    border: 0.12vh solid #666;
+    background: linear-gradient(145deg, #5a5a5a, #3a3a3a);
+    border: 0.12vh solid #2a2a2a;
     padding: 0.6vh; /* Reduced to fit in container */
     cursor: pointer;
     border-radius: 50%;
@@ -265,6 +294,35 @@
     justify-content: center;
     width: 3.8vh; /* Reduced to fit nicely in 5vh container */
     height: 3.8vh; /* Reduced to fit nicely in 5vh container */
+    position: relative;
+    box-shadow: 
+        0 0.3vh 0.5vh rgba(0, 0, 0, 0.4),
+        0 0.15vh 0.25vh rgba(0, 0, 0, 0.3),
+        inset 0 0.1vh 0.2vh rgba(255, 255, 255, 0.2),
+        inset 0 -0.1vh 0.2vh rgba(0, 0, 0, 0.3);
+    transition: all 0.15s ease;
+    transform: translateY(0);
+}
+
+.game-menu-btn:hover {
+    background: linear-gradient(145deg, #6a6a6a, #4a4a4a);
+    box-shadow: 
+        0 0.25vh 0.4vh rgba(0, 0, 0, 0.35),
+        0 0.1vh 0.2vh rgba(0, 0, 0, 0.25),
+        inset 0 0.1vh 0.25vh rgba(255, 255, 255, 0.25),
+        inset 0 -0.08vh 0.15vh rgba(0, 0, 0, 0.35);
+    transform: translateY(-0.05vh);
+    border-color: #333;
+}
+
+.game-menu-btn:active {
+    background: linear-gradient(145deg, #3a3a3a, #5a5a5a);
+    box-shadow: 
+        inset 0 0.3vh 0.5vh rgba(0, 0, 0, 0.5),
+        inset 0 0.1vh 0.3vh rgba(0, 0, 0, 0.4),
+        0 0.05vh 0.1vh rgba(0, 0, 0, 0.2);
+    transform: translateY(0.1vh);
+    border-color: #1a1a1a;
 }
 
 .game-menu-btn svg {

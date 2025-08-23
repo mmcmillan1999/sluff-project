@@ -83,52 +83,107 @@
     font-size: 2vh; /* Reduced font */
     font-weight: bold;
     cursor: pointer;
-    background: linear-gradient(135deg, #4a5568, #2d3748);
-    border: 0.2vh solid #718096;
+    background: linear-gradient(145deg, #5a6578, #3d4758);
+    border: 0.12vh solid #2d3748;
     color: white;
-    border-radius: 1vh;
+    border-radius: 0.8vh;
     display: flex;
     align-items: center;
     justify-content: center;
     line-height: 1;
-    text-shadow: 0.12vh 0.12vh 0.25vh rgba(0,0,0,0.5);
-    transition: all 0.3s ease;
+    text-shadow: 0.1vh 0.1vh 0.2vh rgba(0,0,0,0.5);
+    transition: all 0.15s ease;
     touch-action: manipulation;
-    box-shadow: 0 0.25vh 0.7vh rgba(0, 0, 0, 0.3);
+    position: relative;
+    /* Multi-layer shadows for 3D effect */
+    box-shadow: 
+        0 0.3vh 0.5vh rgba(0, 0, 0, 0.4),
+        0 0.15vh 0.25vh rgba(0, 0, 0, 0.3),
+        inset 0 0.1vh 0.2vh rgba(255, 255, 255, 0.2),
+        inset 0 -0.1vh 0.2vh rgba(0, 0, 0, 0.3);
+    transform: translateY(0);
 }
 
 .adjust-button:hover {
-    background: linear-gradient(135deg, #718096, #4a5568);
-    box-shadow: 0 0.5vh 1.5vh rgba(150, 160, 180, 0.5);
-    transform: translateY(-0.12vh);
+    background: linear-gradient(145deg, #6a7588, #4d5768);
+    /* Slightly lifted on hover */
+    box-shadow: 
+        0 0.25vh 0.4vh rgba(0, 0, 0, 0.35),
+        0 0.1vh 0.2vh rgba(0, 0, 0, 0.25),
+        inset 0 0.1vh 0.25vh rgba(255, 255, 255, 0.25),
+        inset 0 -0.08vh 0.15vh rgba(0, 0, 0, 0.35);
+    transform: translateY(-0.05vh);
 }
 
 .adjust-button:active {
-    transform: translateY(0.12vh);
+    background: linear-gradient(145deg, #3d4758, #5a6578);
+    /* Pushed into bezel effect */
+    box-shadow: 
+        inset 0 0.3vh 0.5vh rgba(0, 0, 0, 0.5),
+        inset 0 0.1vh 0.3vh rgba(0, 0, 0, 0.4),
+        0 0.05vh 0.1vh rgba(0, 0, 0, 0.2);
+    transform: translateY(0.1vh);
+    border-color: #1a202c;
 }
 
 .adjust-button.adjust-green {
-    background: linear-gradient(135deg, #34d399, #10b981);
-    border-color: #10b981;
-    box-shadow: 0 0.25vh 0.7vh rgba(16, 185, 129, 0.3);
+    background: linear-gradient(145deg, #34d399, #0d9668);
+    border-color: #065f46;
+    box-shadow: 
+        0 0.3vh 0.5vh rgba(0, 0, 0, 0.4),
+        0 0.15vh 0.25vh rgba(0, 0, 0, 0.3),
+        inset 0 0.1vh 0.2vh rgba(255, 255, 255, 0.3),
+        inset 0 -0.1vh 0.2vh rgba(0, 0, 0, 0.3);
 }
 
 .adjust-button.adjust-green:hover {
-    background: linear-gradient(135deg, #4ade80, #22c55e);
-    box-shadow: 0 0.5vh 1.5vh rgba(34, 197, 94, 0.5);
-    transform: translateY(-0.12vh);
+    background: linear-gradient(145deg, #4ade80, #16a34a);
+    box-shadow: 
+        0 0.25vh 0.4vh rgba(0, 0, 0, 0.35),
+        0 0.1vh 0.2vh rgba(0, 0, 0, 0.25),
+        inset 0 0.1vh 0.25vh rgba(255, 255, 255, 0.35),
+        inset 0 -0.08vh 0.15vh rgba(0, 0, 0, 0.35);
+    transform: translateY(-0.05vh);
+}
+
+.adjust-button.adjust-green:active {
+    background: linear-gradient(145deg, #0d9668, #34d399);
+    box-shadow: 
+        inset 0 0.3vh 0.5vh rgba(0, 0, 0, 0.5),
+        inset 0 0.1vh 0.3vh rgba(0, 0, 0, 0.4),
+        0 0.05vh 0.1vh rgba(0, 0, 0, 0.2);
+    transform: translateY(0.1vh);
+    border-color: #064e3b;
 }
 
 .adjust-button.adjust-red {
-    background: linear-gradient(135deg, #f87171, #ef4444);
-    border-color: #ef4444;
-    box-shadow: 0 0.25vh 0.7vh rgba(239, 68, 68, 0.3);
+    background: linear-gradient(145deg, #f87171, #dc2626);
+    border-color: #991b1b;
+    box-shadow: 
+        0 0.3vh 0.5vh rgba(0, 0, 0, 0.4),
+        0 0.15vh 0.25vh rgba(0, 0, 0, 0.3),
+        inset 0 0.1vh 0.2vh rgba(255, 255, 255, 0.3),
+        inset 0 -0.1vh 0.2vh rgba(0, 0, 0, 0.3);
 }
 
 .adjust-button.adjust-red:hover {
-    background: linear-gradient(135deg, #fb7185, #f43f5e);
-    box-shadow: 0 0.5vh 1.5vh rgba(239, 68, 68, 0.5);
-    transform: translateY(-0.12vh);
+    background: linear-gradient(145deg, #fb7185, #ef4444);
+    box-shadow: 
+        0 0.25vh 0.4vh rgba(0, 0, 0, 0.35),
+        0 0.1vh 0.2vh rgba(0, 0, 0, 0.25),
+        inset 0 0.1vh 0.25vh rgba(255, 255, 255, 0.35),
+        inset 0 -0.08vh 0.15vh rgba(0, 0, 0, 0.35);
+    transform: translateY(-0.05vh);
+}
+
+.adjust-button.adjust-red:active {
+    background: linear-gradient(145deg, #dc2626, #f87171);
+    box-shadow: 
+        inset 0 0.3vh 0.5vh rgba(0, 0, 0, 0.5),
+        inset 0 0.1vh 0.3vh rgba(0, 0, 0, 0.4),
+        0 0.05vh 0.1vh rgba(0, 0, 0, 0.2);
+    transform: translateY(0.1vh);
+    border-color: #7f1d1d;
 }
 
 /* NO MEDIA QUERIES - Everything scales consistently with vh units */
