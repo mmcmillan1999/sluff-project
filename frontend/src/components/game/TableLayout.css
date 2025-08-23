@@ -144,25 +144,25 @@
 
 /* Bottom positions */
 .pile-bottom-left {
-    left: 6vh;  /* 6vh from left edge */
+    left: 9vh;  /* 9vh from left edge */
     bottom: 5%;
 }
 
 .pile-bottom-right {
-    right: 6vh;  /* 6vh from right edge */
+    right: 9vh;  /* 9vh from right edge */
     left: auto;
     bottom: 5%;
 }
 
 /* Top positions - mirrored from bottom */
 .pile-top-left {
-    left: 6vh;  /* 6vh from left edge */
+    left: 9vh;  /* 9vh from left edge */
     bottom: auto;
     top: 10.5vh;  /* 10.5vh from top edge */
 }
 
 .pile-top-right {
-    right: 6vh;  /* 6vh from right edge */
+    right: 9vh;  /* 9vh from right edge */
     left: auto;
     bottom: auto;
     top: 10.5vh;  /* 10.5vh from top edge */
@@ -579,22 +579,22 @@
 
 /* Position overlay near each pile position */
 .last-trick-overlay-container.pile-bottom-left {
-    left: 6vh; /* Match pile position - 6vh from edge */
+    left: 9vh; /* Match pile position - 9vh from edge */
     bottom: 12%; /* Just above the pile */
 }
 
 .last-trick-overlay-container.pile-bottom-right {
-    right: 6vh; /* Match pile position - 6vh from edge */
+    right: 9vh; /* Match pile position - 9vh from edge */
     bottom: 12%; /* Just above the pile */
 }
 
 .last-trick-overlay-container.pile-top-left {
-    left: 6vh; /* Match pile position - 6vh from edge */
+    left: 9vh; /* Match pile position - 9vh from edge */
     top: 19.5vh; /* Just below the pile - adjusted for 10.5vh position */
 }
 
 .last-trick-overlay-container.pile-top-right {
-    right: 6vh; /* Match pile position - 6vh from edge */
+    right: 9vh; /* Match pile position - 9vh from edge */
     top: 19.5vh; /* Just below the pile - adjusted for 10.5vh position */
 }
 

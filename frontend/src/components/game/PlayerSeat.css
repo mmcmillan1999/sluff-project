@@ -23,8 +23,8 @@
 
 /* Dealer puck - top left corner */
 .dealer-puck-ear {
-    top: -1vh; /* Overlap more with bigger size */
-    left: -1vh; /* Overlap more with bigger size */
+    top: 1vh; /* Moved down 2vh - closer to seat anchor */
+    left: 5vh; /* Shifted further right to avoid bidder puck overlap */
     background: linear-gradient(135deg, #2c2c2c, #1a1a1a); /* Dark gray/black like widow */
     color: #f0f0f0; /* Light gray text */
     font-family: 'Oswald', sans-serif;
@@ -34,7 +34,7 @@
 
 /* Bidder/Trump puck - top right corner */
 .bidder-puck-ear {
-    top: -1vh; /* Overlap more with bigger size */
+    top: 1vh; /* Moved down 2vh - closer to seat anchor */
     right: -1vh; /* Overlap more with bigger size */
 }
 

@@ -239,10 +239,12 @@
                             console.log(`[Insurance] Insurance was active:`, engine.insurance.isActive);
                             console.log(`[Insurance] Deal executed:`, engine.insurance.dealExecuted);
                             console.log(`[Insurance] Hindsight data:`, engine.roundSummary.insuranceHindsight);
+                            // Store the hindsight data before setTimeout since roundSummary might be cleared
+                            const hindsightDataSnapshot = { ...engine.roundSummary.insuranceHindsight };
                             setTimeout(async () => {
                                 for (const botId in engine.bots) {
                                     const bot = engine.bots[botId];
-                                    const hindsightData = engine.roundSummary.insuranceHindsight[bot.playerName];
+                                    const hindsightData = hindsightDataSnapshot[bot.playerName];
                                     if (hindsightData) {
                                         console.log(`[Insurance] Bot ${bot.playerName} hindsight:`, hindsightData);
                                         // Log the decision
