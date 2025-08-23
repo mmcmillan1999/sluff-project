@@ -13,6 +13,7 @@ import AdvertisingHeader from "./components/AdvertisingHeader.js";
 import { submitFeedback } from "./services/api.js";
 import "./App.css";
 import "./components/AdminView.css";
+import "./styles/no-scroll-fix.css"; // Prevent all scrolling in game view
 // Mobile optimizations removed - using vh-based scaling instead
 import { useSounds } from "./hooks/useSounds.js";
 
@@ -254,6 +255,20 @@ function App() {
             socket.emit(eventName, payload);
         }
     };
+
+    // Toggle body class for no-scroll when in game view
+    useEffect(() => {
+        if (view === 'gameTable') {
+            document.body.classList.add('game-active');
+        } else {
+            document.body.classList.remove('game-active');
+        }
+        
+        // Cleanup on unmount
+        return () => {
+            document.body.classList.remove('game-active');
+        };
+    }, [view]);
 
     if (!token || !user) {
         return (

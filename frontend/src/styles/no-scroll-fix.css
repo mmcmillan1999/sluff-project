@@ -1,37 +1,17 @@
-/* No-Scroll Fix - World-class game development practices */
+/* No-Scroll Fix - Only applies when game view is active */
 
-/* 1. Lock the viewport to prevent ANY scrolling */
-html {
+/* 1. Only lock scrolling when game is active */
+body.game-active {
   overflow: hidden;
-  height: 100%;
-  width: 100%;
-  position: fixed;
-}
-
-body {
-  overflow: hidden;
-  height: 100%;
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  position: fixed;
-  /* Prevent iOS bounce scrolling */
-  overscroll-behavior: none;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* 2. Root app container should fill exactly 100vh/100vw */
-#root {
   height: 100vh;
   width: 100vw;
-  overflow: hidden;
-  position: fixed;
-  top: 0;
-  left: 0;
+  /* Don't use position fixed on body - it breaks scrolling restoration */
+  /* Prevent iOS bounce scrolling */
+  overscroll-behavior: none;
 }
 
-/* 3. Prevent any margin collapse issues */
-* {
+/* 3. Prevent margin collapse in game only */
+body.game-active * {
   margin-top: 0;
   margin-bottom: 0;
 }
@@ -46,9 +26,13 @@ body {
 
 /* 5. Ensure no element can cause overflow */
 .game-table,
-.game-footer,
 .player-hand-container {
   overflow: hidden !important;
+}
+
+/* Footer needs overflow visible for menu popup */
+.game-footer {
+  overflow: visible !important;
 }
 
 /* 6. Prevent touch/gesture scrolling on mobile */
@@ -83,12 +67,12 @@ body {
   overflow: hidden !important;
 }
 
-/* 9. Hide scrollbars but keep functionality if needed internally */
-::-webkit-scrollbar {
+/* 9. Hide scrollbars in game view only */
+body.game-active ::-webkit-scrollbar {
   display: none;
 }
 
-* {
+body.game-active * {
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
 }

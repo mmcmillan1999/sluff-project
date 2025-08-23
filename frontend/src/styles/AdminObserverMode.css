@@ -1,7 +1,8 @@
 .admin-observer-mode {
   position: fixed;
-  top: 15px;
-  right: 15px;
+  top: 7vh;
+  left: 98vw;
+  transform: translateX(-50%); /* Center the button at 98vw */
   z-index: 1000;
 }
 
@@ -173,12 +174,9 @@
   font-style: italic;
 }
 
-/* Mobile responsiveness */
+/* Mobile responsiveness - position removed to use consistent vh/vw positioning */
 @media (max-width: 768px) {
-  .admin-observer-mode {
-    top: 10px;
-    right: 10px;
-  }
+  /* Position now uses vh/vw from main rule above */
 
   .observer-toggle {
     width: 32px;

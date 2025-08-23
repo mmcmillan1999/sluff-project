@@ -106,24 +106,24 @@
     color: #fff;
     border: 0.12vh solid #555;
     border-radius: 0.5vh;
-    padding: 0.8vh 1.5vh;
-    font-size: 1.8vh;
+    padding: 0.6vh 1.2vh; /* Reduced to fit in container */
+    font-size: 1.6vh; /* Slightly smaller */
     cursor: pointer;
     z-index: 25;
     display: flex;
     align-items: center;
-    gap: 1vh;
-    min-height: 5vh;
-    min-width: 8vh;
+    gap: 0.6vh; /* Smaller gap */
+    height: 3.8vh; /* Match menu button height */
+    min-width: 6vh; /* Slightly wider for text */
 }
 
 .unread-badge {
     background-color: #28a745;
     color: white;
     border-radius: 50%;
-    width: 2.5vh;
-    height: 2.5vh;
-    font-size: 1.3vh;
+    width: 2vh; /* Smaller to fit button */
+    height: 2vh; /* Smaller to fit button */
+    font-size: 1.2vh; /* Proportionally smaller */
     display: flex;
     align-items: center;
     justify-content: center;
@@ -254,38 +254,40 @@
     z-index: 10; /* Keep chat content below the close button */
 }
 
-.hamburger-btn {
+.game-menu-btn {
     background: none;
     border: 0.12vh solid #666;
-    padding: 1vh;
+    padding: 0.6vh; /* Reduced to fit in container */
     cursor: pointer;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 5vh;
-    height: 5vh;
+    width: 3.8vh; /* Reduced to fit nicely in 5vh container */
+    height: 3.8vh; /* Reduced to fit nicely in 5vh container */
 }
 
-.hamburger-btn svg {
+.game-menu-btn svg {
     stroke: white;
-    width: 2.5vh;
-    height: 2.5vh;
+    width: 2vh; /* Scaled down proportionally */
+    height: 2vh; /* Scaled down proportionally */
 }
 
 /* Button panel groups menu and chat buttons */
 .button-panel {
     display: flex !important; /* Force display */
     align-items: center;
-    gap: 0.8vh; /* Reduced gap */
+    gap: 0.8vh; /* Match insurance container gap */
     justify-content: center;
     flex-shrink: 0; /* Prevent shrinking */
-    padding: 0.5vh; /* Reduced padding */
+    padding: 0.5vh 0.8vh; /* Match insurance container padding */
     background: linear-gradient(135deg, rgba(31, 41, 55, 0.8) 0%, rgba(17, 24, 39, 0.8) 100%);
-    border-radius: 0.8vh;
-    border: 0.1vh solid rgba(255, 255, 255, 0.15);
+    border-radius: 1vh; /* Match insurance container */
+    border: 0.12vh solid rgba(255, 255, 255, 0.15); /* Match insurance container */
+    min-height: 5vh; /* Match insurance container height */
     visibility: visible !important; /* Force visibility */
     opacity: 1 !important; /* Force opacity */
+    box-shadow: 0 0.5vh 1.5vh rgba(0, 0, 0, 0.3); /* Match insurance container shadow */
 }
 
 /* Insurance controls container */

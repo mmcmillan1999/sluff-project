@@ -37,113 +37,34 @@ button,
 .lobby-tab,
 .table-tile,
 .player-hand-card-wrapper,
-.start-timer-button,
-.lobby-menu-button,
-.hamburger-btn {
+.start-timer-button {
     min-height: 44px;
     min-width: 44px;
 }
+/* .lobby-menu-button and .hamburger-btn removed - using vh-based sizing */
 
-/* Mobile-specific button padding */
+/* Mobile-specific adjustments removed - using vh-based sizing throughout */
 @media (max-width: 768px) {
-    button {
-        padding: 12px 16px;
-    }
-    
-    .game-button {
-        padding: 12px 20px;
-        font-size: 1.1em;
-    }
-    
-    /* Card size adjustments for mobile - DISABLED to let JS control size */
-    /* .card-display {
-        width: 60px;
-        height: 80px;
-        font-size: 0.9em;
-    }
-    
-    .player-hand-card-wrapper .card-display {
-        width: 65px;
-        height: 85px;
-    } */
-    
-    /* Touch-friendly spacing */
-    .player-hand-cards {
-        padding: 0; /* NO PADDING */
-    }
-    
-    /* Larger pucks for easier touch */
-    .puck {
-        width: 36px;
-        height: 36px;
-        font-size: 0.8em;
-    }
-    
-    /* Better spacing for action buttons */
-    .action-prompt-container button {
-        margin: 8px;
-    }
+    /* Button padding removed - using vh-based padding */
+    /* Puck sizing removed - using vh-based sizing */
+    /* Action button margins removed - using vh-based spacing */
 }
 
 /* Small mobile screens (320px - 414px) - iPhones and small Androids */
 @media (max-width: 414px) and (orientation: portrait) {
-    /* Viewport optimization for small screens - account for advertising header */
-    .game-view {
-        height: calc(100vh - 58px); /* Subtract mobile ad header height */
-        height: calc(100dvh - 58px); /* Dynamic viewport height */
-        max-height: 100vh;
-        overflow: hidden;
-        margin-top: 0; /* Remove any existing margin */
-    }
+    /* game-view height removed - using consistent 92.5vh from main CSS */
     
-    /* Compact table layout */
-    .game-table {
-        padding: 1px;
-        flex: 1;
-        min-height: 0;
-    }
+    /* game-table overrides removed - using flex settings from main CSS */
     
-    .table-oval {
-        max-width: 100%;
-        height: 100%;
-        max-height: calc(100vh - 278px); /* Tighter spacing + account for ad header */
-        min-width: 320px; /* Ensure minimum stable size */
-        aspect-ratio: 4/3; /* Mobile-friendly aspect ratio */
-        border-width: 5px; /* Thicker border visible but not overwhelming */
-        flex-shrink: 0; /* Prevent shrinking below minimum dimensions */
-    }
+    /* table-oval sizing removed - using vh-based sizing from main CSS */
     
-    /* Compact footer for small screens */
-    .game-footer {
-        padding: 0; /* NO PADDING */
-        z-index: 20;
-        font-size: 0.9em;
-    }
+    /* game-footer overrides removed - using vh-based styling from main CSS */
     
-    /* Optimized player hand for small screens */
-    .player-hand-container {
-        max-height: 95px;
-        overflow: visible;
-    }
+    /* player-hand sizing removed - using vh-based sizing from PlayerHand component */
     
-    .player-hand-cards {
-        height: 80px;
-        padding: 0; /* NO PADDING */
-    }
+    /* Card sizing removed - JS controls with vh units */
     
-    /* Smaller card sizing for small screens - DISABLED to let JS control size */
-    /* .player-hand-card-wrapper .card-display {
-        width: min(55px, calc((100vw - 20px) / 9));
-        height: min(75px, calc((100vw - 20px) / 6.5));
-        font-size: 0.8em;
-    } */
-    
-    /* Compact player seats */
-    .player-seat {
-        min-width: 100px;
-        padding: 4px 8px;
-        font-size: 0.85em;
-    }
+    /* Player seat sizing removed - using vh-based sizing from PlayerSeat component */
     
     /* Smaller action buttons with professional styling */
     .action-prompt-container {
@@ -173,12 +94,7 @@ button,
         min-width: 44px;
     }
     
-    /* Smaller pucks but maintain touch targets */
-    .puck {
-        width: 32px;
-        height: 32px;
-        font-size: 0.7em;
-    }
+    /* Puck sizing removed - using vh-based sizing from main CSS */
     
     /* Ensure touch targets remain accessible */
     button, .game-button {
@@ -200,58 +116,21 @@ button,
 
 /* Vertical mobile optimizations - larger phones (415px+) */
 @media (orientation: portrait) and (min-width: 415px) and (max-width: 768px) {
-    /* Fix viewport height issues on mobile - account for advertising header */
-    .game-view {
-        height: calc(100vh - 72px); /* Subtract tablet ad header height */
-        height: calc(100dvh - 72px); /* Dynamic viewport height for mobile browsers */
-        max-height: 100vh;
-    }
+    /* game-view height removed - using consistent 92.5vh from main CSS */
     
-    /* Optimize table layout for portrait */
-    .game-table {
-        padding: 2px;
-        flex: 1;
-        min-height: 0; /* Allow shrinking */
-    }
+    /* game-table overrides removed - using flex settings from main CSS */
     
-    .table-oval {
-        max-width: 100%;
-        height: 100%;
-        max-height: calc(100vh - 322px); /* Account for header, footer, hand, and ad header */
-        min-width: 320px; /* Stable minimum dimensions */
-        aspect-ratio: 4/3; /* Mobile-optimized aspect ratio */
-        flex-shrink: 0; /* Prevent unwanted shrinking */
-    }
+    /* table-oval sizing removed - using vh-based sizing from main CSS */
     
-    /* Ensure footer doesn't get clipped */
-    .game-footer {
-        padding: 0; /* NO PADDING */
-        z-index: 20;
-    }
+    /* game-footer overrides removed - using vh-based styling from main CSS */
     
-    /* Adjust player hand container for mobile */
-    .player-hand-container {
-        max-height: 110px;
-        overflow: visible;
-    }
+    /* player-hand sizing removed - using vh-based sizing from PlayerHand component */
     
-    /* Adjust player seats for better fit */
-    .player-seat {
-        min-width: 120px;
-        padding: 6px 10px;
-        font-size: 0.9em;
-    }
+    /* Player seat sizing removed - using vh-based sizing from PlayerSeat component */
     
-    /* Card hand optimizations */
-    .player-hand-cards {
-        height: 90px;
-    }
+    /* player-hand sizing removed - using vh-based sizing from PlayerHand component */
     
-    /* Responsive card sizing based on hand size - DISABLED to let JS control size */
-    /* .player-hand-card-wrapper .card-display {
-        width: min(65px, calc((100vw - 40px) / 8));
-        height: min(85px, calc((100vw - 40px) / 6));
-    } */
+    /* Card sizing removed - JS controls with vh units */
     
     /* Action prompt improvements for larger mobile */
     .action-prompt-container {
@@ -450,18 +329,9 @@ button,
 
 /* Ultra-small screens (< 320px) */
 @media (max-width: 319px) and (orientation: portrait) {
-    /* Account for ultra-small ad header */
-    .game-view {
-        height: calc(100vh - 53px) !important;
-        height: calc(100dvh - 53px) !important;
-        max-height: 100vh !important;
-    }
+    /* game-view height removed - using consistent 92.5vh from main CSS */
     
-    .table-oval {
-        max-height: calc(100vh - 273px) !important; /* Ultra compact */
-        min-width: 280px !important; /* Even smaller minimum for ultra compact */
-        aspect-ratio: 4/3 !important;
-    }
+    /* table-oval sizing removed - using vh-based sizing from main CSS */
     
     .trump-broken-text {
         font-size: 1.4em;
@@ -491,10 +361,7 @@ button,
         font-size: 0.9em;
     }
     
-    .player-seat {
-        min-width: 90px;
-        font-size: 0.8em;
-    }
+    /* Player seat sizing removed - using vh-based sizing from PlayerSeat component */
     
     /* Ultra compact action prompts for tiny screens */
     .action-prompt-container {
