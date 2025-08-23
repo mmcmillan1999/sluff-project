@@ -27,7 +27,8 @@ const PlayerSeatPositioner = ({
     const defaultAnchors = {
         left: { x: 15, y: 45 },     // West position from config
         right: { x: 85, y: 45 },    // East position from config
-        bottom: { x: 50, y: 75 }    // South position from config
+        bottom: { x: 50, y: 75 },   // South position from config
+        top: { x: 50, y: 17, rotation: 0 }   // North position for widow - centered at 50vw, 17vh, no rotation
     };
     
     // Collision prevention mode anchor positions (when seat width > 25vw)
@@ -35,7 +36,8 @@ const PlayerSeatPositioner = ({
     const wideModeAnchors = {
         left: { x: 1, y: 35, rotation: 90 },     // West: edge at 1vw, 35vh, rotate 90° clockwise
         right: { x: 99, y: 35, rotation: -90 },  // East: edge at 99vw, 35vh, rotate 90° counter-clockwise
-        bottom: { x: 50, y: 75, rotation: 0 }    // South: stays at same position, no rotation
+        bottom: { x: 50, y: 66.5, rotation: 0 }, // South: moves up to 66.5vh in collision mode
+        top: { x: 50, y: 17, rotation: 0 }       // North: widow stays fixed - no collision mode changes
     };
     
     // Check if player seat width exceeds 25vw

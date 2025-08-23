@@ -38,9 +38,10 @@
     background: #ff0000;
     border: 3px solid #ffff00;
     border-radius: 50%;
+    /* Position at exact bottom center */
     bottom: 0;
     left: 50%;
-    transform: translate(-50%, 50%); /* Center horizontally, move down by half height */
+    transform: translate(-50%, 50%); /* Center horizontally, half below the bottom edge */
     z-index: 1000;
     pointer-events: none;
     box-shadow: 0 0 15px rgba(255, 0, 0, 0.8);

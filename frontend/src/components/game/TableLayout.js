@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useViewport } from '../../hooks/useViewport';
 import ScoreProgressBar from './ScoreProgressBar';
 import PlayerSeatPositioner from './PlayerSeatPositioner';
+import WidowSeat from './WidowSeat';
 import { PLAYER_SEAT_CONFIG, getSeatConfig } from '../../config/PlayerSeatConfig';
 import './KeyAndModal.css';
 import './TableLayout.css';
@@ -523,7 +524,7 @@ const TableLayout = ({
         
         // Determine widow position for 3-player games
         // Find the empty seat position
-        let widowPositionClass = 'widow-seat-top'; // Default to top
+        let widowPosition = 'top'; // Default to top
         
         // Check which positions are occupied
         const occupiedPositions = new Set();
@@ -533,28 +534,35 @@ const TableLayout = ({
         
         // Place widow in the unoccupied position
         if (!occupiedPositions.has('top')) {
-            widowPositionClass = 'widow-seat-top';
+            widowPosition = 'top';
         } else if (!occupiedPositions.has('bottom')) {
-            widowPositionClass = 'widow-seat-bottom';
+            widowPosition = 'bottom';
         } else if (!occupiedPositions.has('left')) {
-            widowPositionClass = 'widow-seat-left';
+            widowPosition = 'left';
         } else if (!occupiedPositions.has('right')) {
-            widowPositionClass = 'widow-seat-right';
+            widowPosition = 'right';
         }
         
+        // Get configuration for widow position
+        const widowConfig = getSeatConfig(widowPosition);
+        
+        // Use PlayerSeatPositioner to handle positioning and collision mode
         return (
-            <div className={`widow-seat ${widowPositionClass}`}>
-                <div className="widow-seat-plate">
-                    <div className="widow-name-row">
-                        <div className="widow-name">WIDOW</div>
-                    </div>
-                    <div className="widow-stats-line">
-                        <span className="widow-tokens">---</span>
-                        <span className="info-divider">|</span>
-                        <span className="widow-score">Empty Seat</span>
-                    </div>
-                </div>
-            </div>
+            <PlayerSeatPositioner
+                playerName="WIDOW"
+                currentTableState={currentTableState}
+                isSelf={false}
+                emitEvent={emitEvent}
+                renderCard={renderCard}
+                seatPosition={widowPosition}
+                PlayerSeat={WidowSeat}  // Use WidowSeat component
+                showTrumpIndicator={false}
+                trumpIndicatorPuck={null}
+                anchorX={widowConfig.anchorX}
+                anchorY={widowConfig.anchorY}
+                rotation={widowConfig.rotation}
+                debugMode={showDebugAnchors}
+            />
         );
     };
 

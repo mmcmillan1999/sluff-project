@@ -144,28 +144,28 @@
 
 /* Bottom positions */
 .pile-bottom-left {
-    left: 9vh;  /* Changed from 6% to vh for consistency */
+    left: 6vh;  /* 6vh from left edge */
     bottom: 5%;
 }
 
 .pile-bottom-right {
-    right: 9vh;  /* Changed from 6% to vh for consistency */
+    right: 6vh;  /* 6vh from right edge */
     left: auto;
     bottom: 5%;
 }
 
 /* Top positions - mirrored from bottom */
 .pile-top-left {
-    left: 9vh;  /* Changed from 6% to vh for consistency */
+    left: 6vh;  /* 6vh from left edge */
     bottom: auto;
-    top: 9vh;  /* Changed from 6% to vh for consistency */
+    top: 10.5vh;  /* 10.5vh from top edge */
 }
 
 .pile-top-right {
-    right: 9vh;  /* Changed from 6% to vh for consistency */
+    right: 6vh;  /* 6vh from right edge */
     left: auto;
     bottom: auto;
-    top: 9vh;  /* Changed from 6% to vh for consistency */
+    top: 10.5vh;  /* 10.5vh from top edge */
 }
 
 /* Hover effects for fixed positions */
@@ -548,23 +548,23 @@
 
 /* Position overlay near each pile position */
 .last-trick-overlay-container.pile-bottom-left {
-    left: 9vh; /* Match pile position - using vh for consistency */
+    left: 6vh; /* Match pile position - 6vh from edge */
     bottom: 12%; /* Just above the pile */
 }
 
 .last-trick-overlay-container.pile-bottom-right {
-    right: 9vh; /* Match pile position - using vh for consistency */
+    right: 6vh; /* Match pile position - 6vh from edge */
     bottom: 12%; /* Just above the pile */
 }
 
 .last-trick-overlay-container.pile-top-left {
-    left: 9vh; /* Match pile position - using vh for consistency */
-    top: 18vh; /* Just below the pile - using vh for consistency */
+    left: 6vh; /* Match pile position - 6vh from edge */
+    top: 19.5vh; /* Just below the pile - adjusted for 10.5vh position */
 }
 
 .last-trick-overlay-container.pile-top-right {
-    right: 9vh; /* Match pile position - using vh for consistency */
-    top: 18vh; /* Just below the pile - using vh for consistency */
+    right: 6vh; /* Match pile position - 6vh from edge */
+    top: 19.5vh; /* Just below the pile - adjusted for 10.5vh position */
 }
 
 .last-trick-header {
@@ -764,88 +764,8 @@ button.card-display:disabled {
     filter: drop-shadow(0 0 1vh #ffff00);
 }
 
-/* Widow Seat - Dynamic positioning based on available space */
-.widow-seat {
-    position: absolute;
-    z-index: 12;
-    pointer-events: none;
-}
-
-/* Widow position classes */
-.widow-seat-top {
-    top: 0.25vh;
-    left: 50%;
-    transform: translateX(-50%);
-}
-
-.widow-seat-bottom {
-    bottom: 12%;
-    left: 50%;
-    transform: translateX(-50%);
-}
-
-.widow-seat-left {
-    top: 50%;
-    left: 2.5vh;
-    transform: translateY(-50%);
-}
-
-.widow-seat-right {
-    top: 50%;
-    right: 2.5vh;
-    transform: translateY(-50%);
-}
-
-.widow-name-row {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.widow-seat-plate {
-    text-align: center;
-    padding: 1vh 1.5vh;
-    background-color: rgba(255, 255, 255, 0.9);
-    border-radius: 1vh;
-    box-shadow: 0 0.25vh 0.6vh rgba(0, 0, 0, 0.3);
-    width: 22vh; /* Match player seat fixed width */
-    min-width: 22vh;
-    max-width: 22vh;
-    border: 0.25vh solid #ccc; /* Match player seat default border */
-    white-space: nowrap;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.5vh;
-    /* Allow natural width expansion like player seats */
-    width: auto;
-}
-
-.widow-name {
-    font-family: 'Creepster', 'Chiller', 'Oswald', sans-serif;
-    font-weight: bold;
-    font-size: 1.8vh; /* Match player-name font-size */
-    color: #000000;
-    text-shadow: 
-        0 0 0.35vh #8b0000,
-        0.12vh 0.12vh 0.12vh #000000;
-    letter-spacing: 0.12vh;
-    animation: widow-glow 3s ease-in-out infinite alternate;
-}
-
-@keyframes widow-glow {
-    0% {
-        text-shadow: 
-            0 0 0.35vh #8b0000,
-            0.12vh 0.12vh 0.12vh #000000;
-    }
-    100% {
-        text-shadow: 
-            0 0 1vh #dc143c,
-            0 0 1.8vh rgba(220, 20, 60, 0.3),
-            0.12vh 0.12vh 0.12vh #000000;
-    }
-}
+/* Widow Seat - Now handled by WidowSeat component and PlayerSeatPositioner */
+/* Old widow CSS removed - see WidowSeat.css for new implementation */
 
 .widow-stats-line {
     display: flex;
