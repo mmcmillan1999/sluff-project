@@ -511,16 +511,24 @@ const PlayerHandAnchorDebug = () => {
                                     color: seatWidthInfo.isWideMode ? '#ff0000' : '#00ff00',
                                     fontWeight: 'bold'
                                 }}>
-                                    {seatWidthInfo.isWideMode ? 'WIDE MODE' : 'Normal'}
+                                    {seatWidthInfo.isWideMode ? 'COLLISION PREVENT' : 'Normal'}
                                 </span>
                             </div>
                             {seatWidthInfo.isWideMode && (
-                                <div className="debug-row">
-                                    <span className="debug-label" style={{color: '#ff0000'}}>Anchors:</span>
-                                    <span className="debug-value" style={{color: '#ff0000', fontSize: '10px'}}>
-                                        W: 1vw, E: 99vw @ 35vh
-                                    </span>
-                                </div>
+                                <>
+                                    <div className="debug-row">
+                                        <span className="debug-label" style={{color: '#ff0000'}}>Positions:</span>
+                                        <span className="debug-value" style={{color: '#ff0000', fontSize: '10px'}}>
+                                            W: 1vw, E: 99vw @ 35vh
+                                        </span>
+                                    </div>
+                                    <div className="debug-row">
+                                        <span className="debug-label" style={{color: '#ff0000'}}>Rotations:</span>
+                                        <span className="debug-value" style={{color: '#ff0000', fontSize: '10px'}}>
+                                            W: 90°, E: -90°
+                                        </span>
+                                    </div>
+                                </>
                             )}
                         </>
                     ) : (

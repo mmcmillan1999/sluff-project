@@ -30,11 +30,12 @@ const PlayerSeatPositioner = ({
         bottom: { x: 50, y: 75 }    // South position from config
     };
     
-    // Wide mode anchor positions (when seat width > 25vw)
+    // Collision prevention mode anchor positions (when seat width > 25vw)
+    // Moves seats to edges and rotates them to prevent overlap
     const wideModeAnchors = {
-        left: { x: 1, y: 35 },   // Move West to edge at 1vw, 35vh
-        right: { x: 99, y: 35 }, // Move East to edge at 99vw, 35vh
-        bottom: { x: 50, y: 75 } // South stays at same position
+        left: { x: 1, y: 35, rotation: 90 },     // West: edge at 1vw, 35vh, rotate 90° clockwise
+        right: { x: 99, y: 35, rotation: -90 },  // East: edge at 99vw, 35vh, rotate 90° counter-clockwise
+        bottom: { x: 50, y: 75, rotation: 0 }    // South: stays at same position, no rotation
     };
     
     // Check if player seat width exceeds 25vw
@@ -70,12 +71,13 @@ const PlayerSeatPositioner = ({
         return () => window.removeEventListener('resize', checkSeatWidth);
     }, [debugMode, seatPosition]);
     
-    // Select anchors based on mode
+    // Select anchors based on mode (collision prevention mode when seat width > 25vw)
     const activeAnchors = isWideMode ? wideModeAnchors : defaultAnchors;
     
     // Use provided anchor or fall back to mode-appropriate defaults
     const effectiveAnchorX = anchorX !== null ? anchorX : activeAnchors[seatPosition]?.x;
     const effectiveAnchorY = anchorY !== null ? anchorY : activeAnchors[seatPosition]?.y;
+    const effectiveRotation = rotation !== 0 ? rotation : (activeAnchors[seatPosition]?.rotation || 0);
     
     // Calculate the wrapper style based on effective anchor position
     const getWrapperStyle = () => {
@@ -92,7 +94,7 @@ const PlayerSeatPositioner = ({
             style.bottom = 'auto';
             // CRITICAL: translate -50% horizontally (center), -100% vertically (bottom at anchor)
             // This pins the bottom center of the element at the anchor point
-            style.transform = `translate(-50%, -100%) rotate(${rotation}deg)`;
+            style.transform = `translate(-50%, -100%) rotate(${effectiveRotation}deg)`;
             // Rotate around the bottom center point (where the "dart" is stuck)
             style.transformOrigin = '50% 100%'; // bottom center
         }
@@ -106,8 +108,8 @@ const PlayerSeatPositioner = ({
             style={getWrapperStyle()}
             data-anchor-x={effectiveAnchorX}
             data-anchor-y={effectiveAnchorY}
-            data-rotation={rotation}
-            data-wide-mode={isWideMode}
+            data-rotation={effectiveRotation}
+            data-collision-prevention={isWideMode}
         >
             {/* Debug anchor point indicator */}
             {debugMode && (
