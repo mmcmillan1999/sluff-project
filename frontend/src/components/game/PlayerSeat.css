@@ -4,6 +4,57 @@
     position: relative;
 }
 
+/* Puck "ears" that overlay on the player seat */
+.seat-puck {
+    position: absolute;
+    width: 3.5vh; /* Increased size to fit image better */
+    height: 3.5vh;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2vh;
+    font-weight: bold;
+    border: 0.15vh solid rgba(0, 0, 0, 0.3);
+    box-shadow: 0 0.2vh 0.4vh rgba(0, 0, 0, 0.3);
+    z-index: 10; /* Above the seat but below modals */
+    pointer-events: none; /* Don't interfere with seat interactions */
+}
+
+/* Dealer puck - top left corner */
+.dealer-puck-ear {
+    top: -1vh; /* Overlap more with bigger size */
+    left: -1vh; /* Overlap more with bigger size */
+    background: linear-gradient(135deg, #2c2c2c, #1a1a1a); /* Dark gray/black like widow */
+    color: #f0f0f0; /* Light gray text */
+    font-family: 'Oswald', sans-serif;
+    border: 0.15vh solid #444; /* Darker border */
+    font-size: 1.8vh; /* Larger text for bigger puck */
+}
+
+/* Bidder/Trump puck - top right corner */
+.bidder-puck-ear {
+    top: -1vh; /* Overlap more with bigger size */
+    right: -1vh; /* Overlap more with bigger size */
+}
+
+/* Apply trump indicator puck styling when it's a bidder puck ear */
+.bidder-puck-ear.trump-indicator-puck {
+    background: linear-gradient(135deg, #b8860b, #ffd700);
+    border: 0.15vh solid #daa520;
+    box-shadow: 0 0.2vh 0.4vh rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.bidder-puck-ear .trump-puck-icon {
+    width: 90%; /* Use most of the puck space */
+    height: 90%;
+    object-fit: contain; /* Maintain aspect ratio */
+    filter: drop-shadow(0.1vh 0.1vh 0.2vh rgba(0, 0, 0, 0.5)); /* Subtle shadow for depth */
+}
+
 .player-seat {
     text-align: center;
     padding: calc(7vh * 0.07) calc(7vh * 0.11); /* 7% and 11% of seat height */

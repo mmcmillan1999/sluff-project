@@ -13,7 +13,10 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent, showTrum
         bidWinnerInfo,
         playerOrderActive,
         trickTurnPlayerName,
-        forfeiture
+        forfeiture,
+        dealer,
+        trumpSuit,
+        trumpBroken
     } = currentTableState;
 
     const playerEntry = Object.values(players).find(p => p.playerName === playerName);
@@ -23,10 +26,11 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent, showTrum
     }
 
     // --- THE FIX: 'userId' was removed from this line as it was unused ---
-    const { disconnected, tokens } = playerEntry; // Now getting tokens from playerEntry
+    const { disconnected, tokens, userId } = playerEntry; // Now getting tokens and userId from playerEntry
     const playerTokenCount = tokens; // Use the value directly
     const isBidWinner = bidWinnerInfo?.playerName === playerName;
     const isDefender = bidWinnerInfo && !isBidWinner && playerOrderActive.includes(playerName);
+    const isDealer = dealer === userId;
     const isTimerRunningForThisPlayer = forfeiture?.targetPlayerName === playerName;
     const isMyTurn = trickTurnPlayerName === playerName;
 
@@ -70,7 +74,46 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent, showTrum
 
     return (
         <div className="player-seat-wrapper">
-            {/* Pucks are now rendered in TableLayout */}
+            {/* Dealer puck - top left ear */}
+            {isDealer && (
+                <div className="seat-puck dealer-puck-ear">
+                    D
+                </div>
+            )}
+            
+            {/* Bidder/Trump puck - top right ear */}
+            {isBidWinner && bidWinnerInfo && trumpSuit && (() => {
+                // Determine trump indicator image based on bid type
+                let trumpImageSrc = '';
+                const bidType = bidWinnerInfo.bid;
+                
+                if (bidType === 'Heart Solo') {
+                    trumpImageSrc = '/assets/trump-pucks/HeartSoloTrumpPuck.png';
+                } else if (bidType === 'Frog') {
+                    trumpImageSrc = '/assets/trump-pucks/FrogTrumpPuck.png';
+                } else {
+                    // Solo bids use suit-specific images
+                    const suitMap = {
+                        'H': 'HeartSolo',
+                        'D': 'DiamondSolo',
+                        'S': 'SpadeSolo',
+                        'C': 'ClubSolo'
+                    };
+                    const suitName = suitMap[trumpSuit] || 'ClubSolo';
+                    trumpImageSrc = `/assets/trump-pucks/${suitName}TrumpPuck.png`;
+                }
+                
+                return (
+                    <div className="seat-puck bidder-puck-ear trump-indicator-puck">
+                        <img 
+                            src={trumpImageSrc}
+                            alt={bidType}
+                            className="trump-puck-icon"
+                        />
+                    </div>
+                );
+            })()}
+            
             {renderOpponentCards()}
             <div className={seatClasses} style={dynamicStyles}>
                 <div className={nameClasses}>

@@ -37,15 +37,15 @@
     justify-content: center;
     align-items: center;
     background: radial-gradient(circle, #424242, #212121);
-    padding: 0.6vh 0; /* Vertical padding only - use full width */
+    padding: 0; /* No padding - table goes edge to edge */
+    overflow: hidden; /* Prevent any overflow */
 }
 
 .table-oval {
-    width: 100%;
-    height: 100%;
-    max-width: min(150vh, 95vw); /* Prevent overflow - cap at 95% viewport width */
-    min-width: min(100vh, 95vw); /* Prevent forcing width beyond screen */
-    aspect-ratio: 3/2;
+    width: 100vw; /* Full viewport width - edge to edge */
+    height: 100%; /* Full height of game-table container */
+    /* Remove max-width and min-width constraints */
+    /* Remove aspect-ratio - let it fill available space */
     background-color: #004d00;
     border-radius: 18vh;
     border: 1.2vh solid #3e2723;
@@ -478,45 +478,63 @@
     text-shadow: 0 0 1vh rgba(255, 255, 0, 0.5);
 }
 
-/* Puck containers - positioned on table near player seats */
-.puck-container-bottom, .puck-container-left, .puck-container-right {
+/* Puck containers - positioned relative to player seat anchors */
+.puck-container-bottom, .puck-container-left, .puck-container-right, .puck-container-top {
     position: absolute;
     z-index: 9;
-    display: flex;
-    gap: 1.5vh; /* Increased gap for when both pucks present */
-    align-items: center;
+    /* Removed flex display - will position pucks absolutely */
 }
 
-/* Bottom player pucks - below the seat on the table */
+/* Bottom player pucks - 1vh below the 75vh anchor (normal mode) */
 .puck-container-bottom { 
-    bottom: 3%; /* Very close to edge */
-    left: 50%; 
+    top: 76vh; /* 75vh anchor + 1vh offset down */
+    left: 50vw; 
     transform: translateX(-50%);
-    flex-direction: row; /* Horizontal layout */
-    gap: 3vh !important; /* Large gap to clearly separate dealer and bidder pucks */
 }
 
-/* Left player pucks - positioned from bottom, hugging left wall */
+/* Left player pucks - 1vh below the 45vh anchor (normal mode) */
 .puck-container-left { 
-    bottom: 35%; /* 5% higher when no collision */
-    left: 1vh; /* Hug the left wall - using vh for consistency */
-    transform: none; /* Remove vertical centering */
-    flex-direction: column; /* Vertical stack */
+    top: 46vh; /* 45vh anchor + 1vh offset down */
+    left: 15vw; /* Matching exact anchor position */
+    transform: translateX(-50%);
 }
 
-/* Right player pucks - positioned from bottom, hugging right wall */
+/* Right player pucks - 1vh below the 45vh anchor (normal mode) */
 .puck-container-right { 
-    bottom: 35%; /* 5% higher when no collision */
-    right: 1vh; /* Hug the right wall - using vh for consistency */
-    transform: none; /* Remove vertical centering */
-    flex-direction: column; /* Vertical stack */
+    top: 46vh; /* 45vh anchor + 1vh offset down */
+    left: 85vw; /* Matching exact anchor position */
+    transform: translateX(-50%);
 }
 
-/* Pucks in containers need relative positioning for flexbox */
+/* Top player pucks - 1vh below the 17vh anchor (for widow/4th player) */
+.puck-container-top { 
+    top: 18vh; /* 17vh anchor + 1vh offset down */
+    left: 50vw; 
+    transform: translateX(-50%);
+}
+
+/* Collision mode adjustments for puck containers */
+/* When seats move in collision mode, pucks follow */
+.wide-mode .puck-container-bottom {
+    top: 67.5vh; /* 66.5vh anchor + 1vh offset down */
+}
+
+.wide-mode .puck-container-left {
+    top: 36vh; /* 35vh anchor + 1vh offset down */
+    left: 1vw; /* Collision mode anchor */
+}
+
+.wide-mode .puck-container-right {
+    top: 36vh; /* 35vh anchor + 1vh offset down */
+    left: 99vw; /* Collision mode anchor */
+}
+
+/* Individual puck positioning */
 .puck-container-bottom .puck,
 .puck-container-left .puck,
-.puck-container-right .puck {
-    position: relative !important; /* Override absolute from PlayerSeat.css */
+.puck-container-right .puck,
+.puck-container-top .puck {
+    position: absolute !important; /* Position pucks absolutely */
     border-radius: 50%;
     width: 3.5vh;
     height: 3.5vh;
@@ -527,12 +545,25 @@
     font-weight: bold;
     border: 0.12vh solid black;
     font-family: 'Oswald', sans-serif;
+    top: 50%;
+    transform: translateY(-50%);
 }
 
+/* Dealer puck - positioned 3vw to the right */
 .dealer-puck { 
-    background-color: ivory; 
-    color: black; 
+    background-color: #4CAF50; /* Temporary green for visibility */
+    color: white; 
     z-index: 15;
+    left: 3vw;
+    box-shadow: 0 0.3vh 0.6vh rgba(0, 0, 0, 0.5); /* Added shadow for visibility */
+}
+
+/* Bidder puck (trump indicator) - positioned 3vw to the left */
+.puck-container-bottom .trump-puck,
+.puck-container-left .trump-puck,
+.puck-container-right .trump-puck,
+.puck-container-top .trump-puck {
+    left: -3vw;
 }
 
 /* Last trick overlay - positioned near the clicked pile */

@@ -355,40 +355,13 @@ const TableLayout = ({
         );
     };
 
-    const renderPlayerPucks = () => {
-        const { players, dealer, bidWinnerInfo } = currentTableState;
+    // Pucks are now rendered as overlays on PlayerSeat components
 
-        const Puck = ({ player, position }) => {
-            const isDealer = player && dealer === player.userId;
-            const isBidder = player && bidWinnerInfo && bidWinnerInfo.playerName === player.playerName;
-
-            // Only render container if player has pucks to show
-            if (!isDealer && !isBidder) {
-                return null;
-            }
-
-            return (
-                <div className={`puck-container-${position}`}>
-                    {/* Dealer puck always on left */}
-                    {isDealer && <div className="puck dealer-puck">D</div>}
-                    {/* Bidder/Trump puck always on right */}
-                    {isBidder && renderTrumpIndicatorPuck()}
-                </div>
-            );
-        };
-
-        const getPlayerByName = (name) => Object.values(players).find(p => p.playerName === name);
-
-        return (
-            <>
-                <Puck player={getPlayerByName(seatAssignments.self)} position="bottom" />
-                <Puck player={getPlayerByName(seatAssignments.opponentLeft)} position="left" />
-                <Puck player={getPlayerByName(seatAssignments.opponentRight)} position="right" />
-            </>
-        );
+    // Helper function to get player by name
+    const getPlayerByName = (name) => {
+        const { players } = currentTableState;
+        return players ? Object.values(players).find(p => p.playerName === name) : null;
     };
-
-    // renderWidowDisplay removed - widow cards now rendered inside renderWidowSeat
 
     const renderTrumpIndicatorPuck = () => {
         const { trumpSuit, trumpBroken, bidWinnerInfo } = currentTableState;
@@ -685,7 +658,7 @@ const TableLayout = ({
                 {renderTrickTallyPiles()}
                 {renderWidowPile()}
                 {renderLastTrickOverlay()}
-                {renderPlayerPucks()}
+                {/* Pucks are now rendered individually below */}
                 {renderTrumpBrokenAnnouncement()}
                 {renderDealerDeck()}
 
@@ -707,6 +680,8 @@ const TableLayout = ({
 
                 {renderPlayedCardsOnTable()}
                 {renderCardDropZones()}
+                
+                {/* Pucks are now rendered as "ears" on PlayerSeat components */}
                 
                 <ActionControls
                     currentTableState={currentTableState}

@@ -14,7 +14,7 @@ const WidowSeat = ({
     showTrumpIndicator,
     trumpIndicatorPuck
 }) => {
-    const { state, widowCards } = currentTableState;
+    const { widowCards } = currentTableState;
     
     // Note: Visibility checks are now handled in TableLayout.js
     // This component just renders when called
