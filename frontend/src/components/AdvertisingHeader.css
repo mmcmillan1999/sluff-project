@@ -37,9 +37,9 @@
     overflow: hidden;
     /* Ad takes up most of the header height - reduced to 75% */
     height: 6vh;
-    /* Width scales with height to maintain aspect ratio */
-    width: calc(6vh * 8); /* 8:1 aspect ratio for banner ads */
-    max-width: 90vw; /* Don't exceed viewport width */
+    /* Fill available width with some margin */
+    width: 100%;
+    max-width: calc(100vw - 2vh); /* Leave small margins on sides */
 }
 
 .ad-label {
@@ -73,6 +73,15 @@
     0% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.35) inset, 0 0 0 0 rgba(255, 193, 7, 0.35); }
     50% { box-shadow: 0 0 0 0.5vh rgba(255, 193, 7, 0.18) inset, 0 0 0 0.7vh rgba(255, 193, 7, 0.12); }
     100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.35) inset, 0 0 0 0 rgba(255, 193, 7, 0.35); }
+}
+
+/* Ad banner wrapper to contain the InGameAdBanner */
+.ad-banner-wrapper {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 /* All ad sizes now unified - content scales within container */
@@ -122,3 +131,21 @@
 }
 
 /* NO MEDIA QUERIES - Everything scales with vh units consistently */
+
+/* View-specific header customizations */
+.advertising-header.lobby-header {
+    /* Lobby-specific styling can go here */
+    /* For example: different height, background, etc. */
+}
+
+.advertising-header.game-header {
+    /* Game-specific styling can go here */
+    /* For example: smaller height to save space for game */
+    /* height: 6vh; */ /* Example: smaller header for game view */
+}
+
+.advertising-header.game-header .ad-placeholder {
+    /* Adjust ad size for game view if needed */
+    /* height: 4.5vh; */
+    /* width: calc(4.5vh * 8); */
+}

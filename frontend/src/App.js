@@ -9,7 +9,8 @@ import MercyWindow from "./components/MercyWindow.js";
 import AdminView from "./components/AdminView.js";
 import FeedbackModal from "./components/FeedbackModal.js";
 import FeedbackView from "./components/FeedbackView.js";
-import AdvertisingHeader from "./components/AdvertisingHeader.js";
+import LobbyHeader from "./components/LobbyHeader.js";
+import GameHeader from "./components/GameHeader.js";
 import { submitFeedback } from "./services/api.js";
 import "./App.css";
 import "./components/AdminView.css";
@@ -270,31 +271,43 @@ function App() {
         };
     }, [view]);
 
+    // No header for auth pages
     if (!token || !user) {
         return (
-            <>
-                <AdvertisingHeader onAdClick={handleAdClick} eligibleForMercy={false} />
-                <div className="app-content-container">
-                    <AuthContainer onLoginSuccess={handleLoginSuccess} />
-                </div>
-            </>
+            <div className="app-content-container">
+                <AuthContainer onLoginSuccess={handleLoginSuccess} />
+            </div>
         );
     }
 
+    // Calculate mercy eligibility for header
+    const mercyEligible = Boolean(
+        user && (
+            parseFloat(user.tokens) < 5 ||
+            user.can_watch_mercy_ad ||
+            user.canWatchMercyAd ||
+            user.mercyEligible ||
+            (user.eligibility && user.eligibility.mercyAd)
+        )
+    );
+
+    // Render different headers for different views
+    const renderHeader = () => {
+        switch (view) {
+            case 'lobby':
+                return <LobbyHeader onAdClick={handleAdClick} eligibleForMercy={mercyEligible} />;
+            case 'gameTable':
+                return <GameHeader onAdClick={handleAdClick} eligibleForMercy={mercyEligible} />;
+            default:
+                return null; // No header for admin, leaderboard, feedback views
+        }
+    };
+
     return (
         <>
-            <AdvertisingHeader
-                onAdClick={handleAdClick}
-                eligibleForMercy={Boolean(
-                    user && (
-                        parseFloat(user.tokens) < 5 ||
-                        user.can_watch_mercy_ad ||
-                        user.canWatchMercyAd ||
-                        user.mercyEligible ||
-                        (user.eligibility && user.eligibility.mercyAd)
-                    )
-                )}
-            />
+            {/* Render appropriate header based on current view */}
+            {renderHeader()}
+            
             <div className="app-content-container">
                 <MercyWindow show={showMercyWindow} onClose={() => setShowMercyWindow(false)} emitEvent={emitEvent} user={user} />
                 <FeedbackModal show={showFeedbackModal} onClose={handleCloseFeedbackModal} onSubmit={handleSubmitFeedback} gameContext={feedbackGameContext} />

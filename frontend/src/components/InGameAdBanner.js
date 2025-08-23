@@ -5,23 +5,23 @@ import React from 'react';
 
 const styles = {
     adContainer: {
-        width: '320px',
-        height: '50px',
+        width: '100%',  // Fill available width
+        height: '100%', // Fill available height
         backgroundColor: '#1a1a1a',
-        border: '1px solid #444',
-        borderRadius: '8px',
+        border: '0.1vh solid #444',
+        borderRadius: '0.8vh',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         overflow: 'hidden',
         fontFamily: "'Oswald', sans-serif",
         color: '#e0e0e0',
-        padding: '0 10px',
+        padding: '0 1.5vh',
         boxSizing: 'border-box',
     },
     logo: {
-        height: '35px',
-        marginRight: '10px',
+        height: '70%',  // Scale with container
+        marginRight: '1.5vh',
     },
     textContainer: {
         display: 'flex',
@@ -30,19 +30,19 @@ const styles = {
         lineHeight: '1.2',
     },
     mainText: {
-        fontSize: '14px',
+        fontSize: '2.2vh',  // Scale with viewport height
         fontWeight: 'bold',
         color: 'white',
         margin: 0,
     },
     subText: {
-        fontSize: '11px',
+        fontSize: '1.8vh',  // Scale with viewport height
         color: '#ffc107', // Gold accent
         margin: 0,
     },
     icon: {
-        fontSize: '24px',
-        marginRight: '10px',
+        fontSize: '3.5vh',  // Scale with viewport height
+        marginRight: '1.5vh',
     },
 };
 

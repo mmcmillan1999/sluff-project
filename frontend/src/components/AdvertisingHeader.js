@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import InGameAdBanner from './InGameAdBanner';
 import './AdvertisingHeader.css';
 
-function AdvertisingHeader({ onAdClick = () => {}, eligibleForMercy = false, isLoading = false, clickUrl = 'https://playsluff.com' }) {
+function AdvertisingHeader({ onAdClick = () => {}, eligibleForMercy = false, isLoading = false, clickUrl = 'https://playsluff.com', viewType = 'default' }) {
     const [imageLoadError, setImageLoadError] = useState(false);
 
     const handleAdClick = () => {
@@ -25,7 +25,7 @@ function AdvertisingHeader({ onAdClick = () => {}, eligibleForMercy = false, isL
     };
 
     return (
-        <div className="advertising-header">
+        <div className={`advertising-header ${viewType}-header`}>
             <div className="ad-container">
                 <div 
                     className={`ad-placeholder ${isLoading ? 'loading' : ''} ${eligibleForMercy ? 'ad-attention' : ''}`}
