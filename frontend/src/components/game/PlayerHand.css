@@ -117,6 +117,19 @@
     transition: none;
     cursor: grabbing;
     will-change: transform;
+    z-index: 9999 !important; /* Ensure dragged card stays above all table elements on mobile */
+    position: relative; /* Ensure z-index is applied */
+    -webkit-transform: translateZ(0); /* Force GPU acceleration on mobile */
+    transform: translateZ(0); /* Create new stacking context */
+    pointer-events: auto; /* Ensure touch events work */
+}
+
+/* Ensure the card image inside dragging wrapper also has high z-index on mobile */
+.player-hand-card-wrapper.is-dragging img {
+    z-index: 9999 !important;
+    position: relative;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
 }
 
 .illegal-move {

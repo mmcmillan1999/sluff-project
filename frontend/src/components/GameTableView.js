@@ -224,6 +224,59 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         }
     }, [currentTableState, selfPlayerName, isSpectator, playSound, playerId]);
     
+    // Global keyboard handler for puck debug
+    useEffect(() => {
+        const handleKeyPress = (e) => {
+            if (e.shiftKey && e.key === 'D') {
+                console.log('========== PUCK DEBUG TRIGGERED ==========');
+                // Measure all player seats
+                document.querySelectorAll('.player-seat-wrapper').forEach((wrapper) => {
+                    const seatElement = wrapper.querySelector('.player-seat');
+                    const nameElement = seatElement?.querySelector('.player-name');
+                    const name = nameElement?.textContent;
+                    if (name) {
+                        const dealerPuck = wrapper.querySelector('.dealer-puck-ear');
+                        const bidderPuck = wrapper.querySelector('.bidder-puck-ear');
+                        
+                        if (dealerPuck || bidderPuck) {
+                            const wrapperRect = wrapper.getBoundingClientRect();
+                            
+                            console.log(`[PUCK DEBUG] ${name}:`);
+                            
+                            if (dealerPuck) {
+                                const dealerRect = dealerPuck.getBoundingClientRect();
+                                const topFromWrapper = (dealerRect.top - wrapperRect.top) / window.innerHeight * 100;
+                                console.log(`  Dealer puck top from wrapper: ${topFromWrapper.toFixed(3)}vh`);
+                                console.log(`  Dealer puck CSS top: ${window.getComputedStyle(dealerPuck).top}`);
+                            }
+                            
+                            if (bidderPuck) {
+                                const bidderRect = bidderPuck.getBoundingClientRect();
+                                const topFromWrapper = (bidderRect.top - wrapperRect.top) / window.innerHeight * 100;
+                                console.log(`  Bidder puck top from wrapper: ${topFromWrapper.toFixed(3)}vh`);
+                                console.log(`  Bidder puck CSS top: ${window.getComputedStyle(bidderPuck).top}`);
+                            }
+                            
+                            if (dealerPuck && bidderPuck) {
+                                const dealerRect = dealerPuck.getBoundingClientRect();
+                                const bidderRect = bidderPuck.getBoundingClientRect();
+                                const diff = (dealerRect.top - bidderRect.top) / window.innerHeight * 100;
+                                console.log(`  Vertical difference (dealer - bidder): ${diff.toFixed(3)}vh`);
+                            }
+                        }
+                    }
+                });
+                console.log('==========================================');
+            }
+        };
+        
+        window.addEventListener('keydown', handleKeyPress);
+        
+        return () => {
+            window.removeEventListener('keydown', handleKeyPress);
+        };
+    }, []);
+    
     if (!currentTableState) {
         return <div>Loading table...</div>;
     }
@@ -300,7 +353,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         const suit = cardString.slice(-1);
         const symbol = SUIT_SYMBOLS[suit] || suit;
         const color = SUIT_COLORS[suit] || 'black';
-        const backgroundColor = isSelected ? 'lightblue' : (SUIT_BACKGROUNDS[suit] || 'white');
+        const backgroundColor = isSelected ? '#8bc3f7' : (SUIT_BACKGROUNDS[suit] || 'white');
         const cardClasses = ['card-display', className].filter(Boolean).join(' ');
         const cardContent = (
             <div style={{ 
@@ -338,6 +391,12 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             position: 'relative',  // For absolute positioning of content
             padding: '2px',  // Override TableLayout.css padding
             boxSizing: 'border-box',
+            // Add prominent shadow effect when selected (similar to menu button)
+            boxShadow: isSelected ? 
+                '0 0.3vh 0.5vh rgba(0, 0, 0, 0.4), 0 0.15vh 0.25vh rgba(0, 0, 0, 0.3), inset 0 0.1vh 0.2vh rgba(255, 255, 255, 0.2), inset 0 -0.1vh 0.2vh rgba(0, 0, 0, 0.3), 0 0 2vh rgba(139, 195, 247, 0.8)' : 
+                undefined,
+            transform: isSelected ? 'translateY(-0.2vh) scale(1.05)' : undefined,
+            transition: 'all 0.15s ease',
             flexShrink: 0,  // Prevent flex shrinking
             ...customStyle
         };

@@ -439,34 +439,21 @@ const PlayerHand = ({
             );
             
             return (
-                <div className="player-hand-container" style={{ position: 'relative' }}>
-                    {/* Confirm button - fixed viewport position */}
-                    <button
-                        className="frog-confirm-button"
-                        onClick={() => {
-                            if (actualSelectedDiscards.length === 3) {
-                                console.log('[Frog] Submitting discards:', actualSelectedDiscards);
-                                emitEvent("submitFrogDiscards", { discards: actualSelectedDiscards });
-                            }
-                        }}
-                        disabled={actualSelectedDiscards.length !== 3}
-                        data-ready={actualSelectedDiscards.length === 3}
-                    >
-                        {actualSelectedDiscards.length === 3 
-                            ? 'Confirm Discards' 
-                            : `Select ${3 - actualSelectedDiscards.length} more`}
-                    </button>
-                    
-                    {/* Top row - positioned 13vh above the normal hand position for better spacing */}
+                <>
+                    {/* Render cards outside container with fixed positioning */}
+                    {/* Top row - positioned higher on screen */}
                     <div className="player-hand-cards is-discarding"
                          style={{ 
-                             position: 'absolute',
-                             bottom: '13vh', // 3vh higher for padding between rows
+                             position: 'fixed',
+                             bottom: '23vh', // Lowered by 3vh (was 26vh)
+                             left: '0',
+                             right: '0',
                              width: '100%',
                              height: `${topLayout?.card.height || 137}px`,
                              display: 'block', // Not flex - we're using absolute positioning
                              paddingLeft: `${topLayout?.container.leftPadding || 0}px`,
-                             paddingRight: `${topLayout?.container.rightPadding || 0}px`
+                             paddingRight: `${topLayout?.container.rightPadding || 0}px`,
+                             zIndex: 100 // Ensure cards are above other elements
                          }}>
                         {topRow.map((card, index) => (
                             <div key={card} 
@@ -487,15 +474,19 @@ const PlayerHand = ({
                         ))}
                     </div>
                     
-                    {/* Bottom row - in the exact normal hand position */}
+                    {/* Bottom row - positioned at bottom of screen */}
                     <div className="player-hand-cards is-discarding"
                          style={{ 
-                             position: 'relative',
+                             position: 'fixed',
+                             bottom: '10vh', // Lowered by 3vh (was 13vh)
+                             left: '0',
+                             right: '0',
                              width: '100%',
                              height: `${bottomLayout?.card.height || 137}px`,
                              display: 'block', // Not flex - we're using absolute positioning
                              paddingLeft: `${bottomLayout?.container.leftPadding || 0}px`,
-                             paddingRight: `${bottomLayout?.container.rightPadding || 0}px`
+                             paddingRight: `${bottomLayout?.container.rightPadding || 0}px`,
+                             zIndex: 100 // Ensure cards are above other elements
                          }}>
                         {bottomRow.map((card, index) => (
                             <div key={card} 
@@ -515,7 +506,24 @@ const PlayerHand = ({
                             </div>
                         ))}
                     </div>
-                </div>
+                    
+                    {/* Confirm button - fixed viewport position */}
+                    <button
+                        className="frog-confirm-button"
+                        onClick={() => {
+                            if (actualSelectedDiscards.length === 3) {
+                                console.log('[Frog] Submitting discards:', actualSelectedDiscards);
+                                emitEvent("submitFrogDiscards", { discards: actualSelectedDiscards });
+                            }
+                        }}
+                        disabled={actualSelectedDiscards.length !== 3}
+                        data-ready={actualSelectedDiscards.length === 3}
+                    >
+                        {actualSelectedDiscards.length === 3 
+                            ? 'Confirm Discards' 
+                            : `Select ${3 - actualSelectedDiscards.length} more`}
+                    </button>
+                </>
             );
         }
         
