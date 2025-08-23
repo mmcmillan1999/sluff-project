@@ -1,0 +1,97 @@
+/* No-Scroll Fix - World-class game development practices */
+
+/* 1. Lock the viewport to prevent ANY scrolling */
+html {
+  overflow: hidden;
+  height: 100%;
+  width: 100%;
+  position: fixed;
+}
+
+body {
+  overflow: hidden;
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  position: fixed;
+  /* Prevent iOS bounce scrolling */
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 2. Root app container should fill exactly 100vh/100vw */
+#root {
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  position: fixed;
+  top: 0;
+  left: 0;
+}
+
+/* 3. Prevent any margin collapse issues */
+* {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+/* 4. Fix for mobile viewport height issues (address bar) */
+.game-view {
+  height: 92.5vh !important; /* Account for 7.5vh header */
+  height: 92.5dvh !important; /* Dynamic viewport height for mobile */
+  max-height: 92.5vh !important;
+  overflow: hidden !important;
+}
+
+/* 5. Ensure no element can cause overflow */
+.game-table,
+.game-footer,
+.player-hand-container {
+  overflow: hidden !important;
+}
+
+/* 6. Prevent touch/gesture scrolling on mobile */
+.game-view,
+.game-table {
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 7. Fix any potential overflow from absolutely positioned elements */
+.admin-observer-mode,
+.game-view-chat-container,
+.in-game-ad-container {
+  pointer-events: none; /* Prevent scrolling interaction */
+}
+
+.admin-observer-mode > *,
+.game-view-chat-container > *,
+.in-game-ad-container > * {
+  pointer-events: auto; /* Re-enable for actual content */
+}
+
+/* 8. Ensure modals don't cause body scroll */
+.modal-overlay {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  overflow: hidden !important;
+}
+
+/* 9. Hide scrollbars but keep functionality if needed internally */
+::-webkit-scrollbar {
+  display: none;
+}
+
+* {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* 10. Viewport meta tag reminder (add to index.html):
+   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"> */

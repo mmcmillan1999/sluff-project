@@ -1,6 +1,199 @@
 import React, { useState, useEffect } from 'react';
 import './PlayerHandAnchorDebug.css';
 
+// Component to track actual footer element positions
+const FooterPositionTracker = () => {
+    const [measurements, setMeasurements] = useState({});
+    const [hasLogged, setHasLogged] = useState(false);
+    
+    useEffect(() => {
+        const measure = () => {
+            const vh = window.innerHeight / 100;
+            const measurements = {};
+            
+            // Measure game-view
+            const gameView = document.querySelector('.game-view');
+            if (gameView) {
+                const rect = gameView.getBoundingClientRect();
+                measurements.gameView = {
+                    top: rect.top,
+                    bottom: rect.bottom,
+                    height: rect.height,
+                    heightVh: (rect.height / vh).toFixed(1)
+                };
+            }
+            
+            // Measure footer
+            const footer = document.querySelector('.game-footer');
+            if (footer) {
+                const rect = footer.getBoundingClientRect();
+                measurements.footer = {
+                    top: rect.top,
+                    bottom: rect.bottom,
+                    height: rect.height,
+                    heightVh: (rect.height / vh).toFixed(1),
+                    overflowPx: Math.max(0, rect.bottom - window.innerHeight)
+                };
+            }
+            
+            // Measure button panel
+            const buttonPanel = document.querySelector('.button-panel');
+            if (buttonPanel) {
+                const rect = buttonPanel.getBoundingClientRect();
+                measurements.buttonPanel = {
+                    top: rect.top,
+                    bottom: rect.bottom,
+                    height: rect.height,
+                    heightVh: (rect.height / vh).toFixed(1),
+                    overflowPx: Math.max(0, rect.bottom - window.innerHeight)
+                };
+            }
+            
+            // Measure spacer
+            const spacer = document.querySelector('.footer-bottom-spacer');
+            if (spacer) {
+                const rect = spacer.getBoundingClientRect();
+                measurements.spacer = {
+                    top: rect.top,
+                    bottom: rect.bottom,
+                    height: rect.height,
+                    heightVh: (rect.height / vh).toFixed(1),
+                    overflowPx: Math.max(0, rect.bottom - window.innerHeight)
+                };
+            }
+            
+            // Log to console on first measurement or when button is clicked
+            if (!hasLogged && Object.keys(measurements).length > 0) {
+                console.log('========================================');
+                console.log('FOOTER DEBUG MEASUREMENTS');
+                console.log('========================================');
+                console.log(`Viewport Height: ${window.innerHeight}px (100vh)`);
+                console.log('----------------------------------------');
+                
+                if (measurements.gameView) {
+                    console.log('game-view:');
+                    console.log(`  Height: ${measurements.gameView.heightVh}vh (${measurements.gameView.height}px)`);
+                    console.log(`  Top: ${measurements.gameView.top}px`);
+                    console.log(`  Bottom: ${measurements.gameView.bottom}px`);
+                }
+                
+                if (measurements.footer) {
+                    console.log('game-footer:');
+                    console.log(`  Height: ${measurements.footer.heightVh}vh (${measurements.footer.height}px)`);
+                    console.log(`  Top: ${measurements.footer.top}px`);
+                    console.log(`  Bottom: ${measurements.footer.bottom}px`);
+                    console.log(`  OVERFLOW: ${measurements.footer.overflowPx}px ${measurements.footer.overflowPx > 0 ? '❌ CLIPPED!' : '✅ OK'}`);
+                }
+                
+                if (measurements.buttonPanel) {
+                    console.log('button-panel:');
+                    console.log(`  Height: ${measurements.buttonPanel.heightVh}vh (${measurements.buttonPanel.height}px)`);
+                    console.log(`  Top: ${measurements.buttonPanel.top}px`);
+                    console.log(`  Bottom: ${measurements.buttonPanel.bottom}px`);
+                    console.log(`  OVERFLOW: ${measurements.buttonPanel.overflowPx}px ${measurements.buttonPanel.overflowPx > 0 ? '❌ CLIPPED!' : '✅ OK'}`);
+                }
+                
+                if (measurements.spacer) {
+                    console.log('footer-bottom-spacer:');
+                    console.log(`  Height: ${measurements.spacer.heightVh}vh (${measurements.spacer.height}px)`);
+                    console.log(`  Top: ${measurements.spacer.top}px`);
+                    console.log(`  Bottom: ${measurements.spacer.bottom}px`);
+                    console.log(`  OVERFLOW: ${measurements.spacer.overflowPx}px ${measurements.spacer.overflowPx > 0 ? '❌ CLIPPED!' : '✅ OK'}`);
+                }
+                
+                console.log('========================================');
+                console.log('Copy this data to share the measurements!');
+                console.log('========================================');
+                
+                setHasLogged(true);
+            }
+            
+            setMeasurements(measurements);
+        };
+        
+        measure();
+        const interval = setInterval(measure, 500);
+        window.addEventListener('resize', measure);
+        
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener('resize', measure);
+        };
+    }, [hasLogged]);
+    
+    return (
+        <div style={{
+            position: 'fixed',
+            top: '50%',
+            left: '20px',
+            transform: 'translateY(-50%)',
+            background: 'rgba(0, 0, 0, 0.9)',
+            color: 'white',
+            padding: '10px',
+            fontSize: '11px',
+            fontFamily: 'monospace',
+            zIndex: 10001,
+            maxWidth: '250px',
+            borderRadius: '5px',
+            border: '2px solid yellow'
+        }}>
+            <div style={{fontWeight: 'bold', marginBottom: '5px', color: 'yellow'}}>
+                ACTUAL POSITIONS (px)
+            </div>
+            
+            {measurements.gameView && (
+                <div style={{marginBottom: '8px'}}>
+                    <div style={{color: '#00ff00'}}>game-view:</div>
+                    <div>Height: {measurements.gameView.heightVh}vh</div>
+                    <div>Bottom: {measurements.gameView.bottom.toFixed(0)}px</div>
+                </div>
+            )}
+            
+            {measurements.footer && (
+                <div style={{marginBottom: '8px'}}>
+                    <div style={{color: '#ff00ff'}}>game-footer:</div>
+                    <div>Height: {measurements.footer.heightVh}vh</div>
+                    <div>Bottom: {measurements.footer.bottom.toFixed(0)}px</div>
+                    <div style={{color: measurements.footer.overflowPx > 0 ? 'red' : 'lime'}}>
+                        Overflow: {measurements.footer.overflowPx.toFixed(0)}px
+                    </div>
+                </div>
+            )}
+            
+            {measurements.buttonPanel && (
+                <div style={{marginBottom: '8px'}}>
+                    <div style={{color: '#00ffff'}}>button-panel:</div>
+                    <div>Height: {measurements.buttonPanel.heightVh}vh</div>
+                    <div>Bottom: {measurements.buttonPanel.bottom.toFixed(0)}px</div>
+                    <div style={{color: measurements.buttonPanel.overflowPx > 0 ? 'red' : 'lime'}}>
+                        Overflow: {measurements.buttonPanel.overflowPx.toFixed(0)}px
+                    </div>
+                </div>
+            )}
+            
+            {measurements.spacer && (
+                <div style={{marginBottom: '8px'}}>
+                    <div style={{color: '#ffff00'}}>spacer:</div>
+                    <div>Height: {measurements.spacer.heightVh}vh</div>
+                    <div>Bottom: {measurements.spacer.bottom.toFixed(0)}px</div>
+                    <div style={{color: measurements.spacer.overflowPx > 0 ? 'red' : 'lime'}}>
+                        Overflow: {measurements.spacer.overflowPx.toFixed(0)}px
+                    </div>
+                </div>
+            )}
+            
+            <div style={{
+                marginTop: '10px',
+                paddingTop: '10px',
+                borderTop: '1px solid #666',
+                color: 'yellow'
+            }}>
+                Viewport: {window.innerHeight}px
+            </div>
+        </div>
+    );
+};
+
 // Component to render measurement rulers for player seats
 const PlayerSeatRulers = () => {
     const [measurements, setMeasurements] = useState({
@@ -186,7 +379,7 @@ const PlayerHandAnchorDebug = () => {
     const [isDragging, setIsDragging] = useState(false);
     const [panelPosition, setPanelPosition] = useState({ x: window.innerWidth / 2 - 140, y: window.innerHeight / 2 - 150 });
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-    const [debugMode, setDebugMode] = useState('playerseat'); // 'playerseat' or 'playerhand'
+    const [debugMode, setDebugMode] = useState('playerseat'); // 'playerseat', 'playerhand', or 'footer'
     const [panelScale, setPanelScale] = useState(1); // Scale factor for zoom
     const [playerHandInfo, setPlayerHandInfo] = useState({
         cardWidth: 0,
@@ -464,9 +657,50 @@ const PlayerHandAnchorDebug = () => {
                     >
                         PlayerHand
                     </button>
+                    <button 
+                        className={`debug-mode-btn ${debugMode === 'footer' ? 'active' : ''}`}
+                        onClick={() => setDebugMode('footer')}
+                    >
+                        Footer Debug
+                    </button>
                 </div>
                 <div className="debug-info-grid">
-                    {debugMode === 'playerseat' ? (
+                    {debugMode === 'footer' ? (
+                        <>
+                            <div className="debug-row">
+                                <span className="debug-label">Footer Total:</span>
+                                <span className="debug-value">20vh</span>
+                            </div>
+                            <div className="debug-row">
+                                <span className="debug-label">PlayerHand:</span>
+                                <span className="debug-value">flex: 1 (~14vh)</span>
+                            </div>
+                            <div className="debug-row">
+                                <span className="debug-label">Controls:</span>
+                                <span className="debug-value">flex: 0 0 6vh</span>
+                            </div>
+                            <div className="debug-separator"></div>
+                            <div className="debug-row">
+                                <span className="debug-label">White Area:</span>
+                                <span className="debug-value">PlayerHand</span>
+                            </div>
+                            <div className="debug-row">
+                                <span className="debug-label">Light Blue:</span>
+                                <span className="debug-value">Controls Wrapper</span>
+                            </div>
+                            <div className="debug-row">
+                                <span className="debug-label">Sky Blue:</span>
+                                <span className="debug-value">Button Panel</span>
+                            </div>
+                            <div className="debug-separator"></div>
+                            <div className="debug-row">
+                                <span className="debug-label">Issue:</span>
+                                <span className="debug-value" style={{color: 'red', fontSize: '11px'}}>
+                                    Check if bottom red marker visible
+                                </span>
+                            </div>
+                        </>
+                    ) : debugMode === 'playerseat' ? (
                         <>
                             <div className="debug-row">
                                 <span className="debug-label">Viewport:</span>
@@ -591,6 +825,71 @@ const PlayerHandAnchorDebug = () => {
                         <div className="debug-label-overlay" style={{backgroundColor: 'rgba(0, 255, 0, 0.9)', top: '50%', transform: 'translateY(-50%)'}}>Footer Controls (Insurance + Menu) 7vh</div>
                     </div>
                 </div>
+            )}
+            
+            {/* Footer debug mode with colored backgrounds */}
+            {debugMode === 'footer' && (
+                <>
+                    {/* Apply debug colors to actual footer elements */}
+                    <style dangerouslySetInnerHTML={{__html: `
+                        .game-footer {
+                            background-color: rgba(255, 255, 255, 0.95) !important;
+                            outline: 3px solid red !important; /* Use outline instead of border */
+                        }
+                        .player-hand-container {
+                            background-color: rgba(255, 255, 255, 0.9) !important;
+                            outline: 2px solid blue !important; /* Use outline instead of border */
+                        }
+                        .footer-controls-wrapper {
+                            background-color: rgba(173, 216, 230, 0.95) !important; /* Light blue */
+                            outline: 2px solid darkblue !important; /* Use outline instead of border */
+                        }
+                        .button-panel {
+                            background: rgba(135, 206, 250, 0.9) !important; /* Sky blue */
+                            outline: 2px solid orange !important; /* Use outline instead of border */
+                        }
+                        .insurance-controls-container {
+                            background-color: rgba(176, 224, 230, 0.9) !important; /* Powder blue */
+                            outline: 2px solid green !important; /* Use outline instead of border */
+                        }
+                        .footer-bottom-spacer {
+                            background-color: rgba(255, 0, 0, 0.3) !important; /* Red spacer visible */
+                            outline: 1px dashed yellow !important; /* Use outline instead of border */
+                        }
+                    `}} />
+                    
+                    {/* Real-time position tracker */}
+                    <FooterPositionTracker />
+                    
+                    {/* Measurement overlay */}
+                    <div className="footer-debug-measurements">
+                        <div style={{
+                            position: 'fixed',
+                            bottom: '20vh',
+                            left: '10px',
+                            background: 'yellow',
+                            padding: '5px',
+                            fontSize: '12px',
+                            fontWeight: 'bold',
+                            zIndex: 10000
+                        }}>
+                            Footer: 20vh total
+                        </div>
+                        <div style={{
+                            position: 'fixed',
+                            bottom: '0',
+                            right: '10px',
+                            background: 'red',
+                            color: 'white',
+                            padding: '5px',
+                            fontSize: '12px',
+                            fontWeight: 'bold',
+                            zIndex: 10000
+                        }}>
+                            Bottom Edge (Should see this!)
+                        </div>
+                    </div>
+                </>
             )}
 
             {/* Render anchor dots only in playerseat mode */}
