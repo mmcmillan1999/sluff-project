@@ -4,7 +4,7 @@ html, body {
   margin: 0;
   padding: 0;
   overflow-x: hidden;
-  background-color: #212121; /* Match lobby background */
+  background-color: #000000; /* Black background for ultra widescreen */
 }
 body {
   margin: 0;
