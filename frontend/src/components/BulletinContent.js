@@ -16,23 +16,39 @@ export const bulletinContent = [
     },
     {
         type: 'header',
-        text: 'Latest Update: v12.1.0 - Table Positioning Improvements!'
+        text: 'Latest Update: v13.0.0 - Major UI/UX Overhaul!'
     },
     {
         type: 'list-item',
-        text: 'Dealer and trump pucks now positioned on the table surface, not attached to player seats.'
+        text: '🎯 NEW: Dealer & bidder pucks now attached as "ears" on player seats - rotate with seats in collision mode!'
     },
     {
         type: 'list-item',
-        text: 'Team-colored pulsing animations - gold for bidder, blue for defenders.'
+        text: '📱 Mobile Optimizations: No more scrolling issues! Game fits perfectly on all screen sizes.'
     },
     {
         type: 'list-item',
-        text: 'Dynamic trick pile positioning that follows the last trick overlay.'
+        text: '🎨 Full viewport table - edge-to-edge gameplay on ultra-wide screens.'
     },
     {
         type: 'list-item',
-        text: 'Improved widow pile with neutral grey/black color scheme.'
+        text: '🃏 Enhanced Frog Widow Exchange with clean two-row card layout.'
+    },
+    {
+        type: 'list-item',
+        text: '⚡ Fixed insurance hindsight crash & improved bot decision making.'
+    },
+    {
+        type: 'list-item',
+        text: '🎯 Dynamic collision prevention - seats auto-rotate when viewport is too narrow.'
+    },
+    {
+        type: 'list-item',
+        text: '🌟 Professional 3D button effects with satisfying click feedback.'
+    },
+    {
+        type: 'list-item',
+        text: '🖤 Fixed black background for ultra-widescreen displays.'
     },
     {
         type: 'header',
@@ -40,11 +56,19 @@ export const bulletinContent = [
     },
     {
         type: 'list-item',
-        text: 'In-app feedback system with automatic debug data collection.'
+        text: 'Widow seat follows same positioning system as player seats.'
     },
     {
         type: 'list-item',
-        text: 'Smarter bot AI that adapts to your playing style.'
+        text: 'Trick piles moved further from edges (9vh) for better phone compatibility.'
+    },
+    {
+        type: 'list-item',
+        text: 'Responsive advertisement banner that scales with viewport.'
+    },
+    {
+        type: 'list-item',
+        text: 'Card physics engine improvements for smoother drag & drop.'
     },
     {
         type: 'header',
