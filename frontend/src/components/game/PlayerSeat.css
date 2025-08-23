@@ -2,6 +2,8 @@
 
 .player-seat-wrapper {
     position: relative;
+    /* The wrapper acts as the positioning context for the pucks */
+    /* The wrapper itself doesn't have dimensions - the seat defines them */
 }
 
 /* Puck "ears" that overlay on the player seat */
@@ -23,8 +25,12 @@
 
 /* Dealer puck - top left corner */
 .dealer-puck-ear {
-    top: 1vh; /* Moved down 2vh - closer to seat anchor */
-    left: 5vh; /* Shifted further right to avoid bidder puck overlap */
+    /* Positioning - above the seat, relative to the anchor point */
+    bottom: calc(7vh - 1.75vh); /* Position puck center just above seat top (seat height is 7vh, puck radius is 1.75vh) */
+    left: calc(50% - 4vh); /* Left of center */
+    transform: translateX(-50%); /* Center the puck on its position */
+    
+    /* Visual styling */
     background: linear-gradient(135deg, #2c2c2c, #1a1a1a); /* Dark gray/black like widow */
     color: #f0f0f0; /* Light gray text */
     font-family: 'Oswald', sans-serif;
@@ -34,12 +40,15 @@
 
 /* Bidder/Trump puck - top right corner */
 .bidder-puck-ear {
-    top: 1vh; /* Moved down 2vh - closer to seat anchor */
-    right: -1vh; /* Overlap more with bigger size */
+    position: absolute;
+    bottom: calc(7vh - 1.75vh); /* Position puck center just above seat top (seat height is 7vh, puck radius is 1.75vh) */
+    right: calc(50% - 4vh); /* Right of center */
+    transform: translateX(50%); /* Center the puck on its position */
 }
 
 /* Apply trump indicator puck styling when it's a bidder puck ear */
 .bidder-puck-ear.trump-indicator-puck {
+    position: absolute !important; /* Override TableLayout.css which sets position: relative !important */
     background: linear-gradient(135deg, #b8860b, #ffd700);
     border: 0.15vh solid #daa520;
     box-shadow: 0 0.2vh 0.4vh rgba(0, 0, 0, 0.3);
