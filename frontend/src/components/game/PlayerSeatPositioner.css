@@ -1,0 +1,67 @@
+/* PlayerSeatPositioner.css */
+/* Wrapper styles for controllable player seat positioning */
+
+.player-seat-positioner {
+    /* Default to inheriting position from TableLayout.css */
+    position: absolute;
+    z-index: 10;
+    
+    /* Smooth transitions for position changes */
+    transition: transform 0.3s ease-in-out, left 0.3s ease-in-out, top 0.3s ease-in-out;
+}
+
+/* When not using custom positioning, fall back to original positions */
+/* Note: These are not used since we always provide explicit positions */
+.player-seat-positioner.player-seat-left:not([style*="left"]) {
+    top: 50%;
+    left: 2.5vh;
+    transform: translateY(-50%);
+}
+
+.player-seat-positioner.player-seat-right:not([style*="left"]) {
+    top: 50%;
+    right: 2.5vh;
+    transform: translateY(-50%);
+}
+
+.player-seat-positioner.player-seat-bottom:not([style*="left"]) {
+    bottom: 12%;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+/* Debug anchor point indicator - shows at bottom center (the pinned point) */
+.anchor-point-indicator {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background: #ff0000;
+    border: 3px solid #ffff00;
+    border-radius: 50%;
+    bottom: 0;
+    left: 50%;
+    transform: translate(-50%, 50%); /* Center horizontally, move down by half height */
+    z-index: 1000;
+    pointer-events: none;
+    box-shadow: 0 0 15px rgba(255, 0, 0, 0.8);
+}
+
+/* Visual "dart" effect */
+.anchor-point-indicator::before {
+    content: '';
+    position: absolute;
+    width: 2px;
+    height: 20px;
+    background: #ffff00;
+    top: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    box-shadow: 0 0 5px rgba(255, 255, 0, 0.8);
+}
+
+/* Ensure the player seat inside maintains its styling */
+.player-seat-positioner .player-seat {
+    /* Reset any transforms that might conflict */
+    position: relative;
+    transform: none;
+}

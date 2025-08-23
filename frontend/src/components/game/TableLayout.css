@@ -144,28 +144,28 @@
 
 /* Bottom positions */
 .pile-bottom-left {
-    left: 6%;
+    left: 9vh;  /* Changed from 6% to vh for consistency */
     bottom: 5%;
 }
 
 .pile-bottom-right {
-    right: 6%;
+    right: 9vh;  /* Changed from 6% to vh for consistency */
     left: auto;
     bottom: 5%;
 }
 
 /* Top positions - mirrored from bottom */
 .pile-top-left {
-    left: 6%;
+    left: 9vh;  /* Changed from 6% to vh for consistency */
     bottom: auto;
-    top: 6%;
+    top: 9vh;  /* Changed from 6% to vh for consistency */
 }
 
 .pile-top-right {
-    right: 6%;
+    right: 9vh;  /* Changed from 6% to vh for consistency */
     left: auto;
     bottom: auto;
-    top: 6%;
+    top: 9vh;  /* Changed from 6% to vh for consistency */
 }
 
 /* Hover effects for fixed positions */
@@ -499,7 +499,7 @@
 /* Left player pucks - positioned from bottom, hugging left wall */
 .puck-container-left { 
     bottom: 35%; /* 5% higher when no collision */
-    left: 1%; /* Hug the left wall */
+    left: 1vh; /* Hug the left wall - using vh for consistency */
     transform: none; /* Remove vertical centering */
     flex-direction: column; /* Vertical stack */
 }
@@ -507,7 +507,7 @@
 /* Right player pucks - positioned from bottom, hugging right wall */
 .puck-container-right { 
     bottom: 35%; /* 5% higher when no collision */
-    right: 1%; /* Hug the right wall */
+    right: 1vh; /* Hug the right wall - using vh for consistency */
     transform: none; /* Remove vertical centering */
     flex-direction: column; /* Vertical stack */
 }
@@ -548,23 +548,23 @@
 
 /* Position overlay near each pile position */
 .last-trick-overlay-container.pile-bottom-left {
-    left: 6%; /* Match pile position */
+    left: 9vh; /* Match pile position - using vh for consistency */
     bottom: 12%; /* Just above the pile */
 }
 
 .last-trick-overlay-container.pile-bottom-right {
-    right: 6%; /* Match pile position */
+    right: 9vh; /* Match pile position - using vh for consistency */
     bottom: 12%; /* Just above the pile */
 }
 
 .last-trick-overlay-container.pile-top-left {
-    left: 6%; /* Match pile position */
-    top: 15%; /* Just below the pile */
+    left: 9vh; /* Match pile position - using vh for consistency */
+    top: 18vh; /* Just below the pile - using vh for consistency */
 }
 
 .last-trick-overlay-container.pile-top-right {
-    right: 6%; /* Match pile position */
-    top: 15%; /* Just below the pile */
+    right: 9vh; /* Match pile position - using vh for consistency */
+    top: 18vh; /* Just below the pile - using vh for consistency */
 }
 
 .last-trick-header {
@@ -951,7 +951,7 @@ button.card-display:disabled {
 /* Score progress containers - positioned independently */
 .score-progress-container.team-defender {
     position: absolute !important;
-    left: 2% !important;
+    left: 2.5vh !important;
     bottom: 8% !important;
     z-index: 10 !important;
     width: 32vh !important;
@@ -960,73 +960,15 @@ button.card-display:disabled {
 
 .score-progress-container.team-bidder {
     position: absolute !important;
-    right: 2% !important;
+    right: 2.5vh !important;
     bottom: 8% !important;
     z-index: 10 !important;
     width: 32vh !important;
     pointer-events: auto !important;
 }
 
-/* Dynamic collision-based rotation for player names */
-/* Calculate when player seats (22vh fixed width at 2.5vh from edge) */
-/* would collide with played cards (at 50% + card-width/2 + padding) */
-/* Card position from center: (10vh * 0.714 / 2) + 1vh = 4.57vh */
-/* Total distance from center to card edge: ~4.57vh */
-/* Player seat: 2.5vh edge + 22vh width = 24.5vh from edge */
-/* Collision occurs when: viewport-width < 2*(24.5vh + 4.57vh) = 58.14vh */
-/* At 1310x1538: width=85.2vh, needs 58.14vh minimum, should fit but tight */
-/* Add safety margin: use 65vh minimum width (aspect ratio ~0.65 or 13/20) */
-
-/* More precise calculation with fixed seat width */
-@media (max-aspect-ratio: 9/10) {
-    /* Left player - rotate and anchor to left edge */
-    .player-seat-left {
-        left: -7vh !important; /* Negative offset to pull seat to edge after rotation */
-        top: 40%; /* Positioned for optimal visibility */
-        transform: none !important; /* Remove the translateY */
-        width: 20vh; /* Width when rotated becomes height */
-    }
-    
-    .player-seat-left .player-seat {
-        transform-origin: center;
-        transform: rotate(90deg);
-        min-width: 20vh !important; /* Ensure adequate space when rotated */
-    }
-    
-    /* Override puck positions in collision mode - move down to 30% */
-    .puck-container-left {
-        bottom: 30% !important; /* Lower position in collision mode */
-    }
-    
-    /* Right player - rotate and anchor to right edge */
-    .player-seat-right {
-        right: -7vh !important; /* Negative offset to pull seat to edge after rotation */
-        top: 40%; /* Positioned for optimal visibility */
-        transform: none !important; /* Remove the translateY */
-        width: 20vh; /* Width when rotated becomes height */
-    }
-    
-    .player-seat-right .player-seat {
-        transform-origin: center;
-        transform: rotate(-90deg);
-        min-width: 20vh !important; /* Ensure adequate space when rotated */
-    }
-    
-    /* Override puck positions in collision mode - move down to 30% */
-    .puck-container-right {
-        bottom: 30% !important; /* Lower position in collision mode */
-    }
-}
-
-/* Additional breakpoint for very narrow screens where rotation isn't enough */
-/* Force smaller seats to prevent any collision */
-@media (max-aspect-ratio: 1/2) {
-    .player-seat-left .player-seat,
-    .player-seat-right .player-seat {
-        min-width: 15vh !important; /* Reduce size on extremely narrow screens */
-        font-size: 1.4vh !important;
-    }
-}
+/* ROTATION REMOVED - All players have fixed positions with no rotation */
+/* Players are positioned via PlayerSeatPositioner component */
 
 /* Widow cards positioning - dynamically positioned based on widow seat */
 .widow-cards-display {

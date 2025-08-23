@@ -1,12 +1,12 @@
 // frontend/src/components/game/PlayerHand.js
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import './PlayerHand.css';
 import { RANKS_ORDER, SUIT_SORT_ORDER } from '../../constants';
 import { getLegalMoves } from '../../utils/legalMoves';
 import CardPhysicsEngine from '../../utils/CardPhysicsEngine';
 import CardSpacingEngine from '../../utils/CardSpacingEngine';
-import { useViewport } from '../../hooks/useViewport';
+// import { useViewport } from '../../hooks/useViewport'; // Currently unused
 
 const getSuitLocal = (cardStr) => cardStr.slice(-1);
 const getRankLocal = (cardStr) => cardStr.slice(0, -1);
@@ -37,13 +37,13 @@ const PlayerHand = ({
     // Use local state only if not provided from parent
     const [localSelectedDiscards, setLocalSelectedDiscards] = useState([]);
     const actualSelectedDiscards = selectedDiscards !== undefined ? selectedDiscards : localSelectedDiscards;
-    const actualSetSelectedDiscards = onSelectDiscard || setLocalSelectedDiscards;
+    // const actualSetSelectedDiscards = onSelectDiscard || setLocalSelectedDiscards; // Currently unused
     const myHandRef = useRef(null);
     const [cardLayout, setCardLayout] = useState(null);
     const physicsEngineRef = useRef(null);
     const spacingEngineRef = useRef(null);
     const [usePhysics] = useState(true); // Feature flag for physics
-    const { width, orientation } = useViewport();
+    // const { width, orientation } = useViewport(); // Currently unused
 
     const [dragState, setDragState] = useState({
         isDragging: false,
@@ -62,7 +62,7 @@ const PlayerHand = ({
     dragStateRef.current = dragState;
 
     const { state, hands, bidWinnerInfo, trickTurnPlayerName, currentTrickCards, leadSuitCurrentTrick, trumpSuit, trumpBroken, players } = currentTableState;
-    const myHand = hands[selfPlayerName] || [];
+    const myHand = useMemo(() => hands[selfPlayerName] || [], [hands, selfPlayerName]);
     
     // Determine if player is bidder or defender
     const isBidder = bidWinnerInfo?.playerName === selfPlayerName;
@@ -82,9 +82,26 @@ const PlayerHand = ({
         };
     }, [usePhysics]);
 
+    // Cleanup effect for invalid/orphaned cards
+    useEffect(() => {
+        if (!usePhysics || !physicsEngineRef.current) return;
+        
+        // Check for any cards in physics that are no longer in the hand
+        const activeInfo = physicsEngineRef.current.getActiveCardInfo();
+        const currentHandSet = new Set(myHand);
+        
+        Object.keys(activeInfo.cards).forEach(cardId => {
+            if (!currentHandSet.has(cardId)) {
+                console.warn(`🚨 Removing orphaned card from physics: ${cardId}`);
+                physicsEngineRef.current.cleanupCard(cardId);
+            }
+        });
+        
+    }, [myHand, usePhysics]);
+
     // Use CardSpacingEngine for layout calculations
     useEffect(() => {
-        const calculateLayout = () => {
+        const calculateLayout = (isResize = false) => {
             if (!spacingEngineRef.current || myHand.length === 0) return;
             
             const viewportWidth = window.innerWidth;
@@ -98,7 +115,48 @@ const PlayerHand = ({
             );
             
             // Store the full layout for use in rendering
-            setCardLayout(layout);
+            setCardLayout(prevLayout => {
+                // Update positions for any active cards in physics engine
+                if (usePhysics && physicsEngineRef.current && myHandRef.current) {
+                    const sortedHand = sortHandBySuit(myHand);
+                    
+                    if (isResize) {
+                        // Handle window resize case
+                        physicsEngineRef.current.handleWindowResize(
+                            sortedHand,
+                            layout,
+                            myHandRef.current
+                        );
+                        
+                        // Debug logging for resize
+                        if (process.env.NODE_ENV === 'development') {
+                            const activeInfo = physicsEngineRef.current.getActiveCardInfo();
+                            console.log('🔄 Window resize detected with active cards:', activeInfo);
+                        }
+                    } else {
+                        // Handle hand content/size changes
+                        physicsEngineRef.current.updateAllActiveCardPositions(
+                            sortedHand,
+                            layout,
+                            myHandRef.current
+                        );
+                        
+                        // Debug logging for hand changes
+                        if (process.env.NODE_ENV === 'development') {
+                            const activeInfo = physicsEngineRef.current.getActiveCardInfo();
+                            if (activeInfo.activeCount > 0) {
+                                console.log('🃏 Hand layout changed with active cards:', {
+                                    ...activeInfo,
+                                    handContent: sortedHand,
+                                    layoutMode: layout.layout.mode
+                                });
+                            }
+                        }
+                    }
+                }
+                
+                return layout;
+            });
             
             // Debug logging in development
             if (process.env.NODE_ENV === 'development') {
@@ -106,10 +164,12 @@ const PlayerHand = ({
             }
         };
         
+        const handleResize = () => calculateLayout(true);
+        
         calculateLayout();
-        window.addEventListener('resize', calculateLayout);
-        return () => window.removeEventListener('resize', calculateLayout);
-    }, [myHand.length, myHand.join(',')]);  // Recalculate on any hand change
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, [myHand, usePhysics]);  // Recalculate on any hand change
 
 
     const handleDragStart = (e, card) => {
@@ -142,8 +202,29 @@ const PlayerHand = ({
                 y: rect.top + rect.height / 2
             };
             
-            // Grab card immediately
-            physicsEngineRef.current.grabCard(card, touchPoint, cardElement, cardCenter);
+            // Get the card's index and container-relative position
+            const cardIndex = myHandToDisplay.indexOf(card);
+            const cardPosition = cardLayout?.layout.positions[cardIndex];
+            const containerRect = myHandRef.current?.getBoundingClientRect();
+            
+            // Calculate container-relative position for proper return
+            const containerRelativePosition = cardPosition && containerRect ? {
+                x: cardPosition.left,
+                y: 0 // Cards are positioned at top of container
+            } : null;
+            
+            // Grab card with additional context
+            physicsEngineRef.current.grabCard(
+                card, 
+                touchPoint, 
+                cardElement, 
+                cardCenter,
+                {
+                    cardIndex,
+                    containerRelativePosition,
+                    containerElement: myHandRef.current
+                }
+            );
         } else {
             // Original drag logic
             const offsetX = initialX - rect.left;
@@ -476,11 +557,6 @@ const PlayerHand = ({
         
         // Add padding around the cards
         const indicatorPadding = 8;
-        
-        // Calculate absolute position including container padding
-        // This allows the indicator to extend beyond container bounds if needed
-        const absoluteFirstCardLeft = firstCardLeft + containerLeftPadding;
-        const absoluteLastCardRight = lastCardLeft + containerLeftPadding + cardWidth;
         
         // Allow indicator to go closer to screen edges (minimum 5px from edge)
         const minScreenPadding = 5;

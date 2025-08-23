@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useViewport } from '../../hooks/useViewport';
 import ScoreProgressBar from './ScoreProgressBar';
+import PlayerSeatPositioner from './PlayerSeatPositioner';
+import { PLAYER_SEAT_CONFIG, getSeatConfig } from '../../config/PlayerSeatConfig';
 import './KeyAndModal.css';
 import './TableLayout.css';
 import { SUIT_SYMBOLS } from '../../constants';
@@ -30,7 +32,8 @@ const TableLayout = ({
     emitEvent,
     handleLeaveTable,
     playSound,
-    dropZoneRef
+    dropZoneRef,
+    showDebugAnchors = false
 }) => {
     const [lastTrickVisible, setLastTrickVisible] = useState(false);
     const [lastTrickPosition, setLastTrickPosition] = useState(null);
@@ -641,26 +644,28 @@ const TableLayout = ({
                     <div className="card-drop-zone-visual"></div>
                 </div>
                 
-                <div className="player-seat-left">
-                    <PlayerSeat 
-                        playerName={seatAssignments.opponentLeft} 
-                        currentTableState={currentTableState} 
-                        isSelf={false} 
-                        emitEvent={emitEvent}
-                        renderCard={renderCard}
-                        seatPosition="left"
-                    />
-                </div>
-                <div className="player-seat-right">
-                    <PlayerSeat 
-                        playerName={seatAssignments.opponentRight} 
-                        currentTableState={currentTableState} 
-                        isSelf={false} 
-                        emitEvent={emitEvent}
-                        renderCard={renderCard}
-                        seatPosition="right"
-                    />
-                </div>
+                <PlayerSeatPositioner
+                    playerName={seatAssignments.opponentLeft}
+                    currentTableState={currentTableState}
+                    isSelf={false}
+                    emitEvent={emitEvent}
+                    renderCard={renderCard}
+                    seatPosition="left"
+                    PlayerSeat={PlayerSeat}
+                    rotation={0}
+                    debugMode={showDebugAnchors}
+                />
+                <PlayerSeatPositioner
+                    playerName={seatAssignments.opponentRight}
+                    currentTableState={currentTableState}
+                    isSelf={false}
+                    emitEvent={emitEvent}
+                    renderCard={renderCard}
+                    seatPosition="right"
+                    PlayerSeat={PlayerSeat}
+                    rotation={0}
+                    debugMode={showDebugAnchors}
+                />
 
                 <img 
                     src="/SluffLogo.png" 
@@ -678,18 +683,19 @@ const TableLayout = ({
 
                 {renderProgressBars()}
                 
-                <div className="player-seat-bottom">
-                    <PlayerSeat 
-                        playerName={seatAssignments.self} 
-                        currentTableState={currentTableState} 
-                        isSelf={true} 
-                        emitEvent={emitEvent}
-                        showTrumpIndicator={seatAssignments.self === bidderName}
-                        trumpIndicatorPuck={renderTrumpIndicatorPuck()}
-                        renderCard={renderCard}
-                        seatPosition="bottom"
-                    />
-                </div>
+                <PlayerSeatPositioner
+                    playerName={seatAssignments.self}
+                    currentTableState={currentTableState}
+                    isSelf={true}
+                    emitEvent={emitEvent}
+                    showTrumpIndicator={seatAssignments.self === bidderName}
+                    trumpIndicatorPuck={renderTrumpIndicatorPuck()}
+                    renderCard={renderCard}
+                    seatPosition="bottom"
+                    PlayerSeat={PlayerSeat}
+                    rotation={0}
+                    debugMode={showDebugAnchors}
+                />
 
                 {renderPlayedCardsOnTable()}
                 {renderCardDropZones()}

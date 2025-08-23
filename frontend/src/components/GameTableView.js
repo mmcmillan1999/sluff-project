@@ -13,12 +13,10 @@ import IosPwaPrompt from './game/IosPwaPrompt';
 import LobbyChat from './LobbyChat';
 import AdminObserverMode from './AdminObserverMode';
 import LayoutDevPanel from './LayoutDevPanel';
+import PlayerHandAnchorDebug from './game/PlayerHandAnchorDebug';
 import { getLobbyChatHistory } from '../services/api';
-import { SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS, RANKS_ORDER, SUIT_SORT_ORDER } from '../constants';
+import { SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS } from '../constants';
 
-// Helper to get suit from card string
-const getSuitLocal = (cardStr) => cardStr.slice(-1);
-const getRankLocal = (cardStr) => cardStr.slice(0, -1);
 
 const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, emitEvent, playSound, socket, handleOpenFeedbackModal }) => {
     const [seatAssignments, setSeatAssignments] = useState({ self: null, opponentLeft: null, opponentRight: null });
@@ -36,7 +34,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const [observedPlayerId, setObservedPlayerId] = useState(playerId);
     const [isObserverMode, setIsObserverMode] = useState(false);
     const [showLayoutDev, setShowLayoutDev] = useState(false);
-    const [showCardDebug] = useState(false); // Hide debug overlay
+    const [showAnchorDebug, setShowAnchorDebug] = useState(false); // Toggle debug overlay
     const [selectedFrogDiscards, setSelectedFrogDiscards] = useState([]);
     const turnPlayerRef = useRef(null);
     const trickWinnerRef = useRef(null);
@@ -102,12 +100,17 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     }, [showGameMenu]);
 
 
-    // Keyboard accessibility: allow ESC to close chat when open
+    // Keyboard accessibility: allow ESC to close chat when open and debug toggles
     useEffect(() => {
         const onKeyDown = (e) => {
             if (e.key === 'Escape' && chatOpen) {
                 e.stopPropagation();
                 setChatOpen(false);
+            }
+            // Toggle debug overlay with Shift+D
+            if (e.key.toLowerCase() === 'd' && e.shiftKey) {
+                e.preventDefault();
+                setShowAnchorDebug(prev => !prev);
             }
         };
         window.addEventListener('keydown', onKeyDown);
@@ -413,7 +416,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     return (
         <div className="game-view">
             {/* Card position debug overlay */}
-            {showCardDebug && window.cardDebugPositions && window.cardDebugPositions.length > 0 && (
+            {false && window.cardDebugPositions && window.cardDebugPositions.length > 0 && (
                 <div style={{
                     position: 'fixed',
                     bottom: '0',
@@ -520,6 +523,9 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                             currentTableState={currentTableState}
                         />
                     )}
+                    {showAnchorDebug && (
+                        <PlayerHandAnchorDebug />
+                    )}
                 </>
             )}
             {/* console.log('[DEBUG] GameTableView render - user:', user) */}
@@ -556,6 +562,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 dropZoneRef={dropZoneRef}
                 isAdmin={user?.is_admin}
                 selectedFrogDiscards={selectedFrogDiscards}
+                showDebugAnchors={showAnchorDebug}
             />
             
             <footer className="game-footer">
@@ -577,6 +584,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                     dropZoneRef={dropZoneRef}
                     selectedDiscards={selectedFrogDiscards}
                     onSelectDiscard={handleFrogDiscardSelect}
+                    showDebug={false}
                 />
                 <div className="footer-controls-wrapper">
                     <InsuranceControls

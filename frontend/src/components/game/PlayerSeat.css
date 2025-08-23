@@ -6,29 +6,33 @@
 
 .player-seat {
     text-align: center;
-    padding: 0.8vh 1vh; /* Reduced padding */
+    padding: calc(7vh * 0.07) calc(7vh * 0.11); /* 7% and 11% of seat height */
     background-color: rgba(255, 255, 255, 0.9);
-    border-radius: 1vh; /* Converted to vh units */
-    box-shadow: 0 0.25vh 0.6vh rgba(0, 0, 0, 0.3);
-    width: 22vh; /* Fixed width for longest content: MrNoobCrusher + 9999 + 120 */
-    max-width: 22vh; /* Prevent expansion */
-    min-width: 22vh; /* Consistent size */
-    border: 0.25vh solid #ccc; /* Converted to vh units */
+    border-radius: calc(7vh * 0.11); /* 11% of seat height */
+    box-shadow: 0 calc(7vh * 0.035) calc(7vh * 0.085) rgba(0, 0, 0, 0.3);
+    width: calc(7vh * 2.5); /* Width = height * 2.5 aspect ratio = 17.5vh */
+    max-width: calc(7vh * 2.5); /* Prevent expansion */
+    min-width: calc(7vh * 2.5); /* Consistent size */
+    height: 7vh; /* Fixed height */
+    max-height: 7vh; /* Prevent expansion */
+    min-height: 7vh; /* Consistent size */
+    border: calc(7vh * 0.03) solid #ccc; /* 3% of seat height */
     white-space: nowrap;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.4vh; /* Slightly reduced gap */
+    justify-content: center; /* Center content vertically */
+    gap: calc(7vh * 0.04); /* 4% of seat height */
     overflow: hidden; /* Prevent content overflow */
     box-sizing: border-box; /* Include padding in width */
 }
 
 .player-name {
     font-weight: bold;
-    font-size: 1.6vh; /* Slightly smaller to fit */
+    font-size: calc(7vh * 0.25); /* 25% of seat height = 1.75vh */
     display: flex;
     align-items: center;
-    gap: 0.5vh; /* Reduced gap */
+    gap: calc(7vh * 0.06); /* 6% of seat height = 0.42vh */
     justify-content: center;
     max-width: 100%;
     overflow: hidden;
@@ -41,13 +45,13 @@
 .player-stats-line {
     display: flex;
     align-items: center;
-    gap: 0.6vh; /* Reduced gap */
-    font-size: 1.4vh; /* Slightly smaller */
+    gap: calc(7vh * 0.07); /* 7% of seat height = 0.49vh */
+    font-size: calc(7vh * 0.2); /* 20% of seat height = 1.4vh */
     white-space: nowrap;
 }
 
 .token-icon-inline {
-    height: 1.6vh; /* Slightly smaller icon */
+    height: calc(7vh * 0.22); /* 22% of seat height = 1.54vh */
     vertical-align: middle;
     flex-shrink: 0; /* Don't shrink icon */
 }
@@ -96,12 +100,12 @@
 .puck {
     position: absolute;
     border-radius: 50%;
-    width: 2.25vh; /* Reduced by 25% from 3vh */
-    height: 2.25vh; /* Reduced by 25% from 3vh */
+    width: calc(7vh * 0.32); /* 32% of seat height = 2.24vh */
+    height: calc(7vh * 0.32); /* 32% of seat height = 2.24vh */
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.2vh; /* Slightly smaller for dealer puck text */
+    font-size: calc(7vh * 0.17); /* 17% of seat height = 1.19vh */
     font-weight: bold;
     border: 0.1vh solid black;
     z-index: 25; /* Higher z-index to stay visible */
@@ -119,10 +123,10 @@
     background: linear-gradient(135deg, #b8860b, #ffd700);
     color: #2c1810;
     font-weight: bold;
-    box-shadow: 0 0.3vh 0.8vh rgba(0, 0, 0, 0.3);
-    width: 4.5vh; /* Larger for trump icons */
-    height: 4.5vh;
-    font-size: 2.5vh; /* Larger icon size */
+    box-shadow: 0 calc(7vh * 0.043) calc(7vh * 0.114) rgba(0, 0, 0, 0.3);
+    width: calc(7vh * 0.64); /* 64% of seat height = 4.48vh */
+    height: calc(7vh * 0.64); /* 64% of seat height = 4.48vh */
+    font-size: calc(7vh * 0.36); /* 36% of seat height = 2.52vh */
     border-radius: 0.8vh;
 }
 
@@ -131,8 +135,8 @@
 
 .disconnected-controls { margin-top: 5px; }
 .start-timer-button {
-    padding: 0.5vh 1vh;
-    font-size: 1.4vh;
+    padding: calc(7vh * 0.07) calc(7vh * 0.14);
+    font-size: calc(7vh * 0.2); /* 20% of seat height = 1.4vh */
     background-color: #ffc107;
     color: black;
     border: 0.1vh solid #c69500;
@@ -140,7 +144,7 @@
     cursor: pointer;
     font-family: 'Oswald', sans-serif;
 }
-.timeout-display { font-weight: bold; color: #dc3545; font-size: 1.4vh; }
+.timeout-display { font-weight: bold; color: #dc3545; font-size: calc(7vh * 0.2); /* 20% of seat height = 1.4vh */ }
 
 .player-tokens, .player-score { font-weight: bold; display: flex; align-items: center; }
 .player-tokens { color: #b45309; }
@@ -155,9 +159,9 @@
     position: static;
     transform: none;
     margin: 0;
-    width: 4vh;
-    height: 4vh;
-    font-size: 1.6vh;
+    width: calc(7vh * 0.57); /* 57% of seat height = 3.99vh */
+    height: calc(7vh * 0.57); /* 57% of seat height = 3.99vh */
+    font-size: calc(7vh * 0.23); /* 23% of seat height = 1.61vh */
 }
 
 .player-error-tooltip {
@@ -167,9 +171,9 @@
     transform: translateX(-50%);
     background-color: #b91c1c;
     color: white;
-    padding: 0.8vh 1.5vh;
-    border-radius: 0.8vh;
-    font-size: 1.4vh;
+    padding: calc(7vh * 0.11) calc(7vh * 0.21);
+    border-radius: calc(7vh * 0.11);
+    font-size: calc(7vh * 0.2); /* 20% of seat height = 1.4vh */
     font-weight: bold;
     z-index: 15;
     white-space: nowrap;

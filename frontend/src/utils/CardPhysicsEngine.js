@@ -270,7 +270,7 @@ class CardPhysicsEngine {
     }
     
     // Start tracking a card when touched with airborne card management
-    grabCard(cardId, touchPoint, cardElement, cardCenter) {
+    grabCard(cardId, touchPoint, cardElement, cardCenter, layoutContext = null) {
         // Clear all debug visualizations when picking up a new card
         this.clearDebugVisualizations();
         
@@ -293,7 +293,7 @@ class CardPhysicsEngine {
                 throw new Error(`Invalid touch point coordinates: x=${touchPoint.x}, y=${touchPoint.y}`);
             }
             
-            return this.originalGrabCard(cardId, touchPoint, cardElement, cardCenter);
+            return this.originalGrabCard(cardId, touchPoint, cardElement, cardCenter, layoutContext);
             
         } catch (error) {
             console.error('Error in grabCard:', error);
@@ -307,7 +307,7 @@ class CardPhysicsEngine {
     }
     
     // Original grab card implementation
-    originalGrabCard(cardId, touchPoint, cardElement, cardCenter) {
+    originalGrabCard(cardId, touchPoint, cardElement, cardCenter, layoutContext = null) {
         // Get the visual position (includes margins)
         const rect = cardElement.getBoundingClientRect();
         
@@ -341,6 +341,20 @@ class CardPhysicsEngine {
         const isDesktop = window.innerWidth >= 1024;
         const dockingOffset = isDesktop ? -rect.height * 0.15 : 0;
         
+        // Calculate original position based on layout context
+        let originalPosition;
+        if (layoutContext && layoutContext.containerRelativePosition && layoutContext.containerElement) {
+            // Use container-relative positioning for proper return
+            const containerRect = layoutContext.containerElement.getBoundingClientRect();
+            originalPosition = {
+                x: containerRect.left + layoutContext.containerRelativePosition.x,
+                y: containerRect.top + layoutContext.containerRelativePosition.y + dockingOffset
+            };
+        } else {
+            // Fallback to absolute positioning
+            originalPosition = { x: rect.left, y: rect.top + dockingOffset };
+        }
+        
         // Initialize card physics state
         this.activeCards.set(cardId, {
             element: cardElement,
@@ -355,7 +369,7 @@ class CardPhysicsEngine {
             initialCardPos: { x: rect.left, y: rect.top },
             cardDimensions: { width: rect.width, height: rect.height },
             isDragging: true,
-            originalPosition: { x: rect.left, y: rect.top + dockingOffset },
+            originalPosition: originalPosition,
             cardCenter: actualCenter,
             grabTime: performance.now(),
             lifted: true,
@@ -364,7 +378,9 @@ class CardPhysicsEngine {
             totalRotation: 0, // Track total rotation for continuous spinning
             forceDocking: false, // Reset force docking flag
             forceDockStartPos: null,
-            forceDockStartTime: null
+            forceDockStartTime: null,
+            // Store layout context for potential re-use
+            layoutContext: layoutContext
         });
         
         // CRITICAL: Apply positioning styles and calculate initial position
@@ -1033,7 +1049,30 @@ class CardPhysicsEngine {
     returnCardHome(card, cardId, onComplete, reason) {
         console.log(`Returning card home: ${reason}`);
         
-        card.targetPosition = card.originalPosition;
+        // Calculate current home position using layoutContext if available
+        let targetPosition;
+        if (card.layoutContext && card.layoutContext.containerRelativePosition && card.layoutContext.containerElement) {
+            // Use container-relative positioning for proper return (same as in grabCard)
+            const containerRect = card.layoutContext.containerElement.getBoundingClientRect();
+            
+            // Apply docking offset (same logic as in grabCard)
+            const isDesktop = window.innerWidth >= 1024;
+            const cardRect = card.element.getBoundingClientRect();
+            const dockingOffset = isDesktop ? -cardRect.height * 0.15 : 0;
+            
+            targetPosition = {
+                x: containerRect.left + card.layoutContext.containerRelativePosition.x,
+                y: containerRect.top + card.layoutContext.containerRelativePosition.y + dockingOffset
+            };
+            
+            console.log(`Calculated target position from layoutContext:`, targetPosition);
+        } else {
+            // Fallback to stored originalPosition
+            targetPosition = card.originalPosition;
+            console.log(`Using stored originalPosition:`, targetPosition);
+        }
+        
+        card.targetPosition = targetPosition;
         card.isReturning = true;
         card.velocity = { x: 0, y: 0 }; // Stop current motion
         card.returnReason = reason;
@@ -2594,7 +2633,7 @@ class CardPhysicsEngine {
                         card.verticalLine.remove();
                     }
                     
-                    // Reset styles
+                    // Reset styles and restore container-relative positioning
                     card.element.style.transition = '';
                     card.element.style.transform = '';
                     card.element.style.zIndex = '';
@@ -2606,6 +2645,13 @@ class CardPhysicsEngine {
                     card.element.style.left = '';
                     card.element.style.top = '';
                     card.element.style.margin = ''; // Restore original margin
+                    
+                    // If we have layout context, restore the proper container-relative position
+                    if (card.layoutContext && card.layoutContext.containerRelativePosition) {
+                        card.element.style.position = 'absolute';
+                        card.element.style.left = `${card.layoutContext.containerRelativePosition.x}px`;
+                        card.element.style.top = `${card.layoutContext.containerRelativePosition.y}px`;
+                    }
                     
                     // CRITICAL FIX: Remove physics control marker
                     card.element.removeAttribute('data-physics-controlled');
@@ -2630,6 +2676,180 @@ class CardPhysicsEngine {
             this.bezierCache.delete(cardId);
             this.activeCards.delete(cardId);
         }
+    }
+    
+    /**
+     * Update position information for a card currently being dragged
+     * This handles cases where the hand layout changes during drag operations
+     * @param {string} cardId - ID of the card being dragged
+     * @param {Object} newLayoutContext - Updated layout context with fresh positions
+     */
+    updateCardPosition(cardId, newLayoutContext) {
+        const card = this.activeCards.get(cardId);
+        if (!card) {
+            console.warn(`Cannot update position for inactive card: ${cardId}`);
+            return false;
+        }
+        
+        // Don't update positions for cards that are being returned or released
+        if (card.isReturning || card.isReleasing) {
+            console.log(`Skipping position update for ${cardId} - card is ${card.isReturning ? 'returning' : 'releasing'}`);
+            return false;
+        }
+        
+        // Update the layout context
+        card.layoutContext = newLayoutContext;
+        
+        // If we have container-relative position, update the target position for potential returns
+        if (newLayoutContext && newLayoutContext.containerRelativePosition && newLayoutContext.containerElement) {
+            const containerRect = newLayoutContext.containerElement.getBoundingClientRect();
+            
+            // Apply the same docking offset logic as in grabCard
+            const isDesktop = window.innerWidth >= 1024;
+            const cardRect = card.element.getBoundingClientRect();
+            const dockingOffset = isDesktop ? -cardRect.height * 0.15 : 0;
+            
+            // Update the original position to the new calculated position
+            card.originalPosition = {
+                x: containerRect.left + newLayoutContext.containerRelativePosition.x,
+                y: containerRect.top + newLayoutContext.containerRelativePosition.y + dockingOffset
+            };
+            
+            console.log(`Updated position for card ${cardId}:`, card.originalPosition);
+        }
+        
+        return true;
+    }
+    
+    /**
+     * Update positions for all active cards with new layout information
+     * This is called when the hand layout recalculates while cards are being dragged
+     * @param {Array} handArray - Current hand array (sorted)
+     * @param {Object} newCardLayout - Fresh card layout from CardSpacingEngine
+     * @param {HTMLElement} containerElement - Hand container element
+     */
+    updateAllActiveCardPositions(handArray, newCardLayout, containerElement) {
+        if (!handArray || !newCardLayout || !containerElement) {
+            console.warn('Invalid parameters for updateAllActiveCardPositions');
+            return;
+        }
+        
+        let updatedCount = 0;
+        let airbornUpdatedCount = 0;
+        
+        // Update each active card's position
+        this.activeCards.forEach((card, cardId) => {
+            // Find the card's new index in the hand
+            const newIndex = handArray.indexOf(cardId);
+            
+            if (newIndex === -1) {
+                // Card is no longer in hand - this can happen if the card was played while being dragged
+                console.warn(`Card ${cardId} no longer found in hand during drag - removing from physics`);
+                
+                // Mark as successfully played to avoid confusing return animations
+                if (card.isReturning) {
+                    card.isReturning = false;
+                }
+                
+                this.cleanupCard(cardId);
+                return;
+            }
+            
+            // Get the new position from the layout
+            const newCardPosition = newCardLayout.layout.positions[newIndex];
+            
+            if (newCardPosition) {
+                // Create updated layout context
+                const updatedLayoutContext = {
+                    cardIndex: newIndex,
+                    containerRelativePosition: {
+                        x: newCardPosition.left,
+                        y: 0 // Cards are positioned at top of container
+                    },
+                    containerElement: containerElement
+                };
+                
+                // Update the card's position
+                if (this.updateCardPosition(cardId, updatedLayoutContext)) {
+                    updatedCount++;
+                }
+                
+                // CRITICAL: Also update targetPosition for airborne cards (docking or returning)
+                if (card.isReturning || card.isDocking) {
+                    const containerRect = containerElement.getBoundingClientRect();
+                    const isDesktop = window.innerWidth >= 1024;
+                    const cardRect = card.element.getBoundingClientRect();
+                    const dockingOffset = isDesktop ? -cardRect.height * 0.15 : 0;
+                    
+                    // Update the target position to the new slot location
+                    const newTargetPosition = {
+                        x: containerRect.left + newCardPosition.left,
+                        y: containerRect.top + dockingOffset
+                    };
+                    
+                    // Smoothly update target for airborne card
+                    card.targetPosition = newTargetPosition;
+                    airbornUpdatedCount++;
+                    
+                    console.log(`Updated airborne card ${cardId} target position:`, {
+                        isReturning: card.isReturning,
+                        isDocking: card.isDocking,
+                        newTarget: newTargetPosition,
+                        newIndex: newIndex
+                    });
+                }
+            }
+        });
+        
+        if (updatedCount > 0) {
+            console.log(`Updated positions for ${updatedCount} active cards due to layout change`);
+        }
+        
+        if (airbornUpdatedCount > 0) {
+            console.log(`Updated target positions for ${airbornUpdatedCount} airborne cards`);
+        }
+    }
+    
+    /**
+     * Handle window resize events for active cards
+     * Updates all card positions when the viewport changes during drag
+     * @param {Array} handArray - Current hand array (sorted) 
+     * @param {Object} newCardLayout - Fresh card layout from CardSpacingEngine
+     * @param {HTMLElement} containerElement - Hand container element
+     */
+    handleWindowResize(handArray, newCardLayout, containerElement) {
+        // Recalculate MAX_AIM_OFFSET for new screen size
+        this.MAX_AIM_OFFSET = this.calculateMaxAimOffset();
+        
+        // Update all active card positions
+        this.updateAllActiveCardPositions(handArray, newCardLayout, containerElement);
+        
+        console.log(`Handled window resize for ${this.activeCards.size} active cards`);
+    }
+    
+    /**
+     * Get information about currently active cards for debugging
+     * @returns {Object} Information about active cards and their positions
+     */
+    getActiveCardInfo() {
+        const cardInfo = {};
+        
+        this.activeCards.forEach((card, cardId) => {
+            cardInfo[cardId] = {
+                isDragging: !card.isReturning && !card.isReleasing,
+                isReturning: card.isReturning,
+                isReleasing: card.isReleasing,
+                cardIndex: card.layoutContext?.cardIndex,
+                hasValidPosition: !!(card.layoutContext && card.layoutContext.containerRelativePosition),
+                originalPosition: card.originalPosition
+            };
+        });
+        
+        return {
+            activeCount: this.activeCards.size,
+            airbornCount: this.airbornCards.size,
+            cards: cardInfo
+        };
     }
     
     // Enhanced cancel all with sophisticated physics cleanup
