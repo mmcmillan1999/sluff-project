@@ -924,7 +924,7 @@ button.card-display:disabled {
 /* Widow cards positioning - dynamically positioned based on widow seat */
 .widow-cards-display {
     position: absolute;
-    z-index: 15;
+    z-index: 9999;
     display: flex !important;
     flex-direction: row !important;
     gap: 0.5vh;
