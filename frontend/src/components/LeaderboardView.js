@@ -59,7 +59,7 @@ const LeaderboardView = ({ user, onReturnToLobby, handleResetAllTokens, handleSh
             <header className="leaderboard-header">
                 <div className="leaderboard-title-group">
                     <img src="/SluffLogo.png" alt="Sluff Logo" className="leaderboard-logo" />
-                    <h2 className="leaderboard-title">Leaderboard</h2>
+                    <h2 className="leaderboard-title"></h2>
                 </div>
                 <div className="leaderboard-header-buttons">
                     <button onClick={fetchLeaderboard} className="refresh-button" title="Refresh">

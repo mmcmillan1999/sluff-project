@@ -19,9 +19,9 @@ const TABLE_COSTS = {
 // --- NEWLY ADDED ---
 const THEMES = [
     { id: 'fort-creek', name: 'Fort Creek', count: 10 },
-    { id: 'shirecliff-road', name: 'ShireCliff Road', count: 10 },
+    { id: 'shirecliff-road', name: 'Shirecliff', count: 10 },
     { id: 'dans-deck', name: "Dan's Deck", count: 10 },
-    { id: 'miss-pauls-academy', name: "Miss Paul's Academy", count: 10 },
+    { id: 'miss-pauls-academy', name: "Academy", count: 10 },
 ];
 // --- END NEWLY ADDED ---
 
