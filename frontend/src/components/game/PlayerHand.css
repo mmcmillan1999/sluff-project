@@ -48,7 +48,7 @@
     /* Fixed height for cards */
     height: 13vh; /* Fixed height instead of min-height */
     overflow: visible !important; /* Force overflow visible to prevent clipping */
-    z-index: 10; /* Higher z-index to appear above menu/chat */
+    z-index: 110; /* Ensure player hand stays above table for drag visibility */
 }
 
 .player-hand-cards {

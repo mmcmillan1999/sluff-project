@@ -31,8 +31,8 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    background-color: #f8f9fa;
-    border: 0.12vh solid #dee2e6;
+    background-color: #1a1a1a; /* Dark background to match ad content */
+    border: 0.12vh solid #333; /* Darker border */
     border-radius: 0.5vh;
     overflow: hidden;
     /* Ad takes up most of the header height - reduced to 75% */
@@ -64,15 +64,17 @@
     object-fit: contain;
 }
 
-/* Attention CTA overlay for Mercy Token */
+/* Attention CTA overlay for Mercy Token - DISABLED */
 .ad-attention {
-    animation: adGlow 2s ease-in-out infinite;
+    /* animation: adGlow 2s ease-in-out infinite; -- DISABLED */
 }
 
 @keyframes adGlow {
+    /* DISABLED - No pulsating
     0% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.35) inset, 0 0 0 0 rgba(255, 193, 7, 0.35); }
     50% { box-shadow: 0 0 0 0.5vh rgba(255, 193, 7, 0.18) inset, 0 0 0 0.7vh rgba(255, 193, 7, 0.12); }
     100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.35) inset, 0 0 0 0 rgba(255, 193, 7, 0.35); }
+    */
 }
 
 /* Ad banner wrapper to contain the InGameAdBanner */
@@ -95,14 +97,14 @@
 
 /* Hover effects */
 .ad-placeholder:hover {
-    background-color: #e9ecef;
+    background-color: #2a2a2a; /* Slightly lighter dark on hover */
     cursor: pointer;
     transition: background-color 0.2s ease;
 }
 
 /* Loading state */
 .ad-placeholder.loading {
-    background: linear-gradient(90deg, #f8f9fa 25%, #e9ecef 50%, #f8f9fa 75%);
+    background: linear-gradient(90deg, #1a1a1a 25%, #2a2a2a 50%, #1a1a1a 75%);
     background-size: 200% 100%;
     animation: loading-shimmer 1.5s infinite;
 }
@@ -123,11 +125,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: #f8f9fa;
-    color: #6c757d;
+    background-color: #1a1a1a;
+    color: #888;
     font-size: 1.35vh;
     font-family: Arial, sans-serif;
-    border: 0.25vh dashed #dee2e6;
+    border: 0.25vh dashed #444;
 }
 
 /* NO MEDIA QUERIES - Everything scales with vh units consistently */

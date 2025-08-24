@@ -274,7 +274,7 @@ function App() {
     // No header for auth pages
     if (!token || !user) {
         return (
-            <div className="app-content-container">
+            <div className="app-content-container no-header">
                 <AuthContainer onLoginSuccess={handleLoginSuccess} />
             </div>
         );
@@ -293,13 +293,18 @@ function App() {
 
     // Render different headers for different views
     const renderHeader = () => {
+        // No header for auth views (login/register)
+        if (view === 'auth') {
+            return null;
+        }
+        
         switch (view) {
             case 'lobby':
                 return <LobbyHeader onAdClick={handleAdClick} eligibleForMercy={mercyEligible} />;
             case 'gameTable':
                 return <GameHeader onAdClick={handleAdClick} eligibleForMercy={mercyEligible} />;
             default:
-                return null; // No header for admin, leaderboard, feedback views
+                return null; // No header for admin, leaderboard, feedback, or auth views
         }
     };
 

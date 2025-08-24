@@ -19,6 +19,12 @@ body {
   padding-bottom: 2.5vh;
 }
 
+/* No header for auth pages */
+.app-content-container.no-header {
+  padding-top: 0;
+  min-height: 100vh;
+}
+
 /* NO MEDIA QUERIES - Everything scales with vh units consistently */
 
 h1 {

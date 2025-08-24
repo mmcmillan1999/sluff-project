@@ -52,7 +52,7 @@
     flex: 0 0 auto; /* Never grow or shrink - always stays its natural height */
     color: white;
     position: relative;
-    z-index: 10; /* Ensure footer stays above table content */
+    z-index: 100; /* Keep footer and dragged cards above table on mobile */
     height: 20vh; /* Fixed height to accommodate player hand + controls */
     box-sizing: border-box; /* Include border in height calculation */
     display: flex;
