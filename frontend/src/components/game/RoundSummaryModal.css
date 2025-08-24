@@ -23,7 +23,10 @@
     max-height: 90vh;
     display: flex;
     flex-direction: column;
-    overflow: hidden; 
+    overflow: hidden;
+    /* Prevent pull-to-refresh on mobile */
+    overscroll-behavior: contain;
+    touch-action: pan-y pinch-zoom;
 }
 
 .summary-main-area {
@@ -162,6 +165,26 @@
     background-color: white;
     margin-top: 10px;
     border-radius: 5px;
+    position: relative;
+}
+
+/* Visual scroll indicator */
+.details-content::after {
+    content: '';
+    position: absolute;
+    bottom: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 30px;
+    height: 3px;
+    background: linear-gradient(to bottom, transparent, #888);
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+}
+
+.details-content.has-scroll::after {
+    opacity: 0.5;
 }
 
 .summary-action-area {
@@ -248,7 +271,34 @@
 }
 
 .scrollable-tricks {
-    max-height: 350px;
+    max-height: 35vh; /* Responsive height based on viewport */
     overflow-y: auto;
     padding-right: 10px;
+    /* Smooth scrolling */
+    scroll-behavior: smooth;
+    /* Better scrollbar styling */
+    scrollbar-width: thin;
+    scrollbar-color: #888 #f1f1f1;
+    /* Prevent pull-to-refresh inside scrollable area */
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+}
+
+/* Custom scrollbar for webkit browsers */
+.scrollable-tricks::-webkit-scrollbar {
+    width: 8px;
+}
+
+.scrollable-tricks::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.scrollable-tricks::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+.scrollable-tricks::-webkit-scrollbar-thumb:hover {
+    background: #555;
 }

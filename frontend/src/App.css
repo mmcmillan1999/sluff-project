@@ -7,6 +7,19 @@ body {
   background-color: #000000; /* Black background for ultra widescreen coverage */
   padding: 0;
   margin: 0;
+  /* Prevent pull-to-refresh on mobile that kicks players from game */
+  overscroll-behavior-y: contain;
+  /* Additional mobile-specific fixes */
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Allow scrolling in specific areas when needed */
+body.allow-scroll {
+  position: relative;
+  overflow: auto;
 }
 
 /* Main content container - unified vh-based spacing */

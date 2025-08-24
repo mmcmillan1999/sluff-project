@@ -14,6 +14,9 @@
     overflow: hidden;
     position: relative; /* Ensure proper stacking context */
     z-index: 1; /* Base z-index for game view */
+    /* Prevent pull-to-refresh on mobile that would reload and kick from game */
+    overscroll-behavior-y: contain;
+    touch-action: pan-x pan-y pinch-zoom;
 }
 
 /* Ensure the main table area fills available space */
@@ -83,10 +86,10 @@
 .game-view-chat-container {
     width: 35vh; /* vh-based width */
     position: absolute;
-    bottom: 1vh;
+    bottom: 22vh; /* Move higher, above player hand area (similar to menu) */
     left: 1vh;
-    z-index: 30;
-    max-height: calc(100vh - 30vh); /* Prevent overlap */
+    z-index: 120; /* Higher than player hand (110) */
+    max-height: calc(100vh - 35vh); /* Adjusted for new position */
 }
 
 .chat-close-button {
