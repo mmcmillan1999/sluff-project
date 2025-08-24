@@ -580,12 +580,12 @@
 /* Position overlay near each pile position */
 .last-trick-overlay-container.pile-bottom-left {
     left: 9vh; /* Match pile position - 9vh from edge */
-    bottom: 12%; /* Just above the pile */
+    bottom: 22vh; /* Raised to stay above player hand area on mobile */
 }
 
 .last-trick-overlay-container.pile-bottom-right {
     right: 9vh; /* Match pile position - 9vh from edge */
-    bottom: 12%; /* Just above the pile */
+    bottom: 22vh; /* Raised to stay above player hand area on mobile */
 }
 
 .last-trick-overlay-container.pile-top-left {
