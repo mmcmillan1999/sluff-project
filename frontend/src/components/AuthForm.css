@@ -15,7 +15,7 @@
 
 .auth-logo {
     width: 100%;
-    max-width: 50vh; /* Increased from 30vh for better scaling on tablets/desktop */
+    max-width: 25vh; /* Reduced to half size for better mobile visibility */
     margin-bottom: 2vh; /* Was 20px */
 }
 
