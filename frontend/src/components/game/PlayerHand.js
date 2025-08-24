@@ -623,8 +623,10 @@ const PlayerHand = ({
                         left: cardPosition ? `${cardPosition.left}px` : '0',
                         top: '0',
                         zIndex: isBeingDragged ? 2000 : (index + 1),
-                        transform: (isBeingDragged && !usePhysics) ? `translate(${dragState.translateX}px, ${dragState.translateY}px) scale(1.1)` : 
-                                  isPhysicsControlled ? 'none' : 'none', // Let physics engine handle transforms
+                        // Use translate3d with a zero z-value to force GPU acceleration and proper stacking
+                        transform: (isBeingDragged && !usePhysics)
+                            ? `translate3d(${dragState.translateX}px, ${dragState.translateY}px, 0) scale(1.1)`
+                            : (isPhysicsControlled ? 'none' : 'none'), // Let physics engine handle transforms
                         transition: isPhysicsControlled ? 'none' : 'left 0.3s ease-out' // Smooth transitions for position changes
                     };
 
