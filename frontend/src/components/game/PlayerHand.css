@@ -48,7 +48,7 @@
     /* Fixed height for cards */
     height: 13vh; /* Fixed height instead of min-height */
     overflow: visible !important; /* Force overflow visible to prevent clipping */
-    z-index: 110; /* Ensure player hand stays above table for drag visibility */
+    /* z-index removed - avoid stacking context issues on mobile */
 }
 
 .player-hand-cards {
@@ -62,7 +62,7 @@
     overflow: visible !important; /* Ensure turn indicator isn't clipped */
     /* Add some margin to ensure glow has space */
     margin: 10px 0;
-    z-index: 11; /* Above the container to ensure visibility */
+    /* z-index removed - let natural stacking order work */
 }
 
 /* Turn indicator overlay - dynamically positioned */
@@ -117,8 +117,9 @@
     transition: none;
     cursor: grabbing;
     will-change: transform;
-    z-index: 9999 !important; /* Ensure dragged card stays above all table elements on mobile */
-    position: relative; /* Ensure z-index is applied */
+    /* Simplified z-index for mobile compatibility */
+    z-index: 1000; /* Much lower z-index to avoid stacking issues */
+    position: relative;
     /* Removed translateZ to avoid Safari stacking context bug on mobile */
     /* -webkit-transform: translateZ(0); */
     /* transform: translateZ(0); */
@@ -126,12 +127,9 @@
 }
 
 /* Ensure the card image inside dragging wrapper also has high z-index on mobile */
+/* Removed img z-index to simplify stacking contexts */
 .player-hand-card-wrapper.is-dragging img {
-    z-index: 9999 !important;
     position: relative;
-    /* Removed translateZ to avoid Safari stacking context bug */
-    /* -webkit-transform: translateZ(0); */
-    /* transform: translateZ(0); */
 }
 
 .illegal-move {

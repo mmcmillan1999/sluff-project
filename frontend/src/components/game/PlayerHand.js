@@ -622,7 +622,7 @@ const PlayerHand = ({
                         position: 'absolute',
                         left: cardPosition ? `${cardPosition.left}px` : '0',
                         top: '0',
-                        zIndex: isBeingDragged ? 2000 : (index + 1),
+                        zIndex: isBeingDragged ? 1000 : (index + 1),
                         // Use translate3d with a zero z-value to force GPU acceleration and proper stacking
                         transform: (isBeingDragged && !usePhysics)
                             ? `translate3d(${dragState.translateX}px, ${dragState.translateY}px, 0) scale(1.1)`
