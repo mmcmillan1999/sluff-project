@@ -2,10 +2,40 @@
 
 const sgMail = require('@sendgrid/mail');
 
-// Set the API key from environment variables
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+let isConfigured = false;
+let configurationFailedMessage = null;
 
-const senderEmail = process.env.SENDER_EMAIL_ADDRESS;
+const resolveSenderEmail = () => {
+    return process.env.SENDER_EMAIL_ADDRESS
+        || process.env.SENDGRID_FROM_EMAIL
+        || process.env.SUPPORT_EMAIL_ADDRESS
+        || null;
+};
+
+const ensureSendGridConfigured = () => {
+    if (isConfigured) {
+        return true;
+    }
+
+    const apiKey = process.env.SENDGRID_API_KEY;
+
+    if (!apiKey) {
+        configurationFailedMessage = 'SendGrid API key is not configured.';
+        console.error('🔴 SendGrid API Key is not configured. Email not sent.');
+        return false;
+    }
+
+    try {
+        sgMail.setApiKey(apiKey);
+        isConfigured = true;
+        configurationFailedMessage = null;
+        return true;
+    } catch (configError) {
+        configurationFailedMessage = configError.message || 'Unknown configuration error.';
+        console.error('🔴 Failed to configure SendGrid API Key:', configurationFailedMessage);
+        return false;
+    }
+};
 
 /**
  * Sends an email using SendGrid.
@@ -16,10 +46,18 @@ const senderEmail = process.env.SENDER_EMAIL_ADDRESS;
  * @returns {Promise<void>}
  */
 const sendEmail = async ({ to, subject, text, html }) => {
-    if (!process.env.SENDGRID_API_KEY || !senderEmail) {
-        console.error('🔴 SendGrid API Key or Sender Email is not configured. Email not sent.');
-        // In a real production app, you might throw an error or handle this more gracefully.
-        // For development, we'll log it and prevent a crash.
+    const senderEmail = resolveSenderEmail();
+
+    if (!senderEmail) {
+        console.error('🔴 Sender email address is not configured. Email not sent.');
+        return;
+    }
+
+    if (!ensureSendGridConfigured()) {
+        console.error('🔴 SendGrid configuration failed. Email not sent.');
+        if (configurationFailedMessage) {
+            console.error(`    ↳ ${configurationFailedMessage}`);
+        }
         return;
     }
 
@@ -36,16 +74,22 @@ const sendEmail = async ({ to, subject, text, html }) => {
         console.log(`✅ Email sent successfully to ${to} with subject "${subject}"`);
     } catch (error) {
         console.error('🔴 Error sending email via SendGrid:');
-        
-        // SendGrid provides detailed error information in the response
-        if (error.response) {
+
+        let detailedMessage = '';
+
+        if (error.response?.body) {
             console.error(error.response.body);
+            const apiErrors = error.response.body.errors;
+            if (Array.isArray(apiErrors) && apiErrors.length > 0) {
+                detailedMessage = apiErrors.map(e => e.message).join(' ');
+            }
         } else {
             console.error(error);
+            detailedMessage = error.message || '';
         }
-        
-        // Re-throw the error so the calling function knows something went wrong.
-        throw new Error('Failed to send email.');
+
+        const messageSuffix = detailedMessage ? ` ${detailedMessage}` : '';
+        throw new Error(`Failed to send email.${messageSuffix}`);
     }
 };
 
