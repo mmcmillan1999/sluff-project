@@ -5,6 +5,37 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const Groq = require('groq-sdk');
 
+// Single source of truth for every model the bots can use.
+// id = what the UI/bots reference; apiModel = what the provider API expects.
+const MODELS = {
+    'gpt-5.4-mini':      { provider: 'openai',    apiModel: 'gpt-5.4-mini',           name: 'GPT-5.4 Mini',      speed: 'fast' },
+    'gpt-5.5':           { provider: 'openai',    apiModel: 'gpt-5.5',                name: 'GPT-5.5',           speed: 'medium' },
+    'gpt-5.4-nano':      { provider: 'openai',    apiModel: 'gpt-5.4-nano',           name: 'GPT-5.4 Nano',      speed: 'very-fast' },
+    'claude-haiku-4.5':  { provider: 'anthropic', apiModel: 'claude-haiku-4-5',       name: 'Claude Haiku 4.5',  speed: 'fast' },
+    'claude-sonnet-4.6': { provider: 'anthropic', apiModel: 'claude-sonnet-4-6',      name: 'Claude Sonnet 4.6', speed: 'medium' },
+    'gemini-2.5-flash':  { provider: 'google',    apiModel: 'gemini-2.5-flash',       name: 'Gemini 2.5 Flash',  speed: 'fast' },
+    'gemini-3.5-flash':  { provider: 'google',    apiModel: 'gemini-3.5-flash',       name: 'Gemini 3.5 Flash',  speed: 'medium' },
+    'llama-3.3-70b':     { provider: 'groq',      apiModel: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B',    speed: 'fast' },
+    'llama-3.1-8b':      { provider: 'groq',      apiModel: 'llama-3.1-8b-instant',   name: 'Llama 3.1 8B',      speed: 'very-fast' },
+};
+
+// Old model ids (pre-2026 makeover) resolve to current equivalents so any
+// stored bot configs or stale clients keep working.
+const LEGACY_ALIASES = {
+    'gpt-4o-mini':       'gpt-5.4-mini',
+    'gpt-4o':            'gpt-5.5',
+    'gpt-3.5-turbo':     'gpt-5.4-nano',
+    'claude-3.5-haiku':  'claude-haiku-4.5',
+    'claude-3.5-sonnet': 'claude-sonnet-4.6',
+    'gemini-2.0-flash':  'gemini-2.5-flash',
+    'gemini-1.5-flash':  'gemini-2.5-flash',
+    'gemini-flash-latest': 'gemini-2.5-flash',
+};
+
+// If the chosen model fails all retries, try these (skipping the failed
+// provider) so a single provider outage never stalls a game.
+const FALLBACK_ORDER = ['llama-3.3-70b', 'gemini-2.5-flash', 'gpt-5.4-mini', 'claude-haiku-4.5'];
+
 class AIService {
     constructor() {
         this.openai = null;
@@ -42,101 +73,35 @@ class AIService {
         this.initialized = true;
     }
 
-    async getCardDecision(model, gameState, legalPlays) {
-        this.initialize();
-        
-        const prompt = this._buildCardPrompt(gameState, legalPlays);
-        console.log(`📡 [AI-API] Calling ${model} for card decision...`);
-        
-        try {
-            const startTime = Date.now();
-            let result;
-            switch (model) {
-                case 'gpt-4o-mini':
-                case 'gpt-4o':
-                case 'gpt-3.5-turbo':
-                    result = await this._getOpenAIDecision(model, prompt, 'card');
-                    break;
-                
-                case 'claude-3.5-haiku':
-                case 'claude-3.5-sonnet':
-                    result = await this._getAnthropicDecision(model, prompt, 'card');
-                    break;
-                
-                case 'gemini-2.0-flash':
-                case 'gemini-1.5-flash':
-                    result = await this._getGoogleDecision(model, prompt, 'card');
-                    break;
-                
-                case 'llama-3.3-70b':
-                case 'llama-3.1-8b':
-                    result = await this._getGroqDecision(model, prompt, 'card');
-                    break;
-                
-                default:
-                    console.warn(`Unknown AI model: ${model}, using fallback`);
-                    return null;
-            }
-            
-            const responseTime = Date.now() - startTime;
-            console.log(`✅ [AI-API] ${model} responded in ${responseTime}ms`);
-            return result;
-        } catch (error) {
-            console.error(`❌ [AI-API] ${model} error:`, error.message);
-            return null;
+    _resolveModel(modelId) {
+        const id = LEGACY_ALIASES[modelId] || modelId;
+        const entry = MODELS[id];
+        return entry ? { id, ...entry } : null;
+    }
+
+    _providerClient(provider) {
+        switch (provider) {
+            case 'openai': return this.openai;
+            case 'anthropic': return this.anthropic;
+            case 'google': return this.google;
+            case 'groq': return this.groq;
+            default: return null;
         }
+    }
+
+    async getCardDecision(model, gameState, legalPlays) {
+        const prompt = this._buildCardPrompt(gameState, legalPlays);
+        return this._decideWithFallback(model, prompt, 'card');
     }
 
     async getBidDecision(model, gameState, currentHighestBid, validBids = null) {
-        this.initialize();
-        
         const prompt = this._buildBidPrompt(gameState, currentHighestBid, validBids);
-        console.log(`📡 [AI-API] Calling ${model} for bid decision...`);
-        
-        try {
-            const startTime = Date.now();
-            let result;
-            switch (model) {
-                case 'gpt-4o-mini':
-                case 'gpt-4o':
-                case 'gpt-3.5-turbo':
-                    result = await this._getOpenAIDecision(model, prompt, 'bid');
-                    break;
-                
-                case 'claude-3.5-haiku':
-                case 'claude-3.5-sonnet':
-                    result = await this._getAnthropicDecision(model, prompt, 'bid');
-                    break;
-                
-                case 'gemini-2.0-flash':
-                case 'gemini-1.5-flash':
-                    result = await this._getGoogleDecision(model, prompt, 'bid');
-                    break;
-                
-                case 'llama-3.3-70b':
-                case 'llama-3.1-8b':
-                    result = await this._getGroqDecision(model, prompt, 'bid');
-                    break;
-                
-                default:
-                    console.warn(`Unknown AI model: ${model}, using fallback`);
-                    return null;
-            }
-            
-            const responseTime = Date.now() - startTime;
-            console.log(`✅ [AI-API] ${model} bid response in ${responseTime}ms`);
-            return result;
-        } catch (error) {
-            console.error(`❌ [AI-API] ${model} bid error:`, error.message);
-            return null;
-        }
+        return this._decideWithFallback(model, prompt, 'bid');
     }
 
     async getInsuranceDecision(model, gameState) {
-        this.initialize();
-        
         const prompt = this._buildInsurancePrompt(gameState);
-        
+
         // Log the analysis being shown to the AI
         const promptLines = prompt.split('\n');
         const analysisStart = promptLines.findIndex(line => line.includes('CURRENT GAME STATE'));
@@ -145,90 +110,115 @@ class AIService {
             const analysisSection = promptLines.slice(analysisStart, analysisEnd).join('\n');
             console.log(`📊 [INSURANCE-ANALYSIS] ${gameState.myName} analysis:\n${analysisSection}`);
         }
-        
-        try {
-            switch (model) {
-                case 'gpt-4o-mini':
-                case 'gpt-4o':
-                case 'gpt-3.5-turbo':
-                    return await this._getOpenAIDecision(model, prompt, 'insurance');
-                
-                case 'claude-3.5-haiku':
-                case 'claude-3.5-sonnet':
-                    return await this._getAnthropicDecision(model, prompt, 'insurance');
-                
-                case 'gemini-2.0-flash':
-                case 'gemini-1.5-flash':
-                    return await this._getGoogleDecision(model, prompt, 'insurance');
-                
-                case 'llama-3.3-70b':
-                case 'llama-3.1-8b':
-                    return await this._getGroqDecision(model, prompt, 'insurance');
-                
-                default:
-                    console.warn(`Unknown AI model: ${model}, using fallback`);
-                    return null;
-            }
-        } catch (error) {
-            console.error(`AI Insurance error for ${model}:`, error);
-            return null;
+
+        return this._decideWithFallback(model, prompt, 'insurance');
+    }
+
+    // Try the requested model first; on total failure walk the fallback
+    // chain (skipping models from the provider that just failed).
+    async _decideWithFallback(modelId, prompt, type) {
+        this.initialize();
+
+        const primary = this._resolveModel(modelId);
+        if (!primary) {
+            console.warn(`Unknown AI model: ${modelId}, using fallback chain`);
         }
+
+        const candidates = [];
+        if (primary) candidates.push(primary);
+        for (const fallbackId of FALLBACK_ORDER) {
+            const entry = this._resolveModel(fallbackId);
+            if (!entry) continue;
+            if (primary && entry.provider === primary.provider) continue;
+            if (candidates.some(c => c.id === entry.id)) continue;
+            candidates.push(entry);
+        }
+
+        for (let i = 0; i < candidates.length; i++) {
+            const candidate = candidates[i];
+            if (!this._providerClient(candidate.provider)) continue;
+
+            const isFallback = i > 0;
+            console.log(`📡 [AI-API] Calling ${candidate.id}${isFallback ? ' (fallback)' : ''} for ${type} decision...`);
+            try {
+                const startTime = Date.now();
+                const result = await this._decide(candidate, prompt, type);
+                if (result) {
+                    console.log(`✅ [AI-API] ${candidate.id} ${type} response in ${Date.now() - startTime}ms`);
+                    return result;
+                }
+            } catch (error) {
+                console.error(`❌ [AI-API] ${candidate.id} ${type} error:`, error.message);
+            }
+            // Only fall through to other providers on hard failure; stop after
+            // two extra attempts so a full multi-provider outage fails fast.
+            if (i >= 2) break;
+        }
+
+        return null;
+    }
+
+    async _decide(entry, prompt, type) {
+        switch (entry.provider) {
+            case 'openai': return this._getOpenAIDecision(entry.apiModel, prompt, type);
+            case 'anthropic': return this._getAnthropicDecision(entry.apiModel, prompt, type);
+            case 'google': return this._getGoogleDecision(entry.apiModel, prompt, type);
+            case 'groq': return this._getGroqDecision(entry.apiModel, prompt, type);
+            default: return null;
+        }
+    }
+
+    _validate(result, type) {
+        if (!result) return false;
+        if (type === 'card' && !result.card) return false;
+        if (type === 'bid' && !result.bid) return false;
+        if (type === 'insurance' && (typeof result.offer !== 'number' || typeof result.requirement !== 'number')) return false;
+        return true;
     }
 
     async _getOpenAIDecision(model, prompt, type) {
         if (!this.openai) return null;
 
-        // Try up to 3 times to get valid JSON
         for (let attempt = 1; attempt <= 3; attempt++) {
             try {
+                // GPT-5 family: max_tokens is rejected (use max_completion_tokens),
+                // temperature must stay at default, and reasoning tokens count
+                // against the cap — so the budget is well above the old 150.
                 const response = await this.openai.chat.completions.create({
                     model: model,
                     messages: [
                         { role: 'system', content: this._getSystemPrompt(type) + '\nIMPORTANT: Return ONLY valid JSON. No explanations outside JSON.' },
                         { role: 'user', content: prompt }
                     ],
-                    max_tokens: 150, // Increased from 100
-                    temperature: 0.5, // Reduced from 0.7 for more consistency
+                    max_completion_tokens: 4000,
                     response_format: { type: 'json_object' }
                 });
 
                 const content = response.choices[0].message.content;
-                // Try to parse JSON
                 const result = JSON.parse(content);
-                
-                // Validate the response has required fields
-                if (type === 'card' && !result.card) continue;
-                if (type === 'bid' && !result.bid) continue;
-                if (type === 'insurance' && (typeof result.offer !== 'number' || typeof result.requirement !== 'number')) continue;
-                
+                if (!this._validate(result, type)) continue;
                 return result;
             } catch (error) {
                 console.log(`OpenAI attempt ${attempt} failed: ${error.message}`);
                 if (attempt === 3) throw error;
             }
         }
-        
+
         return null;
     }
 
     async _getAnthropicDecision(model, prompt, type) {
         if (!this.anthropic) return null;
 
-        const modelMap = {
-            'claude-3.5-haiku': 'claude-3-5-haiku-20241022',
-            'claude-3.5-sonnet': 'claude-3-5-sonnet-20241022'
-        };
-
         for (let attempt = 1; attempt <= 3; attempt++) {
             try {
                 const response = await this.anthropic.messages.create({
-                    model: modelMap[model] || model,
-                    max_tokens: 150,
-                    temperature: 0.3,
+                    model: model,
+                    max_tokens: 300,
                     messages: [
-                        { 
-                            role: 'user', 
-                            content: `${this._getSystemPrompt(type)}\n\n${prompt}\n\nIMPORTANT: Respond with ONLY a valid JSON object. No text before or after the JSON.` 
+                        {
+                            role: 'user',
+                            content: `${this._getSystemPrompt(type)}\n\n${prompt}\n\nIMPORTANT: Respond with ONLY a valid JSON object. No text before or after the JSON.`
                         }
                     ]
                 });
@@ -238,38 +228,28 @@ class AIService {
                 const jsonMatch = text.match(/\{.*\}/s);
                 const jsonStr = jsonMatch ? jsonMatch[0] : text;
                 const result = JSON.parse(jsonStr);
-                
-                // Validate
-                if (type === 'card' && !result.card) continue;
-                if (type === 'bid' && !result.bid) continue;
-                if (type === 'insurance' && (typeof result.offer !== 'number' || typeof result.requirement !== 'number')) continue;
-                
+                if (!this._validate(result, type)) continue;
                 return result;
             } catch (error) {
                 console.log(`Anthropic attempt ${attempt} failed: ${error.message}`);
                 if (attempt === 3) throw error;
             }
         }
-        
+
         return null;
     }
 
     async _getGoogleDecision(model, prompt, type) {
         if (!this.google) return null;
 
-        const modelMap = {
-            'gemini-2.0-flash': 'gemini-2.0-flash-exp',
-            'gemini-1.5-flash': 'gemini-1.5-flash',
-            'gemini-flash-latest': 'gemini-1.5-flash-latest'
-        };
-
         for (let attempt = 1; attempt <= 3; attempt++) {
             try {
-                const genModel = this.google.getGenerativeModel({ 
-                    model: modelMap[model] || model,
+                const genModel = this.google.getGenerativeModel({
+                    model: model,
                     generationConfig: {
                         temperature: 0.2,
-                        maxOutputTokens: 150,
+                        maxOutputTokens: 2000,
+                        responseMimeType: 'application/json',
                     }
                 });
 
@@ -282,77 +262,60 @@ CRITICAL: Your response must be ONLY a valid JSON object, nothing else.`;
                 const result = await genModel.generateContent(fullPrompt);
                 const response = await result.response;
                 const text = response.text().trim();
-                
+
                 // Extract JSON from response
                 const jsonMatch = text.match(/\{.*\}/s);
                 if (!jsonMatch) continue;
-                
+
                 const jsonResult = JSON.parse(jsonMatch[0]);
-                
-                // Validate
-                if (type === 'card' && !jsonResult.card) continue;
-                if (type === 'bid' && !jsonResult.bid) continue;
-                if (type === 'insurance' && (typeof jsonResult.offer !== 'number' || typeof jsonResult.requirement !== 'number')) continue;
-                
+                if (!this._validate(jsonResult, type)) continue;
                 return jsonResult;
             } catch (error) {
                 console.log(`Google attempt ${attempt} failed: ${error.message}`);
-                
+
                 // Handle rate limits specifically for Gemini
-                if (error.message?.includes('429') || error.message?.includes('quota') || 
+                if (error.message?.includes('429') || error.message?.includes('quota') ||
                     error.message?.includes('rate') || error.message?.includes('Resource exhausted')) {
-                    // Gemini has very strict rate limits (10 requests/minute)
-                    // Use exponential backoff: 6s, 12s, 18s
                     const waitTime = attempt * 6000;
                     console.log(`⚠️ Gemini rate limited, waiting ${waitTime/1000}s before retry...`);
                     await new Promise(resolve => setTimeout(resolve, waitTime));
                     continue;
                 }
-                
+
                 if (attempt === 3) throw error;
                 await new Promise(resolve => setTimeout(resolve, 1000));
             }
         }
-        
+
         return null;
     }
 
     async _getGroqDecision(model, prompt, type) {
         if (!this.groq) return null;
 
-        const modelMap = {
-            'llama-3.3-70b': 'llama-3.3-70b-versatile',
-            'llama-3.1-8b': 'llama-3.1-8b-instant'
-        };
-
         for (let attempt = 1; attempt <= 3; attempt++) {
             try {
                 const response = await this.groq.chat.completions.create({
-                    model: modelMap[model] || model,
+                    model: model,
                     messages: [
-                        { 
-                            role: 'system', 
+                        {
+                            role: 'system',
                             content: this._getSystemPrompt(type) + '\nYou MUST respond with valid JSON only.'
                         },
                         { role: 'user', content: prompt }
                     ],
-                    max_tokens: 150,
-                    temperature: 0.1, // Very low for consistency
+                    max_tokens: 300,
+                    temperature: 0.1,
                     response_format: { type: 'json_object' }
                 });
 
                 const content = response.choices[0].message.content;
                 const result = JSON.parse(content);
-                
-                // Validate
-                if (type === 'card' && !result.card) continue;
-                if (type === 'bid' && !result.bid) continue;
-                if (type === 'insurance' && (typeof result.offer !== 'number' || typeof result.requirement !== 'number')) continue;
-                
+                if (!this._validate(result, type)) continue;
                 return result;
             } catch (error) {
                 console.log(`Groq attempt ${attempt} failed: ${error.status} ${error.message}`);
-                
+
                 // Handle rate limits specifically
                 if (error.status === 429 || error.message?.includes('rate_limit')) {
                     const waitTime = attempt === 1 ? 4000 : attempt === 2 ? 8000 : 12000;
@@ -360,12 +323,12 @@ CRITICAL: Your response must be ONLY a valid JSON object, nothing else.`;
                     await new Promise(resolve => setTimeout(resolve, waitTime));
                     continue;
                 }
-                
+
                 if (attempt === 3) throw error;
                 await new Promise(resolve => setTimeout(resolve, 500 * attempt));
             }
         }
-        
+
         return null;
     }
 
@@ -447,17 +410,17 @@ Refusing when bidder will win = lose DOUBLE the points!`;
 
     _buildBidPrompt(gameState, currentHighestBid, validBids) {
         const { myHand, scores } = gameState;
-        
+
         // Count high cards and suits
         const suits = { H: [], S: [], C: [], D: [] };
         for (const card of myHand) {
             const suit = card[card.length - 1];
             suits[suit].push(card);
         }
-        
+
         // Use provided valid bids or default to all bids
         const availableBids = validBids || ['Pass', 'Solo', 'Frog', 'Heart Solo'];
-        
+
         return `Bidding Phase:
 - Your hand: ${myHand.join(', ')}
 - Suit distribution: Hearts(${suits.H.length}), Spades(${suits.S.length}), Clubs(${suits.C.length}), Diamonds(${suits.D.length})
@@ -482,10 +445,10 @@ Consider:
         const { myHand, currentTrick, trumpSuit, leadSuit, playedCards, scores, trickNumber,
                 capturedTricksCount, pointsCaptured, seatPosition, insurance, bidder,
                 suitTracking, remainingHighCards } = gameState;
-        
+
         // Calculate round phase
         const roundPhase = trickNumber <= 4 ? 'early' : trickNumber <= 9 ? 'mid' : 'late';
-        
+
         // Build void information
         let voidInfo = '';
         if (suitTracking) {
@@ -505,7 +468,7 @@ Consider:
                 voidInfo = `\n- Known voids: ${voids.join('; ')}`;
             }
         }
-        
+
         // High cards remaining summary
         let highCardInfo = '';
         if (remainingHighCards) {
@@ -519,7 +482,7 @@ Consider:
                 highCardInfo = `\n- High cards out: ${highCards.join('; ')}`;
             }
         }
-        
+
         return `Game State:
 - Your hand: ${myHand.join(', ')}
 - Legal plays: ${legalPlays.join(', ')}
@@ -536,8 +499,8 @@ ${insurance?.dealActive ? '- Insurance deal is ACTIVE' : ''}
 
 ENDGAME CONTROL:
 ${roundPhase === 'late' ? `Critical: Track voids! If opponent is void in a suit, they can trump.
-Count remaining ${trumpSuit || 'trump'}: Use your ${trumpSuit || 'trump'} wisely.` : 
-roundPhase === 'mid' ? 'Start tracking who might be void in suits.' : 
+Count remaining ${trumpSuit || 'trump'}: Use your ${trumpSuit || 'trump'} wisely.` :
+roundPhase === 'mid' ? 'Start tracking who might be void in suits.' :
 'Early game - establish suit control.'}
 
 TRUMP FORCING STRATEGY:
@@ -554,20 +517,20 @@ Choose the best card. Consider:
     }
 
     _buildInsurancePrompt(gameState) {
-        const { myHand, scores, bidder, bidType, insurance, capturedTricksCount, 
+        const { myHand, scores, bidder, bidType, insurance, capturedTricksCount,
                 pointsCaptured, trickNumber, seatPosition, myName, remainingHighCards } = gameState;
-        
+
         // Determine if I'm the bidder or a defender
         const isBidder = (bidder === myName);
         const role = isBidder ? 'BIDDER' : 'DEFENDER';
-        
+
         // Calculate current game state
         const tricksPlayed = trickNumber - 1;
         const tricksRemaining = 13 - tricksPlayed;
         const bidderPoints = pointsCaptured?.[bidder] || 0;
         const totalPointsCaptured = Object.values(pointsCaptured || {}).reduce((sum, pts) => sum + pts, 0);
         const pointsRemaining = 120 - totalPointsCaptured;
-        
+
         // Count high cards in my hand
         let myHighCards = 0;
         let myPoints = 0;
@@ -579,12 +542,12 @@ Choose the best card. Consider:
                 if (rank === 'A' || rank === '10') myHighCards++;
             }
         }
-        
+
         // Calculate expected final score
         const bidderCurrentPace = tricksPlayed > 0 ? (bidderPoints / totalPointsCaptured) : 0.5;
         const expectedBidderFinal = bidderPoints + (pointsRemaining * bidderCurrentPace);
         const bidderDelta = Math.round(expectedBidderFinal - 60);
-        
+
         return `Insurance Decision - You are a ${role}:
 - Your hand: ${myHand.join(', ')} (worth ${myPoints} points)
 - You: ${myName} (${role})
@@ -603,13 +566,13 @@ YOUR ANALYSIS:
 STRATEGIC INSURANCE CALCULATION:
 ${(() => {
     const bidMultiplier = bidType === 'Heart Solo' ? 3 : bidType === 'Frog' ? 2 : 1;
-    
+
     if (isBidder) {
         // Bidder calculates expected score impact
         const myExpectedDelta = bidderDelta;
         const myExpectedScore = myExpectedDelta * bidMultiplier * 2; // 2-way payout if win
         const myExpectedLoss = -Math.abs(myExpectedDelta) * bidMultiplier * 3; // 3-way payout if lose
-        
+
         return `As BIDDER, your expected outcome:
 - If you WIN by ${Math.abs(bidderDelta)} points: You gain ${Math.abs(myExpectedScore)} points
 - If you LOSE by ${Math.abs(bidderDelta)} points: You lose ${Math.abs(myExpectedLoss)} points
@@ -620,7 +583,7 @@ ${(() => {
         const bidderExpectedDelta = bidderDelta;
         const myRiskIfBidderWins = Math.abs(bidderExpectedDelta) * bidMultiplier;
         const myGainIfBidderLoses = Math.abs(bidderExpectedDelta) * bidMultiplier / 2;
-        
+
         return `As DEFENDER, your risk analysis:
 - If bidder WINS by ${Math.abs(bidderDelta)}: You lose ${myRiskIfBidderWins} points
 - If bidder LOSES by ${Math.abs(bidderDelta)}: You gain ${Math.round(myGainIfBidderLoses)} points
@@ -635,40 +598,15 @@ Your move (offer=${isBidder ? '0' : '?'}, requirement=${isBidder ? '?' : '0'}):`
 
     getAvailableModels() {
         this.initialize();
-        
-        const models = [];
-        
-        if (this.openai) {
-            models.push(
-                { id: 'gpt-4o-mini', name: 'GPT-4o Mini', provider: 'OpenAI', speed: 'fast' },
-                { id: 'gpt-4o', name: 'GPT-4o', provider: 'OpenAI', speed: 'medium' },
-                { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', provider: 'OpenAI', speed: 'fast' }
-            );
-        }
-        
-        if (this.anthropic) {
-            models.push(
-                { id: 'claude-3.5-haiku', name: 'Claude 3.5 Haiku', provider: 'Anthropic', speed: 'fast' },
-                { id: 'claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', provider: 'Anthropic', speed: 'medium' }
-            );
-        }
-        
-        if (this.google) {
-            models.push(
-                { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', provider: 'Google', speed: 'fast' },
-                { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', provider: 'Google', speed: 'fast' }
-            );
-        }
-        
-        if (this.groq) {
-            models.push(
-                { id: 'llama-3.3-70b', name: 'Llama 3.3 70B', provider: 'Groq', speed: 'fast' },
-                { id: 'llama-3.1-8b', name: 'Llama 3.1 8B', provider: 'Groq', speed: 'very-fast' }
-                // Mixtral-8x7b has been decommissioned by Groq
-            );
-        }
-        
-        return models;
+
+        return Object.entries(MODELS)
+            .filter(([, m]) => this._providerClient(m.provider))
+            .map(([id, m]) => ({
+                id,
+                name: m.name,
+                provider: { openai: 'OpenAI', anthropic: 'Anthropic', google: 'Google', groq: 'Groq' }[m.provider],
+                speed: m.speed,
+            }));
     }
 }
 

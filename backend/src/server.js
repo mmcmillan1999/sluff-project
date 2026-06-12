@@ -101,6 +101,15 @@ server.listen(PORT, async () => {
 
     const pingRouter = createPingRoutes();
     app.use('/api/ping', pingRouter);
+
+    app.get('/health', async (req, res) => {
+        try {
+            await pool.query('SELECT 1');
+            res.json({ status: 'ok', db: 'up', uptime: Math.floor(process.uptime()) });
+        } catch (err) {
+            res.status(503).json({ status: 'degraded', db: 'down', uptime: Math.floor(process.uptime()) });
+        }
+    });
     
     const botStatsRouter = createBotInsuranceStatsRoutes(pool);
     app.use('/api/bot-insurance', botStatsRouter);

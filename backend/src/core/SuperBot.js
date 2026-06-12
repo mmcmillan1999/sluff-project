@@ -6,7 +6,7 @@ const { getLegalMoves } = require('./legalMoves');
 const { CARD_POINT_VALUES, RANKS_ORDER } = require('./constants');
 
 class SuperBot extends BotPlayer {
-    constructor(userId, name, engine, aiModel = 'gpt-4o-mini') {
+    constructor(userId, name, engine, aiModel = 'gpt-5.4-mini') {
         super(userId, name, engine);
         this.aiModel = aiModel;
         this.isSuperBot = true;

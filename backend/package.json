@@ -11,8 +11,15 @@
     "test": "node tests/run_all_tests.js",
     "test:e2e": "node tests/auth.test.js && node tests/api.test.js"
   },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.59.0",
+    "@google/generative-ai": "^0.24.1",
     "@sendgrid/mail": "^8.1.5",
+    "groq-sdk": "^0.30.0",
+    "openai": "^5.12.2",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
