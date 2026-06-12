@@ -24,8 +24,11 @@ The "where is everything" file. Update this whenever an account, plan, or URL ch
 
 ## Billing history & lessons (June 2026)
 
-- Render billed **~$500/month from Aug 2025 through May 2026 (~$5,500 total)**, including months when the site was unused. Three invoices (Dec 2025, Jan 2026, Mar 2026) went unpaid → service suspended.
-- **Lesson: a friends-and-family app needs ~$15/mo on Render** (Starter web service ~$7 + smallest Postgres ~$6–7). Check the workspace for extra services, oversized instance types, autoscaling, and preview environments. Review the first invoice after any change.
+- Render billed **~$500/month from Aug 2025 through May 2026 (~$5,500 total)**, including months when the site was unused. Three invoices (Dec 2025, Jan 2026, Mar 2026) went unpaid → workspace suspended (DB included).
+- **Root cause (May 2026 invoice CSV): `sluff-backend` was on a "Pro Ultra" instance at $0.6048/hr = ~$394/mo.** The fix is one dropdown: downsize to Starter (~$7/mo).
+- Render workspace inventory (May 2026): `sluff-backend` (prod, Pro Ultra — DOWNSIZE), `sluff-backend-pilot` (staging, Starter $6), `Mosaic` (Standard $22 — separate project, not sluff), `SOTOS` (Starter $6 — separate project, not sluff), `sluff-db` (Postgres Basic-1gb, ~$17 — holds ALL game data; servers hold none).
+- **Lesson: a friends-and-family app needs ~$15–25/mo on Render.** Review the first invoice after any change; billing email is the Yahoo address.
+- Backup the DB anytime with `node backend/scripts/backup-db.js` (writes JSON dumps to backend/backups/, gitignored). Run one immediately after the DB comes back from suspension.
 - Set a calendar reminder: review Render + Squarespace + SendGrid billing every 6 months.
 
 ## Recovery runbook (site is down — do these in order)
