@@ -50,16 +50,31 @@ module.exports = function(pool, bcrypt, jwt, io) {
                 <p>If you did not register for this account, you can safely ignore this email.</p>
             `;
 
-            await sendEmail({
-                to: email,
-                subject: emailSubject,
-                text: emailText,
-                html: emailHtml,
-            });
+            // Email delivery must not block registration (SendGrid credits ran
+            // out June 2026). If the verification email fails, activate the
+            // account directly. TEMPORARY: revert to strict verification once
+            // the SendGrid account is restored (see docs/OPERATIONS.md).
+            let emailSent = true;
+            try {
+                await sendEmail({
+                    to: email,
+                    subject: emailSubject,
+                    text: emailText,
+                    html: emailHtml,
+                });
+            } catch (emailError) {
+                emailSent = false;
+                console.error(`⚠️ Verification email failed for ${email}, activating account directly:`, emailError.message);
+                await client.query('UPDATE users SET is_verified = true WHERE id = $1', [newUserId]);
+            }
 
             await client.query('COMMIT');
-            
-            res.status(201).json({ message: "Registration successful! Please check your email to verify your account." });
+
+            res.status(201).json({
+                message: emailSent
+                    ? "Registration successful! Please check your email to verify your account."
+                    : "Registration successful! Your account is ready — you can log in now."
+            });
 
         } catch (error) {
             await client.query('ROLLBACK');
