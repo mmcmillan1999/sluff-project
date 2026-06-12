@@ -36,7 +36,8 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    background: radial-gradient(circle, #424242, #212121);
+    /* Dark backdrop so the felt is the brightest thing on screen */
+    background: radial-gradient(circle at 50% 30%, #1c1c1c, #0f0f0f);
     padding: 0; /* No padding - table goes edge to edge */
     overflow: hidden; /* Prevent any overflow */
 }
@@ -44,13 +45,16 @@
 .table-oval {
     width: 100vw; /* Full viewport width - edge to edge */
     height: 100%; /* Full height of game-table container */
-    /* Remove max-width and min-width constraints */
-    /* Remove aspect-ratio - let it fill available space */
-    background-color: #004d00;
+    /* Felt with a light-source vignette for depth */
+    background: radial-gradient(ellipse at 50% 35%, #15673a 0%, #0f4d2a 55%, #0a3a1f 100%);
     border-radius: 18vh;
     border: 1.2vh solid #3e2723;
     position: relative;
-    box-shadow: inset 0 0 3vh rgba(0,0,0,0.5);
+    /* Gold pinstripe inside the wood rim + deep felt vignette */
+    box-shadow:
+        inset 0 0 0 0.25vh rgba(255, 215, 0, 0.18),
+        inset 0 0 6vh rgba(0, 0, 0, 0.55),
+        0 1vh 3vh rgba(0, 0, 0, 0.5);
     flex-shrink: 0;
 }
 
@@ -108,11 +112,16 @@
     display: inline-flex;
     justify-content: center;
     align-items: center;
-    background-color: #1a1a1a;
-    border: 0.12vh solid #888;
-    border-radius: 0.5vh;
-    box-shadow: 0.12vh 0.12vh 0.35vh rgba(0,0,0,0.5);
-    padding: 0.6vh;
+    /* Deep navy field with a gold double-border inset — real card-back look */
+    background: radial-gradient(circle at 50% 40%, #1e3a8a, #14224d 80%);
+    border: 0.12vh solid #0d1330;
+    border-radius: 0.7vh;
+    box-shadow:
+        inset 0 0 0 0.22vh rgba(255, 215, 0, 0.3),
+        inset 0 0 0 0.45vh #14224d,
+        inset 0 0 0 0.55vh rgba(255, 215, 0, 0.15),
+        0 0.25vh 0.6vh rgba(0, 0, 0, 0.5);
+    padding: 0.9vh;
     box-sizing: border-box;
 }
 
@@ -120,7 +129,7 @@
     width: 100%;
     height: 100%;
     object-fit: contain;
-    transform: rotate(-70deg);
+    opacity: 0.6;
 }
 
 /* Trick pile containers - unified design */
@@ -611,10 +620,10 @@
 
 /* Card display base styles */
 .card-display {
-    border: 0.12vh solid #777;
+    border: 0.1vh solid rgba(0, 0, 0, 0.25);
     border-radius: 0.7vh;
     font-weight: bold;
-    box-shadow: 0 0.25vh 0.5vh rgba(0,0,0,0.2);
+    box-shadow: 0 0.25vh 0.7vh rgba(0, 0, 0, 0.35);
     display: flex;
     flex-direction: column;
     align-items: flex-start;

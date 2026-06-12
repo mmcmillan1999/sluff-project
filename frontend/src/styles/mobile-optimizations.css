@@ -72,7 +72,7 @@ button,
         min-width: 180px; /* Narrower to not cover names */
         max-width: calc(100vw - 100px); /* Ensure doesn't cover side elements */
         font-size: 0.8em; /* Smaller text */
-        font-family: 'Arial', 'Helvetica', sans-serif; /* Professional font */
+        font-family: 'Oswald', sans-serif;
     }
     
     .action-prompt-container h4 {
@@ -138,7 +138,7 @@ button,
         max-width: calc(100vw - 80px); /* Don't cover player names */
         padding: 12px 16px;
         font-size: 0.9em;
-        font-family: 'Arial', 'Helvetica', sans-serif;
+        font-family: 'Oswald', sans-serif;
     }
     
     .action-prompt-container h4 {
@@ -205,7 +205,7 @@ button,
         max-width: calc(100vw - 60px); /* Don't cover player names */
         padding: 10px 14px;
         font-size: 0.85em;
-        font-family: 'Arial', 'Helvetica', sans-serif;
+        font-family: 'Oswald', sans-serif;
     }
     
     .action-prompt-container h4 {

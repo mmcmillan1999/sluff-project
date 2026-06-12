@@ -353,20 +353,35 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         const suit = cardString.slice(-1);
         const symbol = SUIT_SYMBOLS[suit] || suit;
         const color = SUIT_COLORS[suit] || 'black';
-        const backgroundColor = isSelected ? '#8bc3f7' : (SUIT_BACKGROUNDS[suit] || 'white');
+        const backgroundColor = SUIT_BACKGROUNDS[suit] || '#fbfaf4';
         const cardClasses = ['card-display', className].filter(Boolean).join(' ');
         const cardContent = (
-            <div style={{ 
-                display: 'flex', 
-                flexDirection: 'column', 
-                alignItems: 'flex-start',
-                position: 'absolute',
-                top: '2px',
-                left: '4px'
-            }}>
-                <span style={{ lineHeight: '1' }}>{rank !== '?' && rank}</span>
-                <span className="card-symbol" style={{ lineHeight: '1', marginTop: '-2px' }}>{symbol}</span>
-            </div>
+            <>
+                <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'flex-start',
+                    position: 'absolute',
+                    top: '2px',
+                    left: '4px'
+                }}>
+                    <span style={{ lineHeight: '1' }}>{rank !== '?' && rank}</span>
+                    <span className="card-symbol" style={{ lineHeight: '1', marginTop: '-2px' }}>{symbol}</span>
+                </div>
+                {/* Mirrored bottom-right index, standard playing-card convention */}
+                <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'flex-start',
+                    position: 'absolute',
+                    bottom: '2px',
+                    right: '4px',
+                    transform: 'rotate(180deg)'
+                }}>
+                    <span style={{ lineHeight: '1' }}>{rank !== '?' && rank}</span>
+                    <span className="card-symbol" style={{ lineHeight: '1', marginTop: '-2px' }}>{symbol}</span>
+                </div>
+            </>
         );
         
         // Font size relative to card height
@@ -391,9 +406,9 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             position: 'relative',  // For absolute positioning of content
             padding: '2px',  // Override TableLayout.css padding
             boxSizing: 'border-box',
-            // Add prominent shadow effect when selected (similar to menu button)
-            boxShadow: isSelected ? 
-                '0 0.3vh 0.5vh rgba(0, 0, 0, 0.4), 0 0.15vh 0.25vh rgba(0, 0, 0, 0.3), inset 0 0.1vh 0.2vh rgba(255, 255, 255, 0.2), inset 0 -0.1vh 0.2vh rgba(0, 0, 0, 0.3), 0 0 2vh rgba(139, 195, 247, 0.8)' : 
+            // Selected = blue ring + glow + lift; card stock stays white
+            boxShadow: isSelected ?
+                '0 0 0 0.3vh #3b82f6, 0 0 1.6vh rgba(59, 130, 246, 0.75), 0 0.3vh 0.6vh rgba(0, 0, 0, 0.35)' :
                 undefined,
             transform: isSelected ? 'translateY(-0.2vh) scale(1.05)' : undefined,
             transition: 'all 0.15s ease',

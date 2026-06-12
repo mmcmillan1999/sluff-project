@@ -43,7 +43,8 @@
 }
 
 .widow-name {
-    font-family: 'Creepster', 'Chiller', 'Oswald', sans-serif;
+    font-family: 'Oswald', sans-serif;
+    letter-spacing: 0.05em;
     font-weight: bold;
     font-size: 1.8vh; /* Match player-name font-size */
     color: #8b0000;

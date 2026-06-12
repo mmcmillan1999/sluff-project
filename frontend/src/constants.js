@@ -9,8 +9,10 @@
 export const SUITS_MAP = { H: "Hearts", D: "Diamonds", C: "Clubs", S: "Spades" };
 // --- FIX: Corrected UTF-8 characters for suit symbols ---
 export const SUIT_SYMBOLS = { H: '♥', D: '♦', C: '♣', S: '♠' };
-export const SUIT_COLORS = { H: 'crimson', D: 'crimson', C: 'black', S: 'black' };
-export const SUIT_BACKGROUNDS = { H: 'mistyrose', D: 'lightyellow', C: 'palegreen', S: 'lightgrey' };
+export const SUIT_COLORS = { H: '#c62828', D: '#c62828', C: '#1b1b1b', S: '#1b1b1b' };
+// White card stock for every suit — suit identity comes from the pip color,
+// matching standard playing-card conventions (no more pastel tints).
+export const SUIT_BACKGROUNDS = { H: '#fbfaf4', D: '#fbfaf4', C: '#fbfaf4', S: '#fbfaf4' };
 
 // Game Rule Definitions
 export const RANKS_ORDER = ["6", "7", "8", "9", "J", "Q", "K", "10", "A"];
