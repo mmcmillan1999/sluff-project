@@ -1,6 +1,7 @@
 // frontend/src/App.js
 import React, { useState, useEffect, useCallback } from "react";
 import io from "socket.io-client";
+import { getServerUrl } from "./services/api.js";
 import AuthContainer from "./components/AuthContainer.js";
 import LobbyView from "./components/LobbyView.js";
 import GameTableView from "./components/GameTableView.js";
@@ -17,33 +18,6 @@ import "./components/AdminView.css";
 import "./styles/no-scroll-fix.css"; // Prevent all scrolling in game view
 // Mobile optimizations removed - using vh-based scaling instead
 import { useSounds } from "./hooks/useSounds.js";
-
-// Import the same getServerUrl function logic from api.js
-const getServerUrl = () => {
-    if (import.meta.env?.VITE_SERVER_URL) {
-        return import.meta.env?.VITE_SERVER_URL;
-    }
-    
-    const hostname = window.location.hostname;
-    
-    // Local development
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        return 'http://localhost:3005';
-    }
-    
-    // Production
-    if (hostname === 'playsluff.com' || hostname === 'www.playsluff.com') {
-        return 'https://api.playsluff.com';
-    }
-    
-    // Render.com deployment
-    if (hostname.includes('onrender.com')) {
-        return 'https://sluff-backend.onrender.com';
-    }
-    
-    // Default to production
-    return 'https://api.playsluff.com';
-};
 
 const SERVER_URL = getServerUrl();
 console.log(`[Socket.IO] Connecting to: ${SERVER_URL}`);

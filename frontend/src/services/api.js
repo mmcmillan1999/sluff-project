@@ -32,14 +32,15 @@ const getServerUrl = () => {
         return 'https://sluff-backend-pilot.onrender.com';
     }
     
-    // Netlify Production deployment  
-    if (hostname === 'sluff.netlify.app') {
+    // Netlify Production deployments
+    if (hostname === 'sluff.netlify.app' || hostname === 'playsluff.netlify.app') {
         return 'https://sluff-backend.onrender.com';
     }
-    
-    // Generic Netlify branch deploys - use stage backend
+
+    // Generic Netlify branch deploys - use production backend
+    // (the pilot/stage backend has been dormant since 2025)
     if (hostname.includes('netlify')) {
-        return 'https://sluff-backend-pilot.onrender.com';
+        return 'https://sluff-backend.onrender.com';
     }
     
     // Render.com deployment (if frontend is on Render)
@@ -57,9 +58,11 @@ const getServerUrl = () => {
         return 'https://sluff-backend.onrender.com';
     }
     
-    // Default to stage backend for any unknown domains
-    return 'https://sluff-backend-pilot.onrender.com';
+    // Default to production backend for any unknown domains
+    return 'https://sluff-backend.onrender.com';
 };
+
+export { getServerUrl };
 
 const SERVER_URL = getServerUrl();
 
