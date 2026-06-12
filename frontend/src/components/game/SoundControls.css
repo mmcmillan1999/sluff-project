@@ -1,0 +1,40 @@
+/* SoundControls.css */
+.sound-controls {
+    display: flex;
+    align-items: center;
+    gap: 1vh;
+    padding: 0.5vh 0;
+}
+
+.sound-mute-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 4.4vh;
+    height: 4.4vh;
+    min-width: 32px;
+    min-height: 32px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 0.8vh;
+    color: #f5f5f4;
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.15s ease;
+}
+
+.sound-mute-btn:hover {
+    background: rgba(255, 255, 255, 0.16);
+}
+
+.sound-volume-slider {
+    flex: 1;
+    min-width: 90px;
+    accent-color: #3b82f6;
+    cursor: pointer;
+}
+
+.sound-controls.compact .sound-volume-slider {
+    min-width: 70px;
+    max-width: 110px;
+}

@@ -15,10 +15,11 @@ import AdminObserverMode from './AdminObserverMode';
 import LayoutDevPanel from './LayoutDevPanel';
 import PlayerHandAnchorDebug from './game/PlayerHandAnchorDebug';
 import { getLobbyChatHistory } from '../services/api';
+import SoundControls from './game/SoundControls';
 import { SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS } from '../constants';
 
 
-const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, emitEvent, playSound, socket, handleOpenFeedbackModal }) => {
+const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, emitEvent, playSound, socket, handleOpenFeedbackModal, soundSettings }) => {
     const [seatAssignments, setSeatAssignments] = useState({ self: null, opponentLeft: null, opponentRight: null });
     const [showRoundSummaryModal, setShowRoundSummaryModal] = useState(false);
     const [showInsurancePrompt, setShowInsurancePrompt] = useState(false);
@@ -457,6 +458,9 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             <div className="game-menu-info">
                 <p><strong>State:</strong> {currentTableState?.state || "N/A"}</p>
                 <p><strong>Bid:</strong> {currentTableState?.bidWinnerInfo?.bid || "N/A"} {currentTableState?.bidWinnerInfo?.playerName && ` by ${currentTableState.bidWinnerInfo.playerName}`}</p>
+            </div>
+            <div className="game-menu-sound">
+                <SoundControls soundSettings={soundSettings} />
             </div>
             <div className="game-menu-actions">
                 <button onClick={handleLeaveTable} className="game-menu-button secondary">Back to Lobby</button>

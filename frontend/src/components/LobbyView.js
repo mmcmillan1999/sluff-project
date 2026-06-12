@@ -5,10 +5,11 @@ import './LobbyView.css';
 import Bulletin from './Bulletin';
 import LobbyTableCard from './LobbyTableCard';
 import LobbyChat from './LobbyChat';
+import SoundControls from './game/SoundControls';
 import { getLobbyChatHistory } from '../services/api';
 import { useViewport } from '../hooks/useViewport';
 
-const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowAdmin, handleShowFeedback, errorMessage, emitEvent, socket, handleOpenFeedbackModal }) => {
+const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowAdmin, handleShowFeedback, errorMessage, emitEvent, socket, handleOpenFeedbackModal, soundSettings }) => {
     
     const [activeTab, setActiveTab] = useState('');
     const [showMenu, setShowMenu] = useState(false);
@@ -337,7 +338,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
             </main>
             
             <footer className="lobby-footer">
-                <span>Server: {import.meta.env?.VITE_SERVER_URL || 'wss://sluff-backend.onrender.com'}</span>
+                <SoundControls soundSettings={soundSettings} compact />
                 <span>Version: {serverVersion}</span>
             </footer>
         </div>

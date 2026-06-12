@@ -1,36 +1,96 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+
+// Web Audio API instead of <audio> elements: short SFX mix OVER background
+// audio (YouTube/music keeps playing) instead of seizing the phone's audio
+// session — the same approach Howler.js and HTML5 game engines use.
+const SOUND_FILES = {
+    turnAlert: '/Sounds/turn_alert.mp3',
+    cardPlay: '/Sounds/card_play.mp3',
+    trickWin: '/Sounds/trick_win.mp3',
+    cardDeal: '/Sounds/card_dealing_10s_v3.mp3',
+    no_peaking_cheater: '/Sounds/no_peaking_cheater.mp3',
+};
+
+const stored = (key, fallback) => {
+    try {
+        const v = localStorage.getItem(key);
+        return v === null ? fallback : JSON.parse(v);
+    } catch {
+        return fallback;
+    }
+};
 
 export const useSounds = () => {
-    const sounds = useRef({});
-    const [isSoundEnabled, setIsSoundEnabled] = useState(false);
+    const ctxRef = useRef(null);
+    const gainRef = useRef(null);
+    const buffersRef = useRef({});
+    const enabledRef = useRef(false);
 
+    const [muted, setMuted] = useState(() => stored('sluff_sound_muted', false));
+    const [volume, setVolume] = useState(() => stored('sluff_sound_volume', 0.7));
+    const mutedRef = useRef(muted);
+    const volumeRef = useRef(volume);
+
+    // Persist settings and apply them to the live gain node
     useEffect(() => {
-        sounds.current = {
-            turnAlert: new Audio('/Sounds/turn_alert.mp3'),
-            cardPlay: new Audio('/Sounds/card_play.mp3'),
-            trickWin: new Audio('/Sounds/trick_win.mp3'),
-            cardDeal: new Audio('/Sounds/card_dealing_10s_v3.mp3'),
-            no_peaking_cheater: new Audio('/Sounds/no_peaking_cheater.mp3'), // ADDED THIS LINE
-        };
-        Object.values(sounds.current).forEach(sound => {
-            sound.load();
-            sound.volume = 0.7;
-        });
+        mutedRef.current = muted;
+        volumeRef.current = volume;
+        try {
+            localStorage.setItem('sluff_sound_muted', JSON.stringify(muted));
+            localStorage.setItem('sluff_sound_volume', JSON.stringify(volume));
+        } catch { /* private browsing */ }
+        if (gainRef.current && ctxRef.current) {
+            gainRef.current.gain.setValueAtTime(muted ? 0 : volume, ctxRef.current.currentTime);
+        }
+    }, [muted, volume]);
+
+    const ensureContext = useCallback(() => {
+        if (!ctxRef.current) {
+            const Ctx = window.AudioContext || window.webkitAudioContext;
+            if (!Ctx) return null;
+            ctxRef.current = new Ctx();
+            gainRef.current = ctxRef.current.createGain();
+            gainRef.current.gain.value = mutedRef.current ? 0 : volumeRef.current;
+            gainRef.current.connect(ctxRef.current.destination);
+
+            Object.entries(SOUND_FILES).forEach(async ([name, url]) => {
+                try {
+                    const res = await fetch(url);
+                    const data = await res.arrayBuffer();
+                    buffersRef.current[name] = await ctxRef.current.decodeAudioData(data);
+                } catch (e) {
+                    console.error(`Failed to load sound ${name}:`, e);
+                }
+            });
+        }
+        return ctxRef.current;
     }, []);
 
-    const playSound = (soundName) => {
-        if (isSoundEnabled && sounds.current[soundName]) {
-            sounds.current[soundName].currentTime = 0;
-            sounds.current[soundName].play().catch(e => console.error(`Error playing ${soundName}:`, e));
-        }
-    };
+    const enableSound = useCallback(() => {
+        // Must be called from a user gesture (browsers gate audio on interaction)
+        const ctx = ensureContext();
+        if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
+        enabledRef.current = true;
+    }, [ensureContext]);
 
-    const enableSound = () => {
-        if (!isSoundEnabled) {
-            console.log("Audio context unlocked by user interaction. Sounds are now enabled.");
-            setIsSoundEnabled(true);
-        }
-    };
+    const playSound = useCallback((soundName) => {
+        // Muted players never touch the audio session at all
+        if (!enabledRef.current || mutedRef.current) return;
+        const ctx = ctxRef.current;
+        const buffer = buffersRef.current[soundName];
+        if (!ctx || !buffer) return;
+        if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(gainRef.current);
+        source.start(0);
+    }, []);
 
-    return { playSound, enableSound };
+    const toggleMute = useCallback(() => setMuted(m => !m), []);
+
+    return {
+        playSound,
+        enableSound,
+        soundSettings: { muted, volume, toggleMute, setVolume },
+    };
 };
