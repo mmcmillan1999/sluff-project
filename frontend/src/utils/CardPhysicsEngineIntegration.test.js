@@ -5,45 +5,42 @@ import CardPhysicsEngine from './CardPhysicsEngine';
 import CardSpacingEngine from './CardSpacingEngine';
 
 // Enhanced mock setup for integration testing
-const mockPerformanceNow = jest.fn();
+const mockPerformanceNow = vi.fn();
 global.performance = { now: mockPerformanceNow };
 
-const mockRequestAnimationFrame = jest.fn();
-const mockCancelAnimationFrame = jest.fn();
+const mockRequestAnimationFrame = vi.fn();
+const mockCancelAnimationFrame = vi.fn();
 global.requestAnimationFrame = mockRequestAnimationFrame;
 global.cancelAnimationFrame = mockCancelAnimationFrame;
 
 // Mock DOM methods with more realistic behavior
 const createMockCardElement = (id = 'AS', position = { x: 100, y: 100 }) => {
-  const element = {
-    id,
-    style: {},
-    getBoundingClientRect: jest.fn(() => ({
-      left: position.x,
-      top: position.y,
-      width: 80,
-      height: 120,
-      right: position.x + 80,
-      bottom: position.y + 120
-    })),
-    appendChild: jest.fn(),
-    removeAttribute: jest.fn(),
-    setAttribute: jest.fn(),
-    offsetHeight: 120,
-    parentElement: { parentElement: null }
-  };
-  
+  // Real DOM element so jsdom DOM APIs (appendChild etc.) accept it;
+  // geometry is stubbed since jsdom has no layout engine.
+  const element = document.createElement('div');
+  element.id = id;
+  element.getBoundingClientRect = vi.fn(() => ({
+    left: position.x,
+    top: position.y,
+    width: 80,
+    height: 120,
+    right: position.x + 80,
+    bottom: position.y + 120
+  }));
+  Object.defineProperty(element, 'offsetHeight', { value: 120, configurable: true });
+  document.body.appendChild(element);
+
   // Mock getComputedStyle
-  global.getComputedStyle = jest.fn(() => ({
+  global.getComputedStyle = vi.fn(() => ({
     marginLeft: '0px',
     overflow: 'visible'
   }));
-  
+
   return element;
 };
 
 const createMockHandContainer = (containerWidth = 800) => ({
-  getBoundingClientRect: jest.fn(() => ({
+  getBoundingClientRect: vi.fn(() => ({
     left: 50,
     top: 500,
     width: containerWidth,
@@ -54,7 +51,7 @@ const createMockHandContainer = (containerWidth = 800) => ({
 });
 
 const createMockDropZone = (centerX = 400, centerY = 300) => ({
-  getBoundingClientRect: jest.fn(() => ({
+  getBoundingClientRect: vi.fn(() => ({
     left: centerX - 50,
     top: centerY - 50,
     width: 100,
@@ -79,7 +76,7 @@ describe('CardPhysicsEngine Integration Tests', () => {
     mockTime = 0;
     mockPerformanceNow.mockImplementation(() => mockTime);
     
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     
     // Capture the animation update function
     mockRequestAnimationFrame.mockImplementation((callback) => {

@@ -1,7 +1,7 @@
 // Production-safe logger utility
 // Silences console output in production while preserving it in development
 
-const isDevelopment = process.env.NODE_ENV === 'development';
+const isDevelopment = import.meta.env?.DEV;
 
 const logger = {
     log: isDevelopment ? console.log.bind(console) : () => {},

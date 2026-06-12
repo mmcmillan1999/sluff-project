@@ -4,22 +4,26 @@ import * as api from './services/api';
 import { getMockGameState } from './__mocks__/mockGameState';
 import { io } from 'socket.io-client';
 
-// We will mock the entire library.
-jest.mock('socket.io-client');
+// Mock socket.io-client with a hoisted factory so App.js's module-level
+// io(...) call receives the mock socket (a plain auto-mock plus
+// mockReturnValue runs after App.js has already evaluated).
+const { mockSocket } = vi.hoisted(() => ({
+    mockSocket: {
+        on: vi.fn(),
+        off: vi.fn(),
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+        emit: vi.fn(),
+        auth: {},
+        connected: false,
+    },
+}));
+vi.mock('socket.io-client', () => ({
+    io: vi.fn(() => mockSocket),
+}));
 
 // Mock the entire api service
-jest.mock('./services/api');
-
-// Configure the mock implementation for io
-const mockSocket = {
-    on: jest.fn(),
-    off: jest.fn(),
-    connect: jest.fn(),
-    disconnect: jest.fn(),
-    emit: jest.fn(),
-    auth: {},
-};
-io.mockReturnValue(mockSocket);
+vi.mock('./services/api');
 
 
 describe('App Component and Game Flow', () => {
@@ -28,7 +32,7 @@ describe('App Component and Game Flow', () => {
     
     beforeEach(() => {
         // Reset mocks before each test
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         socketEventHandlers = {};
 
         // Redefine the .on implementation for each test to capture handlers
@@ -37,7 +41,7 @@ describe('App Component and Game Flow', () => {
         });
 
         api.getLobbyChatHistory.mockResolvedValue([]);
-        Storage.prototype.getItem = jest.fn(() => 'mock.token.payload');
+        Storage.prototype.getItem = vi.fn(() => 'mock.token.payload');
     });
 
     test('renders Login component on initial load without a token', () => {

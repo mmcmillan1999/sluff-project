@@ -337,7 +337,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
             </main>
             
             <footer className="lobby-footer">
-                <span>Server: {process.env.REACT_APP_SERVER_URL || 'wss://sluff-backend.onrender.com'}</span>
+                <span>Server: {import.meta.env?.VITE_SERVER_URL || 'wss://sluff-backend.onrender.com'}</span>
                 <span>Version: {serverVersion}</span>
             </footer>
         </div>

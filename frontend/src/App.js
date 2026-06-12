@@ -20,8 +20,8 @@ import { useSounds } from "./hooks/useSounds.js";
 
 // Import the same getServerUrl function logic from api.js
 const getServerUrl = () => {
-    if (process.env.REACT_APP_SERVER_URL) {
-        return process.env.REACT_APP_SERVER_URL;
+    if (import.meta.env?.VITE_SERVER_URL) {
+        return import.meta.env?.VITE_SERVER_URL;
     }
     
     const hostname = window.location.hostname;

@@ -26,21 +26,18 @@ describe('Spacing Mode Compatibility Tests', () => {
             })
         };
         
-        // Mock card element
-        mockCardElement = {
-            getBoundingClientRect: () => ({
-                left: 200,
-                top: 500,
-                width: 71,
-                height: 100,
-                right: 271,
-                bottom: 600
-            }),
-            style: {},
-            dataset: {},
-            addEventListener: jest.fn(),
-            removeEventListener: jest.fn()
-        };
+        // Mock card element — real DOM node so jsdom DOM APIs accept it;
+        // geometry is stubbed since jsdom has no layout engine.
+        mockCardElement = document.createElement('div');
+        mockCardElement.getBoundingClientRect = () => ({
+            left: 200,
+            top: 500,
+            width: 71,
+            height: 100,
+            right: 271,
+            bottom: 600
+        });
+        document.body.appendChild(mockCardElement);
     });
     
     describe('CENTER_MODE Compatibility', () => {

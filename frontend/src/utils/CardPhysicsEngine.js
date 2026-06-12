@@ -330,7 +330,7 @@ class CardPhysicsEngine {
             y: touchPoint.y - actualCenter.y
         };
         
-        if (process.env.NODE_ENV === 'development' && marginLeft !== 0) {
+        if (import.meta.env?.DEV && marginLeft !== 0) {
             console.log('Card has margin-left:', marginLeft);
         }
         
@@ -517,7 +517,7 @@ class CardPhysicsEngine {
         this.activeCards.get(cardId).parentOverflows = parentOverflows;
         
         // Debug initial setup (only in development)
-        if (process.env.NODE_ENV === 'development') {
+        if (import.meta.env?.DEV) {
             console.log('Card grabbed:', {
                 cardId,
                 position: this.activeCards.get(cardId).position,
@@ -536,7 +536,7 @@ class CardPhysicsEngine {
         // Don't call applyTransform here - we already set the correct transform above
         
         // Debug: Check if pencil marker is at finger position after transform
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env?.DEV) {
             // Wait two frames to ensure all updates have been applied
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
@@ -1935,7 +1935,7 @@ class CardPhysicsEngine {
             card.angularVelocity = Math.max(-maxAngularVelocity, Math.min(maxAngularVelocity, card.angularVelocity));
             
             // Debug logging for physics state
-            if (process.env.NODE_ENV === 'development' && card.frameCount % 60 === 0) {
+            if (import.meta.env?.DEV && card.frameCount % 60 === 0) {
                 console.log('Physics state:', {
                     cardId: card.element.id,
                     currentRotation: (card.rotation * 180 / Math.PI).toFixed(1) + '°',

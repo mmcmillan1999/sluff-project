@@ -3,12 +3,12 @@
 import CardPhysicsEngine from './CardPhysicsEngine';
 
 // Mock performance.now() for consistent timing
-const mockPerformanceNow = jest.fn();
+const mockPerformanceNow = vi.fn();
 global.performance = { now: mockPerformanceNow };
 
 // Mock requestAnimationFrame and cancelAnimationFrame
-const mockRequestAnimationFrame = jest.fn();
-const mockCancelAnimationFrame = jest.fn();
+const mockRequestAnimationFrame = vi.fn();
+const mockCancelAnimationFrame = vi.fn();
 global.requestAnimationFrame = mockRequestAnimationFrame;
 global.cancelAnimationFrame = mockCancelAnimationFrame;
 
@@ -17,15 +17,15 @@ const createMockCardElement = (id = 'AS', dimensions = { width: 80, height: 120 
   const element = {
     id,
     style: {},
-    getBoundingClientRect: jest.fn(() => ({
+    getBoundingClientRect: vi.fn(() => ({
       left: 100,
       top: 100,
       width: dimensions.width,
       height: dimensions.height
     })),
-    appendChild: jest.fn(),
-    removeAttribute: jest.fn(),
-    setAttribute: jest.fn(),
+    appendChild: vi.fn(),
+    removeAttribute: vi.fn(),
+    setAttribute: vi.fn(),
     offsetHeight: 120,
     parentElement: {
       parentElement: null
@@ -33,7 +33,7 @@ const createMockCardElement = (id = 'AS', dimensions = { width: 80, height: 120 
   };
   
   // Mock computed styles
-  global.getComputedStyle = jest.fn(() => ({
+  global.getComputedStyle = vi.fn(() => ({
     marginLeft: '0px',
     overflow: 'visible'
   }));
@@ -53,7 +53,7 @@ describe('CardPhysicsEngine', () => {
     mockPerformanceNow.mockImplementation(() => mockTime);
     
     // Reset all mocks
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     
     // Mock requestAnimationFrame to capture the update function
     let updateFunction = null;

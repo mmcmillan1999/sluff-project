@@ -8,9 +8,9 @@
 // Smart environment detection - no more manual changes needed!
 const getServerUrl = () => {
     // Check if we have an explicit override in env
-    if (process.env.REACT_APP_SERVER_URL) {
-        console.log(`[API] Using override from .env: ${process.env.REACT_APP_SERVER_URL}`);
-        return process.env.REACT_APP_SERVER_URL;
+    if (import.meta.env?.VITE_SERVER_URL) {
+        console.log(`[API] Using override from .env: ${import.meta.env?.VITE_SERVER_URL}`);
+        return import.meta.env?.VITE_SERVER_URL;
     }
     
     // Detect based on where the frontend is running

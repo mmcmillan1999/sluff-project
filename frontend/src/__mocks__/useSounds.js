@@ -1,7 +1,7 @@
 // Mock implementation of useSounds hook for testing
 export const useSounds = () => {
-    const playSound = jest.fn();
-    const enableSound = jest.fn();
+    const playSound = vi.fn();
+    const enableSound = vi.fn();
 
     return { playSound, enableSound };
 };

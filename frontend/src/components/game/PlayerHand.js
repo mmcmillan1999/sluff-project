@@ -129,7 +129,7 @@ const PlayerHand = ({
                         );
                         
                         // Debug logging for resize
-                        if (process.env.NODE_ENV === 'development') {
+                        if (import.meta.env?.DEV) {
                             const activeInfo = physicsEngineRef.current.getActiveCardInfo();
                             console.log('🔄 Window resize detected with active cards:', activeInfo);
                         }
@@ -142,7 +142,7 @@ const PlayerHand = ({
                         );
                         
                         // Debug logging for hand changes
-                        if (process.env.NODE_ENV === 'development') {
+                        if (import.meta.env?.DEV) {
                             const activeInfo = physicsEngineRef.current.getActiveCardInfo();
                             if (activeInfo.activeCount > 0) {
                                 console.log('🃏 Hand layout changed with active cards:', {
@@ -159,7 +159,7 @@ const PlayerHand = ({
             });
             
             // Debug logging in development
-            if (process.env.NODE_ENV === 'development') {
+            if (import.meta.env?.DEV) {
                 spacingEngineRef.current.logDebugInfo(layout);
             }
         };
