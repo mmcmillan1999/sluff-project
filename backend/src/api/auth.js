@@ -219,14 +219,22 @@ module.exports = function(pool, bcrypt, jwt, io) {
                 );
 
                 const resetUrl = `${process.env.CLIENT_ORIGIN}/reset-password?token=${resetToken}`;
-                await sendEmail({
-                    to: user.email,
-                    subject: "Sluff Password Reset Request",
-                    text: `You requested a password reset. Click this link to reset your password: ${resetUrl}`,
-                    html: `<h1>Password Reset Request</h1><p>You requested a password reset for your Sluff account. Please click the link below to set a new password. This link is valid for one hour.</p><a href="${resetUrl}" style="padding: 10px 15px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">Reset Password</a><p>If you did not request this, you can safely ignore this email.</p>`,
-                });
+                try {
+                    await sendEmail({
+                        to: user.email,
+                        subject: "Sluff Password Reset Request",
+                        text: `You requested a password reset. Click this link to reset your password: ${resetUrl}`,
+                        html: `<h1>Password Reset Request</h1><p>You requested a password reset for your Sluff account. Please click the link below to set a new password. This link is valid for one hour.</p><a href="${resetUrl}" style="padding: 10px 15px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">Reset Password</a><p>If you did not request this, you can safely ignore this email.</p>`,
+                    });
+                } catch (emailError) {
+                    // Email provider is down (SendGrid out of credits, June 2026).
+                    // The reset token can't be delivered, so be honest about it
+                    // instead of returning a generic internal error.
+                    console.error(`⚠️ Password reset email failed for ${user.email}:`, emailError.message);
+                    return res.status(503).json({ message: "Password reset emails are temporarily unavailable. Please contact the site admin to reset your password." });
+                }
             }
-            
+
             res.status(200).json({ message: "If an account with that email exists, a password reset link has been sent." });
 
         } catch (error) {
