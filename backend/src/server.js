@@ -26,18 +26,25 @@ const insuranceHandler = require('./core/handlers/insuranceHandler');
 const app = express();
 const server = http.createServer(app);
 
-// --- MODIFIED CORS SETUP ---
-// Allow multiple origins for local development
-const allowedOrigins = process.env.CLIENT_ORIGIN 
-    ? [process.env.CLIENT_ORIGIN]
-    : ["http://localhost:3003"];
+// --- CORS SETUP ---
+// All known production origins, plus whatever CLIENT_ORIGIN adds.
+const allowedOrigins = [
+    "https://playsluff.com",
+    "https://www.playsluff.com",
+    "https://playsluff.netlify.app",
+    "https://sluff.netlify.app",
+];
+if (process.env.CLIENT_ORIGIN && !allowedOrigins.includes(process.env.CLIENT_ORIGIN)) {
+    allowedOrigins.push(process.env.CLIENT_ORIGIN);
+}
 
-// Add additional local development origins if needed
+// Add local development origins
 if (process.env.NODE_ENV !== 'production') {
     allowedOrigins.push(
-        "http://10.0.0.40:3003",
+        "http://localhost:3000",
         "http://localhost:3001",
-        "http://localhost:3000"
+        "http://localhost:3003",
+        "http://10.0.0.40:3003"
     );
 }
 
