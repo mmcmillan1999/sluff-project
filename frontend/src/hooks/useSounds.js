@@ -73,12 +73,39 @@ export const useSounds = () => {
         enabledRef.current = true;
     }, [ensureContext]);
 
+    // Safety net: unlock audio on the FIRST user gesture of any kind, so sound
+    // works even on flows that skip the explicit enableSound() call sites
+    // (e.g. auto-rejoining a table after a refresh).
+    useEffect(() => {
+        const unlock = () => {
+            enableSound();
+            window.removeEventListener('pointerdown', unlock);
+            window.removeEventListener('keydown', unlock);
+            window.removeEventListener('touchstart', unlock);
+        };
+        window.addEventListener('pointerdown', unlock);
+        window.addEventListener('keydown', unlock);
+        window.addEventListener('touchstart', unlock);
+        return () => {
+            window.removeEventListener('pointerdown', unlock);
+            window.removeEventListener('keydown', unlock);
+            window.removeEventListener('touchstart', unlock);
+        };
+    }, [enableSound]);
+
     const playSound = useCallback((soundName) => {
         // Muted players never touch the audio session at all
-        if (!enabledRef.current || mutedRef.current) return;
+        if (mutedRef.current) return;
+        if (!enabledRef.current) {
+            console.warn(`[sound] "${soundName}" skipped — audio not unlocked yet (no user gesture)`);
+            return;
+        }
         const ctx = ctxRef.current;
         const buffer = buffersRef.current[soundName];
-        if (!ctx || !buffer) return;
+        if (!ctx || !buffer) {
+            console.warn(`[sound] "${soundName}" skipped — ${!ctx ? 'no audio context' : 'buffer not loaded'}`);
+            return;
+        }
         if (ctx.state === 'suspended') ctx.resume().catch(() => {});
         const source = ctx.createBufferSource();
         source.buffer = buffer;
