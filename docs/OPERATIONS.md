@@ -8,10 +8,10 @@ The "where is everything" file. Update this whenever an account, plan, or URL ch
 | What | Provider | Account / login hint | Notes |
 |---|---|---|---|
 | Domain `playsluff.com` | **Squarespace Domains** (migrated from Google Domains) | Likely Google sign-in at account.squarespace.com | Registered 2025-07-25, **paid through 2030-07-25**. June 2026: on `clientHold` — verify contact email / account standing to reactivate. Nameservers: Google Cloud DNS. |
-| Frontend hosting | **Netlify** | _fill in account email_ | Auto-deploys from `main` on GitHub. Config in `netlify.toml`. |
+| Frontend hosting | **Netlify** (new acct, June 2026) | mmcmillan1999 / team "abc" | Site **playsluff.netlify.app**, auto-deploys `main`, env var `VITE_SERVER_URL` set. OLD account (site "sluff") is locked for non-payment — support contacted/owed balance TBD. |
 | Backend hosting | **Render** | _fill in account email_ | Web service `sluff-backend-pilot` (+ check for other services!). June 2026: suspended, 3 unpaid invoices; was billing ~$508/mo — see Billing history below. |
 | Database | **Render PostgreSQL** | same Render account | `POSTGRES_CONNECT_STRING` env var on the backend service. Free-tier Postgres is deleted after 90 days of nonpayment/expiry. |
-| Email (transactional) | **SendGrid** | _fill in account email_ | Sends as noreply@playsluff.com. `SENDGRID_API_KEY` env var. |
+| Email (transactional) | **SendGrid** | _fill in account email_ | Sends as noreply@playsluff.com. `SENDGRID_API_KEY` env var. **June 2026: account out of credits ("Maximum credits exceeded") — emails don't send.** Registration auto-activates accounts as a workaround (see TEMPORARY note in `backend/src/api/auth.js`); password reset is broken until fixed. Log in at sendgrid.com and restore/choose a plan, or swap to another provider. |
 | Source code | **GitHub** | mmcmillan1999/sluff-project | `main` = deploy branch, `Local_Dev` = dev branch. |
 | AI providers (bot brains) | OpenAI, Anthropic, Google AI Studio, Groq | _fill in account emails_ | Keys in backend/.env locally and Render env vars in prod. |
 
