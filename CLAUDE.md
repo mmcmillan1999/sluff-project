@@ -1,124 +1,49 @@
-# CLAUDE.md - Project Context for Claude Code
+# CLAUDE.md — Sluff Card Game
 
-## Project: Sluff Card Game
-A real-time multiplayer card game with WebSocket communication, built with React frontend and Node.js backend.
+Real-time multiplayer trick-taking card game (4-player Sluff) with LLM-powered bot opponents.
 
-## Key Information
-- **Project type**: Full-stack web application
-- **Main languages**: JavaScript (React, Node.js)
-- **Key dependencies**: React, Socket.io, Express, PostgreSQL
-- **Deployment**: Netlify (frontend), Heroku (backend)
+## Stack
+- **Frontend** (`/frontend`): React 19 + Vite 6, plain JS (no TypeScript), Socket.IO client, CSS files (no framework). Tests: Vitest + Testing Library.
+- **Backend** (`/backend`): Node 22, Express 4, Socket.IO 4, PostgreSQL (`pg`), JWT auth, SendGrid email. Tests: plain-Node suite in `backend/tests` (`run_all_tests.js`).
+- **AI bots** (`backend/src/services/aiService.js`): multi-provider (OpenAI, Anthropic, Google, Groq) with a single `MODELS` registry, legacy-ID aliases, and a cross-provider fallback chain. Verify model changes with `node scripts/smoke-test-ai.js`.
 
-## Important Commands
-- **Frontend Dev**: `cd frontend && npm start`
-- **Frontend Build**: `cd frontend && npm run build`
-- **Backend**: `cd backend && npm start`
-- **Debug Overlay**: Press `Shift+D` in game
-- **Deploy to Netlify**: Auto-deploys from GitHub main branch
-
-## Project Structure
-- `/frontend/` - React application
-  - `/src/components/` - React components
-  - `/src/components/game/` - Game-specific components
-  - `/public/assets/` - Images and static assets
-- `/backend/` - Node.js server
-  - WebSocket handling
-  - Game state management
-  - PostgreSQL database integration
-
-## Development Notes
-- All game layout uses viewport units (vh/vw) for responsive scaling
-- Cards maintain 5:7 aspect ratio (width = height * 0.714)
-- Header fixed at 7.5vh, game view uses remaining space
-- Z-index hierarchy carefully managed for overlays and modals
-
-## 🎯 Core Layout Systems (Updated: 8/23/2025)
-
-### PlayerSeat Positioning System ✅
-- **Wrapper pattern** with anchor points (bottom-center pinning)
-- **Collision prevention mode** triggers when seat width > 25vw
-- Automatic repositioning: West→1vw, East→99vw @ 35vh with 90° rotations
-- Fixed dimensions: 7vh height × 2.5 aspect ratio = 17.5vh width
-- See: `PLAYERSEAT_POSITIONING_SYSTEM.md` for complete documentation
-
-### Card Spacing Logic ✅
-- **Two modes**: CENTER_MODE (cards fit) vs OVERLAP_MODE (cards overlap)
-- Mathematical foundation from Excel model (perfectly replicated)
-- Key constants: Card height = 10% viewport, aspect ratio = 0.714
-- Edge-anchoring in overlap mode ensures perfect spread
-- See: `CARD_SPACING_LOGIC.md` for complete documentation
-
-### Card Physics Engine ✅
-- Momentum-based dragging with spring return
-- Compatible with both spacing modes
-- Orphaned card cleanup prevents memory leaks
-- Integration tested with all hand sizes (0-15 cards)
-
-## AI Bot System
-- **9 Working Models** with reasoning display
-- Insurance system correctly implements point protection
-- Bot decisions show genuine AI analysis (not pre-programmed)
-
-## Project Status (Updated: 8/23/2025)
-
-### Completed Features
-- ✅ Viewport height (vh) based responsive design throughout the game
-- ✅ Mathematical card spacing with CENTER/OVERLAP modes
-- ✅ PlayerSeat positioning with collision prevention and rotation
-- ✅ Card physics engine with momentum and spring return
-- ✅ Debug overlay system (Shift+D) with rulers and measurements
-- ✅ Simple FrogDiscardOverlay popup for Frog Widow Exchange
-- ✅ Insurance system with point protection mechanics
-- ✅ Draw voting mechanism
-- ✅ Bot players with AI reasoning display
-- ✅ Admin observer mode
-
-### Current Architecture
-
-#### Layout Hierarchy
+## Commands
+```bash
+cd frontend && npm run dev        # Vite dev server, port 3000
+cd frontend && npm run build      # production build -> frontend/build
+cd frontend && npm test           # Vitest
+cd backend && npm run dev:simple  # nodemon server, port 3005
+cd backend && npm test            # game-logic test suite
 ```
-GameTableView (100vh - 7.5vh header)
-├── TableLayout (game-table flex container)
-│   └── table-oval (max-width: min(150vh, 95vw))
-│       ├── Player seats (absolute positioned)
-│       ├── Trick piles (4 fixed positions)
-│       └── Played cards (absolute positioned)
-└── PlayerHand (footer area)
-    └── player-hand-container (fixed 13vh height)
-        └── player-hand-cards (with turn pulse animation)
-```
+Debug overlay in game: `Shift+D`.
 
-#### Key Components
-- **PlayerSeatPositioner**: Wrapper component for absolute seat positioning with collision prevention
-- **PlayerHand**: Mathematical card spacing with CENTER/OVERLAP modes
-- **CardSpacingEngine**: Pure math engine for card position calculations
-- **CardPhysicsEngine**: Momentum-based dragging with spring return
-- **PlayerHandAnchorDebug**: Debug overlay (Shift+D) with measurements and rulers
-- **TableLayout**: Main game container with all table elements
-- **FrogDiscardOverlay**: Simple popup for Frog widow exchange
+## Deployment (verify before assuming — was down June 2026)
+- **Frontend**: Netlify, auto-deploys from `main` (`netlify.toml` at repo root, publishes `frontend/build`, Node 22).
+- **Backend**: Render web service (`npm start`). NOT Heroku.
+- **Database**: PostgreSQL on Render via `POSTGRES_CONNECT_STRING`. Schema created at boot by `backend/src/data/createTables.js` (no migration tool).
+- **URLs**: playsluff.com / api.playsluff.com (domain), sluff-backend-pilot.onrender.com (Render direct). Frontend auto-detects backend URL by hostname in `frontend/src/services/api.js`; `VITE_SERVER_URL` overrides.
 
-## Current Focus: Fine-Tuning Details
+## Env vars (backend/.env, see .env.example)
+`POSTGRES_CONNECT_STRING`, `JWT_SECRET`, `CLIENT_ORIGIN`, `PORT`, `SENDGRID_API_KEY`, `SENDER_EMAIL_ADDRESS`, `ADMIN_SECRET`, `AI_SECRET_KEY`, plus `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GOOGLE_API_KEY` / `GROQ_API_KEY` for bots.
 
-### ✅ Recently Completed (8/22-8/23/2025)
-- PlayerSeat positioning with collision prevention
-- Card spacing mathematics (CENTER/OVERLAP modes)
-- Debug overlay with measurements (Shift+D)
-- Card physics engine integration
-- ESLint warning cleanup
+## Architecture map
+- `backend/src/core/` — GameEngine (state machine), BotPlayer/SuperBot, handlers (bidding, card play, scoring, insurance), legalMoves.
+- `backend/src/events/gameEvents.js` — all Socket.IO handlers.
+- `backend/src/services/GameService.js` — table orchestration.
+- `backend/src/api/` — REST routes (auth, leaderboard, admin, feedback, chat, ai, ping). `/health` endpoint checks DB.
+- `frontend/src/components/game/` — game UI; `GameTableView` orchestrates, `TableLayout` lays out the oval, `PlayerHand` renders the hand.
+- `frontend/src/utils/CardPhysicsEngine.js` — momentum drag physics (~3k lines, the crown jewel).
+- `frontend/src/utils/CardSpacingEngine.js` — CENTER/OVERLAP card spacing math (`docs/CARD_SPACING_LOGIC.md`).
 
-### 🎯 Next Fine-Tuning Tasks
-1. **Turn Indicator Polish**: Ensure pulse animation properly surrounds PlayerHand
-2. **Table Centering**: Verify table oval is perfectly centered
-3. **Container Boundaries**: Fine-tune all margins and padding
-4. **Visual Polish**: Ensure all transitions are smooth
+## Conventions
+- Game layout sizes in vh/vw only; cards keep 5:7 aspect ratio; header is 7.5vh.
+- Positioning uses wrapper components (`docs/PLAYERSEAT_POSITIONING_SYSTEM.md`).
+- 4-space indent, single quotes, CommonJS in backend, ESM in frontend.
 
-### 📚 Key Documentation Files
-- `PLAYERSEAT_POSITIONING_SYSTEM.md` - Player seat positioning guide
-- `CARD_SPACING_LOGIC.md` - Card spacing mathematics
-- `CARD_PHYSICS_TODO.md` - Physics implementation notes
+## Known quirks
+- 11 Vitest failures in physics/spacing suites are stale Aug-2025 behavioral expectations, not regressions — don't "fix" engine behavior to satisfy them without testing real gameplay.
+- `docs/archive/` is historical; don't treat as current.
+- Local Python tooling in `tools/legacy-agents/` is unrelated to the app (gitignored).
 
-### 🔑 Design Principles
-1. **Wrapper Pattern**: Use wrappers for positioning, keep content separate
-2. **Viewport Units**: All sizing in vh/vw for consistency
-3. **Mathematical Precision**: All spacing calculated, not eyeballed
-4. **Debug First**: Always have visual debugging available (Shift+D)
+## Goals (June 2026)
+Revive deployment (Render + domain), keep modernizing, then App Store release via a Capacitor wrapper (PWA manifest exists; no service worker or native shell yet).
