@@ -47,24 +47,9 @@ Thumbs.db
 
 # Claude AI files
 .claude/
-CLAUDE.md
 
-# Development tools and scripts
-agent.bat
-agents.bat
-mybrain.bat
-mybrain-agents.bat
-agents_cli.py
-analyze_ports.py
-show_agents.py
-agents/
-Addons/
-PORT_STANDARDS.md
-
-# Backend analysis scripts (development tools)
-backend/src/analyze-bot-performance.js
-backend/src/check-bot-games.js
-backend/src/check-insurance-logs.js
+# Legacy local tooling (archived, not part of the app)
+tools/legacy-agents/
 
 # Package lock files (keeping for now)
 # package-lock.json
