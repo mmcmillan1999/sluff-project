@@ -120,7 +120,9 @@ module.exports = function(pool, bcrypt, jwt, io) {
             const tokens = parseFloat(tokenResult.rows[0].tokens || 0).toFixed(2);
 
             const payload = { id: user.id, username: user.username, is_admin: user.is_admin };
-            const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1d' });
+            // 90-day sessions: sign in once, stay signed in (chess.com-style).
+            // Logout still works client-side; rotating JWT_SECRET force-logs-out everyone.
+            const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '90d' });
 
             try {
                 const loginMsgQuery = `
