@@ -67,11 +67,41 @@ export const useSounds = () => {
     }, []);
 
     const enableSound = useCallback(() => {
-        // Must be called from a user gesture (browsers gate audio on interaction)
+        // Must be called from a user gesture (browsers gate audio on interaction).
         const ctx = ensureContext();
-        if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
+        if (!ctx) return;
+        if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+        // iOS Safari won't actually play audio after a bare resume() — it needs a
+        // real (silent) buffer STARTED inside the user gesture to fully unlock the
+        // audio session. This is the canonical Web Audio unlock and is what makes
+        // sound work on iPhone, not just desktop.
+        try {
+            const silent = ctx.createBuffer(1, 1, 22050);
+            const source = ctx.createBufferSource();
+            source.buffer = silent;
+            source.connect(ctx.destination);
+            source.start(0);
+        } catch { /* unlock is best-effort */ }
         enabledRef.current = true;
     }, [ensureContext]);
+
+    // iOS suspends the AudioContext whenever the app is backgrounded; once we've
+    // unlocked via a gesture, resume() is allowed on visibility/focus so sound
+    // keeps working after the user switches apps and comes back.
+    useEffect(() => {
+        const resumeIfNeeded = () => {
+            const ctx = ctxRef.current;
+            if (ctx && ctx.state === 'suspended' && enabledRef.current) {
+                ctx.resume().catch(() => {});
+            }
+        };
+        document.addEventListener('visibilitychange', resumeIfNeeded);
+        window.addEventListener('focus', resumeIfNeeded);
+        return () => {
+            document.removeEventListener('visibilitychange', resumeIfNeeded);
+            window.removeEventListener('focus', resumeIfNeeded);
+        };
+    }, []);
 
     // Safety net: unlock audio on the FIRST user gesture of any kind, so sound
     // works even on flows that skip the explicit enableSound() call sites

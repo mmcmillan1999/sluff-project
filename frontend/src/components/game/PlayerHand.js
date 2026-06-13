@@ -1,6 +1,7 @@
 // frontend/src/components/game/PlayerHand.js
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import './PlayerHand.css';
 import { RANKS_ORDER, SUIT_SORT_ORDER } from '../../constants';
 import { getLegalMoves } from '../../utils/legalMoves';
@@ -438,7 +439,11 @@ const PlayerHand = ({
                 7
             );
             
-            return (
+            // Portal the 14-card discard overlay to <body> so it escapes the
+            // game-footer's stacking context (z-index:10) — otherwise the table's
+            // trick piles (z-index:15) render on top and hide cards during the
+            // discard selection. At body level its z-index:100 wins cleanly.
+            return createPortal(
                 <>
                     {/* Render cards outside container with fixed positioning */}
                     {/* Top row - positioned higher on screen */}
@@ -523,10 +528,11 @@ const PlayerHand = ({
                             ? 'Confirm Discards' 
                             : `Select ${3 - actualSelectedDiscards.length} more`}
                     </button>
-                </>
+                </>,
+                document.body
             );
         }
-        
+
         // Single row layout for less than 14 cards (shouldn't happen in Frog, but fallback)
         return (
             <div className="player-hand-container" style={{ flexDirection: 'column' }}>
