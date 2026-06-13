@@ -10,6 +10,7 @@ import PlayerSeat from './game/PlayerSeat';
 import ActionControls from './game/ActionControls';
 import InsurancePrompt from './game/InsurancePrompt';
 import IosPwaPrompt from './game/IosPwaPrompt';
+import { END_ROUND_TOTAL_MS } from '../config/endRoundTiming';
 import LobbyChat from './LobbyChat';
 import AdminObserverMode from './AdminObserverMode';
 import LayoutDevPanel from './LayoutDevPanel';
@@ -44,6 +45,8 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const highBidRef = useRef(null);
     const passedCountRef = useRef(0);
     const trumpSuitRef = useRef(null);
+    const roundModalTimerRef = useRef(null);
+    const roundModalScheduledRef = useRef(false);
     const insurancePromptShownRef = useRef(false);
     const errorTimerRef = useRef(null);
     const dropZoneRef = useRef(null);
@@ -202,13 +205,28 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         }
     }, [currentTableState, playerId]);
     
+    // Hold the recap modal until the end-of-round celebration finishes (players
+    // animate the final trick + widow reveal first). Spectators see it immediately.
     useEffect(() => {
-        if (currentTableState) {
-            const { state, roundSummary } = currentTableState;
-            const isModalState = state === "WidowReveal" || state === "Awaiting Next Round Trigger" || state === "Game Over";
-            setShowRoundSummaryModal(!!(roundSummary && isModalState));
+        if (!currentTableState) return undefined;
+        const { state, roundSummary } = currentTableState;
+        const isModalState = state === "WidowReveal" || state === "Awaiting Next Round Trigger" || state === "Game Over";
+        if (roundSummary && isModalState) {
+            if (!roundModalScheduledRef.current) {
+                roundModalScheduledRef.current = true;
+                const delay = isSpectator ? 0 : END_ROUND_TOTAL_MS;
+                roundModalTimerRef.current = setTimeout(() => setShowRoundSummaryModal(true), delay);
+            }
+        } else {
+            roundModalScheduledRef.current = false;
+            if (roundModalTimerRef.current) {
+                clearTimeout(roundModalTimerRef.current);
+                roundModalTimerRef.current = null;
+            }
+            setShowRoundSummaryModal(false);
         }
-    }, [currentTableState]);
+        return undefined;
+    }, [currentTableState, isSpectator]);
 
     useEffect(() => {
         if (!currentTableState || !selfPlayerName || isSpectator) return;

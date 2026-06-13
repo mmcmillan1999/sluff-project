@@ -1,10 +1,16 @@
 // frontend/src/components/game/TableLayout.js
-import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useViewport } from '../../hooks/useViewport';
 import ScoreProgressBar from './ScoreProgressBar';
 import PlayerSeatPositioner from './PlayerSeatPositioner';
 import WidowSeat from './WidowSeat';
 import { PLAYER_SEAT_CONFIG, getSeatConfig } from '../../config/PlayerSeatConfig';
+import {
+    FINAL_TRICK_HOLD_MS, FINAL_TRICK_FLY_MS,
+    BANNER_START_MS, BANNER_DURATION_MS,
+    WIDOW_TO_CENTER_START_MS, WIDOW_TO_CENTER_MS,
+    WIDOW_HOLD_MS, WIDOW_TO_PILE_MS,
+} from '../../config/endRoundTiming';
 import './KeyAndModal.css';
 import './TableLayout.css';
 import { SUIT_SYMBOLS } from '../../constants';
@@ -46,6 +52,18 @@ const TableLayout = ({
     // Refs to the played-card "fly" wrappers (one per seat) + the hold-then-fly timer.
     const flyRefs = useRef({});
     const flyTimerRef = useRef(null);
+    // End-of-round celebration: "WIDOW REVEAL!" banner + the widow cards flying
+    // from the widow pile to center and on to the awarded team's pile.
+    const [widowRevealVisible, setWidowRevealVisible] = useState(false);
+    const [widowCelebrationActive, setWidowCelebrationActive] = useState(false);
+    const widowCardRefs = useRef([]);
+    const endRoundTimersRef = useRef([]);
+    const endRoundKeyRef = useRef(null);
+
+    const clearEndRoundTimers = () => {
+        endRoundTimersRef.current.forEach(clearTimeout);
+        endRoundTimersRef.current = [];
+    };
 
     useEffect(() => {
         return () => {
@@ -58,7 +76,38 @@ const TableLayout = ({
             if (flyTimerRef.current) {
                 clearTimeout(flyTimerRef.current);
             }
+            clearEndRoundTimers();
         };
+    }, []);
+
+    // Shared helper: measure the played cards + the winning pile, hold, then slide
+    // and shrink the cards onto that pile. Used by both the per-trick linger and
+    // the final trick of the round.
+    const flyTrickToWinnerPile = useCallback((winnerIsBidder) => {
+        const targetEl = document.querySelector(`.trick-pile-base.${winnerIsBidder ? 'bidder' : 'defender'}-base`);
+        if (!targetEl) return; // graceful fallback: cards simply remain, then unmount
+        const t = targetEl.getBoundingClientRect();
+        const tcx = t.left + t.width / 2;
+        const tcy = t.top + t.height / 2;
+
+        const cards = Object.values(flyRefs.current).filter(Boolean);
+        cards.forEach((el) => {
+            const r = el.getBoundingClientRect();
+            if (!r.width) return;
+            el.__fly = { dx: tcx - (r.left + r.width / 2), dy: tcy - (r.top + r.height / 2) };
+            el.style.transition = 'none';
+            el.style.transform = 'translate(0px, 0px) scale(1)';
+            if (el.parentElement) el.parentElement.style.zIndex = '40';
+            void el.offsetWidth; // force reflow so the fly animates from home
+        });
+
+        flyTimerRef.current = setTimeout(() => {
+            cards.forEach((el) => {
+                if (!el.__fly) return;
+                el.style.transition = `transform ${FINAL_TRICK_FLY_MS}ms cubic-bezier(0.45, 0.05, 0.4, 1)`;
+                el.style.transform = `translate(${el.__fly.dx}px, ${el.__fly.dy}px) scale(0.6)`;
+            });
+        }, FINAL_TRICK_HOLD_MS);
     }, []);
 
     // Track trump broken state changes and trigger announcement
@@ -86,45 +135,15 @@ const TableLayout = ({
         setPreviousTrumpBroken(trumpBroken);
     }, [currentTableState, previousTrumpBroken]);
 
-    // "Magnet" the completed trick onto the winning pile: hold the cards briefly,
-    // then slide + shrink them onto the winner's pile instead of just vanishing.
-    // Keyed on state only so mid-linger re-renders don't cancel the pending fly.
+    // "Magnet" the completed trick onto the winning pile during the per-trick
+    // linger. Keyed on state only so mid-linger re-renders don't cancel the fly.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useLayoutEffect(() => {
         const { state, lastCompletedTrick, bidWinnerInfo } = currentTableState;
         if (state !== 'TrickCompleteLinger' || isSpectator || !lastCompletedTrick || !bidWinnerInfo) {
             return undefined;
         }
-
-        const winnerIsBidder = lastCompletedTrick.winnerName === bidWinnerInfo.playerName;
-        const targetEl = document.querySelector(`.trick-pile-base.${winnerIsBidder ? 'bidder' : 'defender'}-base`);
-        if (!targetEl) return undefined; // graceful fallback: cards simply remain, then unmount
-
-        const t = targetEl.getBoundingClientRect();
-        const tcx = t.left + t.width / 2;
-        const tcy = t.top + t.height / 2;
-
-        const cards = Object.values(flyRefs.current).filter(Boolean);
-        cards.forEach((el) => {
-            const r = el.getBoundingClientRect();
-            if (!r.width) return;
-            el.__fly = { dx: tcx - (r.left + r.width / 2), dy: tcy - (r.top + r.height / 2) };
-            // Start from home with no transition, and lift above the pile (z-index 15).
-            el.style.transition = 'none';
-            el.style.transform = 'translate(0px, 0px) scale(1)';
-            if (el.parentElement) el.parentElement.style.zIndex = '40';
-            void el.offsetWidth; // force reflow so the fly animates from home
-        });
-
-        // Hold ~0.63s so players register the trick, then drag onto the pile over ~1.2s.
-        flyTimerRef.current = setTimeout(() => {
-            cards.forEach((el) => {
-                if (!el.__fly) return;
-                el.style.transition = 'transform 1.2s cubic-bezier(0.45, 0.05, 0.4, 1)';
-                el.style.transform = `translate(${el.__fly.dx}px, ${el.__fly.dy}px) scale(0.6)`;
-            });
-        }, 630);
-
+        flyTrickToWinnerPile(lastCompletedTrick.winnerName === bidWinnerInfo.playerName);
         return () => {
             if (flyTimerRef.current) {
                 clearTimeout(flyTimerRef.current);
@@ -132,6 +151,100 @@ const TableLayout = ({
             }
         };
     }, [currentTableState.state]);
+
+    // End-of-round celebration sequence. The final (11th) trick skips the linger
+    // and jumps straight to scoring, so we run the whole flourish here when the
+    // round-end state arrives, then GameTableView delays the recap modal to match.
+    //   1) magnet the final trick onto its pile
+    //   2) "WIDOW REVEAL!" banner
+    //   3) widow cards fly from the widow pile to center
+    //   4) hold in center
+    //   5) widow cards fly to the awarded team's pile
+    // Keyed on state only so the long sequence isn't cancelled by re-renders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useLayoutEffect(() => {
+        const { state, roundSummary, lastCompletedTrick, bidWinnerInfo } = currentTableState;
+        const isRoundEnd = (state === 'Awaiting Next Round Trigger' || state === 'Game Over')
+            && roundSummary && lastCompletedTrick && bidWinnerInfo && !isSpectator;
+
+        if (!isRoundEnd) {
+            // Reset once we've moved on to the next round / away from the recap.
+            if (endRoundKeyRef.current) {
+                endRoundKeyRef.current = null;
+                clearEndRoundTimers();
+                setWidowRevealVisible(false);
+                setWidowCelebrationActive(false);
+            }
+            return;
+        }
+
+        // Run the sequence once per round-end (roundSummary is a fresh object each round).
+        if (endRoundKeyRef.current === roundSummary) return;
+        endRoundKeyRef.current = roundSummary;
+        clearEndRoundTimers();
+
+        // 1) Final trick onto the winning pile.
+        flyTrickToWinnerPile(lastCompletedTrick.winnerName === bidWinnerInfo.playerName);
+
+        // 2) Banner.
+        endRoundTimersRef.current.push(setTimeout(() => setWidowRevealVisible(true), BANNER_START_MS));
+        endRoundTimersRef.current.push(setTimeout(() => setWidowRevealVisible(false), BANNER_START_MS + BANNER_DURATION_MS));
+
+        // 3) Mount the widow overlay just before it should start moving; the
+        //    positioning effect below measures + animates it once it's in the DOM.
+        endRoundTimersRef.current.push(setTimeout(() => setWidowCelebrationActive(true), WIDOW_TO_CENTER_START_MS));
+    }, [currentTableState.state]);
+
+    // Drives the widow overlay: measured FLIP from the widow pile -> center
+    // (held) -> the awarded team's pile. Runs when the overlay mounts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useLayoutEffect(() => {
+        if (!widowCelebrationActive) return undefined;
+        const { roundSummary, lastCompletedTrick, bidWinnerInfo } = currentTableState;
+        const cards = widowCardRefs.current.filter(Boolean);
+        if (!cards.length || !roundSummary || !bidWinnerInfo) return undefined;
+
+        const center = (el) => {
+            const r = el.getBoundingClientRect();
+            return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+        };
+        const widowEl = document.querySelector('.trick-pile-base.widow-base');
+        const ovalEl = document.querySelector('.table-oval');
+        // Frog/Solo -> bidder; Heart Solo -> the last-trick winner's team.
+        const widowToBidder = bidWinnerInfo.bid === 'Heart Solo'
+            ? lastCompletedTrick?.winnerName === bidWinnerInfo.playerName
+            : true;
+        const pileEl = document.querySelector(`.trick-pile-base.${widowToBidder ? 'bidder' : 'defender'}-base`);
+        if (!widowEl || !ovalEl || !pileEl) return undefined;
+
+        const src = center(widowEl);
+        const mid = center(ovalEl);
+        const dst = center(pileEl);
+        const place = (x, y, scale) => `translate(${x}px, ${y}px) translate(-50%, -50%) scale(${scale})`;
+
+        cards.forEach((el, i) => {
+            const fan = (i - (cards.length - 1) / 2) * (el.offsetWidth * 0.85 || 60);
+            el.__mid = { x: mid.x + fan, y: mid.y };
+            el.__dst = dst;
+            el.style.transition = 'none';
+            el.style.transform = place(src.x, src.y, 0.55);
+            void el.offsetWidth; // reflow so the move animates from the widow pile
+            el.style.transition = `transform ${WIDOW_TO_CENTER_MS}ms cubic-bezier(0.3, 0.7, 0.3, 1)`;
+            el.style.transform = place(el.__mid.x, el.__mid.y, 1);
+        });
+
+        // After the hold, converge onto the awarded pile.
+        const toPile = setTimeout(() => {
+            cards.forEach((el) => {
+                if (!el.__dst) return;
+                el.style.transition = `transform ${WIDOW_TO_PILE_MS}ms cubic-bezier(0.45, 0.05, 0.4, 1)`;
+                el.style.transform = place(el.__dst.x, el.__dst.y, 0.5);
+            });
+        }, WIDOW_TO_CENTER_MS + WIDOW_HOLD_MS);
+        endRoundTimersRef.current.push(toPile);
+
+        return undefined;
+    }, [widowCelebrationActive]);
 
     const handleTrickPileClick = (clickedPile, pileClass) => {
         const { lastCompletedTrick, bidWinnerInfo } = currentTableState;
@@ -489,6 +602,47 @@ const TableLayout = ({
         );
     };
 
+    const renderWidowRevealAnnouncement = () => {
+        if (!widowRevealVisible) {
+            return null;
+        }
+
+        return (
+            <div className="trump-broken-announcement">
+                <div className="trump-broken-content widow-reveal-content">
+                    <div className="trump-broken-lightning">🃏</div>
+                    <div className="trump-broken-text">WIDOW REVEAL!</div>
+                    <div className="trump-broken-lightning">🃏</div>
+                </div>
+            </div>
+        );
+    };
+
+    // Overlay of the widow cards animated from the widow pile -> center -> awarded
+    // pile during the end-of-round celebration (positioning driven by the effect above).
+    const renderWidowCelebration = () => {
+        if (!widowCelebrationActive) {
+            return null;
+        }
+        const widowCards = currentTableState.roundSummary?.widowForReveal || [];
+        if (!widowCards.length) {
+            return null;
+        }
+        return (
+            <div className="widow-celebration-overlay">
+                {widowCards.map((card, i) => (
+                    <div
+                        key={`${card}-${i}`}
+                        className="widow-celebration-card"
+                        ref={(el) => { widowCardRefs.current[i] = el; }}
+                    >
+                        {renderCard(card, { large: true })}
+                    </div>
+                ))}
+            </div>
+        );
+    };
+
     const renderDealerDeck = () => {
         const { state, dealer, players } = currentTableState;
         
@@ -633,8 +787,9 @@ const TableLayout = ({
         // Get the widow pile position from trick pile calculation
         const widowPileClass = currentTableState._widowPilePosition || 'pile-bottom-left';
         
-        // Get widow cards to display
-        const isRoundOver = state === 'Awaiting Next Round Trigger' || state === 'Game Over';
+        // Get widow cards to display. While the celebration overlay is flying the
+        // widow out, keep the static pile face-down so the cards aren't duplicated.
+        const isRoundOver = (state === 'Awaiting Next Round Trigger' || state === 'Game Over') && !widowCelebrationActive;
         const cardsToDisplay = isRoundOver ? roundSummary?.widowForReveal : (widow || originalDealtWidow);
         const widowSize = cardsToDisplay?.length || 0;
         
@@ -725,6 +880,8 @@ const TableLayout = ({
                 {renderLastTrickOverlay()}
                 {/* Pucks are now rendered individually below */}
                 {renderTrumpBrokenAnnouncement()}
+                {renderWidowRevealAnnouncement()}
+                {renderWidowCelebration()}
                 {renderDealerDeck()}
 
                 {renderProgressBars()}

@@ -416,6 +416,29 @@
     will-change: transform;
 }
 
+/* End-of-round widow celebration: cards fly widow pile -> center -> awarded pile */
+.widow-celebration-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 60;
+}
+
+.widow-celebration-card {
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform-origin: center center;
+    will-change: transform;
+    filter: drop-shadow(0 0.5vh 1vh rgba(0, 0, 0, 0.5));
+}
+
+/* "WIDOW REVEAL!" reuses the trump-broken banner with a gold/purple tint */
+.trump-broken-content.widow-reveal-content {
+    background: linear-gradient(135deg, rgba(88, 28, 135, 0.95), rgba(180, 83, 9, 0.95));
+    border-color: #facc15;
+}
+
 /* The card that won the trick gets a soft pulsing glow during the linger, in the
    winning team's colour (gold = bidder, blue = defender) to match the pile pulse.
    Uses filter (not transform) so it never fights the fly animation's translate/scale. */
