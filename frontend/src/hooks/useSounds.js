@@ -18,6 +18,7 @@ const SOUND_FILES = {
     suitClubs: '/Sounds/suit_clubs_v1.mp3',
     suitDiamonds: '/Sounds/suit_diamonds_v1.mp3',
     roundEnd: '/Sounds/round_end_v1.mp3',
+    drumroll: '/Sounds/drumroll_v1.mp3',
     no_peaking_cheater: '/Sounds/no_peaking_cheater.mp3',
 };
 

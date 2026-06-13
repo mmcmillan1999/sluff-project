@@ -259,8 +259,8 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             if (suitSound) playSound(suitSound);
         }
         trumpSuitRef.current = ts;
-        // Round-complete fanfare (after scoring, before the next round begins).
-        if (state === 'Awaiting Next Round Trigger' && gameStateRef.current !== 'Awaiting Next Round Trigger') playSound('roundEnd');
+        // Note: the round-end fanfare now plays at the widow flip (TableLayout),
+        // not here, so the drumroll has time to build first.
         gameStateRef.current = state;
         // Clear selected discards when leaving Frog Widow Exchange
         if (state !== "Frog Widow Exchange") {

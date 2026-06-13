@@ -9,7 +9,8 @@ import {
     FINAL_TRICK_HOLD_MS, FINAL_TRICK_FLY_MS,
     BANNER_START_MS, BANNER_DURATION_MS,
     WIDOW_TO_CENTER_START_MS, WIDOW_TO_CENTER_MS,
-    WIDOW_HOLD_MS, WIDOW_TO_PILE_MS,
+    WIDOW_FLIP_START_MS, WIDOW_FLIP_MS,
+    WIDOW_TO_PILE_MS, WIDOW_OVERLAY_TO_PILE_MS,
 } from '../../config/endRoundTiming';
 import './KeyAndModal.css';
 import './TableLayout.css';
@@ -56,6 +57,7 @@ const TableLayout = ({
     // from the widow pile to center and on to the awarded team's pile.
     const [widowRevealVisible, setWidowRevealVisible] = useState(false);
     const [widowCelebrationActive, setWidowCelebrationActive] = useState(false);
+    const [widowFlipped, setWidowFlipped] = useState(false);
     const widowCardRefs = useRef([]);
     const endRoundTimersRef = useRef([]);
     const endRoundKeyRef = useRef(null);
@@ -174,6 +176,7 @@ const TableLayout = ({
                 clearEndRoundTimers();
                 setWidowRevealVisible(false);
                 setWidowCelebrationActive(false);
+                setWidowFlipped(false);
             }
             return;
         }
@@ -182,17 +185,37 @@ const TableLayout = ({
         if (endRoundKeyRef.current === roundSummary) return;
         endRoundKeyRef.current = roundSummary;
         clearEndRoundTimers();
+        setWidowFlipped(false);
 
         // 1) Final trick onto the winning pile.
         flyTrickToWinnerPile(lastCompletedTrick.winnerName === bidWinnerInfo.playerName);
 
-        // 2) Banner.
-        endRoundTimersRef.current.push(setTimeout(() => setWidowRevealVisible(true), BANNER_START_MS));
+        // As it lands, fade the trick cards into the pile so a face-up card isn't
+        // left hovering on the pile when the widow reveal begins. (The server never
+        // clears the final trick's cards the way it does for non-final tricks.)
+        endRoundTimersRef.current.push(setTimeout(() => {
+            Object.values(flyRefs.current).filter(Boolean).forEach((el) => {
+                el.style.transition = 'opacity 150ms ease-out';
+                el.style.opacity = '0';
+            });
+        }, FINAL_TRICK_HOLD_MS + FINAL_TRICK_FLY_MS));
+
+        // 2) Banner + drumroll begin (anticipation).
+        endRoundTimersRef.current.push(setTimeout(() => {
+            setWidowRevealVisible(true);
+            if (playSound) playSound('drumroll');
+        }, BANNER_START_MS));
         endRoundTimersRef.current.push(setTimeout(() => setWidowRevealVisible(false), BANNER_START_MS + BANNER_DURATION_MS));
 
-        // 3) Mount the widow overlay just before it should start moving; the
-        //    positioning effect below measures + animates it once it's in the DOM.
+        // 3) Mount the widow overlay (face-down) just before it should start moving;
+        //    the positioning effect below measures + animates it once it's in the DOM.
         endRoundTimersRef.current.push(setTimeout(() => setWidowCelebrationActive(true), WIDOW_TO_CENTER_START_MS));
+
+        // 4) Flip the widow face-up + the round-end fanfare as the payoff.
+        endRoundTimersRef.current.push(setTimeout(() => {
+            setWidowFlipped(true);
+            if (playSound) playSound('roundEnd');
+        }, WIDOW_FLIP_START_MS));
     }, [currentTableState.state]);
 
     // Drives the widow overlay: measured FLIP from the widow pile -> center
@@ -233,14 +256,14 @@ const TableLayout = ({
             el.style.transform = place(el.__mid.x, el.__mid.y, 1);
         });
 
-        // After the hold, converge onto the awarded pile.
+        // After the anticipation + flip + revealed hold, converge onto the awarded pile.
         const toPile = setTimeout(() => {
             cards.forEach((el) => {
                 if (!el.__dst) return;
                 el.style.transition = `transform ${WIDOW_TO_PILE_MS}ms cubic-bezier(0.45, 0.05, 0.4, 1)`;
                 el.style.transform = place(el.__dst.x, el.__dst.y, 0.5);
             });
-        }, WIDOW_TO_CENTER_MS + WIDOW_HOLD_MS);
+        }, WIDOW_OVERLAY_TO_PILE_MS);
         endRoundTimersRef.current.push(toPile);
 
         return undefined;
@@ -636,7 +659,14 @@ const TableLayout = ({
                         className="widow-celebration-card"
                         ref={(el) => { widowCardRefs.current[i] = el; }}
                     >
-                        {renderCard(card, { large: true })}
+                        <div className={`widow-flip${widowFlipped ? ' revealed' : ''}`}>
+                            <div className="widow-flip-face widow-flip-front">
+                                {renderCard(card, { large: true })}
+                            </div>
+                            <div className="widow-flip-face widow-flip-back">
+                                {renderCard(null, { isFaceDown: true, large: true })}
+                            </div>
+                        </div>
                     </div>
                 ))}
             </div>

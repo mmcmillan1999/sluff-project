@@ -71,6 +71,7 @@ const BASES = {
     suit_clubs: 'suit_clubs',
     suit_diamonds: 'suit_diamonds',
     round_end: 'round_end',
+    drumroll: 'drumroll',
 };
 
 const makers = {
@@ -89,6 +90,13 @@ const makers = {
     },
     async suit_diamonds() {
         return tts(VOICES.rachel, 'Diamonds.', { stability: 0.55, similarity_boost: 0.75, style: 0.25, use_speaker_boost: true });
+    },
+    async drumroll() {
+        // Builds anticipation under the face-down widow before the flip/fanfare.
+        return soundGen(
+            'A tense building snare drumroll, a steady military roll that rises in intensity and anticipation over several seconds, no cymbal crash at the end, dry and close, no music.',
+            4.5,
+        );
     },
     async round_end() {
         // Mario-flag vibe without copying the actual tune: an original retro win jingle.

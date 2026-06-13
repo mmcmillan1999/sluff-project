@@ -386,7 +386,10 @@
                 const isCourtney = bot.playerName === "Courtney Sr.";
                 const standardDelay = isCourtney ? 2000 : 1000;
                 const playDelay = isCourtney ? 2400 : 1200;
-                const roundEndDelay = isCourtney ? 16000 : 8000;
+                // Must exceed the client end-of-round celebration (~9.2s, see
+                // frontend endRoundTiming.js) plus modal-viewing time, or a bot
+                // dealer ends the round before the player sees the recap + widow reveal.
+                const roundEndDelay = isCourtney ? 20000 : 14000;
         
                 if (engine.state === 'Dealing Pending' && engine.dealer == botUserId) {
                     scheduleTurnAction(this.dealCards, standardDelay, botUserId);
@@ -428,7 +431,7 @@
                                     }, 3000);
                                 }
                             }
-                        }, 10000); // 10 second delay before reset
+                        }, 16000); // delay before reset — leave time for the end-of-round celebration + modal
                     }
                     break; // Exit the loop since we've handled game over
                 } else if (engine.state === 'Bidding Phase' && engine.biddingTurnPlayerId == botUserId) {

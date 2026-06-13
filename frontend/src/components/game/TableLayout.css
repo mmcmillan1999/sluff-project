@@ -430,7 +430,32 @@
     top: 0;
     transform-origin: center center;
     will-change: transform;
+    perspective: 900px;
     filter: drop-shadow(0 0.5vh 1vh rgba(0, 0, 0, 0.5));
+}
+
+/* 3D flip: starts showing the back (face-down), flips to the front on reveal */
+.widow-flip {
+    position: relative;
+    transform-style: preserve-3d;
+    transition: transform 500ms ease-in-out;
+    transform: rotateY(180deg);
+}
+
+.widow-flip.revealed {
+    transform: rotateY(0deg);
+}
+
+.widow-flip-face {
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+
+.widow-flip-back {
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform: rotateY(180deg);
 }
 
 /* "WIDOW REVEAL!" reuses the trump-broken banner with a gold/purple tint */
