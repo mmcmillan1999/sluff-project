@@ -56,8 +56,18 @@ export const useSounds = () => {
             Object.entries(SOUND_FILES).forEach(async ([name, url]) => {
                 try {
                     const res = await fetch(url);
+                    if (!res.ok) throw new Error(`fetch ${res.status}`);
                     const data = await res.arrayBuffer();
-                    buffersRef.current[name] = await ctxRef.current.decodeAudioData(data);
+                    // iOS Safari historically supports only the CALLBACK form of
+                    // decodeAudioData (the promise form returns undefined / throws on
+                    // older versions), and is pickier about mp3 than desktop Chrome.
+                    // Support both forms so buffers actually decode on iPhone.
+                    buffersRef.current[name] = await new Promise((resolve, reject) => {
+                        let ret;
+                        try { ret = ctxRef.current.decodeAudioData(data, resolve, reject); }
+                        catch (e) { return reject(e); }
+                        if (ret && typeof ret.then === 'function') ret.then(resolve, reject);
+                    });
                 } catch (e) {
                     console.error(`Failed to load sound ${name}:`, e);
                 }

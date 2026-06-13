@@ -400,9 +400,14 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             maxWidth: width,  // Prevent growing
             minHeight: height,  // Prevent shrinking
             maxHeight: height,  // Prevent growing
-            backgroundColor, 
-            color, 
+            backgroundColor,
+            color,
             fontSize: getFontSize(),
+            // Pin the card font on the card itself so rank/suit glyphs keep the
+            // same proportions no matter where the card is mounted — the Frog
+            // discard overlay is portaled to <body>, outside .game-view, so it
+            // can't inherit Merriweather from the game container.
+            fontFamily: '"Merriweather", serif',
             display: 'inline-block',  // Changed from inline-flex for proper positioning
             position: 'relative',  // For absolute positioning of content
             padding: '2px',  // Override TableLayout.css padding
