@@ -77,9 +77,9 @@ function resolveTrick(engine) {
         const effects = [
             { type: 'BROADCAST_STATE' },
             { 
-                type: 'START_TIMER', 
-                payload: { 
-                    duration: 1000, 
+                type: 'START_TIMER',
+                payload: {
+                    duration: 2000, // hold the completed trick so the cards can animate onto the winning pile
                     onTimeout: (engineRef) => {
                         if (engineRef.state === "TrickCompleteLinger") {
                             engineRef.currentTrickCards = [];

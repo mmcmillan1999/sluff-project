@@ -409,10 +409,28 @@
     z-index: 8;
 }
 
-.played-card-bottom { 
-    bottom: 30%; 
-    left: 50%; 
-    transform: translateX(-50%); 
+/* Inner wrapper transformed by the trick "magnet" animation (see TableLayout.js) */
+.trick-card-fly {
+    display: inline-block;
+    transform-origin: center center;
+    will-change: transform;
+}
+
+/* The card that won the trick gets a soft pulsing golden glow during the linger.
+   Uses filter (not transform) so it never fights the fly animation's translate/scale. */
+.trick-card-fly.trick-winning-card {
+    animation: trick-winner-glow 0.85s ease-in-out infinite;
+}
+
+@keyframes trick-winner-glow {
+    0%, 100% { filter: drop-shadow(0 0 0.4vh rgba(255, 205, 40, 0.55)); }
+    50%      { filter: drop-shadow(0 0 1.5vh rgba(255, 205, 40, 0.95)); }
+}
+
+.played-card-bottom {
+    bottom: 30%;
+    left: 50%;
+    transform: translateX(-50%);
 }
 
 .played-card-left { 

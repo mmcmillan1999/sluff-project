@@ -1,5 +1,5 @@
 // frontend/src/components/game/TableLayout.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useViewport } from '../../hooks/useViewport';
 import ScoreProgressBar from './ScoreProgressBar';
 import PlayerSeatPositioner from './PlayerSeatPositioner';
@@ -43,6 +43,9 @@ const TableLayout = ({
     const [previousTrumpBroken, setPreviousTrumpBroken] = useState(false);
     const lastTrickTimerRef = useRef(null);
     const trumpAnnouncementTimerRef = useRef(null);
+    // Refs to the played-card "fly" wrappers (one per seat) + the hold-then-fly timer.
+    const flyRefs = useRef({});
+    const flyTimerRef = useRef(null);
 
     useEffect(() => {
         return () => {
@@ -51,6 +54,9 @@ const TableLayout = ({
             }
             if (trumpAnnouncementTimerRef.current) {
                 clearTimeout(trumpAnnouncementTimerRef.current);
+            }
+            if (flyTimerRef.current) {
+                clearTimeout(flyTimerRef.current);
             }
         };
     }, []);
@@ -79,6 +85,53 @@ const TableLayout = ({
         // Update previous state
         setPreviousTrumpBroken(trumpBroken);
     }, [currentTableState, previousTrumpBroken]);
+
+    // "Magnet" the completed trick onto the winning pile: hold the cards briefly,
+    // then slide + shrink them onto the winner's pile instead of just vanishing.
+    // Keyed on state only so mid-linger re-renders don't cancel the pending fly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useLayoutEffect(() => {
+        const { state, lastCompletedTrick, bidWinnerInfo } = currentTableState;
+        if (state !== 'TrickCompleteLinger' || isSpectator || !lastCompletedTrick || !bidWinnerInfo) {
+            return undefined;
+        }
+
+        const winnerIsBidder = lastCompletedTrick.winnerName === bidWinnerInfo.playerName;
+        const targetEl = document.querySelector(`.trick-pile-base.${winnerIsBidder ? 'bidder' : 'defender'}-base`);
+        if (!targetEl) return undefined; // graceful fallback: cards simply remain, then unmount
+
+        const t = targetEl.getBoundingClientRect();
+        const tcx = t.left + t.width / 2;
+        const tcy = t.top + t.height / 2;
+
+        const cards = Object.values(flyRefs.current).filter(Boolean);
+        cards.forEach((el) => {
+            const r = el.getBoundingClientRect();
+            if (!r.width) return;
+            el.__fly = { dx: tcx - (r.left + r.width / 2), dy: tcy - (r.top + r.height / 2) };
+            // Start from home with no transition, and lift above the pile (z-index 15).
+            el.style.transition = 'none';
+            el.style.transform = 'translate(0px, 0px) scale(1)';
+            if (el.parentElement) el.parentElement.style.zIndex = '40';
+            void el.offsetWidth; // force reflow so the fly animates from home
+        });
+
+        // Hold ~0.43s so players register the trick, then drag onto the pile over ~1.2s.
+        flyTimerRef.current = setTimeout(() => {
+            cards.forEach((el) => {
+                if (!el.__fly) return;
+                el.style.transition = 'transform 1.2s cubic-bezier(0.45, 0.05, 0.4, 1)';
+                el.style.transform = `translate(${el.__fly.dx}px, ${el.__fly.dy}px) scale(0.6)`;
+            });
+        }, 430);
+
+        return () => {
+            if (flyTimerRef.current) {
+                clearTimeout(flyTimerRef.current);
+                flyTimerRef.current = null;
+            }
+        };
+    }, [currentTableState.state]);
 
     const handleTrickPileClick = (clickedPile, pileClass) => {
         const { lastCompletedTrick, bidWinnerInfo } = currentTableState;
@@ -120,23 +173,31 @@ const TableLayout = ({
             return null;
         }
 
-        const getPlayedCardForPlayer = (pName) => {
-            if (!pName) return renderCard(null, { large: true });
-            const cardInfo = (cardsToDisplay || []).find(c => c.playerName === pName);
-            return renderCard(cardInfo?.card, { large: true });
+        const cardFor = (pName) => (pName ? (cardsToDisplay || []).find(c => c.playerName === pName)?.card || null : null);
+
+        // During the linger, highlight the card that actually won the trick.
+        const winnerName = isLingerState ? currentTableState.lastCompletedTrick?.winnerName : null;
+
+        // Each played card sits in a fixed wrapper for positioning; the inner
+        // .trick-card-fly element is what we transform to animate onto the pile.
+        const slot = (posKey, pName, wrapperClass) => {
+            const card = cardFor(pName);
+            const isWinner = !!card && pName === winnerName;
+            const flyClass = `trick-card-fly${isWinner ? ' trick-winning-card' : ''}`;
+            return (
+                <div className={wrapperClass}>
+                    <div className={flyClass} ref={(el) => { flyRefs.current[posKey] = card ? el : null; }}>
+                        {renderCard(card, { large: true })}
+                    </div>
+                </div>
+            );
         };
 
         return (
             <>
-                <div className="played-card-bottom">
-                    {getPlayedCardForPlayer(seatAssignments.self)}
-                </div>
-                <div className="played-card-left">
-                    {getPlayedCardForPlayer(seatAssignments.opponentLeft)}
-                </div>
-                <div className="played-card-right">
-                    {getPlayedCardForPlayer(seatAssignments.opponentRight)}
-                </div>
+                {slot('bottom', seatAssignments.self, 'played-card-bottom')}
+                {slot('left', seatAssignments.opponentLeft, 'played-card-left')}
+                {slot('right', seatAssignments.opponentRight, 'played-card-right')}
             </>
         );
     };
