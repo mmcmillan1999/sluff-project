@@ -416,15 +416,25 @@
     will-change: transform;
 }
 
-/* The card that won the trick gets a soft pulsing golden glow during the linger.
+/* The card that won the trick gets a soft pulsing glow during the linger, in the
+   winning team's colour (gold = bidder, blue = defender) to match the pile pulse.
    Uses filter (not transform) so it never fights the fly animation's translate/scale. */
-.trick-card-fly.trick-winning-card {
-    animation: trick-winner-glow 0.85s ease-in-out infinite;
+.trick-card-fly.trick-winning-card-bidder {
+    animation: trick-winner-glow-gold 0.85s ease-in-out infinite;
 }
 
-@keyframes trick-winner-glow {
-    0%, 100% { filter: drop-shadow(0 0 0.4vh rgba(255, 205, 40, 0.55)); }
-    50%      { filter: drop-shadow(0 0 1.5vh rgba(255, 205, 40, 0.95)); }
+.trick-card-fly.trick-winning-card-defender {
+    animation: trick-winner-glow-blue 0.85s ease-in-out infinite;
+}
+
+@keyframes trick-winner-glow-gold {
+    0%, 100% { filter: drop-shadow(0 0 0.9vh rgba(250, 204, 21, 0.9)) drop-shadow(0 0 1.8vh rgba(250, 204, 21, 0.55)); }
+    50%      { filter: drop-shadow(0 0 2.4vh rgba(245, 158, 11, 1)) drop-shadow(0 0 4.5vh rgba(245, 158, 11, 0.75)); }
+}
+
+@keyframes trick-winner-glow-blue {
+    0%, 100% { filter: drop-shadow(0 0 0.9vh rgba(96, 165, 250, 0.9)) drop-shadow(0 0 1.8vh rgba(96, 165, 250, 0.55)); }
+    50%      { filter: drop-shadow(0 0 2.4vh rgba(59, 130, 246, 1)) drop-shadow(0 0 4.5vh rgba(59, 130, 246, 0.75)); }
 }
 
 .played-card-bottom {

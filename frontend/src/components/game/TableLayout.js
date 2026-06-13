@@ -116,14 +116,14 @@ const TableLayout = ({
             void el.offsetWidth; // force reflow so the fly animates from home
         });
 
-        // Hold ~0.43s so players register the trick, then drag onto the pile over ~1.2s.
+        // Hold ~0.63s so players register the trick, then drag onto the pile over ~1.2s.
         flyTimerRef.current = setTimeout(() => {
             cards.forEach((el) => {
                 if (!el.__fly) return;
                 el.style.transition = 'transform 1.2s cubic-bezier(0.45, 0.05, 0.4, 1)';
                 el.style.transform = `translate(${el.__fly.dx}px, ${el.__fly.dy}px) scale(0.6)`;
             });
-        }, 430);
+        }, 630);
 
         return () => {
             if (flyTimerRef.current) {
@@ -175,15 +175,18 @@ const TableLayout = ({
 
         const cardFor = (pName) => (pName ? (cardsToDisplay || []).find(c => c.playerName === pName)?.card || null : null);
 
-        // During the linger, highlight the card that actually won the trick.
+        // During the linger, highlight the card that actually won the trick, in the
+        // winning team's colour (gold = bidder, blue = defender) to match the pile.
         const winnerName = isLingerState ? currentTableState.lastCompletedTrick?.winnerName : null;
+        const winnerIsBidder = !!winnerName && winnerName === currentTableState.bidWinnerInfo?.playerName;
 
         // Each played card sits in a fixed wrapper for positioning; the inner
         // .trick-card-fly element is what we transform to animate onto the pile.
         const slot = (posKey, pName, wrapperClass) => {
             const card = cardFor(pName);
             const isWinner = !!card && pName === winnerName;
-            const flyClass = `trick-card-fly${isWinner ? ' trick-winning-card' : ''}`;
+            const winnerClass = isWinner ? (winnerIsBidder ? ' trick-winning-card-bidder' : ' trick-winning-card-defender') : '';
+            const flyClass = `trick-card-fly${winnerClass}`;
             return (
                 <div className={wrapperClass}>
                     <div className={flyClass} ref={(el) => { flyRefs.current[posKey] = card ? el : null; }}>

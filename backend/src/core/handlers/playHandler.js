@@ -79,7 +79,7 @@ function resolveTrick(engine) {
             { 
                 type: 'START_TIMER',
                 payload: {
-                    duration: 2000, // hold the completed trick so the cards can animate onto the winning pile
+                    duration: 2200, // hold the completed trick so the cards can animate onto the winning pile
                     onTimeout: (engineRef) => {
                         if (engineRef.state === "TrickCompleteLinger") {
                             engineRef.currentTrickCards = [];
