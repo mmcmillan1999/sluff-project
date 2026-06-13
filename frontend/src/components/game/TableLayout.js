@@ -66,9 +66,10 @@ const TableLayout = ({
                 clearTimeout(trumpAnnouncementTimerRef.current);
             }
             
-            // Show announcement
+            // Show announcement + play the trump-broken accent
             setTrumpBrokenAnnouncementVisible(true);
-            
+            if (playSound) playSound('trumpBroken');
+
             // Hide announcement after 2.5 seconds
             trumpAnnouncementTimerRef.current = setTimeout(() => {
                 setTrumpBrokenAnnouncementVisible(false);

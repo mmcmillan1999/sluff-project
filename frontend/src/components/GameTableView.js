@@ -41,6 +41,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const trickWinnerRef = useRef(null);
     const cardCountRef = useRef(null);
     const gameStateRef = useRef(null);
+    const highBidRef = useRef(null);
     const insurancePromptShownRef = useRef(false);
     const errorTimerRef = useRef(null);
     const dropZoneRef = useRef(null);
@@ -218,6 +219,15 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         if (lastCompletedTrick && lastCompletedTrick.winnerName === selfPlayerName && trickWinnerRef.current !== lastCompletedTrick.winnerName) playSound('trickWin');
         trickWinnerRef.current = lastCompletedTrick?.winnerName;
         if (state === 'Bidding Phase' && gameStateRef.current === 'Dealing Pending') playSound('cardDeal');
+        // Bidding accents: play once each time the winning bid escalates, and on all-pass.
+        const highBid = currentTableState.currentHighestBidDetails?.bid || null;
+        if (highBid && highBid !== highBidRef.current) {
+            if (highBid === 'Frog') playSound('bidFrog');
+            else if (highBid === 'Solo') playSound('bidSolo');
+            else if (highBid === 'Heart Solo') playSound('bidHeartSolo');
+        }
+        highBidRef.current = highBid;
+        if (state === 'AllPassWidowReveal' && gameStateRef.current !== 'AllPassWidowReveal') playSound('bidAllPass');
         gameStateRef.current = state;
         // Clear selected discards when leaving Frog Widow Exchange
         if (state !== "Frog Widow Exchange") {

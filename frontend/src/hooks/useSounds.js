@@ -7,7 +7,12 @@ const SOUND_FILES = {
     turnAlert: '/Sounds/turn_alert.mp3',
     cardPlay: '/Sounds/card_play.mp3',
     trickWin: '/Sounds/trick_win.mp3',
-    cardDeal: '/Sounds/card_dealing_10s_v3.mp3',
+    cardDeal: '/Sounds/card_dealing_3s_v1.mp3',
+    trumpBroken: '/Sounds/trump_broken_v6.mp3',
+    bidFrog: '/Sounds/bid_frog_v1.mp3',
+    bidSolo: '/Sounds/bid_solo_v1.mp3',
+    bidHeartSolo: '/Sounds/bid_heart_solo_v1.mp3',
+    bidAllPass: '/Sounds/bid_all_pass_v1.mp3',
     no_peaking_cheater: '/Sounds/no_peaking_cheater.mp3',
 };
 

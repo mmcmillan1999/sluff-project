@@ -70,3 +70,7 @@ htmlcov/
 
 # Database backups (local only)
 backend/backups/
+
+# Sound audition scratch (generated locally; not for production)
+frontend/public/sound-audition.html
+frontend/public/Sounds/*_v*.mp3

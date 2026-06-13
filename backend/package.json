@@ -18,19 +18,20 @@
     "@anthropic-ai/sdk": "^0.59.0",
     "@google/generative-ai": "^0.24.1",
     "@sendgrid/mail": "^8.1.5",
-    "groq-sdk": "^0.30.0",
-    "openai": "^5.12.2",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.18.2",
+    "groq-sdk": "^0.30.0",
     "jsonwebtoken": "^9.0.2",
     "node-fetch": "^3.3.2",
+    "openai": "^5.12.2",
     "pg": "^8.16.3",
     "socket.io": "^4.5.4",
     "uuid": "^11.1.0"
   },
   "devDependencies": {
+    "ffmpeg-static": "^5.3.0",
     "nodemon": "^3.1.10"
   }
 }
