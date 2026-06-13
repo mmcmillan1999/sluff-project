@@ -50,30 +50,21 @@ module.exports = function(pool, bcrypt, jwt, io) {
                 <p>If you did not register for this account, you can safely ignore this email.</p>
             `;
 
-            // Email delivery must not block registration (SendGrid credits ran
-            // out June 2026). If the verification email fails, activate the
-            // account directly. TEMPORARY: revert to strict verification once
-            // the SendGrid account is restored (see docs/OPERATIONS.md).
-            let emailSent = true;
-            try {
-                await sendEmail({
-                    to: email,
-                    subject: emailSubject,
-                    text: emailText,
-                    html: emailHtml,
-                });
-            } catch (emailError) {
-                emailSent = false;
-                console.error(`⚠️ Verification email failed for ${email}, activating account directly:`, emailError.message);
-                await client.query('UPDATE users SET is_verified = true WHERE id = $1', [newUserId]);
-            }
+            // Send the verification email as part of the registration transaction.
+            // If delivery fails we roll the whole thing back so the user can retry,
+            // rather than leaving them with an unverified account they can't activate.
+            // (Email provider is Resend — see backend/src/services/emailService.js.)
+            await sendEmail({
+                to: email,
+                subject: emailSubject,
+                text: emailText,
+                html: emailHtml,
+            });
 
             await client.query('COMMIT');
 
             res.status(201).json({
-                message: emailSent
-                    ? "Registration successful! Please check your email to verify your account."
-                    : "Registration successful! Your account is ready — you can log in now."
+                message: "Registration successful! Please check your email to verify your account."
             });
 
         } catch (error) {
@@ -82,8 +73,10 @@ module.exports = function(pool, bcrypt, jwt, io) {
             if (error.code === '23505') {
                  return res.status(409).json({ message: "Username or email already exists." });
             }
-            const errorMessage = error.response ? "Error sending verification email." : (error.message || "An unknown error occurred.");
-            res.status(500).json({ message: errorMessage });
+            if (error.message === 'Failed to send email.') {
+                return res.status(502).json({ message: "We couldn't send your verification email. Please try again in a moment." });
+            }
+            res.status(500).json({ message: error.message || "An unknown error occurred." });
         } finally {
             client.release();
         }
@@ -229,11 +222,11 @@ module.exports = function(pool, bcrypt, jwt, io) {
                         html: `<h1>Password Reset Request</h1><p>You requested a password reset for your Sluff account. Please click the link below to set a new password. This link is valid for one hour.</p><a href="${resetUrl}" style="padding: 10px 15px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">Reset Password</a><p>If you did not request this, you can safely ignore this email.</p>`,
                     });
                 } catch (emailError) {
-                    // Email provider is down (SendGrid out of credits, June 2026).
-                    // The reset token can't be delivered, so be honest about it
-                    // instead of returning a generic internal error.
+                    // If the email provider is unavailable the reset token can't be
+                    // delivered, so be honest about it instead of returning a generic
+                    // internal error or a misleading "link sent" success message.
                     console.error(`⚠️ Password reset email failed for ${user.email}:`, emailError.message);
-                    return res.status(503).json({ message: "Password reset emails are temporarily unavailable. Please contact the site admin to reset your password." });
+                    return res.status(503).json({ message: "Password reset emails are temporarily unavailable. Please try again in a moment or contact the site admin." });
                 }
             }
 

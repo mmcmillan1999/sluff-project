@@ -28,6 +28,9 @@ const RequestPasswordReset = ({ onNavigate }) => {
                 <div className="auth-form" style={{ textAlign: 'center' }}>
                     <h3>✅ Request Sent</h3>
                     <p>{successMessage}</p>
+                    <p style={{ fontSize: '0.9em', opacity: 0.85 }}>
+                        The reset link is valid for one hour. If it doesn't arrive within a minute, check your spam folder.
+                    </p>
                     <button onClick={() => onNavigate('login')} className="auth-button login">Back to Login</button>
                 </div>
             ) : (

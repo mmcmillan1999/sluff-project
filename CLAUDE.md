@@ -24,7 +24,7 @@ Debug overlay in game: `Shift+D`.
 - **URLs**: playsluff.com / api.playsluff.com (domain), sluff-backend-pilot.onrender.com (Render direct). Frontend auto-detects backend URL by hostname in `frontend/src/services/api.js`; `VITE_SERVER_URL` overrides.
 
 ## Env vars (backend/.env, see .env.example)
-`POSTGRES_CONNECT_STRING`, `JWT_SECRET`, `CLIENT_ORIGIN`, `PORT`, `SENDGRID_API_KEY`, `SENDER_EMAIL_ADDRESS`, `ADMIN_SECRET`, `AI_SECRET_KEY`, plus `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GOOGLE_API_KEY` / `GROQ_API_KEY` for bots.
+`POSTGRES_CONNECT_STRING`, `JWT_SECRET`, `CLIENT_ORIGIN`, `PORT`, `RESEND_API_KEY` (transactional email; `SENDGRID_API_KEY` is a legacy fallback), `SENDER_EMAIL_ADDRESS`, `ADMIN_SECRET`, `AI_SECRET_KEY`, plus `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GOOGLE_API_KEY` / `GROQ_API_KEY` for bots.
 
 ## Architecture map
 - `backend/src/core/` — GameEngine (state machine), BotPlayer/SuperBot, handlers (bidding, card play, scoring, insurance), legalMoves.

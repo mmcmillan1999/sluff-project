@@ -32,7 +32,6 @@ const allowedOrigins = [
     "https://playsluff.com",
     "https://www.playsluff.com",
     "https://playsluff.netlify.app",
-    "https://sluff.netlify.app",
 ];
 if (process.env.CLIENT_ORIGIN && !allowedOrigins.includes(process.env.CLIENT_ORIGIN)) {
     allowedOrigins.push(process.env.CLIENT_ORIGIN);

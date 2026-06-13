@@ -32,8 +32,11 @@ const Register = ({ onRegisterSuccess, onSwitchToLogin }) => {
             <div className="auth-container">
                 <img src="/SluffLogo.png" alt="Sluff Logo" className="auth-logo" />
                 <div className="auth-form email-sent-message">
-                    <h3 className="auth-success-title">✅ Registration Complete!</h3>
+                    <h3 className="auth-success-title">✅ Check Your Email</h3>
                     <p className="auth-success-text">{successMessage}</p>
+                    <p className="auth-success-text" style={{ fontSize: '0.9em', opacity: 0.85 }}>
+                        The link is valid for 24 hours. If you don't see it within a minute, check your spam folder.
+                    </p>
                     {/* This button now correctly uses the onSwitchToLogin prop */}
                     <button onClick={onSwitchToLogin} className="auth-button login">Back to Login</button>
                 </div>
