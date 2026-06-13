@@ -28,6 +28,9 @@ const FULL_DECK = [
     '6S', '7S', '8S', '9S', 'JS', 'QS', 'KS', '10S', 'AS'
 ];
 
+// Total captured tricks across all players (used to detect when a trick lands).
+const trickTotal = (captured) => Object.values(captured || {}).reduce((acc, t) => acc + (t?.length || 0), 0);
+
 const TableLayout = ({
     currentTableState,
     seatAssignments,
@@ -61,6 +64,12 @@ const TableLayout = ({
     const widowCardRefs = useRef([]);
     const endRoundTimersRef = useRef([]);
     const endRoundKeyRef = useRef(null);
+    // Pile counts lag the server until the magnet slides the cards in, so the
+    // stack only grows once the cards have arrived (not the moment they're played).
+    const [laggedCapturedTricks, setLaggedCapturedTricks] = useState(() => currentTableState.capturedTricks || {});
+    const displayedTrickTotalRef = useRef(trickTotal(currentTableState.capturedTricks));
+    const pendingTrickTargetRef = useRef(null);
+    const laggedTrickTimerRef = useRef(null);
 
     const clearEndRoundTimers = () => {
         endRoundTimersRef.current.forEach(clearTimeout);
@@ -78,9 +87,42 @@ const TableLayout = ({
             if (flyTimerRef.current) {
                 clearTimeout(flyTimerRef.current);
             }
+            if (laggedTrickTimerRef.current) {
+                clearTimeout(laggedTrickTimerRef.current);
+            }
             clearEndRoundTimers();
         };
     }, []);
+
+    // When a trick is captured, hold the pile count until the magnet has slid the
+    // cards onto the pile (~hold + fly). Resets/new rounds update immediately, and
+    // spectators (who don't see the magnet) update immediately too.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => {
+        const captured = currentTableState.capturedTricks || {};
+        const newTotal = trickTotal(captured);
+        const oldTotal = displayedTrickTotalRef.current;
+
+        if (!isSpectator && newTotal > oldTotal) {
+            if (pendingTrickTargetRef.current !== newTotal) {
+                pendingTrickTargetRef.current = newTotal;
+                if (laggedTrickTimerRef.current) clearTimeout(laggedTrickTimerRef.current);
+                laggedTrickTimerRef.current = setTimeout(() => {
+                    setLaggedCapturedTricks(captured);
+                    displayedTrickTotalRef.current = newTotal;
+                    pendingTrickTargetRef.current = null;
+                }, FINAL_TRICK_HOLD_MS + FINAL_TRICK_FLY_MS);
+            }
+        } else if (newTotal !== oldTotal || isSpectator) {
+            if (laggedTrickTimerRef.current) {
+                clearTimeout(laggedTrickTimerRef.current);
+                laggedTrickTimerRef.current = null;
+            }
+            pendingTrickTargetRef.current = null;
+            setLaggedCapturedTricks(captured);
+            displayedTrickTotalRef.current = newTotal;
+        }
+    }, [currentTableState.capturedTricks, isSpectator]);
 
     // Shared helper: measure the played cards + the winning pile, hold, then slide
     // and shrink the cards onto that pile. Used by both the per-trick linger and
@@ -369,7 +411,9 @@ const TableLayout = ({
     };
     
     const renderTrickTallyPiles = () => {
-        const { capturedTricks, bidWinnerInfo, playerOrderActive, lastCompletedTrick } = currentTableState;
+        const { bidWinnerInfo, playerOrderActive, lastCompletedTrick } = currentTableState;
+        // Use the lagged counts so the stack grows only once the magnet lands.
+        const capturedTricks = laggedCapturedTricks;
         if (!bidWinnerInfo) return null;
         
         const bidderName = bidWinnerInfo.playerName;
@@ -817,11 +861,13 @@ const TableLayout = ({
         // Get the widow pile position from trick pile calculation
         const widowPileClass = currentTableState._widowPilePosition || 'pile-bottom-left';
         
-        // Get widow cards to display. While the celebration overlay is flying the
-        // widow out, keep the static pile face-down so the cards aren't duplicated.
-        const isRoundOver = (state === 'Awaiting Next Round Trigger' || state === 'Game Over') && !widowCelebrationActive;
-        const cardsToDisplay = isRoundOver ? roundSummary?.widowForReveal : (widow || originalDealtWidow);
-        const widowSize = cardsToDisplay?.length || 0;
+        // Players watch the animated reveal: the static pile stays face-down, then
+        // becomes an empty plate once the celebration lifts the cards out. Spectators
+        // (who don't see the animation) get the revealed widow.
+        const isRoundOver = state === 'Awaiting Next Round Trigger' || state === 'Game Over';
+        const showRevealed = isRoundOver && isSpectator;
+        const cardsToDisplay = showRevealed ? roundSummary?.widowForReveal : (widow || originalDealtWidow);
+        const widowSize = (widowCelebrationActive && !isSpectator) ? 0 : (cardsToDisplay?.length || 0);
         
         return (
             <div className={`trick-pile-container ${widowPileClass}`}>
@@ -831,7 +877,7 @@ const TableLayout = ({
                             <div className="trick-pile-cards">
                                 {widowSize === 0 ? (
                                     renderCard(null, { isFaceDown: true, style: { opacity: 0.3 }, small: true })
-                                ) : isRoundOver ? (
+                                ) : showRevealed ? (
                                     // Show revealed widow cards stacked
                                     cardsToDisplay.map((card, i) => (
                                         <div key={card + i} style={{ 
