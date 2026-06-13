@@ -18,7 +18,10 @@ const EXT = /_v\d+\.(mp3|webm|ogg|wav|m4a)$/i;
 
 // Sounds we want to record but may not have any variants for yet. They always
 // get a section (with just a record row) so they're auditionable from the start.
-const PLANNED = ['bid_frog', 'bid_solo', 'bid_heart_solo', 'bid_all_pass'];
+const PLANNED = [
+    'bid_frog', 'bid_solo', 'bid_heart_solo', 'bid_all_pass', 'bid_pass',
+    'suit_spades', 'suit_clubs', 'suit_diamonds', 'round_end',
+];
 
 const files = fs.readdirSync(SOUNDS_DIR).filter((f) => EXT.test(f));
 const groups = {};

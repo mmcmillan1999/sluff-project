@@ -13,6 +13,11 @@ const SOUND_FILES = {
     bidSolo: '/Sounds/bid_solo_v1.mp3',
     bidHeartSolo: '/Sounds/bid_heart_solo_v1.mp3',
     bidAllPass: '/Sounds/bid_all_pass_v1.mp3',
+    bidPass: '/Sounds/bid_pass_v1.mp3',
+    suitSpades: '/Sounds/suit_spades_v1.mp3',
+    suitClubs: '/Sounds/suit_clubs_v1.mp3',
+    suitDiamonds: '/Sounds/suit_diamonds_v1.mp3',
+    roundEnd: '/Sounds/round_end_v1.mp3',
     no_peaking_cheater: '/Sounds/no_peaking_cheater.mp3',
 };
 

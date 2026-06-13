@@ -65,7 +65,38 @@ function save(base, buf) {
     console.log(`  ✓ ${path.basename(file)} (${(buf.length / 1024).toFixed(1)} KB)`);
 }
 
+// Output base filename per maker key (defaults to "bid_<key>").
+const BASES = {
+    suit_spades: 'suit_spades',
+    suit_clubs: 'suit_clubs',
+    suit_diamonds: 'suit_diamonds',
+    round_end: 'round_end',
+};
+
 const makers = {
+    async pass() {
+        // A single soft wooden table knock — the classic card-table "knock = pass".
+        return soundGen(
+            'A single soft knuckle knock on a solid wooden table — one quick quiet tap, dry and close-miked, short, no music.',
+            1,
+        );
+    },
+    async suit_spades() {
+        return tts(VOICES.rachel, 'Spades.', { stability: 0.55, similarity_boost: 0.75, style: 0.25, use_speaker_boost: true });
+    },
+    async suit_clubs() {
+        return tts(VOICES.rachel, 'Clubs.', { stability: 0.55, similarity_boost: 0.75, style: 0.25, use_speaker_boost: true });
+    },
+    async suit_diamonds() {
+        return tts(VOICES.rachel, 'Diamonds.', { stability: 0.55, similarity_boost: 0.75, style: 0.25, use_speaker_boost: true });
+    },
+    async round_end() {
+        // Mario-flag vibe without copying the actual tune: an original retro win jingle.
+        return soundGen(
+            'A triumphant retro 8-bit "level complete" victory fanfare — a short ascending celebratory chiptune flourish that resolves on a bright happy chord, like clearing a video game stage, upbeat and rewarding.',
+            3.5,
+        );
+    },
     async frog() {
         return soundGen(
             'A single large bullfrog croak, very low and slow, deep and wet and resonant — a long "rrrrribbit" — natural pond ambience, clear and prominent, dry, no music.',
@@ -115,10 +146,10 @@ const makers = {
     for (const name of names) {
         const make = makers[name];
         if (!make) { console.warn(`! unknown "${name}" (known: ${Object.keys(makers).join(', ')})`); continue; }
-        console.log(`\nbid_${name}:`);
+        console.log(`\n${BASES[name] || `bid_${name}`}:`);
         try {
             const buf = await make();
-            if (buf) save(`bid_${name}`, buf);
+            if (buf) save(BASES[name] || `bid_${name}`, buf);
         } catch (e) {
             console.error(`  ✗ ${name}: ${e.message}`);
         }

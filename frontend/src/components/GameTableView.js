@@ -42,6 +42,8 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const cardCountRef = useRef(null);
     const gameStateRef = useRef(null);
     const highBidRef = useRef(null);
+    const passedCountRef = useRef(0);
+    const trumpSuitRef = useRef(null);
     const insurancePromptShownRef = useRef(false);
     const errorTimerRef = useRef(null);
     const dropZoneRef = useRef(null);
@@ -228,6 +230,19 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         }
         highBidRef.current = highBid;
         if (state === 'AllPassWidowReveal' && gameStateRef.current !== 'AllPassWidowReveal') playSound('bidAllPass');
+        // Individual pass: knock when another player drops out of the bidding.
+        const passedCount = currentTableState.playersWhoPassedThisRound?.length || 0;
+        if (passedCount > passedCountRef.current) playSound('bidPass');
+        passedCountRef.current = passedCount;
+        // Trump-suit announcement when the Solo winner names their suit (S/C/D only).
+        const ts = currentTableState.trumpSuit || null;
+        if (ts && ts !== trumpSuitRef.current && currentTableState.bidWinnerInfo?.bid === 'Solo') {
+            const suitSound = { S: 'suitSpades', C: 'suitClubs', D: 'suitDiamonds' }[ts];
+            if (suitSound) playSound(suitSound);
+        }
+        trumpSuitRef.current = ts;
+        // Round-complete fanfare (after scoring, before the next round begins).
+        if (state === 'Awaiting Next Round Trigger' && gameStateRef.current !== 'Awaiting Next Round Trigger') playSound('roundEnd');
         gameStateRef.current = state;
         // Clear selected discards when leaving Frog Widow Exchange
         if (state !== "Frog Widow Exchange") {
