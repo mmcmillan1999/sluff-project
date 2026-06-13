@@ -18,15 +18,26 @@ const registerGameHandlers = (io, gameService) => {
     io.on("connection", (socket) => {
         console.log(`Socket connected: ${socket.user.username} (ID: ${socket.user.id}, Socket: ${socket.id})`);
 
+        // Reconnection: if this user still holds a seat at any table, put them back
+        // on it deterministically. This runs on every (re)connect — full reload or a
+        // dropped-socket auto-reconnect — and is what lets a player return to their
+        // table after closing/backgrounding the app. It must NOT depend on the old
+        // socket's 'disconnect' having been processed, nor on the async token query.
         const engine = Object.values(gameService.getAllEngines()).find(e => e.players[socket.user.id]);
-        if (engine && engine.players[socket.user.id]?.disconnected) {
+        if (engine) {
+            socket.join(engine.tableId);                       // (1) so broadcasts reach this socket
+            engine.reconnectPlayer(socket.user.id, socket);    // (2) adopt new socket id, clear forfeit
+            gameService.io.to(engine.tableId).emit('gameState', engine.getStateForClient()); // (3) push state now
+
+            // Best-effort token-balance refresh — never gates the rejoin above.
             gameService.pool.query("SELECT SUM(amount) AS tokens FROM transactions WHERE user_id = $1", [socket.user.id])
                 .then(tokenResult => {
-                    const tokens = parseFloat(tokenResult.rows[0].tokens || 0).toFixed(2);
-                    engine.reconnectPlayer(socket.user.id, socket, tokens);
+                    const player = engine.players[socket.user.id];
+                    if (!player) return;
+                    player.tokens = parseFloat(tokenResult.rows[0].tokens || 0).toFixed(2);
                     gameService.io.to(engine.tableId).emit('gameState', engine.getStateForClient());
                 })
-                .catch(err => console.error("Error fetching tokens on reconnect:", err));
+                .catch(err => console.error("Error refreshing tokens on reconnect:", err));
         }
         
         socket.emit("lobbyState", gameService.getLobbyState());
@@ -413,8 +424,16 @@ const registerGameHandlers = (io, gameService) => {
             console.log(`Socket disconnected: ${socket.user.username} (ID: ${socket.user.id}, Socket: ${socket.id})`);
             const enginePlayerIsOn = Object.values(gameService.getAllEngines()).find(e => e.players[socket.user.id]);
             if (enginePlayerIsOn) {
-                enginePlayerIsOn.disconnectPlayer(socket.user.id);
-                gameService.io.to(enginePlayerIsOn.tableId).emit('gameState', enginePlayerIsOn.getStateForClient());
+                const player = enginePlayerIsOn.players[socket.user.id];
+                // Only treat this as a real disconnect if it's still the player's
+                // active socket. On a fast reload the replacement socket reconnects
+                // first and takes over player.socketId; this older socket's late
+                // 'disconnect' must be ignored, or it would mark the freshly
+                // returned player offline again (the core intermittency bug).
+                if (player && player.socketId === socket.id) {
+                    enginePlayerIsOn.disconnectPlayer(socket.user.id);
+                    gameService.io.to(enginePlayerIsOn.tableId).emit('gameState', enginePlayerIsOn.getStateForClient());
+                }
             }
             try {
                 const pool = gameService.pool;

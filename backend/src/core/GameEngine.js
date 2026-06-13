@@ -174,15 +174,24 @@ class GameEngine {
         }
     }
     
-    reconnectPlayer(userId, socket, tokens) {
-        if (!this.players[userId] || !this.players[userId].disconnected) return;
-        console.log(`[${this.tableId}] Reconnecting user ${this.players[userId].playerName}.`);
-        this.players[userId].disconnected = false;
-        this.players[userId].socketId = socket.id;
-        if (tokens !== null) this.players[userId].tokens = tokens;
-        if (this.forfeiture.targetPlayerName === this.players[userId].playerName) {
+    // Re-seat a returning player on `socket`. Idempotent and NOT gated on the
+    // `disconnected` flag: on a fast reload the new socket can connect before the
+    // old socket's 'disconnect' is processed, so the flag may still be false — we
+    // must still adopt the new socket id and clear any pending forfeit either way.
+    // Returns true if the user had a seat here, false otherwise.
+    reconnectPlayer(userId, socket, tokens = null) {
+        const player = this.players[userId];
+        if (!player) return false;
+        if (player.disconnected) {
+            console.log(`[${this.tableId}] Reconnecting user ${player.playerName}.`);
+        }
+        player.disconnected = false;
+        player.socketId = socket.id;
+        if (tokens !== null) player.tokens = tokens;
+        if (this.forfeiture.targetPlayerName === player.playerName) {
              this._clearForfeitTimer();
         }
+        return true;
     }
 
     startGame(requestingUserId) {

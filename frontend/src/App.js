@@ -23,7 +23,11 @@ const SERVER_URL = getServerUrl();
 console.log(`[Socket.IO] Connecting to: ${SERVER_URL}`);
 const socket = io(SERVER_URL, {
     autoConnect: false,
-    reconnectionAttempts: 5,
+    // Keep trying to reconnect indefinitely (with backoff) instead of giving up
+    // after 5 tries — a player who backgrounds the app for a while should still
+    // get their socket back, which is what triggers the server-side rejoin.
+    reconnectionAttempts: Infinity,
+    reconnectionDelayMax: 5000,
     transports: ['websocket', 'polling']
 });
 
@@ -152,6 +156,11 @@ function App() {
                     setCurrentTableState(null);
                 } else {
                     setCurrentTableState(newTableState);
+                    // Return to our seat after a fresh reload/reconnect: the server
+                    // re-seats us and pushes state, but the view was reset to 'lobby'.
+                    // Only auto-switch from the lobby so we don't override an
+                    // intentional view (leaderboard/feedback) while still seated.
+                    setView(v => (v === 'lobby' ? 'gameTable' : v));
                 }
             };
             const onJoinedTable = ({ gameState }) => {
@@ -212,6 +221,26 @@ function App() {
             }
         }
     }, [token, handleLogout, handleLeaveTable]);
+
+    // When the app returns to the foreground (tab focus / mobile resume), make sure
+    // the socket is connected. If it dropped while we were away, reconnecting here
+    // triggers the server to put us back on our table. This is the "close the app
+    // and come back" path.
+    useEffect(() => {
+        if (!token) return;
+        const ensureConnected = () => {
+            if (document.visibilityState === 'visible' && !socket.connected) {
+                socket.auth = { token };
+                socket.connect();
+            }
+        };
+        document.addEventListener('visibilitychange', ensureConnected);
+        window.addEventListener('focus', ensureConnected);
+        return () => {
+            document.removeEventListener('visibilitychange', ensureConnected);
+            window.removeEventListener('focus', ensureConnected);
+        };
+    }, [token]);
 
     const handleJoinTable = (tableId) => {
         enableSound();
