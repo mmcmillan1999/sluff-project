@@ -5,6 +5,8 @@
  * Handles all HTTP communication with the backend, providing a clean interface for components.
  */
 
+import { Capacitor } from '@capacitor/core';
+
 // Smart environment detection - no more manual changes needed!
 const getServerUrl = () => {
     // Check if we have an explicit override in env
@@ -12,16 +14,23 @@ const getServerUrl = () => {
         console.log(`[API] Using override from .env: ${import.meta.env?.VITE_SERVER_URL}`);
         return import.meta.env?.VITE_SERVER_URL;
     }
-    
+
+    // Native app (Capacitor): the WebView's hostname is "localhost", so we MUST
+    // pin to production here — otherwise the shipped app would try to reach a dev
+    // backend on the phone. (Override with VITE_SERVER_URL above for native dev.)
+    if (Capacitor.isNativePlatform()) {
+        return 'https://sluff-backend.onrender.com';
+    }
+
     // Detect based on where the frontend is running
     const hostname = window.location.hostname;
-    
+
     // Local development
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
         // For local dev, always use local backend
         return 'http://localhost:3005';
     }
-    
+
     // Production domains
     if (hostname === 'playsluff.com' || hostname === 'www.playsluff.com') {
         return 'https://sluff-backend.onrender.com';

@@ -32,6 +32,10 @@ const allowedOrigins = [
     "https://playsluff.com",
     "https://www.playsluff.com",
     "https://playsluff.netlify.app",
+    // Capacitor native app origins (iOS sends capacitor://localhost, Android http://localhost).
+    "capacitor://localhost",
+    "ionic://localhost",
+    "http://localhost",
 ];
 if (process.env.CLIENT_ORIGIN && !allowedOrigins.includes(process.env.CLIENT_ORIGIN)) {
     allowedOrigins.push(process.env.CLIENT_ORIGIN);

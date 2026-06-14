@@ -1,0 +1,29 @@
+{
+  "appId": "com.playsluff.app",
+  "appName": "Sluff",
+  "webDir": "build",
+  "server": {
+    "androidScheme": "https",
+    "iosScheme": "capacitor"
+  },
+  "ios": {
+    "contentInset": "always",
+    "backgroundColor": "#1f2a24"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1500,
+      "backgroundColor": "#1f2a24",
+      "showSpinner": false,
+      "launchAutoHide": true
+    },
+    "StatusBar": {
+      "style": "LIGHT",
+      "backgroundColor": "#1f2a24",
+      "overlaysWebView": false
+    },
+    "Keyboard": {
+      "resize": "native"
+    }
+  }
+}

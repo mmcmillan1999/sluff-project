@@ -8,13 +8,20 @@ import '@fontsource/merriweather/400.css';
 import '@fontsource/merriweather/700.css';
 import './index.css';
 import App from './App';
+import ErrorBoundary from './components/ErrorBoundary';
+import { initNative } from './utils/nativeInit';
 import reportWebVitals from './utils/reportWebVitals';
-import './utils/logger'; // Silences console in production  
+import './utils/logger'; // Silences console in production
+
+// Native (Capacitor) startup — no-ops on web.
+initNative();
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </React.StrictMode>
 );
 
