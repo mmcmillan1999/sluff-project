@@ -30,6 +30,15 @@ class CardPhysicsEngine {
         };
         this.MAX_AIM_OFFSET = this.calculateMaxAimOffset();
         this.DOCKING_TIME_LIMIT = 2.5; // seconds - extra time for non-vertical cards to dock
+
+        // Critically-damped settle (the dock-to-center spring). Smaller = snappier.
+        this.SETTLE_SMOOTH_TIME = 0.22;     // position settle time (s)
+        this.SETTLE_ROT_SMOOTH_TIME = 0.18; // rotation-to-upright settle time (s)
+        // Let thrown spin linger: free-spin with this per-frame-ish damping until the
+        // spin bleeds below the threshold, then align to upright. Lower damping or a
+        // lower threshold = spin lingers longer.
+        this.SPIN_DAMPING = 0.96;           // ~0.9s for a hard spin to wind down
+        this.SPIN_ALIGN_THRESHOLD = 1.5;    // rad/s — below this, snap-align to upright
         
         // Velocity thresholds for throw classification
         this.VELOCITY_SLOW_THRESHOLD = 300; // px/s - Below this is slow
@@ -644,18 +653,7 @@ class CardPhysicsEngine {
         // Calculate release velocity
         const velocity = this.calculateVelocity();
         card.velocity = velocity;
-        
-        // Debug: Log velocity angle
-        const releaseAngle = Math.atan2(velocity.y, velocity.x) * 180 / Math.PI;
-        console.log('Release velocity:', {
-            vx: velocity.x.toFixed(1),
-            vy: velocity.y.toFixed(1),
-            angle: releaseAngle.toFixed(1) + '°',
-            interpretation: releaseAngle > 45 && releaseAngle < 135 ? 'DOWNWARD' : 
-                           releaseAngle < -45 && releaseAngle > -135 ? 'UPWARD' :
-                           Math.abs(releaseAngle) < 45 ? 'RIGHTWARD' : 'LEFTWARD'
-        });
-        
+
         // Get current card position for calculations
         const rect = card.element.getBoundingClientRect();
         const currentCenter = {
@@ -681,27 +679,9 @@ class CardPhysicsEngine {
         const aimAnalysis = this.analyzeThrowAim(currentCenter, dropZoneCenter, velocity);
         card.aimOffset = aimAnalysis.offset;
         card.isOnTarget = aimAnalysis.isOnTarget;
-        
-        console.log(`Throw Analysis: ${throwClassification.type} ${aimAnalysis.isOnTarget ? 'on-target' : 'off-target'} throw`, {
-            speed: throwClassification.speed.toFixed(1),
-            offset: aimAnalysis.offset.toFixed(1),
-            reason: aimAnalysis.reason
-        });
-        
-        // IMPORTANT: Preserve angular momentum from dragging
-        // The angular velocity should continue from whatever spin the user imparted
-        // Don't reset or modify it here - let it carry through to the flight
-        
-        console.log('Card released:', {
-            cardId,
-            speed: throwClassification.speed.toFixed(1),
-            dragDuration: ((performance.now() - card.grabTime) / 1000).toFixed(2),
-            throwType: throwClassification.type,
-            currentCenter: { x: currentCenter.x.toFixed(1), y: currentCenter.y.toFixed(1) },
-            dropZoneCenter: dropZoneCenter ? { x: dropZoneCenter.x.toFixed(1), y: dropZoneCenter.y.toFixed(1) } : null,
-            angularVelocity: (card.angularVelocity * 180 / Math.PI).toFixed(1) + '°/s'
-        });
-        
+
+        // Angular momentum from dragging carries through to flight untouched.
+
         // Setup sophisticated flight physics based on throw analysis
         card.targetPosition = {
             x: dropZoneCenter.x - rect.width / 2,
@@ -711,6 +691,10 @@ class CardPhysicsEngine {
         card.isReturning = false;
         card.flightStartTime = performance.now();
         card.currentPosition = { ...currentCenter };
+        // Fresh settle state for the critically-damped dock.
+        card.settleUprightTarget = null;
+        card.isDocking = false;
+        card.dockingCompleted = false;
         
         // Initialize flight physics based on throw type and aim
         this.initializeFlightPhysics(card, currentCenter, dropZoneCenter, aimAnalysis, throwClassification);
@@ -1108,146 +1092,81 @@ class CardPhysicsEngine {
      * @param {number} distance - Distance to target
      * @param {Object} toTarget - Vector to target
      */
+    // Critically-damped smoothing (Unity-style SmoothDamp): eases `current` toward
+    // `target` while carrying `vel.value`, so existing momentum flows in. Stable and
+    // never overshoots, regardless of frame rate.
+    smoothDamp(current, target, vel, smoothTime, dt) {
+        const st = Math.max(0.0001, smoothTime);
+        const omega = 2 / st;
+        const x = omega * dt;
+        const exp = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+        const change = current - target;
+        const temp = (vel.value + omega * change) * dt;
+        vel.value = (vel.value - omega * temp) * exp;
+        return target + (change + temp) * exp;
+    }
+
     updateSophisticatedFlightPhysics(card, deltaTime, distance, toTarget) {
-        const physics = card.flightPhysics;
+        // Final rotation/scale settle once docking has latched (see completeDocking).
+        if (card.isDocking) {
+            const t = Math.min((performance.now() - card.dockStartTime) / 200, 1);
+            const e = this.easeInOutQuad(t);
+            card.rotation = card.dockStartRotation + (card.dockTargetRotation - card.dockStartRotation) * e;
+            card.angularVelocity = 0;
+            card.scale = 1.05 - 0.05 * e;
+            card.position = { ...card.targetPosition };
+            return;
+        }
+
+        // ONE model: a critically-damped spring pulls the card to the dock, seeded
+        // with the thrown velocity so the flick's momentum and direction carry into a
+        // smooth, overshoot-free landing — replacing the old guidance / correction /
+        // force-dock / overshoot-clamp / final-approach stack.
+        const vx = { value: card.velocity.x };
+        const vy = { value: card.velocity.y };
+        card.position.x = this.smoothDamp(card.position.x, card.targetPosition.x, vx, this.SETTLE_SMOOTH_TIME, deltaTime);
+        card.position.y = this.smoothDamp(card.position.y, card.targetPosition.y, vy, this.SETTLE_SMOOTH_TIME, deltaTime);
+        card.velocity.x = vx.value;
+        card.velocity.y = vy.value;
+
+        // Let the thrown spin LINGER: free-spin with damping while it's still going,
+        // and only align to the nearest upright once the spin has mostly bled off
+        // (or as a backstop after the docking time limit). Cards thrown without spin
+        // skip straight to the align branch, so they're unaffected.
         const flightTime = (performance.now() - card.flightStartTime) / 1000;
-        
-        // DOCK CAPTURE ZONE - Prevent skip-over
-        const DOCK_CAPTURE_RADIUS = 100; // Generous capture zone
-        const MAX_DOCK_SPEED = 500; // Max speed for docking
-        
-        if (distance < DOCK_CAPTURE_RADIUS) {
-            const currentSpeed = Math.sqrt(card.velocity.x ** 2 + card.velocity.y ** 2);
-            
-            // Check if we're approaching the dock
-            const approachingDock = (toTarget.x * card.velocity.x + toTarget.y * card.velocity.y) > 0;
-            
-            if (approachingDock) {
-                // Within capture zone and approaching - ensure smooth docking
-                if (currentSpeed > MAX_DOCK_SPEED) {
-                    // Too fast - apply braking
-                    const brakeFactor = MAX_DOCK_SPEED / currentSpeed;
-                    card.velocity.x *= brakeFactor;
-                    card.velocity.y *= brakeFactor;
-                    console.log('Braking for dock approach:', currentSpeed.toFixed(1), '->', MAX_DOCK_SPEED);
-                }
-                
-                // Magnetic pull toward dock center
-                const magneticStrength = (1 - distance / DOCK_CAPTURE_RADIUS) * 200;
-                const dirX = toTarget.x / distance;
-                const dirY = toTarget.y / distance;
-                card.velocity.x += dirX * magneticStrength * deltaTime;
-                card.velocity.y += dirY * magneticStrength * deltaTime;
-                
-                // Check for immediate docking - more forgiving for rotated cards
-                const rotationFactor = Math.abs(Math.cos(card.rotation)); // 1 when vertical, 0 when horizontal
-                const dockingThreshold = 20 + (1 - rotationFactor) * 15; // 20-35 based on rotation
-                if (distance < dockingThreshold) {
-                    this.completeDocking(card, 'Magnetic dock capture');
-                    return;
-                }
-            }
-        }
-        
-        // Apply different physics based on throw characteristics
-        if (physics.isOnTarget) {
-            this.updateOnTargetThrow(card, deltaTime, distance, toTarget, flightTime);
+        const spinStillGoing = Math.abs(card.angularVelocity) >= this.SPIN_ALIGN_THRESHOLD
+            && flightTime < this.DOCKING_TIME_LIMIT;
+        if (spinStillGoing) {
+            card.rotation += card.angularVelocity * deltaTime;
+            card.angularVelocity *= Math.pow(this.SPIN_DAMPING, deltaTime * 60);
         } else {
-            this.updateOffTargetThrow(card, deltaTime, distance, toTarget, flightTime);
-        }
-        
-        // Apply motion with near-dock overshoot protection and viewport clamping
-        let nextX = card.position.x + card.velocity.x * deltaTime;
-        let nextY = card.position.y + card.velocity.y * deltaTime;
-
-        // Compute centers for overshoot detection
-        const cardHalfW = (card.cardDimensions ? card.cardDimensions.width : this.CARD_WIDTH) / 2;
-        const cardHalfH = (card.cardDimensions ? card.cardDimensions.height : this.CARD_HEIGHT) / 2;
-        const nextCenterX = nextX + cardHalfW;
-        const nextCenterY = nextY + cardHalfH;
-        const targetCenterX = card.targetPosition.x + cardHalfW;
-        const targetCenterY = card.targetPosition.y + cardHalfH;
-        const nextToTargetX = targetCenterX - nextCenterX;
-        const nextToTargetY = targetCenterY - nextCenterY;
-        const nextDistance = Math.sqrt(nextToTargetX * nextToTargetX + nextToTargetY * nextToTargetY);
-
-        // If we're close to dock, don't allow a single step to increase distance dramatically
-        // This avoids a last-frame spike that can shoot the card offscreen
-        const NEAR_DOCK_RADIUS = 180; // Slightly larger than capture radius
-        if (distance < NEAR_DOCK_RADIUS) {
-            // If proposed step increases distance notably, clamp step toward target and damp velocity
-            if (nextDistance > distance + 30) {
-                const dirX = distance > 0 ? toTarget.x / distance : 0;
-                const dirY = distance > 0 ? toTarget.y / distance : 0;
-                const maxStep = Math.max(20, distance * 0.5); // Limit how far we can move in one frame near dock
-                nextX = card.position.x + dirX * maxStep;
-                nextY = card.position.y + dirY * maxStep;
-                // Update velocity to reflect clamped step
-                if (deltaTime > 0) {
-                    card.velocity.x = (nextX - card.position.x) / deltaTime;
-                    card.velocity.y = (nextY - card.position.y) / deltaTime;
-                }
+            if (card.settleUprightTarget == null) {
+                card.settleUprightTarget = Math.round(card.rotation / (Math.PI / 2)) * (Math.PI / 2);
             }
+            const vr = { value: card.angularVelocity };
+            card.rotation = this.smoothDamp(card.rotation, card.settleUprightTarget, vr, this.SETTLE_ROT_SMOOTH_TIME, deltaTime);
+            card.angularVelocity = vr.value;
         }
 
-        // Viewport safety clamp to prevent temporary offscreen jumps
-        const PAD = 60; // Allow a little leeway beyond edges
-        const maxX = (window.innerWidth || 0) - (card.cardDimensions ? card.cardDimensions.width : this.CARD_WIDTH) + PAD;
-        const maxY = (window.innerHeight || 0) - (card.cardDimensions ? card.cardDimensions.height : this.CARD_HEIGHT) + PAD;
-        const minX = -PAD;
-        const minY = -PAD;
-        if (isFinite(maxX) && isFinite(maxY)) {
-            if (nextX < minX || nextX > maxX || nextY < minY || nextY > maxY) {
-                // Softly steer back in-bounds by damping velocity
-                card.velocity.x *= 0.8;
-                card.velocity.y *= 0.8;
-                nextX = Math.min(Math.max(nextX, minX), maxX);
-                nextY = Math.min(Math.max(nextY, minY), maxY);
-            }
+        // Ease scale to rest.
+        card.scale += (1.0 - card.scale) * Math.min(1, deltaTime / 0.15);
+
+        // Debug path trace (honored only when tracers are enabled).
+        const cx = card.position.x + (card.cardDimensions ? card.cardDimensions.width / 2 : 40);
+        const cy = card.position.y + (card.cardDimensions ? card.cardDimensions.height / 2 : 60);
+        this.updateActualPath({ x: cx, y: cy });
+
+        // Complete once essentially home, slow, and aligned upright (so we don't snap
+        // the card flat while it's still spinning).
+        const dxNow = card.targetPosition.x - card.position.x;
+        const dyNow = card.targetPosition.y - card.position.y;
+        const distNow = Math.sqrt(dxNow * dxNow + dyNow * dyNow);
+        const speed = Math.sqrt(card.velocity.x ** 2 + card.velocity.y ** 2);
+        const rotAligned = card.settleUprightTarget != null
+            && Math.abs(card.rotation - card.settleUprightTarget) < 0.05;
+        if (distNow < 6 && speed < 40 && rotAligned) {
+            this.completeDocking(card, 'Spring settle');
         }
-        
-        // Smooth final approach when very close - expanded range for rotated cards
-        const currentSpeed = Math.sqrt(card.velocity.x ** 2 + card.velocity.y ** 2);
-        const rotationFactor = Math.abs(Math.cos(card.rotation)); // Account for card rotation
-        const approachThreshold = 30 + (1 - rotationFactor) * 20; // 30-50 based on rotation
-        if (distance < approachThreshold && !physics.wrapAroundActive) {  
-            // Very close - ensure smooth docking
-            const dockX = card.targetPosition.x + card.cardDimensions.width / 2;
-            const dockY = card.targetPosition.y + card.cardDimensions.height / 2;
-            
-            // Blend toward dock position smoothly
-            const magnetFactor = Math.min(0.4, (approachThreshold - distance) / approachThreshold); // Stronger as we get closer
-            const targetSpeed = Math.min(currentSpeed, 200); // Cap speed for final approach
-            
-            const dirX = (dockX - card.position.x) / Math.max(distance, 1);
-            const dirY = (dockY - card.position.y) / Math.max(distance, 1);
-            
-            // Blend velocity instead of replacing it
-            card.velocity.x = card.velocity.x * (1 - magnetFactor) + dirX * targetSpeed * magnetFactor;
-            card.velocity.y = card.velocity.y * (1 - magnetFactor) + dirY * targetSpeed * magnetFactor;
-        }
-        
-        // Safe to move
-    card.position.x = nextX;
-    card.position.y = nextY;
-        
-        // Track actual path for debug visualization
-        const cardCenterX = card.position.x + (card.cardDimensions ? card.cardDimensions.width / 2 : 40);
-        const cardCenterY = card.position.y + (card.cardDimensions ? card.cardDimensions.height / 2 : 60);
-        this.updateActualPath({ x: cardCenterX, y: cardCenterY });
-        
-        // Maintain angular momentum (never alter spin)
-        // More forgiving damping for non-vertical cards
-        // rotationFactor already calculated above for approach threshold
-        if (distance > approachThreshold) {
-            card.angularVelocity *= 0.998; // Almost no damping during flight
-        } else {
-            // Less damping for rotated cards to let them settle naturally
-            const dampingRate = 0.92 + (1 - rotationFactor) * 0.03; // 0.92-0.95 based on rotation
-            card.angularVelocity *= dampingRate;
-        }
-        
-        card.rotation += card.angularVelocity * deltaTime;
     }
     
     /**
