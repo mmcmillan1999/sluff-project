@@ -74,3 +74,16 @@ backend/backups/
 # Sound audition scratch (generated locally; not for production)
 frontend/public/sound-audition.html
 frontend/public/Sounds/*_v*.mp3
+
+# Capacitor native shells (generated on a Mac via `npx cap add ios`)
+# The Xcode/Gradle projects are committed, but their generated artifacts are not.
+frontend/ios/App/Pods/
+frontend/ios/App/App/public/
+frontend/ios/App/build/
+frontend/ios/DerivedData/
+frontend/android/app/build/
+frontend/android/.gradle/
+frontend/android/app/src/main/assets/public/
+*.ipa
+*.apk
+*.aab
