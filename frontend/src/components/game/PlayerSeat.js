@@ -31,16 +31,21 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent, showTrum
     const isBidWinner = bidWinnerInfo?.playerName === playerName;
     const isDefender = bidWinnerInfo && !isBidWinner && playerOrderActive.includes(playerName);
     const isDealer = dealer === userId;
+    // 4-player: the dealer sits the round out — black border marks them.
+    const isSittingOutDealer = isDealer && currentTableState.playerMode === 4 && currentTableState.gameStarted;
     const isTimerRunningForThisPlayer = forfeiture?.targetPlayerName === playerName;
     const isMyTurn = trickTurnPlayerName === playerName;
 
     // Team indication border styling
     let borderColor = '#ccc'; // Default for non-players
     let borderWidth = '2px'; // Default width for non-players
-    
+
     if (disconnected) {
         borderColor = 'red';
         borderWidth = '3px'; // Keep disconnected override
+    } else if (isSittingOutDealer) {
+        borderColor = '#111'; // Black for the sitting-out 4-player dealer
+        borderWidth = '5px';
     } else if (isBidWinner) {
         borderColor = '#ffc107'; // Gold for bidder
         borderWidth = '5px';
@@ -48,7 +53,7 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent, showTrum
         borderColor = '#0d6efd'; // Blue for defenders
         borderWidth = '5px';
     }
-    
+
     const dynamicStyles = {
         border: `${borderWidth} solid ${borderColor}`,
     };
@@ -57,7 +62,8 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent, showTrum
         'player-seat',
         isMyTurn && 'active-turn',
         isBidWinner && 'team-bidder',
-        isDefender && 'team-defender'
+        isDefender && 'team-defender',
+        isSittingOutDealer && 'sitting-out-dealer'
     ].filter(Boolean).join(' ');
 
     const nameClasses = ['player-name', isSelf && 'is-self'].filter(Boolean).join(' ');

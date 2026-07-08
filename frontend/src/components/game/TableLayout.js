@@ -48,6 +48,9 @@ const TableLayout = ({
 }) => {
     const [lastTrickVisible, setLastTrickVisible] = useState(false);
     const [lastTrickPosition, setLastTrickPosition] = useState(null);
+    // 4-player: the sitting-out dealer may peek at the widow (spec privilege)
+    const [widowPeekVisible, setWidowPeekVisible] = useState(false);
+    const widowPeekTimerRef = useRef(null);
     const [trumpBrokenAnnouncementVisible, setTrumpBrokenAnnouncementVisible] = useState(false);
     const { width } = useViewport();
     const [previousTrumpBroken, setPreviousTrumpBroken] = useState(false);
@@ -343,6 +346,44 @@ const TableLayout = ({
         }
     };
 
+    // Widow peek (4-player only): the sitting-out dealer taps the widow pile
+    // to see its cards, same rhythm as the last-trick peek. Anyone else who
+    // taps gets the "no peeking" treatment.
+    const handleWidowPileClick = () => {
+        if (currentTableState.playerMode !== 4) return;
+        const isSittingOutDealer = currentTableState.dealer === playerId;
+        if (isSittingOutDealer) {
+            if (widowPeekTimerRef.current) clearTimeout(widowPeekTimerRef.current);
+            setWidowPeekVisible(true);
+            widowPeekTimerRef.current = setTimeout(() => setWidowPeekVisible(false), 3000);
+        } else if (playSound) {
+            playSound('no_peaking_cheater');
+        }
+    };
+
+    const renderWidowPeekOverlay = () => {
+        const { originalDealtWidow, widowDiscardsForFrogBidder, bidWinnerInfo } = currentTableState;
+        if (!widowPeekVisible || !originalDealtWidow?.length) return null;
+        const widowPileClass = currentTableState._widowPilePosition || 'pile-bottom-left';
+        const showFrogDiscards = bidWinnerInfo?.bid === 'Frog' && widowDiscardsForFrogBidder?.length > 0;
+        return (
+            <div className={`last-trick-overlay-container ${widowPileClass}`}>
+                <h4 className="last-trick-header">Widow</h4>
+                <div className="last-trick-cards">
+                    {originalDealtWidow.map(card => renderCard(card, { key: card, small: true }))}
+                </div>
+                {showFrogDiscards && (
+                    <>
+                        <h4 className="last-trick-header">Frog discards</h4>
+                        <div className="last-trick-cards">
+                            {widowDiscardsForFrogBidder.map(card => renderCard(card, { key: card, small: true }))}
+                        </div>
+                    </>
+                )}
+            </div>
+        );
+    };
+
     const renderPlayedCardsOnTable = () => {
         const isLingerState = currentTableState.state === 'TrickCompleteLinger';
         const cardsToDisplay = isLingerState ? currentTableState.lastCompletedTrick.cards : currentTableState.currentTrickCards;
@@ -379,6 +420,7 @@ const TableLayout = ({
                 {slot('bottom', seatAssignments.self, 'played-card-bottom')}
                 {slot('left', seatAssignments.opponentLeft, 'played-card-left')}
                 {slot('right', seatAssignments.opponentRight, 'played-card-right')}
+                {seatAssignments.opponentAcross && slot('top', seatAssignments.opponentAcross, 'played-card-top')}
             </>
         );
     };
@@ -775,15 +817,13 @@ const TableLayout = ({
             return null;
         }
         
-        const numPlayers = playerOrderActive?.length || 0;
-        const isFourPlayer = numPlayers === 4;
-        
-        // In 4-player games, don't show separate widow seat (dealer is the widow)
-        if (isFourPlayer) {
+        // 4-player: the top seat belongs to the across player, and the widow
+        // is just the pile (the sitting-out dealer can peek it) — no WIDOW seat.
+        // playerOrderActive is the ACTIVE trio, so key off playerMode/seating.
+        if (currentTableState.playerMode === 4 || seatAssignments.opponentAcross) {
             return null;
         }
-        
-        // Only show the widow seat when there are less than 4 players
+        const numPlayers = playerOrderActive?.length || 0;
         if (!playerOrderActive || numPlayers >= 4) {
             return null;
         }
@@ -845,19 +885,12 @@ const TableLayout = ({
             return null;
         }
         
-        const numPlayers = playerOrderActive?.length || 0;
-        const isFourPlayer = numPlayers === 4;
-        
-        // In 4-player games, don't show separate widow pile (dealer is the widow)
-        if (isFourPlayer) {
+        // The widow pile renders in both modes — in 4-player it's also the
+        // sitting-out dealer's peek target (docs/FOUR_PLAYER_SPEC.md).
+        if (!playerOrderActive || playerOrderActive.length === 0) {
             return null;
         }
-        
-        // Only show the widow pile when there are less than 4 players
-        if (!playerOrderActive || numPlayers >= 4) {
-            return null;
-        }
-        
+
         // Get the widow pile position from trick pile calculation
         const widowPileClass = currentTableState._widowPilePosition || 'pile-bottom-left';
         
@@ -869,8 +902,13 @@ const TableLayout = ({
         const cardsToDisplay = showRevealed ? roundSummary?.widowForReveal : (widow || originalDealtWidow);
         const widowSize = (widowCelebrationActive && !isSpectator) ? 0 : (cardsToDisplay?.length || 0);
         
+        const dealerCanPeek = currentTableState.playerMode === 4;
         return (
-            <div className={`trick-pile-container ${widowPileClass}`}>
+            <div
+                className={`trick-pile-container ${widowPileClass}`}
+                onClick={dealerCanPeek ? handleWidowPileClick : undefined}
+                style={dealerCanPeek ? { cursor: 'pointer', pointerEvents: 'auto' } : undefined}
+            >
                 <div className="trick-pile-base widow-base">
                     <div className="trick-pile">
                         <div className="trick-pile-content-wrapper">
@@ -943,8 +981,23 @@ const TableLayout = ({
                     rotation={0}
                     debugMode={showDebugAnchors}
                 />
+                {/* 4-player: the across player takes the top seat (the widow
+                    seat in 3-player). null playerName renders nothing. */}
+                {seatAssignments.opponentAcross && (
+                    <PlayerSeatPositioner
+                        playerName={seatAssignments.opponentAcross}
+                        currentTableState={currentTableState}
+                        isSelf={false}
+                        emitEvent={emitEvent}
+                        renderCard={renderCard}
+                        seatPosition="top"
+                        PlayerSeat={PlayerSeat}
+                        rotation={0}
+                        debugMode={showDebugAnchors}
+                    />
+                )}
 
-                <img 
+                <img
                     src="/SluffLogo.png" 
                     alt="Sluff Watermark" 
                     className="sluff-watermark"
@@ -954,6 +1007,7 @@ const TableLayout = ({
                 {renderTrickTallyPiles()}
                 {renderWidowPile()}
                 {renderLastTrickOverlay()}
+                {renderWidowPeekOverlay()}
                 {/* Pucks are now rendered individually below */}
                 {renderTrumpBrokenAnnouncement()}
                 {renderWidowRevealAnnouncement()}

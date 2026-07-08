@@ -169,42 +169,51 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     }, [currentTableState, isSpectator]);
 
     useEffect(() => {
-        if (currentTableState?.playerOrderActive?.length > 0) {
+        // Seats derive from the full seating roster, not playerOrderActive:
+        // in a 4-player game playerOrderActive shrinks to the 3 active players
+        // (the dealer sits out) but everyone keeps their fixed seat all game.
+        const roster = (currentTableState?.playerMode === 4 && currentTableState?.seatingOrder?.length === 4)
+            ? currentTableState.seatingOrder
+            : currentTableState?.playerOrderActive;
+        if (roster?.length > 0) {
             if (isSpectator) {
                 // For spectators, show all players in a default arrangement
-                const activePlayerNames = currentTableState.playerOrderActive;
-                // console.log('[ADMIN] Spectator seat assignment - active players:', activePlayerNames);
-                if (activePlayerNames.length === 3) {
-                    const assignments = { 
-                        self: activePlayerNames[0], 
-                        opponentLeft: activePlayerNames[1], 
-                        opponentRight: activePlayerNames[2] 
-                    };
-                    // console.log('[ADMIN] Setting 3-player spectator seats:', assignments);
-                    setSeatAssignments(assignments);
-                } else if (activePlayerNames.length === 4) {
-                    const assignments = { 
-                        self: activePlayerNames[0], 
-                        opponentLeft: activePlayerNames[1], 
-                        opponentAcross: activePlayerNames[2],
-                        opponentRight: activePlayerNames[3] 
-                    };
-                    // console.log('[ADMIN] Setting 4-player spectator seats:', assignments);
-                    setSeatAssignments(assignments);
+                if (roster.length === 3) {
+                    setSeatAssignments({
+                        self: roster[0],
+                        opponentLeft: roster[1],
+                        opponentRight: roster[2]
+                    });
+                } else if (roster.length === 4) {
+                    setSeatAssignments({
+                        self: roster[0],
+                        opponentLeft: roster[1],
+                        opponentAcross: roster[2],
+                        opponentRight: roster[3]
+                    });
                 }
             } else if (playerId && currentTableState.players[playerId]) {
-                // For players, show from their perspective
+                // For players, show from their perspective (self at bottom)
                 const myName = getPlayerNameByUserId(playerId);
-                const selfIndex = currentTableState.playerOrderActive.indexOf(myName);
+                const selfIndex = roster.indexOf(myName);
                 if (selfIndex !== -1) {
-                    const numActive = currentTableState.playerOrderActive.length;
-                    const opponentLeftName = currentTableState.playerOrderActive[(selfIndex + 1) % numActive];
-                    const opponentRightName = currentTableState.playerOrderActive[(selfIndex + numActive - 1) % numActive];
-                    setSeatAssignments({ self: myName, opponentLeft: opponentLeftName, opponentRight: opponentRightName });
+                    const n = roster.length;
+                    const opponentLeftName = roster[(selfIndex + 1) % n];
+                    const opponentRightName = roster[(selfIndex + n - 1) % n];
+                    if (n === 4) {
+                        setSeatAssignments({
+                            self: myName,
+                            opponentLeft: opponentLeftName,
+                            opponentAcross: roster[(selfIndex + 2) % n],
+                            opponentRight: opponentRightName
+                        });
+                    } else {
+                        setSeatAssignments({ self: myName, opponentLeft: opponentLeftName, opponentRight: opponentRightName });
+                    }
                 } else { setSeatAssignments({ self: null, opponentLeft: null, opponentRight: null }); }
             }
-        } else { 
-            setSeatAssignments({ self: null, opponentLeft: null, opponentRight: null }); 
+        } else {
+            setSeatAssignments({ self: null, opponentLeft: null, opponentRight: null });
         }
     }, [currentTableState, playerId, isSpectator, getPlayerNameByUserId]);
 
