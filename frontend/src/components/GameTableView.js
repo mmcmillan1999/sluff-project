@@ -140,7 +140,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     // winning bid sound — after a breather so the bidding result can sink in.
     // Requiring a known pre-play state means a mid-round reconnect
     // (null -> Playing Phase) doesn't re-trigger it.
-    const SPLASH_DELAY_MS = 3000;
+    const SPLASH_DELAY_MS = 1500;
     useEffect(() => {
         const state = currentTableState?.state;
         const PRE_PLAY_STATES = ['Bidding Phase', 'Awaiting Frog Upgrade Decision', 'Frog Widow Exchange', 'Trump Selection'];

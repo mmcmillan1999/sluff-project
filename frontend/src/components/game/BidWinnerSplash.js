@@ -9,8 +9,8 @@ import { SUIT_SYMBOLS, SUIT_COLORS } from '../../constants';
 // Timeline (ms from mount)
 const BID_SOUND_AT = 600;
 const SUIT_SOUND_AT = 2400;  // Solo only: suit announce a beat after the bid
-const FLY_AT = 11800;        // names leave the VS layout for their seats
-const DONE_AT = 13400;       // parent unmounts the overlay
+const FLY_AT = 9800;         // names leave the VS layout for their seats
+const DONE_AT = 11400;       // parent unmounts the overlay
 
 const BID_SOUNDS = { 'Frog': 'bidFrog', 'Solo': 'bidSolo', 'Heart Solo': 'bidHeartSolo' };
 const SUIT_SOUNDS = { S: 'suitSpades', C: 'suitClubs', D: 'suitDiamonds' };
