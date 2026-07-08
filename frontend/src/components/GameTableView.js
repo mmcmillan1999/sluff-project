@@ -148,7 +148,13 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             const info = {
                 playerName: currentTableState.bidWinnerInfo.playerName,
                 bid: currentTableState.bidWinnerInfo.bid,
-                trumpSuit: currentTableState.trumpSuit
+                trumpSuit: currentTableState.trumpSuit,
+                // The actual defending team: active players minus the bidder.
+                // (Derived from playerOrderActive, NOT the seat map — in
+                // 4-player the sitting-out dealer has a seat but no team.)
+                defenders: currentTableState.playerOrderActive.filter(
+                    name => name !== currentTableState.bidWinnerInfo.playerName
+                )
             };
             if (splashTimerRef.current) clearTimeout(splashTimerRef.current);
             splashTimerRef.current = setTimeout(() => setBidSplashInfo(info), SPLASH_DELAY_MS);

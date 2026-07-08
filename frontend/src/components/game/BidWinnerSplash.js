@@ -48,12 +48,16 @@ const BidWinnerSplash = ({ info, seatAssignments, playSound, onDone }) => {
         return { anchorX: 50, anchorY: 45 };
     };
 
-    const defenders = [
-        seatAssignments.self,
-        seatAssignments.opponentLeft,
-        seatAssignments.opponentRight,
-        seatAssignments.opponentAcross
-    ].filter(name => name && name !== bidderName);
+    // Defenders come from the round's active players (passed by the trigger);
+    // seat-derived fallback for safety. Never includes the 4-player dealer.
+    const defenders = (info.defenders && info.defenders.length > 0)
+        ? info.defenders
+        : [
+            seatAssignments.self,
+            seatAssignments.opponentLeft,
+            seatAssignments.opponentRight,
+            seatAssignments.opponentAcross
+        ].filter(name => name && name !== bidderName);
 
     const posStyle = (vsPos, name) => {
         const target = flying ? seatAnchorFor(name) : null;
