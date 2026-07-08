@@ -11,12 +11,18 @@ const biddingHandler = require('./handlers/biddingHandler');
 const BOT_NAMES = ["Mike Knight", "Grandma Joe", "Grampa Blane", "Kimba", "Courtney Sr.", "Cliff"];
 
 class GameEngine {
-    constructor(tableId, theme, tableName, emitLobbyUpdateCallback) {
+    constructor(tableId, theme, tableName, emitLobbyUpdateCallback, tableType = 'private') {
         this.emitLobbyUpdateCallback = emitLobbyUpdateCallback;
-        
+
         this.tableId = tableId;
         this.tableName = tableName;
         this.theme = theme;
+        // 'private' (browsable, invite links, humans only) or 'quickplay'
+        // (hidden matchmaking pool, GameService fills seats with bots).
+        this.tableType = tableType;
+        // While a quick-play table holds 3 players, this is the epoch-ms
+        // deadline of the 20s search for a 4th human (clients show a countdown).
+        this.qpWindowEndsAt = null;
         this.serverVersion = SERVER_VERSION;
         this.state = "Waiting for Players";
         this.players = {};
@@ -333,6 +339,7 @@ class GameEngine {
         // Re-arm the terminal-state watchdogs (GameService) for the next game.
         this.gameOverHandled = false;
         this.drawCompleteHandled = false;
+        this.qpWindowEndsAt = null;
         this._initializeNewRoundState(); 
         for (const userId in this.players) {
             if (this.players[userId].disconnected) {
@@ -582,6 +589,7 @@ class GameEngine {
         const activeTurnOrder = this.gameStarted ? this.playerOrder.turnOrder : this.playerOrder.allIds;
         const state = {
             tableId: this.tableId, tableName: this.tableName, theme: this.theme, state: this.state, players: this.players,
+            tableType: this.tableType, qpWindowEndsAt: this.qpWindowEndsAt,
             playerOrderActive: activeTurnOrder.map(id => this.players[id]?.playerName).filter(Boolean),
             // Full seating roster in join order (includes the sitting-out dealer
             // in 4-player). Clients derive fixed seats from this, not from

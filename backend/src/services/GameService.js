@@ -28,17 +28,28 @@
 
         _initializeEngines() {
             let tableCounter = 1;
+            const emitLobbyUpdateCallback = () => this.io.emit('lobbyState', this.getLobbyState());
             THEMES.forEach(theme => {
                 for (let i = 0; i < theme.count; i++) {
                     const tableId = `table-${tableCounter}`;
                     const tableNumber = i + 1;
                     const tableName = `${theme.name} #${tableNumber}`;
-                    const emitLobbyUpdateCallback = () => this.io.emit('lobbyState', this.getLobbyState());
-                    this.engines[tableId] = new GameEngine(tableId, theme.id, tableName, emitLobbyUpdateCallback);
+                    this.engines[tableId] = new GameEngine(tableId, theme.id, tableName, emitLobbyUpdateCallback, 'private');
                     tableCounter++;
                 }
             });
-            console.log(`${tableCounter - 1} in-memory game engines initialized.`);
+            // Quick-play matchmaking pool: hidden from the lobby list, entered
+            // only through the "Play Now" button. 3 per theme is plenty for now.
+            const QP_TABLES_PER_THEME = 3;
+            THEMES.forEach(theme => {
+                for (let i = 1; i <= QP_TABLES_PER_THEME; i++) {
+                    const tableId = `qp-${theme.id}-${i}`;
+                    const tableName = `${theme.name} Quick Play`;
+                    this.engines[tableId] = new GameEngine(tableId, theme.id, tableName, emitLobbyUpdateCallback, 'quickplay');
+                }
+            });
+            this.qpTimers = {};
+            console.log(`${Object.keys(this.engines).length} in-memory game engines initialized (${tableCounter - 1} private + quick-play pool).`);
         }
 
         getEngineById(tableId) { return this.engines[tableId]; }
@@ -46,7 +57,7 @@
         getLobbyState() {
             const groupedByTheme = THEMES.map(theme => {
                 const themeTables = Object.values(this.engines)
-                    .filter(engine => engine.theme === theme.id)
+                    .filter(engine => engine.theme === theme.id && engine.tableType !== 'quickplay')
                     .map(engine => {
                         const clientState = engine.getStateForClient();
                         const activePlayers = Object.values(clientState.players).filter(p => !p.isSpectator);
@@ -63,12 +74,122 @@
             return { themes: groupedByTheme, serverVersion: SERVER_VERSION };
         }
 
+        // ===================== QUICK PLAY MATCHMAKER =====================
+        // Flow (docs/FOUR_PLAYER_SPEC.md sibling — see whiteboard, July 2026):
+        // click Play Now -> seat at a filling table (or open a fresh one).
+        // Each empty seat toward 3 players gets a random 5-10s timer; a human
+        // click takes the seat and cancels it, a firing timer seats a bot.
+        // At 3 players a 20s humans-only window for a 4th opens (clients show
+        // a Start 3-Player button); a 4th human starts 4P immediately, the
+        // window expiring starts 3P. Bots never take the 4th seat.
+
+        _humanCount(engine) {
+            return Object.values(engine.players).filter(p => !p.isBot && !p.isSpectator).length;
+        }
+
+        findQuickPlayTable(themeId) {
+            const pool = Object.values(this.engines).filter(e =>
+                e.tableType === 'quickplay' && e.theme === themeId && !e.gameStarted);
+            // Prefer a table already filling with at least one human...
+            const filling = pool.find(e => this._humanCount(e) > 0 && e.playerOrder.count < 4);
+            if (filling) return filling;
+            // ...else a completely fresh table...
+            const empty = pool.find(e => e.playerOrder.count === 0);
+            if (empty) return empty;
+            // ...else anything not started with an open seat (bots-only leftovers).
+            return pool.find(e => e.playerOrder.count < 4) || null;
+        }
+
+        // restartFill: true when a human just took a seat — their arrival
+        // restarts the next seat's 5-10s window from zero.
+        evaluateQuickPlayTable(tableId, { restartFill = false } = {}) {
+            const engine = this.engines[tableId];
+            if (!engine || engine.tableType !== 'quickplay') return;
+            const timers = this.qpTimers[tableId] || (this.qpTimers[tableId] = {});
+            const timerFn = this.timerOverride || setTimeout;
+            const clearFill = () => { if (timers.fill) { clearTimeout(timers.fill); timers.fill = null; } };
+            const clearWindow = () => {
+                if (timers.window) { clearTimeout(timers.window); timers.window = null; }
+                engine.qpWindowEndsAt = null;
+            };
+
+            if (engine.gameStarted) { clearFill(); clearWindow(); return; }
+
+            const humans = this._humanCount(engine);
+            const seated = engine.playerOrder.count;
+
+            if (humans === 0) {
+                // Abandoned mid-fill: sweep the bots so the table returns to the
+                // pool clean. (Seated humans who merely disconnected pre-game are
+                // removed by disconnectPlayer, so 0 humans really means empty.)
+                clearFill(); clearWindow();
+                let guard = 8;
+                while (guard-- > 0 && Object.values(engine.players).some(p => p.isBot)) engine.removeBot();
+                if (engine.playerOrder.count === 0) engine.state = 'Waiting for Players';
+                return;
+            }
+
+            if (seated < 3) {
+                clearWindow();
+                if (restartFill) clearFill();
+                if (!timers.fill) {
+                    const delay = 5000 + Math.floor(Math.random() * 5000);
+                    timers.fill = timerFn(() => {
+                        timers.fill = null;
+                        const eng = this.engines[tableId];
+                        if (!eng || eng.gameStarted) return;
+                        if (this._humanCount(eng) > 0 && eng.playerOrder.count < 3) {
+                            eng.addBotPlayer();
+                            this.io.to(tableId).emit('gameState', eng.getStateForClient());
+                        }
+                        this.evaluateQuickPlayTable(tableId);
+                    }, delay) || true; // truthy marker when a test timer override returns undefined
+                }
+                return;
+            }
+
+            if (seated === 3) {
+                clearFill();
+                if (!timers.window) {
+                    engine.qpWindowEndsAt = Date.now() + 20000;
+                    this.io.to(tableId).emit('gameState', engine.getStateForClient());
+                    timers.window = timerFn(() => {
+                        timers.window = null;
+                        const eng = this.engines[tableId];
+                        if (!eng || eng.gameStarted) { if (eng) eng.qpWindowEndsAt = null; return; }
+                        eng.qpWindowEndsAt = null;
+                        this._startQuickPlayGame(tableId);
+                    }, 20000) || true;
+                }
+                return;
+            }
+
+            // 4 seated (the 4th is always a human) — start immediately.
+            clearFill(); clearWindow();
+            this._startQuickPlayGame(tableId);
+        }
+
+        async _startQuickPlayGame(tableId) {
+            const engine = this.engines[tableId];
+            if (!engine || engine.gameStarted) return;
+            const firstHuman = Object.values(engine.players).find(p => !p.isBot && !p.isSpectator);
+            if (!firstHuman) { this.evaluateQuickPlayTable(tableId); return; }
+            engine.qpWindowEndsAt = null;
+            await this.startGame(tableId, firstHuman.userId);
+            // Start can fail (e.g. a broke player got kicked) — re-arm the fill.
+            if (!engine.gameStarted) this.evaluateQuickPlayTable(tableId);
+        }
+        // =================================================================
+
         async playCard(tableId, userId, card) {
             await this._performAction(tableId, (engine) => engine.playCard(userId, card));
         }
         
         async startGame(tableId, requestingUserId) {
             await this._performAction(tableId, (engine) => engine.startGame(requestingUserId));
+            // A human pressing Start during the quick-play 4th-player window
+            // must cancel the window timer (evaluate no-ops once started).
+            if (this.engines[tableId]?.tableType === 'quickplay') this.evaluateQuickPlayTable(tableId);
         }
         
         async dealCards(tableId, requestingUserId) {
@@ -407,9 +528,16 @@
                             this.io.to(tableId).emit('gameState', currentEngine.getStateForClient());
                             this.io.emit('lobbyState', this.getLobbyState());
 
+                            // Quick-play tables re-enter matchmaking after a game
+                            // (rematch window for whoever stayed seated).
+                            if (currentEngine.tableType === 'quickplay') {
+                                this.evaluateQuickPlayTable(tableId);
+                            }
+
                             // If all players are bots, start a new game automatically
+                            // (private tables only — quick-play sweeps abandoned bots)
                             const allBots = Object.values(currentEngine.players).every(p => p.isBot && !p.isSpectator);
-                            if (allBots && currentEngine.playerOrder.count >= 3) {
+                            if (allBots && currentEngine.playerOrder.count >= 3 && currentEngine.tableType !== 'quickplay') {
                                 setTimeout(() => {
                                     const engine = this.getEngineById(tableId);
                                     if (engine && engine.state === 'Ready to Start') {

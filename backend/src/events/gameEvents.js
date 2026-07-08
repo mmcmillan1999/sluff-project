@@ -65,6 +65,29 @@ const registerGameHandlers = (io, gameService) => {
             }
         });
 
+        // Shared seating flow for joinTable and quickPlay: fetch tokens, leave
+        // any previous table, join the room, seat the player, broadcast.
+        const seatUserAtTable = async (engineToJoin, asSpectator = false) => {
+            const tableId = engineToJoin.tableId;
+            const tokenResult = await gameService.pool.query("SELECT SUM(amount) AS tokens FROM transactions WHERE user_id = $1", [socket.user.id]);
+            const tokens = parseFloat(tokenResult.rows[0].tokens || 0).toFixed(2);
+
+            const previousEngine = Object.values(gameService.getAllEngines()).find(e => e.players[socket.user.id] && e.tableId !== tableId);
+            if (previousEngine) {
+                previousEngine.leaveTable(socket.user.id);
+                socket.leave(previousEngine.tableId);
+                gameService.io.to(previousEngine.tableId).emit('gameState', previousEngine.getStateForClient());
+                if (previousEngine.tableType === 'quickplay') gameService.evaluateQuickPlayTable(previousEngine.tableId);
+            }
+            socket.join(tableId);
+
+            engineToJoin.joinTable(socket.user, socket.id, tokens, asSpectator);
+
+            socket.emit('joinedTable', { gameState: engineToJoin.getStateForClient() });
+            gameService.io.to(tableId).emit('gameState', engineToJoin.getStateForClient());
+            gameService.io.emit('lobbyState', gameService.getLobbyState());
+        };
+
         socket.on("joinTable", async ({ tableId, asSpectator = false }) => {
             if (asSpectator) {
                 console.log(`[ADMIN] User ${socket.user.username} joining table ${tableId} as spectator`);
@@ -72,34 +95,37 @@ const registerGameHandlers = (io, gameService) => {
 
             const engineToJoin = gameService.getEngineById(tableId);
             if (!engineToJoin) return socket.emit("error", { message: "Table not found." });
-            
-            try {
-                const tokenResult = await gameService.pool.query("SELECT SUM(amount) AS tokens FROM transactions WHERE user_id = $1", [socket.user.id]);
-                const tokens = parseFloat(tokenResult.rows[0].tokens || 0).toFixed(2);
 
-                const previousEngine = Object.values(gameService.getAllEngines()).find(e => e.players[socket.user.id] && e.tableId !== tableId);
-                if (previousEngine) {
-                    previousEngine.leaveTable(socket.user.id);
-                    socket.leave(previousEngine.tableId);
-                    gameService.io.to(previousEngine.tableId).emit('gameState', previousEngine.getStateForClient());
-                }
-                socket.join(tableId);
-                
-                // Join table with forceSpectator parameter
-                engineToJoin.joinTable(socket.user, socket.id, tokens, asSpectator);
-                
+            try {
+                await seatUserAtTable(engineToJoin, asSpectator);
+
                 if (asSpectator) {
                     const finalPlayer = engineToJoin.players[socket.user.id];
                     console.log(`[ADMIN] Spectator join result: isSpectator=${finalPlayer?.isSpectator}, inPlayerOrder=${engineToJoin.playerOrder.includes(socket.user.id)}`);
                 }
-                
-                socket.emit('joinedTable', { gameState: engineToJoin.getStateForClient() });
-                gameService.io.to(tableId).emit('gameState', engineToJoin.getStateForClient());
-                gameService.io.emit('lobbyState', gameService.getLobbyState());
+                // Joining a quick-play table via an invite link still counts.
+                if (engineToJoin.tableType === 'quickplay') gameService.evaluateQuickPlayTable(tableId);
 
             } catch(err) {
                  console.error(`Error fetching tokens for user ${socket.user.id} on join:`, err);
                  socket.emit("error", { message: "Could not retrieve your token balance." });
+            }
+        });
+
+        // Quick Play: pick (or open) a matchmaking table for the theme and
+        // seat the player; the GameService matchmaker handles the rest.
+        socket.on("quickPlay", async ({ theme }) => {
+            const engineToJoin = gameService.findQuickPlayTable(theme);
+            if (!engineToJoin) {
+                return socket.emit("error", { message: "All quick play tables are busy — try again in a moment." });
+            }
+            try {
+                await seatUserAtTable(engineToJoin, false);
+                // A human arrival restarts the next seat's 5-10s fill window.
+                gameService.evaluateQuickPlayTable(engineToJoin.tableId, { restartFill: true });
+            } catch(err) {
+                console.error(`Error in quickPlay for user ${socket.user.id}:`, err);
+                socket.emit("error", { message: "Could not retrieve your token balance." });
             }
         });
 
@@ -109,6 +135,7 @@ const registerGameHandlers = (io, gameService) => {
                 engineToLeave.leaveTable(socket.user.id);
                 gameService.io.to(tableId).emit('gameState', engineToLeave.getStateForClient());
                 gameService.io.emit('lobbyState', gameService.getLobbyState());
+                if (engineToLeave.tableType === 'quickplay') gameService.evaluateQuickPlayTable(tableId);
             }
             socket.leave(tableId);
             socket.emit("lobbyState", gameService.getLobbyState());
@@ -188,7 +215,12 @@ const registerGameHandlers = (io, gameService) => {
             socket.emit("notification", { message: "You are now a spectator." });
         });
 
+        // Bots are quick-play-only for regular players (the matchmaker seats
+        // them). Manual bot management remains as an admin testing tool.
         socket.on("addBot", ({ tableId, name }) => {
+            if (!socket.user.is_admin) {
+                return socket.emit("error", { message: "Bots join Quick Play games automatically." });
+            }
             const engine = gameService.getEngineById(tableId);
             if (engine) {
                 engine.addBotPlayer(name || 'Lee');
@@ -236,7 +268,10 @@ const registerGameHandlers = (io, gameService) => {
                 gameService.io.emit('lobbyState', gameService.getLobbyState());
             }
         };
-        socket.on("removeBot", createDirectHandler('removeBot'));
+        socket.on("removeBot", (payload) => {
+            if (!socket.user.is_admin) return socket.emit("error", { message: "Admin privileges required." });
+            createDirectHandler('removeBot')(payload);
+        });
         socket.on("forfeitGame", createDirectHandler('forfeitGame'));
         socket.on("resetGame", createDirectHandler('reset'));
         socket.on("updateInsuranceSetting", createDirectHandler('updateInsuranceSetting'));
@@ -433,6 +468,9 @@ const registerGameHandlers = (io, gameService) => {
                 if (player && player.socketId === socket.id) {
                     enginePlayerIsOn.disconnectPlayer(socket.user.id);
                     gameService.io.to(enginePlayerIsOn.tableId).emit('gameState', enginePlayerIsOn.getStateForClient());
+                    if (enginePlayerIsOn.tableType === 'quickplay') {
+                        gameService.evaluateQuickPlayTable(enginePlayerIsOn.tableId);
+                    }
                 }
             }
             try {
