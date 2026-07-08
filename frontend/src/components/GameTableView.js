@@ -140,7 +140,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     // can hit the table mid-animation. Splash after a breather so the live bid
     // call finishes first. Requiring a known pre-play state means a mid-round
     // reconnect (null -> Bid Announcement) doesn't re-trigger it.
-    const SPLASH_DELAY_MS = 1000;
+    const SPLASH_DELAY_MS = 2500;
     useEffect(() => {
         const state = currentTableState?.state;
         const PRE_PLAY_STATES = ['Bidding Phase', 'Awaiting Frog Upgrade Decision', 'Frog Widow Exchange', 'Trump Selection'];

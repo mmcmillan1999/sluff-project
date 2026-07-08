@@ -19,6 +19,7 @@ const ActionControls = ({
     };
     
     if (isSpectator) {
+        if (currentTableState.state === "Bid Announcement") return null;
         return (
             <div className="action-prompt-container">
                 <p style={{fontStyle:'italic', margin: 0}}>{currentTableState.state}</p>
@@ -144,9 +145,10 @@ const ActionControls = ({
                     <p style={{ margin: 0 }}>Returning to lobby in {currentTableState.drawCountdown}...</p>
                 </div>
             );
+        case "Bid Announcement": // the VS splash owns the screen — no status box
         case "Playing Phase":
         case "TrickCompleteLinger":
-            return null; 
+            return null;
         default:
             return (
                 <div className="action-prompt-container">

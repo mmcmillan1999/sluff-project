@@ -545,11 +545,11 @@ class GameEngine {
             defenders.forEach(defName => { this.insurance.defenderOffers[defName] = -60 * multiplier; });
         }
 
-        // 5.5s covers the client-side splash (1s breather + ~4.2s animation)
+        // 7s covers the client-side splash (2.5s breather + ~4.2s animation)
         // plus network slack. Guarded so a reset/forfeit during the window
         // doesn't get yanked back into play.
         return { type: 'START_TIMER', payload: {
-            duration: 5500,
+            duration: 7000,
             onTimeout: (engineRef) => {
                 if (engineRef.state !== "Bid Announcement") return [];
                 engineRef.state = "Playing Phase";
