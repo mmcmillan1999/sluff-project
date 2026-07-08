@@ -13,6 +13,7 @@ import FeedbackView from "./components/FeedbackView.js";
 import LobbyHeader from "./components/LobbyHeader.js";
 import GameHeader from "./components/GameHeader.js";
 import { submitFeedback } from "./services/api.js";
+import { extractInviteTableId } from "./utils/tableInvites.js";
 import "./App.css";
 import "./components/AdminView.css";
 import "./styles/no-scroll-fix.css"; // Prevent all scrolling in game view
@@ -43,6 +44,12 @@ function App() {
     const { playSound, enableSound, soundSettings } = useSounds();
     const [showFeedbackModal, setShowFeedbackModal] = useState(false);
     const [feedbackGameContext, setFeedbackGameContext] = useState(null);
+    // Invite link (/join/<tableId>): parsed once on load, held until the user
+    // is logged in and the socket is up, then consumed by the auto-join effect.
+    // window.__sluffInviteTableId is the native cold-start handoff (nativeInit).
+    const [pendingInviteTableId, setPendingInviteTableId] = useState(() =>
+        extractInviteTableId(window.location.href) || window.__sluffInviteTableId || null
+    );
 
     const handleLogout = useCallback(() => {
         localStorage.removeItem("sluff_token");
@@ -242,6 +249,39 @@ function App() {
         };
     }, [token]);
 
+    // Native deep links arrive as a window event (see utils/nativeInit.js)
+    // because the webview URL never changes inside the Capacitor shell.
+    useEffect(() => {
+        const onInvite = (e) => {
+            if (e.detail?.tableId) setPendingInviteTableId(e.detail.tableId);
+        };
+        window.addEventListener('sluff:invite', onInvite);
+        return () => window.removeEventListener('sluff:invite', onInvite);
+    }, []);
+
+    // Consume a pending invite: wait until we're authenticated and the socket
+    // is connected, then join via the normal joinTable flow. Errors (table
+    // full, not found) surface through the existing 'error' handler.
+    useEffect(() => {
+        if (!token || !user || !pendingInviteTableId) return;
+        const tableId = pendingInviteTableId;
+        const join = () => {
+            socket.emit("joinTable", { tableId });
+            setPendingInviteTableId(null);
+            delete window.__sluffInviteTableId;
+            // Clear /join/... from the address bar so a refresh doesn't re-join.
+            if (window.location.pathname.startsWith('/join/')) {
+                window.history.replaceState({}, '', '/');
+            }
+        };
+        if (socket.connected) {
+            join();
+        } else {
+            socket.once('connect', join);
+            return () => socket.off('connect', join);
+        }
+    }, [token, user, pendingInviteTableId]);
+
     const handleJoinTable = (tableId) => {
         enableSound();
         socket.emit("joinTable", { tableId });
@@ -278,7 +318,7 @@ function App() {
     if (!token || !user) {
         return (
             <div className="app-content-container no-header">
-                <AuthContainer onLoginSuccess={handleLoginSuccess} />
+                <AuthContainer onLoginSuccess={handleLoginSuccess} inviteTableId={pendingInviteTableId} />
             </div>
         );
     }

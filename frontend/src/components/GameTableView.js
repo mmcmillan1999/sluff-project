@@ -17,6 +17,7 @@ import LayoutDevPanel from './LayoutDevPanel';
 import PlayerHandAnchorDebug from './game/PlayerHandAnchorDebug';
 import { getLobbyChatHistory } from '../services/api';
 import SoundControls from './game/SoundControls';
+import { shareInvite, getInviteUrl } from '../utils/tableInvites';
 import { SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS } from '../constants';
 
 
@@ -38,6 +39,8 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const [showLayoutDev, setShowLayoutDev] = useState(false);
     const [showAnchorDebug, setShowAnchorDebug] = useState(false); // Toggle debug overlay
     const [selectedFrogDiscards, setSelectedFrogDiscards] = useState([]);
+    const [shareNotice, setShareNotice] = useState(null);
+    const shareNoticeTimerRef = useRef(null);
     const turnPlayerRef = useRef(null);
     const trickWinnerRef = useRef(null);
     const cardCountRef = useRef(null);
@@ -471,6 +474,23 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         return (<span style={style} className={cardClasses}>{cardContent}</span>);
     };
 
+    const handleShareInvite = async () => {
+        setShowGameMenu(false);
+        const result = await shareInvite(currentTableState.tableId, currentTableState.tableName);
+        if (result === 'copied') {
+            if (shareNoticeTimerRef.current) clearTimeout(shareNoticeTimerRef.current);
+            setShareNotice('Invite link copied — send it to your friends!');
+            shareNoticeTimerRef.current = setTimeout(() => setShareNotice(null), 4000);
+        } else if (result === 'failed') {
+            // No share sheet and no clipboard access — let them copy by hand.
+            window.prompt('Copy this invite link:', getInviteUrl(currentTableState.tableId));
+        }
+    };
+
+    useEffect(() => () => {
+        if (shareNoticeTimerRef.current) clearTimeout(shareNoticeTimerRef.current);
+    }, []);
+
     const handleForfeit = () => {
         if (window.confirm("Are you sure you want to forfeit? This will count as a loss and your buy-in will be distributed to the other players.")) {
             emitEvent("forfeitGame");
@@ -511,6 +531,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 <SoundControls soundSettings={soundSettings} />
             </div>
             <div className="game-menu-actions">
+                <button onClick={handleShareInvite} className="game-menu-button invite">📨 Invite Friends</button>
                 <button onClick={handleLeaveTable} className="game-menu-button secondary">Back to Lobby</button>
                 <button 
                     onClick={() => {
@@ -543,6 +564,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
 
     return (
         <div className="game-view">
+            {shareNotice && <div className="share-invite-notice">{shareNotice}</div>}
             {/* Card position debug overlay */}
             {false && window.cardDebugPositions && window.cardDebugPositions.length > 0 && (
                 <div style={{

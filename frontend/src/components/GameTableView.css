@@ -279,6 +279,29 @@
     border-color: #c82333;
     color: white;
 }
+.game-menu-button.invite {
+    background-color: #198754;
+    border-color: #146c43;
+    color: white;
+}
+
+/* Transient confirmation after copying an invite link */
+.share-invite-notice {
+    position: fixed;
+    top: 9vh; /* just below the 7.5vh header */
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #198754;
+    color: white;
+    border: 0.12vh solid #146c43;
+    border-radius: 0.8vh;
+    padding: 1vh 2vh;
+    font-family: 'Oswald', sans-serif;
+    font-size: 1.8vh;
+    z-index: 2000;
+    box-shadow: 0 0.4vh 1vh rgba(0, 0, 0, 0.4);
+    white-space: nowrap;
+}
 
 /* Ensure embedded LobbyChat does not overlay the close button in game view */
 .game-view-chat-container .lobby-chat-container {
