@@ -42,6 +42,7 @@ const TableLayout = ({
     handleLeaveTable,
     playSound,
     dropZoneRef,
+    isAdmin = false,
     showDebugAnchors = false
 }) => {
     const [lastTrickVisible, setLastTrickVisible] = useState(false);
