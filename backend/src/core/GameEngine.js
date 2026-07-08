@@ -280,8 +280,8 @@ class GameEngine {
     chooseTrump(userId, suit) {
         if (this.state !== "Trump Selection" || this.bidWinnerInfo?.userId !== userId || !["S", "C", "D"].includes(suit)) return this._effects();
         this.trumpSuit = suit;
-        this._transitionToPlayingPhase();
-        return this._effects([{ type: 'BROADCAST_STATE' }]);
+        const fanfareTimer = this._transitionToPlayingPhase();
+        return this._effects([{ type: 'BROADCAST_STATE' }, fanfareTimer]);
     }
 
     submitFrogDiscards(userId, discards) {
@@ -309,8 +309,8 @@ class GameEngine {
         }
         this.widowDiscardsForFrogBidder = discards;
         this.hands[player.playerName] = currentHand.filter(card => !discards.includes(card));
-        this._transitionToPlayingPhase();
-        return this._effects([{ type: 'BROADCAST_STATE' }]);
+        const fanfareTimer = this._transitionToPlayingPhase();
+        return this._effects([{ type: 'BROADCAST_STATE' }, fanfareTimer]);
     }
 
     playCard(userId, card) {
@@ -516,8 +516,12 @@ class GameEngine {
         this.state = "Game Over";
     }
     
+    // Enter the "Bid Announcement" window: everything about the round is set up
+    // (trump, trick leader, insurance), but play is held while clients run the
+    // bid-winner VS splash. Returns a START_TIMER effect the caller must include
+    // in its returned effects; the timer flips the state to "Playing Phase".
     _transitionToPlayingPhase() {
-        this.state = "Playing Phase";
+        this.state = "Bid Announcement";
         this.tricksPlayedCount = 0;
         this.trumpBroken = false;
         this.currentTrickCards = [];
@@ -540,6 +544,18 @@ class GameEngine {
 
             defenders.forEach(defName => { this.insurance.defenderOffers[defName] = -60 * multiplier; });
         }
+
+        // 5.5s covers the client-side splash (1s breather + ~4.2s animation)
+        // plus network slack. Guarded so a reset/forfeit during the window
+        // doesn't get yanked back into play.
+        return { type: 'START_TIMER', payload: {
+            duration: 5500,
+            onTimeout: (engineRef) => {
+                if (engineRef.state !== "Bid Announcement") return [];
+                engineRef.state = "Playing Phase";
+                return [{ type: 'BROADCAST_STATE' }];
+            }
+        }};
     }
     
     _advanceRound() {

@@ -106,10 +106,11 @@ function resolveBiddingFinal(engine) {
         engine.revealedWidowForFrog = [...engine.widow];
         const bidderHand = engine.hands[engine.bidWinnerInfo.playerName];
         engine.hands[engine.bidWinnerInfo.playerName] = [...bidderHand, ...engine.widow];
-    } else if (bid === "Heart Solo") { 
-        engine.trumpSuit = "H"; 
-        engine._transitionToPlayingPhase();
-    } else if (bid === "Solo") { 
+    } else if (bid === "Heart Solo") {
+        engine.trumpSuit = "H";
+        const fanfareTimer = engine._transitionToPlayingPhase();
+        return [{ type: 'BROADCAST_STATE' }, fanfareTimer];
+    } else if (bid === "Solo") {
         engine.state = "Trump Selection";
     }
     return [{ type: 'BROADCAST_STATE' }];

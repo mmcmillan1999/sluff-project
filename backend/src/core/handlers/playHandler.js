@@ -5,6 +5,9 @@ const { SUITS } = require('../constants');
 const scoringHandler = require('./scoringHandler');
 
 function playCard(engine, userId, card) {
+    // The trick leader is already assigned during Bid Announcement, but play
+    // is held until the round-start splash window ends.
+    if (engine.state === "Bid Announcement") return [];
     if (userId !== engine.trickTurnPlayerId) return [];
     const player = engine.players[userId];
     if (!player) return [];

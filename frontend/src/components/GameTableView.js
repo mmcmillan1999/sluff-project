@@ -135,16 +135,16 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         return player?.playerName || String(targetPlayerId);
     }, [currentTableState]);
 
-    // Round-start fanfare: when the table transitions from a bidding-flow state
-    // into the Playing Phase, splash "bid winner VS the team" and replay the
-    // winning bid sound — after a breather so the bidding result can sink in.
-    // Requiring a known pre-play state means a mid-round reconnect
-    // (null -> Playing Phase) doesn't re-trigger it.
+    // Round-start fanfare: the server holds play in a dedicated "Bid
+    // Announcement" state (~5.5s) while clients run the VS splash, so no cards
+    // can hit the table mid-animation. Splash after a breather so the live bid
+    // call finishes first. Requiring a known pre-play state means a mid-round
+    // reconnect (null -> Bid Announcement) doesn't re-trigger it.
     const SPLASH_DELAY_MS = 1000;
     useEffect(() => {
         const state = currentTableState?.state;
         const PRE_PLAY_STATES = ['Bidding Phase', 'Awaiting Frog Upgrade Decision', 'Frog Widow Exchange', 'Trump Selection'];
-        if (state === 'Playing Phase' && PRE_PLAY_STATES.includes(splashStateRef.current) && currentTableState?.bidWinnerInfo) {
+        if (state === 'Bid Announcement' && PRE_PLAY_STATES.includes(splashStateRef.current) && currentTableState?.bidWinnerInfo) {
             const info = {
                 playerName: currentTableState.bidWinnerInfo.playerName,
                 bid: currentTableState.bidWinnerInfo.bid,
@@ -249,7 +249,9 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         if (!currentTableState || !selfPlayerName || isSpectator) return;
         const { state, trickTurnPlayerName, lastCompletedTrick, currentTrickCards } = currentTableState;
         if ((state === "Playing Phase" || state === "Bidding Phase") && trickTurnPlayerName === selfPlayerName && turnPlayerRef.current !== selfPlayerName) playSound('turnAlert');
-        turnPlayerRef.current = trickTurnPlayerName;
+        // Don't stamp the ref during Bid Announcement: the leader is assigned
+        // then, and stamping would swallow their turn alert when play opens.
+        if (state !== "Bid Announcement") turnPlayerRef.current = trickTurnPlayerName;
         const newCardCount = currentTrickCards?.length || 0;
         if (newCardCount > 0 && newCardCount !== cardCountRef.current) playSound('cardPlay');
         cardCountRef.current = newCardCount;
