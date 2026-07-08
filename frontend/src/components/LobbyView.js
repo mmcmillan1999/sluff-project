@@ -7,6 +7,7 @@ import LobbyTableCard from './LobbyTableCard';
 import LobbyChat from './LobbyChat';
 import SoundControls from './game/SoundControls';
 import { getLobbyChatHistory } from '../services/api';
+import { BUILD_ID } from '../utils/clientVersion';
 import { useViewport } from '../hooks/useViewport';
 
 const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowAdmin, handleShowFeedback, errorMessage, emitEvent, socket, handleOpenFeedbackModal, soundSettings }) => {
@@ -339,7 +340,10 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
             
             <footer className="lobby-footer">
                 <SoundControls soundSettings={soundSettings} compact />
-                <span>Version: {serverVersion}</span>
+                <span>
+                    Version: {serverVersion}
+                    {BUILD_ID && ` | Client: ${BUILD_ID.replace('T', ' ').slice(5, 16)}`}
+                </span>
             </footer>
         </div>
     );
