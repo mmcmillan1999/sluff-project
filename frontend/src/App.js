@@ -14,6 +14,7 @@ import LobbyHeader from "./components/LobbyHeader.js";
 import GameHeader from "./components/GameHeader.js";
 import { submitFeedback } from "./services/api.js";
 import { extractInviteTableId } from "./utils/tableInvites.js";
+import { newBuildAvailable } from "./utils/clientVersion.js";
 import "./App.css";
 import "./components/AdminView.css";
 import "./styles/no-scroll-fix.css"; // Prevent all scrolling in game view
@@ -248,6 +249,45 @@ function App() {
             window.removeEventListener('focus', ensureConnected);
         };
     }, [token]);
+
+    // Mandatory client updates: poll version.json on load, on returning to the
+    // foreground (the moment phones show stale code), and every 5 minutes. When
+    // a newer build is deployed, reload immediately — unless the user is
+    // mid-game, in which case the reload waits until they leave the table.
+    const pendingReloadRef = React.useRef(false);
+    const viewRef = React.useRef(view);
+    useEffect(() => { viewRef.current = view; }, [view]);
+
+    useEffect(() => {
+        let disposed = false;
+        const applyIfSafe = () => {
+            if (viewRef.current !== 'gameTable') window.location.reload();
+        };
+        const check = async () => {
+            if (pendingReloadRef.current) { applyIfSafe(); return; }
+            if (await newBuildAvailable() && !disposed) {
+                console.log('[VERSION] Newer frontend build detected — reloading.');
+                pendingReloadRef.current = true;
+                applyIfSafe();
+            }
+        };
+        const onVisible = () => { if (document.visibilityState === 'visible') check(); };
+        check();
+        document.addEventListener('visibilitychange', onVisible);
+        window.addEventListener('focus', onVisible);
+        const interval = setInterval(check, 5 * 60 * 1000);
+        return () => {
+            disposed = true;
+            document.removeEventListener('visibilitychange', onVisible);
+            window.removeEventListener('focus', onVisible);
+            clearInterval(interval);
+        };
+    }, []);
+
+    // A stale client that was mid-game reloads as soon as it leaves the table.
+    useEffect(() => {
+        if (view !== 'gameTable' && pendingReloadRef.current) window.location.reload();
+    }, [view]);
 
     // Native deep links arrive as a window event (see utils/nativeInit.js)
     // because the webview URL never changes inside the Capacitor shell.

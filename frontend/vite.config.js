@@ -49,9 +49,32 @@ function soundRecorderPlugin() {
     };
 }
 
+// Stamp each production build so deployed clients can detect they're stale:
+// the same id is compiled into the bundle (__BUILD_ID__) and written to
+// build/version.json. When a running client sees version.json change, it
+// knows a newer frontend has shipped and reloads itself (see App.js).
+const BUILD_ID = new Date().toISOString();
+
+function versionStampPlugin() {
+    return {
+        name: 'sluff-version-stamp',
+        apply: 'build',
+        generateBundle() {
+            this.emitFile({
+                type: 'asset',
+                fileName: 'version.json',
+                source: JSON.stringify({ buildId: BUILD_ID }),
+            });
+        },
+    };
+}
+
 // Components are .js files containing JSX (CRA legacy), so .js is parsed as JSX.
 export default defineConfig({
-    plugins: [react(), soundRecorderPlugin()],
+    plugins: [react(), soundRecorderPlugin(), versionStampPlugin()],
+    define: {
+        __BUILD_ID__: JSON.stringify(BUILD_ID),
+    },
     esbuild: {
         loader: 'jsx',
         include: /src\/.*\.jsx?$/,
