@@ -295,37 +295,8 @@
                                             hindsightData.hindsightValue
                                         );
                                         
-                                        // Have bot comment on their learning
-                                        if (hindsightData.hindsightValue < -20) {
-                                            const messages = [
-                                                `You got me this time! I wasted ${Math.abs(hindsightData.hindsightValue)} points by ${engine.insurance.dealExecuted ? 'making' : 'not making'} that deal at trick ${engine.tricksPlayedCount}.`,
-                                                `Ouch! That insurance ${engine.insurance.dealExecuted ? 'deal' : 'decision'} cost me ${Math.abs(hindsightData.hindsightValue)} points. My circuits are adjusting...`,
-                                                `Well played! I'm learning that trick ${engine.tricksPlayedCount} is too ${engine.tricksPlayedCount <= 3 ? 'early' : 'late'} for those kinds of deals.`,
-                                                `${Math.abs(hindsightData.hindsightValue)} points down the drain! Next time I'll be smarter about ${engine.tricksPlayedCount <= 3 ? 'early' : engine.tricksPlayedCount <= 7 ? 'mid' : 'late'}-game insurance.`
-                                            ];
-                                            const message = messages[Math.floor(Math.random() * messages.length)];
-                                            // Use new_lobby_message event that frontend is listening for
-                                            this.io.emit('new_lobby_message', {
-                                                id: Date.now(),
-                                                username: bot.playerName,
-                                                message: message,
-                                                created_at: new Date().toISOString()
-                                            });
-                                        } else if (hindsightData.hindsightValue > 20) {
-                                            const messages = [
-                                                `Ha! My insurance strategy saved me ${hindsightData.hindsightValue} points that round!`,
-                                                `My neural network is pleased - that ${engine.insurance.dealExecuted ? 'deal' : 'decision'} gained me ${hindsightData.hindsightValue} points!`,
-                                                `Experience pays off! Making the right call at trick ${engine.tricksPlayedCount} saved me ${hindsightData.hindsightValue} points.`
-                                            ];
-                                            const message = messages[Math.floor(Math.random() * messages.length)];
-                                            // Use new_lobby_message event that frontend is listening for
-                                            this.io.emit('new_lobby_message', {
-                                                id: Date.now(),
-                                                username: bot.playerName,
-                                                message: message,
-                                                created_at: new Date().toISOString()
-                                            });
-                                        }
+                                        // Bots no longer chat about their insurance hindsight
+                                        // (July 2026) — the decision logging above still runs.
                                     }
                                 }
                             }, 3000); // Delay so it appears after round summary

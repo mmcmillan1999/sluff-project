@@ -332,33 +332,10 @@ class AdaptiveInsuranceStrategy {
             
             console.log(`[INSURANCE-LOG] Database insert successful for ${botName}`);
 
-            // Periodically analyze and adjust (10% chance)
+            // Periodically analyze and adjust (10% chance). Bots no longer
+            // announce these adjustments in chat (July 2026).
             if (Math.random() < 0.1) {
-                const adjustmentMade = await this.analyzeAndAdjust(botName);
-                
-                // Announce learning if adjustment was made and gameService is available
-                if (adjustmentMade && engine.tableId && this.pool) {
-                    setTimeout(() => {
-                        const messages = [
-                            `I've been analyzing my last few games... Time to adjust my insurance strategy!`,
-                            `My pattern recognition shows I've been too predictable. Updating my algorithms...`,
-                            `Learning from ${botName === 'Kimba' ? 'my wild' : botName === 'Grandma Joe' ? 'years of' : 'recent'} experience!`,
-                            `Recalibrating insurance parameters based on recent performance data...`
-                        ];
-                        const message = messages[Math.floor(Math.random() * messages.length)];
-                        
-                        // Emit directly through the pool's io reference if available
-                        if (this.io) {
-                            // Use new_lobby_message event that frontend is listening for
-                            this.io.emit('new_lobby_message', {
-                                id: Date.now(),
-                                username: botName,
-                                message: message,
-                                created_at: new Date().toISOString()
-                            });
-                        }
-                    }, 1000);
-                }
+                await this.analyzeAndAdjust(botName);
             }
         } catch (error) {
             console.error('[INSURANCE-LOG] ERROR logging insurance decision:', error);
