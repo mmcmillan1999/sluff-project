@@ -42,6 +42,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const [selectedFrogDiscards, setSelectedFrogDiscards] = useState([]);
     const [bidSplashInfo, setBidSplashInfo] = useState(null);
     const splashStateRef = useRef(null);
+    const splashTimerRef = useRef(null);
     const [shareNotice, setShareNotice] = useState(null);
     const shareNoticeTimerRef = useRef(null);
     const turnPlayerRef = useRef(null);
@@ -136,20 +137,28 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
 
     // Round-start fanfare: when the table transitions from a bidding-flow state
     // into the Playing Phase, splash "bid winner VS the team" and replay the
-    // winning bid sound. Requiring a known pre-play state means a mid-round
-    // reconnect (null -> Playing Phase) doesn't re-trigger it.
+    // winning bid sound — after a breather so the bidding result can sink in.
+    // Requiring a known pre-play state means a mid-round reconnect
+    // (null -> Playing Phase) doesn't re-trigger it.
+    const SPLASH_DELAY_MS = 3000;
     useEffect(() => {
         const state = currentTableState?.state;
         const PRE_PLAY_STATES = ['Bidding Phase', 'Awaiting Frog Upgrade Decision', 'Frog Widow Exchange', 'Trump Selection'];
         if (state === 'Playing Phase' && PRE_PLAY_STATES.includes(splashStateRef.current) && currentTableState?.bidWinnerInfo) {
-            setBidSplashInfo({
+            const info = {
                 playerName: currentTableState.bidWinnerInfo.playerName,
                 bid: currentTableState.bidWinnerInfo.bid,
                 trumpSuit: currentTableState.trumpSuit
-            });
+            };
+            if (splashTimerRef.current) clearTimeout(splashTimerRef.current);
+            splashTimerRef.current = setTimeout(() => setBidSplashInfo(info), SPLASH_DELAY_MS);
         }
         splashStateRef.current = state;
     }, [currentTableState]);
+
+    useEffect(() => () => {
+        if (splashTimerRef.current) clearTimeout(splashTimerRef.current);
+    }, []);
 
     useEffect(() => {
         if (currentTableState) {
