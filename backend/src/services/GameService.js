@@ -378,6 +378,45 @@
                 }, delay);
             };
         
+            // Terminal-state cleanup — must run regardless of whether bots are
+            // seated. (This used to live inside the bot loop, so human-only
+            // tables never self-cleaned, and a completed draw had no cleanup
+            // path at all: the table sat in DrawComplete forever and re-seated
+            // its players into the finished game on every reconnect.)
+            if (engine.state === 'Game Over' || engine.state === 'DrawComplete') {
+                const handledFlag = engine.state === 'Game Over' ? 'gameOverHandled' : 'drawCompleteHandled';
+                if (!engine[handledFlag]) {
+                    engine[handledFlag] = true;
+                    const terminalState = engine.state;
+                    console.log(`[CLEANUP] ${terminalState} detected on table ${tableId}. Resetting in 16 seconds...`);
+                    setTimeout(() => {
+                        const currentEngine = this.getEngineById(tableId);
+                        if (currentEngine && currentEngine.state === terminalState) {
+                            console.log(`[CLEANUP] Resetting table ${tableId} after ${terminalState}`);
+                            currentEngine.reset();
+                            this.io.to(tableId).emit('gameState', currentEngine.getStateForClient());
+                            this.io.emit('lobbyState', this.getLobbyState());
+
+                            // If all players are bots, start a new game automatically
+                            const allBots = Object.values(currentEngine.players).every(p => p.isBot && !p.isSpectator);
+                            if (allBots && currentEngine.playerOrder.count === 3) {
+                                setTimeout(() => {
+                                    const engine = this.getEngineById(tableId);
+                                    if (engine && engine.state === 'Ready to Start') {
+                                        console.log(`[BOT] Starting new bot-only game on table ${tableId}`);
+                                        const firstBot = Object.values(engine.players).find(p => p.isBot && !p.isSpectator);
+                                        if (firstBot) {
+                                            this._performAction(tableId, (eng) => eng.startGame(firstBot.userId));
+                                        }
+                                    }
+                                }, 3000);
+                            }
+                        }
+                    }, 16000); // delay before reset — leave time for the end-of-round celebration + modal
+                }
+                return; // finished table — no bot turns to take
+            }
+
             for (const botId in engine.bots) {
                 if (turnActionTaken) break;
         
@@ -402,38 +441,6 @@
                         // Round summary not ready yet, will retry on next interval
                         console.log(`[BOT] Waiting for round summary to be set before next round trigger`);
                     }
-                } else if (engine.state === 'Game Over') {
-                    // Handle game over state - reset the game after a delay
-                    // Only do this once per game (check if no other bot has scheduled it)
-                    if (!engine.gameOverHandled) {
-                        engine.gameOverHandled = true;
-                        console.log(`[BOT] Game Over detected on table ${tableId}. Resetting in 10 seconds...`);
-                        setTimeout(() => {
-                            const currentEngine = this.getEngineById(tableId);
-                            if (currentEngine && currentEngine.state === 'Game Over') {
-                                console.log(`[BOT] Resetting game on table ${tableId}`);
-                                currentEngine.reset();
-                                this.io.to(tableId).emit('gameState', currentEngine.getStateForClient());
-                                this.io.emit('lobbyState', this.getLobbyState());
-                                
-                                // If all players are bots, start a new game automatically
-                                const allBots = Object.values(currentEngine.players).every(p => p.isBot && !p.isSpectator);
-                                if (allBots && currentEngine.playerOrder.count === 3) {
-                                    setTimeout(() => {
-                                        const engine = this.getEngineById(tableId);
-                                        if (engine && engine.state === 'Ready to Start') {
-                                            console.log(`[BOT] Starting new bot-only game on table ${tableId}`);
-                                            const firstBot = Object.values(engine.players).find(p => p.isBot && !p.isSpectator);
-                                            if (firstBot) {
-                                                this._performAction(tableId, (eng) => eng.startGame(firstBot.userId));
-                                            }
-                                        }
-                                    }, 3000);
-                                }
-                            }
-                        }, 16000); // delay before reset — leave time for the end-of-round celebration + modal
-                    }
-                    break; // Exit the loop since we've handled game over
                 } else if (engine.state === 'Bidding Phase' && engine.biddingTurnPlayerId == botUserId) {
                     const bid = bot.decideBid();
                     console.log(`[BOT-BID] ${bot.playerName} is bidding: ${bid}`);

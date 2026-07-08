@@ -147,13 +147,22 @@ class GameEngine {
 
     leaveTable(userId) {
         if (!this.players[userId]) return;
-        
+
         const playerInfo = this.players[userId];
         const safeLeaveStates = ["Waiting for Players", "Ready to Start"];
-        
-        if (this.gameId) {
+        // Terminal states: the game is settled and payouts are done, so leaving
+        // must release the seat for real even though gameId is still set —
+        // otherwise every reconnect re-seats the player into the finished game.
+        const terminalStates = ["DrawComplete", "Game Over"];
+
+        if (terminalStates.includes(this.state)) {
+            delete this.players[userId];
+            if (playerInfo.isBot) delete this.bots[userId];
+            this.playerOrder.remove(userId);
+        }
+        else if (this.gameId) {
             this.disconnectPlayer(userId);
-        } 
+        }
         else if (safeLeaveStates.includes(this.state) || playerInfo.isSpectator) {
             delete this.players[userId];
             if (playerInfo.isBot) delete this.bots[userId];
@@ -321,6 +330,9 @@ class GameEngine {
         this.gameStarted = false;
         this.gameId = null;
         this.playerMode = null;
+        // Re-arm the terminal-state watchdogs (GameService) for the next game.
+        this.gameOverHandled = false;
+        this.drawCompleteHandled = false;
         this._initializeNewRoundState(); 
         for (const userId in this.players) {
             if (this.players[userId].disconnected) {
