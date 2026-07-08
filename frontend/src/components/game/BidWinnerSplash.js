@@ -7,10 +7,10 @@ import { PLAYER_SEAT_CONFIG } from '../../config/PlayerSeatConfig';
 import { SUIT_SYMBOLS, SUIT_COLORS } from '../../constants';
 
 // Timeline (ms from mount)
-const BID_SOUND_AT = 150;
-const SUIT_SOUND_AT = 1150;  // Solo only: suit announce a beat after the bid
-const FLY_AT = 2600;         // names leave the VS layout for their seats
-const DONE_AT = 3500;        // parent unmounts the overlay
+const BID_SOUND_AT = 600;
+const SUIT_SOUND_AT = 2400;  // Solo only: suit announce a beat after the bid
+const FLY_AT = 8800;         // names leave the VS layout for their seats
+const DONE_AT = 10400;       // parent unmounts the overlay
 
 const BID_SOUNDS = { 'Frog': 'bidFrog', 'Solo': 'bidSolo', 'Heart Solo': 'bidHeartSolo' };
 const SUIT_SOUNDS = { S: 'suitSpades', C: 'suitClubs', D: 'suitDiamonds' };
