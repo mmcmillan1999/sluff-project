@@ -9,10 +9,10 @@ import { SUIT_SYMBOLS, SUIT_COLORS } from '../../constants';
 // Timeline (ms from mount). The splash itself mounts SPLASH_DELAY_MS after the
 // bids resolve (GameTableView), which gives the live bid call time to finish
 // before this replays it.
-const BID_SOUND_AT = 800;    // replay lands just as the names hit their marks
-const SUIT_SOUND_AT = 2200;  // Solo only: suit announce a beat after the bid
-const FLY_AT = 6500;         // names leave the VS layout for their seats
-const DONE_AT = 7600;        // parent unmounts the overlay
+const BID_SOUND_AT = 400;    // replay lands just as the names hit their marks
+const SUIT_SOUND_AT = 1100;  // Solo only: suit announce a beat after the bid
+const FLY_AT = 3250;         // bidder leaves first; team follows 0.35s later (CSS)
+const DONE_AT = 4200;        // parent unmounts the overlay
 
 const BID_SOUNDS = { 'Frog': 'bidFrog', 'Solo': 'bidSolo', 'Heart Solo': 'bidHeartSolo' };
 const SUIT_SOUNDS = { S: 'suitSpades', C: 'suitClubs', D: 'suitDiamonds' };
