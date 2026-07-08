@@ -21,7 +21,8 @@ Debug overlay in game: `Shift+D`.
 - **Frontend**: Netlify, auto-deploys from `main` (`netlify.toml` at repo root, publishes `frontend/build`, Node 22).
 - **Backend**: Render web service (`npm start`). NOT Heroku.
 - **Database**: PostgreSQL on Render via `POSTGRES_CONNECT_STRING`. Schema created at boot by `backend/src/data/createTables.js` (no migration tool).
-- **URLs**: playsluff.com / api.playsluff.com (domain), sluff-backend-pilot.onrender.com (Render direct). Frontend auto-detects backend URL by hostname in `frontend/src/services/api.js`; `VITE_SERVER_URL` overrides.
+- **URLs**: playsluff.com (frontend domain); backend is **sluff-backend.onrender.com** (verified July 2026 — `api.playsluff.com` is dead and `sluff-backend-pilot.onrender.com` is a dormant stage service running old code). Frontend auto-detects backend URL by hostname in `frontend/src/services/api.js`; `VITE_SERVER_URL` overrides.
+- **Netlify gotcha (July 2026)**: webhook-triggered deploys can all show "skipped — a new deploy was scheduled for the same branch" (suspected duplicate deploy triggers). If pushes to `main` skip, use Deploys → "Trigger deploy" in the dashboard. Verify what's live via `https://playsluff.com/version.json` and the Client stamp in the lobby footer.
 
 ## Env vars (backend/.env, see .env.example)
 `POSTGRES_CONNECT_STRING`, `JWT_SECRET`, `CLIENT_ORIGIN`, `PORT`, `RESEND_API_KEY` (transactional email; `SENDGRID_API_KEY` is a legacy fallback), `SENDER_EMAIL_ADDRESS`, `ADMIN_SECRET`, `AI_SECRET_KEY`, plus `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GOOGLE_API_KEY` / `GROQ_API_KEY` for bots.

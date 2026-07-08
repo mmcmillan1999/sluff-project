@@ -9,7 +9,7 @@ The "where is everything" file. Update this whenever an account, plan, or URL ch
 |---|---|---|---|
 | Domain `playsluff.com` | **Squarespace Domains** (migrated from Google Domains) | Likely Google sign-in at account.squarespace.com | Registered 2025-07-25, **paid through 2030-07-25**. June 2026: on `clientHold` — verify contact email / account standing to reactivate. Nameservers: Google Cloud DNS. |
 | Frontend hosting | **Netlify** (new acct, June 2026) | mmcmillan1999 / team "abc" | Site **playsluff.netlify.app**, auto-deploys `main`, env var `VITE_SERVER_URL` set. OLD account (site "sluff") is locked for non-payment — support contacted/owed balance TBD. |
-| Backend hosting | **Render** | _fill in account email_ | Web service `sluff-backend-pilot` (+ check for other services!). June 2026: suspended, 3 unpaid invoices; was billing ~$508/mo — see Billing history below. |
+| Backend hosting | **Render** | _fill in account email_ | Production web service is **`sluff-backend`** (verified July 2026 via `/api/ping` version). `sluff-backend-pilot` is a DORMANT stage service running old code — don't debug against it. June 2026: suspended, 3 unpaid invoices; was billing ~$508/mo — see Billing history below. |
 | Database | **Render PostgreSQL** | same Render account | `POSTGRES_CONNECT_STRING` env var on the backend service. Free-tier Postgres is deleted after 90 days of nonpayment/expiry. |
 | Email (transactional) | **Resend** (primary) / SendGrid (legacy fallback) | _fill in account email_ | Sends as noreply@playsluff.com. `RESEND_API_KEY` env var (preferred); falls back to `SENDGRID_API_KEY` only if Resend isn't set. **June 2026: switched to Resend after SendGrid ran out of credits. `playsluff.com` re-verified in Resend (needs SPF/DKIM DNS records live) — registration verification + password-reset emails working again.** If sends start 403'ing, re-check domain verification at resend.com/domains. |
 | Source code | **GitHub** | mmcmillan1999/sluff-project | `main` = deploy branch, `Local_Dev` = dev branch. |
@@ -18,9 +18,10 @@ The "where is everything" file. Update this whenever an account, plan, or URL ch
 ## URLs
 
 - Production frontend: https://playsluff.com (Netlify, custom domain)
-- Production backend: https://api.playsluff.com (custom domain → Render)
-- Render direct: https://sluff-backend-pilot.onrender.com
-- Health check: `GET /health` (DB-aware), `GET /api/ping`
+- Production backend: https://sluff-backend.onrender.com (what the frontend actually targets — see `frontend/src/services/api.js`)
+- DEAD/STALE (July 2026): `api.playsluff.com` doesn't respond; `sluff-backend-pilot.onrender.com` is the dormant stage service (old code)
+- Health check: `GET /health` (DB-aware), `GET /api/ping` (includes `version` — compare against `SERVER_VERSION` in `backend/src/core/constants.js` to verify a deploy landed)
+- Frontend build check: `https://playsluff.com/version.json` must match the `Client:` stamp in the lobby footer; mismatch or HTML response = stale/failed Netlify deploy
 
 ## Billing history & lessons (June 2026)
 
@@ -33,7 +34,7 @@ The "where is everything" file. Update this whenever an account, plan, or URL ch
 
 ## Recovery runbook (site is down — do these in order)
 
-1. **Backend up?** `curl https://sluff-backend-pilot.onrender.com/health` — 503 with `x-render-routing: suspend` header = Render suspended the service (billing). Render dashboard → resume.
+1. **Backend up?** `curl https://sluff-backend.onrender.com/health` — 503 with `x-render-routing: suspend` header = Render suspended the service (billing). Render dashboard → resume.
 2. **Domain resolving?** `nslookup playsluff.com` — NXDOMAIN = registrar problem (Squarespace; check for clientHold / verification emails), since registration is paid through 2030.
 3. **Frontend up?** Check the `.netlify.app` URL in the Netlify dashboard; if it works but the domain doesn't, it's DNS/registrar, not Netlify.
 4. **DB alive?** `/health` returns `db: "down"` → check the Render Postgres instance and `POSTGRES_CONNECT_STRING`. Schema self-creates on boot (`backend/src/data/createTables.js`); a new empty DB "just works" but loses accounts/history.
