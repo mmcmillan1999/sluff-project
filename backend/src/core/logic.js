@@ -139,6 +139,10 @@ function calculateRoundScoreDetails(table) {
     const pointChanges = {};
     activePlayerNames.forEach(p => pointChanges[p] = 0);
     if(playerMode === 3) pointChanges[PLACEHOLDER_ID] = 0;
+    // 4-player: the sitting-out dealer is the absorber — initialize their
+    // entry so the failed-bid branch below adds to a number, not undefined.
+    const sittingOutDealerName = playerMode === 4 ? table.players[table.dealer]?.playerName : null;
+    if (sittingOutDealerName) pointChanges[sittingOutDealerName] = 0;
 
     if (insurance.dealExecuted) {
         const agreement = insurance.executedDetails.agreement;
@@ -308,13 +312,16 @@ async function handleDrawGameOver(table, outcome, transactionFn, statUpdateFn) {
 
 
 function calculateInsuranceHindsight(table, pointChanges) {
-    if (table.playerMode !== 3) return null;
+    if (table.playerMode !== 3 && table.playerMode !== 4) return null;
 
     const { bidWinnerInfo, insurance, players } = table;
     const bidWinnerName = bidWinnerInfo.playerName;
-    const defenders = Object.values(players)
-        .filter(p => !p.isSpectator && p.playerName !== bidWinnerName)
-        .map(p => p.playerName);
+    // Defenders = the round's active players minus the bidder. In 4-player
+    // the sitting-out dealer is not in playerOrderActive and has no
+    // insurance stake.
+    const defenders = table.playerOrderActive
+        .map(id => players[id]?.playerName)
+        .filter(name => name && name !== bidWinnerName);
     
     const hindsight = {};
 

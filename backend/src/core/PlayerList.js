@@ -39,9 +39,12 @@ class PlayerList {
     /**
      * Sets the turn order based on the dealer's position.
      * This is the ONLY place where the order is shuffled/recalculated.
-     * @param {number} dealerId 
+     * @param {number} dealerId
+     * @param {boolean} excludeDealer - 4-player mode: the dealer sits the
+     *   round out, so they are omitted from the turn order (they still deal
+     *   and still appear in allIds/seating). See docs/FOUR_PLAYER_SPEC.md.
      */
-    setTurnOrder(dealerId) {
+    setTurnOrder(dealerId, excludeDealer = false) {
         let activePlayers = [...this._playerIds];
         let dealerIndex = activePlayers.indexOf(dealerId);
 
@@ -58,7 +61,9 @@ class PlayerList {
         for (let i = 1; i <= activePlayers.length; i++) {
             orderedIds.push(activePlayers[(dealerIndex + i) % activePlayers.length]);
         }
-        this._turnOrder = orderedIds;
+        this._turnOrder = excludeDealer
+            ? orderedIds.filter(id => id !== activePlayers[dealerIndex])
+            : orderedIds;
     }
 }
 

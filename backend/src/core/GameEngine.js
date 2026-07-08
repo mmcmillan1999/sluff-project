@@ -232,7 +232,7 @@ class GameEngine {
                 if (this.playerMode === 3 && this.scores[PLACEHOLDER_ID] === undefined) { this.scores[PLACEHOLDER_ID] = 120; }
                 const shuffledPlayerIds = shuffle([...activePlayerIds]);
                 this.dealer = shuffledPlayerIds[0];
-                this.playerOrder.setTurnOrder(this.dealer);
+                this.playerOrder.setTurnOrder(this.dealer, this.playerMode === 4);
                 this._initializeNewRoundState();
                 this.state = "Dealing Pending";
             },
@@ -529,18 +529,21 @@ class GameEngine {
         this.lastCompletedTrick = null;
         this.trickLeaderId = this.bidWinnerInfo.userId;
         this.trickTurnPlayerId = this.bidWinnerInfo.userId;
-        if (this.playerMode === 3) {
+        // Insurance runs whenever the round has exactly 3 active players —
+        // which is every round in both 3-player and 4-player mode (the
+        // 4-player dealer sits out and is not a party to insurance).
+        if (this.playerMode === 3 || this.playerMode === 4) {
             this.insurance.isActive = true;
             const multiplier = BID_MULTIPLIERS[this.bidWinnerInfo.bid];
             this.insurance.bidMultiplier = multiplier;
             this.insurance.bidderPlayerName = this.bidWinnerInfo.playerName;
             this.insurance.bidderRequirement = 120 * multiplier;
             console.log(`[INSURANCE] Activated for ${this.bidWinnerInfo.playerName} with bid ${this.bidWinnerInfo.bid} (multiplier: ${multiplier})`);
-            
-            const allPlayerNames = Object.values(this.players)
-                .filter(p => !p.isSpectator)
-                .map(p => p.playerName);
-            const defenders = allPlayerNames.filter(name => name !== this.bidWinnerInfo.playerName);
+
+            const activePlayerNames = this.playerOrder.turnOrder
+                .map(id => this.players[id]?.playerName)
+                .filter(Boolean);
+            const defenders = activePlayerNames.filter(name => name !== this.bidWinnerInfo.playerName);
 
             defenders.forEach(defName => { this.insurance.defenderOffers[defName] = -60 * multiplier; });
         }
@@ -570,7 +573,7 @@ class GameEngine {
             return;
         }
         
-        this.playerOrder.setTurnOrder(this.dealer);
+        this.playerOrder.setTurnOrder(this.dealer, this.playerMode === 4);
         this._initializeNewRoundState();
         this.state = "Dealing Pending";
     }
@@ -580,6 +583,10 @@ class GameEngine {
         const state = {
             tableId: this.tableId, tableName: this.tableName, theme: this.theme, state: this.state, players: this.players,
             playerOrderActive: activeTurnOrder.map(id => this.players[id]?.playerName).filter(Boolean),
+            // Full seating roster in join order (includes the sitting-out dealer
+            // in 4-player). Clients derive fixed seats from this, not from
+            // playerOrderActive, which shrinks to 3 in a 4-player round.
+            seatingOrder: this.playerOrder.allIds.map(id => this.players[id]?.playerName).filter(Boolean),
             dealer: this.dealer, hands: this.hands, widow: this.widow, originalDealtWidow: this.originalDealtWidow, scores: this.scores, currentHighestBidDetails: this.currentHighestBidDetails, bidWinnerInfo: this.bidWinnerInfo, gameStarted: this.gameStarted, trumpSuit: this.trumpSuit, currentTrickCards: this.currentTrickCards, tricksPlayedCount: this.tricksPlayedCount, leadSuitCurrentTrick: this.leadSuitCurrentTrick, trumpBroken: this.trumpBroken, capturedTricks: this.capturedTricks, roundSummary: this.roundSummary, lastCompletedTrick: this.lastCompletedTrick, playersWhoPassedThisRound: this.playersWhoPassedThisRound.map(id => this.players[id]?.playerName), playerMode: this.playerMode, serverVersion: this.serverVersion, insurance: this.insurance, forfeiture: this.forfeiture, drawRequest: this.drawRequest, originalFrogBidderId: this.originalFrogBidderId, soloBidMadeAfterFrog: this.soloBidMadeAfterFrog, revealedWidowForFrog: this.revealedWidowForFrog, widowDiscardsForFrogBidder: this.widowDiscardsForFrogBidder,
             bidderCardPoints: this.bidderCardPoints, defenderCardPoints: this.defenderCardPoints,
             drawCountdown: this.drawCountdown,

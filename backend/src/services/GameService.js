@@ -173,7 +173,46 @@
                     });
                 }
             }
-            
+            else if (finalRankings.length === 4) {
+                // 4-player pot: 4 buy-ins split 3 : 1 : 0 : 0 by final rank.
+                // Players tied across ranks pool those ranks' parts and split
+                // them evenly (see docs/FOUR_PLAYER_SPEC.md). A "part" is one
+                // buy-in, so shares are expressed in buy-ins returned.
+                const PARTS = [3, 1, 0, 0];
+                const RANK_LABELS = ['1st', '2nd', '3rd', '4th'];
+                let i = 0;
+                while (i < finalRankings.length) {
+                    let j = i;
+                    while (j + 1 < finalRankings.length && finalRankings[j + 1].score === finalRankings[i].score) j++;
+                    const group = finalRankings.slice(i, j + 1);
+                    const pooledParts = PARTS.slice(i, j + 1).reduce((a, b) => a + b, 0);
+                    const share = pooledParts / group.length;
+                    const amount = tableCost * share;
+                    const rankLabel = group.length === 1 ? RANK_LABELS[i] : `tied ${RANK_LABELS[i]}-${RANK_LABELS[j]}`;
+
+                    for (const p of group) {
+                        if (p.isBot) continue;
+                        if (share > 1) {
+                            transactionFn({ userId: p.userId, gameId, type: 'win_payout', amount, description: `Win (${rankLabel}) - ${share.toFixed(2)} buy-ins from the 4-player pot` });
+                            statUpdateFn("UPDATE users SET wins = wins + 1 WHERE id = $1", [p.userId]);
+                            payoutDetails[p.userId] = `You finished ${rankLabel} and won a net ${(amount - tableCost).toFixed(2)} tokens!`;
+                        } else if (share === 1) {
+                            transactionFn({ userId: p.userId, gameId, type: 'wash_payout', amount, description: `Wash (${rankLabel}) - Buy-in returned` });
+                            statUpdateFn("UPDATE users SET washes = washes + 1 WHERE id = $1", [p.userId]);
+                            payoutDetails[p.userId] = `You finished ${rankLabel}. Your buy-in was returned.`;
+                        } else if (share > 0) {
+                            transactionFn({ userId: p.userId, gameId, type: 'win_payout', amount, description: `Partial recovery (${rankLabel}) - ${share.toFixed(2)} buy-ins` });
+                            statUpdateFn("UPDATE users SET losses = losses + 1 WHERE id = $1", [p.userId]);
+                            payoutDetails[p.userId] = `You finished ${rankLabel} and recovered ${amount.toFixed(2)} of your ${tableCost.toFixed(2)} token buy-in.`;
+                        } else {
+                            statUpdateFn("UPDATE users SET losses = losses + 1 WHERE id = $1", [p.userId]);
+                            payoutDetails[p.userId] = `You finished ${rankLabel} and lost your buy-in of ${tableCost.toFixed(2)} tokens.`;
+                        }
+                    }
+                    i = j + 1;
+                }
+            }
+
             try {
                 await Promise.all(transactionPromises);
                 await Promise.all(statPromises);
@@ -399,7 +438,7 @@
 
                             // If all players are bots, start a new game automatically
                             const allBots = Object.values(currentEngine.players).every(p => p.isBot && !p.isSpectator);
-                            if (allBots && currentEngine.playerOrder.count === 3) {
+                            if (allBots && currentEngine.playerOrder.count >= 3) {
                                 setTimeout(() => {
                                     const engine = this.getEngineById(tableId);
                                     if (engine && engine.state === 'Ready to Start') {

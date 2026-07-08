@@ -36,7 +36,9 @@ function playCard(engine, userId, card) {
     if (isLeading) engine.leadSuitCurrentTrick = playedSuit;
     if (playedSuit === engine.trumpSuit) engine.trumpBroken = true;
     
-    const expectedCardsInTrick = engine.playerOrder.count;
+    // Cards per trick = active players this round (3 in a 4-player game,
+    // where the dealer sits out) — NOT total seated players.
+    const expectedCardsInTrick = engine.playerOrder.turnOrder.length;
     if (engine.currentTrickCards.length === expectedCardsInTrick) {
         return resolveTrick(engine);
     } else {

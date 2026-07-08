@@ -145,7 +145,7 @@ class AdaptiveInsuranceStrategy {
         const { insurance, bidWinnerInfo, hands, bidderCardPoints, defenderCardPoints, tricksPlayedCount, trumpSuit } = engine;
         const bidMultiplier = BID_MULTIPLIERS[bidWinnerInfo.bid] || 1;
         const isBidder = bot.playerName === bidWinnerInfo.playerName;
-        const numberOfOpponents = engine.playerOrder.count - 1;
+        const numberOfOpponents = engine.playerOrder.turnOrder.length - 1;
         const GOAL = 60;
         const TOTAL_POINTS = 120;
 

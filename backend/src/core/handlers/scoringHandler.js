@@ -56,7 +56,9 @@ function calculateRoundScores(engine) {
                 theme: engine.theme,
                 gameId: engine.gameId,
                 players: engine.players,
-                playerOrderActive: engine.playerOrder.turnOrder.map(id => engine.players[id]),
+                // All seated players (not just the round's active trio) so
+                // 4-player game-over ranks the sitting-out dealer too.
+                playerOrderActive: engine.playerOrder.allIds.map(id => engine.players[id]),
             },
         });
     }
