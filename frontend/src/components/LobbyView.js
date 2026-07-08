@@ -10,12 +10,14 @@ import { getLobbyChatHistory } from '../services/api';
 import { BUILD_ID } from '../utils/clientVersion';
 import { useViewport } from '../hooks/useViewport';
 
-const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowAdmin, handleShowFeedback, errorMessage, emitEvent, socket, handleOpenFeedbackModal, soundSettings }) => {
-    
+const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQuickPlay, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowAdmin, handleShowFeedback, errorMessage, emitEvent, socket, handleOpenFeedbackModal, soundSettings }) => {
+
     const [activeTab, setActiveTab] = useState('');
     const [showMenu, setShowMenu] = useState(false);
-    // Collapsible headers removed; add simple toggles for tables and bulletin visibility
-    const [tablesCollapsed, setTablesCollapsed] = useState(false);
+    // Quick Play is the primary path; private tables start collapsed.
+    const [tablesCollapsed, setTablesCollapsed] = useState(true);
+    // Brief "seating you" feedback on the tapped Quick Play card.
+    const [quickPlayPending, setQuickPlayPending] = useState(null);
     const [bulletinCollapsed, setBulletinCollapsed] = useState(false);
     const [chatMessages, setChatMessages] = useState([]);
     const [chatMinimized, setChatMinimized] = useState(false);
@@ -243,25 +245,46 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
             
             {errorMessage && <p className="error-message">{errorMessage}</p>}
 
-            <nav className="lobby-nav">
-                {lobbyThemes && lobbyThemes.map(theme => (
-                    <button
-                        key={theme.id}
-                        onClick={() => setActiveTab(theme.id)}
-                        className={`lobby-tab ${activeTab === theme.id ? 'active' : ''}`}
-                    >
-                        <span className="lobby-tab-name">{theme.name}</span>
-                        <span className="lobby-tab-cost">
-                            <img src="/Sluff_Token.png" alt="Token" className="tab-token-icon" /> {theme.cost}
-                        </span>
-                    </button>
-                ))}
-            </nav>
-
             <main className="lobby-main">
                 {/* Desktop sidebar - only shown on desktop */}
                 <DesktopSidebar />
-                
+
+                {/* ============ QUICK PLAY — the primary way in ============ */}
+                <div className="quickplay-section">
+                    <div className="quickplay-heading">
+                        <span className="quickplay-title">Quick Play</span>
+                        <span className="quickplay-subtitle">Tap a table — we'll find you a game</span>
+                    </div>
+                    <div className="quickplay-cards">
+                        {lobbyThemes && lobbyThemes.length > 0 ? lobbyThemes.map(theme => {
+                            const canAfford = parseFloat(user.tokens) >= theme.cost;
+                            const isPending = quickPlayPending === theme.id;
+                            return (
+                                <button
+                                    key={theme.id}
+                                    className={`qp-card qp-${theme.id} ${canAfford ? '' : 'qp-disabled'} ${isPending ? 'qp-pending' : ''}`}
+                                    disabled={!canAfford || isPending}
+                                    onClick={() => {
+                                        setQuickPlayPending(theme.id);
+                                        handleQuickPlay(theme.id);
+                                        // Safety: clear if the server didn't seat us
+                                        setTimeout(() => setQuickPlayPending(null), 4000);
+                                    }}
+                                >
+                                    <span className="qp-card-name">{theme.name}</span>
+                                    <span className="qp-card-cost">
+                                        <img src="/Sluff_Token.png" alt="Token" className="tab-token-icon" /> {theme.cost}
+                                    </span>
+                                    <span className="qp-play-pill">
+                                        {isPending ? 'SEATING YOU…' : canAfford ? 'PLAY NOW ▶' : 'NEED TOKENS'}
+                                    </span>
+                                </button>
+                            );
+                        }) : <p className="loading-text">Loading tables...</p>}
+                    </div>
+                </div>
+
+                {/* ============ PRIVATE TABLES — play with friends ============ */}
                 <div className="tables-section">
                     <div
                         className="tables-toggle"
@@ -272,21 +295,38 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleLo
                         aria-expanded={!tablesCollapsed}
                         aria-controls="tables-grid"
                     >
-                        <span className="toggle-title">Game Tables</span>
+                        <span className="toggle-title">Private Tables</span>
+                        <span className="toggle-subtitle">pick a table & invite friends</span>
                         <span className="toggle-caret">{tablesCollapsed ? '►' : '▼'}</span>
                     </div>
                     {!tablesCollapsed && (
-                        <div className="table-grid" id="tables-grid">
-                            {activeTheme ? activeTheme.tables.map(table => (
-                                <LobbyTableCard 
-                                    key={table.tableId}
-                                    table={table}
-                                    canAfford={user.tokens >= activeTheme.cost}
-                                    onJoin={handleJoinTable}
-                                    user={user}
-                                />
-                            )) : <p className="loading-text">Loading tables...</p>}
-                        </div>
+                        <>
+                            <nav className="lobby-nav">
+                                {lobbyThemes && lobbyThemes.map(theme => (
+                                    <button
+                                        key={theme.id}
+                                        onClick={() => setActiveTab(theme.id)}
+                                        className={`lobby-tab ${activeTab === theme.id ? 'active' : ''}`}
+                                    >
+                                        <span className="lobby-tab-name">{theme.name}</span>
+                                        <span className="lobby-tab-cost">
+                                            <img src="/Sluff_Token.png" alt="Token" className="tab-token-icon" /> {theme.cost}
+                                        </span>
+                                    </button>
+                                ))}
+                            </nav>
+                            <div className="table-grid" id="tables-grid">
+                                {activeTheme ? activeTheme.tables.map(table => (
+                                    <LobbyTableCard
+                                        key={table.tableId}
+                                        table={table}
+                                        canAfford={user.tokens >= activeTheme.cost}
+                                        onJoin={handleJoinTable}
+                                        user={user}
+                                    />
+                                )) : <p className="loading-text">Loading tables...</p>}
+                            </div>
+                        </>
                     )}
                 </div>
                 

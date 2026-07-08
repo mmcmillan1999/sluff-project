@@ -327,6 +327,13 @@ function App() {
         socket.emit("joinTable", { tableId });
     };
 
+    // Quick Play: the server picks a matchmaking table for the theme, seats
+    // us (joinedTable flips the view), and fills the remaining seats.
+    const handleQuickPlay = (themeId) => {
+        enableSound();
+        socket.emit("quickPlay", { theme: themeId });
+    };
+
     const handleJoinTableAsSpectator = (tableId) => {
         enableSound();
         socket.emit("joinTable", { tableId, asSpectator: true });
@@ -403,7 +410,7 @@ function App() {
                 {(() => {
                     switch (view) {
                         case 'lobby':
-                            return <LobbyView user={user} lobbyThemes={lobbyThemes} serverVersion={serverVersion} handleJoinTable={handleJoinTable} handleJoinTableAsSpectator={handleJoinTableAsSpectator} handleLogout={handleLogout} handleRequestFreeToken={handleRequestFreeToken} handleShowLeaderboard={() => setView('leaderboard')} handleShowAdmin={handleShowAdmin} handleShowFeedback={() => setView('feedback')} errorMessage={errorMessage} emitEvent={emitEvent} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} soundSettings={soundSettings} />;
+                            return <LobbyView user={user} lobbyThemes={lobbyThemes} serverVersion={serverVersion} handleJoinTable={handleJoinTable} handleQuickPlay={handleQuickPlay} handleJoinTableAsSpectator={handleJoinTableAsSpectator} handleLogout={handleLogout} handleRequestFreeToken={handleRequestFreeToken} handleShowLeaderboard={() => setView('leaderboard')} handleShowAdmin={handleShowAdmin} handleShowFeedback={() => setView('feedback')} errorMessage={errorMessage} emitEvent={emitEvent} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} soundSettings={soundSettings} />;
                         case 'gameTable':
                             return currentTableState ? <GameTableView user={user} playerId={user.id} currentTableState={currentTableState} handleLeaveTable={handleLeaveTable} handleLogout={handleLogout} errorMessage={errorMessage} emitEvent={emitEvent} playSound={playSound} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} soundSettings={soundSettings} /> : <div>Loading table...</div>;
                         case 'leaderboard':

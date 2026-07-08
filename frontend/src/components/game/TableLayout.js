@@ -981,6 +981,7 @@ const TableLayout = ({
                     emitEvent={emitEvent}
                     handleLeaveTable={handleLeaveTable}
                     renderCard={renderCard}
+                    isAdmin={isAdmin}
                 />
             </div>
         </main>

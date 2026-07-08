@@ -972,3 +972,129 @@
     padding-bottom: 0;
   }
 }
+/* ==================== QUICK PLAY (July 2026) ==================== */
+/* Mobile-first: a stack of big tappable theme cards, the primary way
+   into a game. Private tables live in the collapsible section below. */
+
+.quickplay-section {
+  margin-bottom: 2.5vh;
+}
+
+.quickplay-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 2.5vw;
+  padding: 0.5vh 1vw 1.2vh;
+}
+
+.quickplay-title {
+  font-family: 'Oswald', sans-serif;
+  font-weight: 600;
+  font-size: clamp(1.2rem, 3vh, 1.6rem);
+  color: #fff;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.quickplay-subtitle {
+  font-size: clamp(0.7rem, 1.6vh, 0.9rem);
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.quickplay-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.4vh;
+}
+
+@media (min-width: 700px) {
+  .quickplay-cards { grid-template-columns: 1fr 1fr; }
+}
+
+.qp-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 3vw;
+  row-gap: 0.4vh;
+  width: 100%;
+  min-height: 9.5vh;
+  padding: 1.6vh 4.5vw;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 14px;
+  color: #fff;
+  cursor: pointer;
+  text-align: left;
+  font-family: 'Oswald', sans-serif;
+  box-shadow: 0 0.5vh 1.4vh rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.qp-card:active:not(:disabled) {
+  transform: scale(0.975);
+  box-shadow: 0 0.2vh 0.6vh rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Theme identities */
+.qp-card.qp-fort-creek        { background: linear-gradient(135deg, #14501c 0%, #2e7d32 100%); }
+.qp-card.qp-shirecliff-road   { background: linear-gradient(135deg, #143c5c 0%, #2471a3 100%); }
+.qp-card.qp-dans-deck         { background: linear-gradient(135deg, #6e1a1a 0%, #a03232 100%); }
+.qp-card.qp-miss-pauls-academy{ background: linear-gradient(135deg, #3a1763 0%, #6a3ab2 100%); }
+
+.qp-card-name {
+  grid-column: 1;
+  grid-row: 1;
+  font-size: clamp(1.05rem, 2.6vh, 1.5rem);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+}
+
+.qp-card-cost {
+  grid-column: 1;
+  grid-row: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 1.2vw;
+  font-size: clamp(0.75rem, 1.8vh, 0.95rem);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.qp-play-pill {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  padding: 1.1vh 3.5vw;
+  background: rgba(255, 255, 255, 0.94);
+  color: #1b1b1b;
+  border-radius: 999px;
+  font-size: clamp(0.8rem, 1.9vh, 1rem);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  box-shadow: 0 0.3vh 0.9vh rgba(0, 0, 0, 0.35);
+}
+
+.qp-card.qp-disabled {
+  filter: grayscale(0.7) brightness(0.6);
+  cursor: not-allowed;
+}
+
+.qp-card.qp-pending .qp-play-pill {
+  background: rgba(255, 255, 255, 0.6);
+  animation: qp-pending-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes qp-pending-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.toggle-subtitle {
+  font-size: clamp(0.65rem, 1.5vh, 0.85rem);
+  color: rgba(255, 255, 255, 0.45);
+  margin-left: auto;
+  margin-right: 2vw;
+}
