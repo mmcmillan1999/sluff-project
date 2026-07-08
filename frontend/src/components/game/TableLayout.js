@@ -3,8 +3,6 @@ import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from
 import { useViewport } from '../../hooks/useViewport';
 import ScoreProgressBar from './ScoreProgressBar';
 import PlayerSeatPositioner from './PlayerSeatPositioner';
-import WidowSeat from './WidowSeat';
-import { PLAYER_SEAT_CONFIG, getSeatConfig } from '../../config/PlayerSeatConfig';
 import {
     FINAL_TRICK_HOLD_MS, FINAL_TRICK_FLY_MS,
     BANNER_START_MS, BANNER_DURATION_MS,
@@ -809,68 +807,9 @@ const TableLayout = ({
         );
     };
 
-    const renderWidowSeat = () => {
-        const { playerOrderActive, state } = currentTableState;
-        
-        const hiddenStates = ["Waiting for Players", "Ready to Start", "Dealing Pending"];
-        if (hiddenStates.includes(state)) {
-            return null;
-        }
-        
-        // 4-player: the top seat belongs to the across player, and the widow
-        // is just the pile (the sitting-out dealer can peek it) — no WIDOW seat.
-        // playerOrderActive is the ACTIVE trio, so key off playerMode/seating.
-        if (currentTableState.playerMode === 4 || seatAssignments.opponentAcross) {
-            return null;
-        }
-        const numPlayers = playerOrderActive?.length || 0;
-        if (!playerOrderActive || numPlayers >= 4) {
-            return null;
-        }
-        
-        // Determine widow position for 3-player games
-        // Find the empty seat position
-        let widowPosition = 'top'; // Default to top
-        
-        // Check which positions are occupied
-        const occupiedPositions = new Set();
-        if (seatAssignments.self) occupiedPositions.add('bottom');
-        if (seatAssignments.opponentLeft) occupiedPositions.add('left');
-        if (seatAssignments.opponentRight) occupiedPositions.add('right');
-        
-        // Place widow in the unoccupied position
-        if (!occupiedPositions.has('top')) {
-            widowPosition = 'top';
-        } else if (!occupiedPositions.has('bottom')) {
-            widowPosition = 'bottom';
-        } else if (!occupiedPositions.has('left')) {
-            widowPosition = 'left';
-        } else if (!occupiedPositions.has('right')) {
-            widowPosition = 'right';
-        }
-        
-        // Get configuration for widow position
-        const widowConfig = getSeatConfig(widowPosition);
-        
-        // Use PlayerSeatPositioner to handle positioning and collision mode
-        return (
-            <PlayerSeatPositioner
-                playerName="WIDOW"
-                currentTableState={currentTableState}
-                isSelf={false}
-                emitEvent={emitEvent}
-                renderCard={renderCard}
-                seatPosition={widowPosition}
-                PlayerSeat={WidowSeat}  // Use WidowSeat component
-                showTrumpIndicator={false}
-                trumpIndicatorPuck={null}
-                anchorX={widowConfig.anchorX}
-                anchorY={widowConfig.anchorY}
-                rotation={widowConfig.rotation}
-                debugMode={showDebugAnchors}
-            />
-        );
-    };
+    // The WIDOW nameplate seat is retired (July 2026): in 3-player the top
+    // seat simply stays empty, in 4-player the across player sits there. The
+    // widow PILE (renderWidowPile) remains in both modes.
 
     const renderWidowPile = () => {
         const { playerOrderActive, state, widow, originalDealtWidow, roundSummary, bidWinnerInfo } = currentTableState;
@@ -1003,7 +942,6 @@ const TableLayout = ({
                     className="sluff-watermark"
                 />
                 
-                {renderWidowSeat()}
                 {renderTrickTallyPiles()}
                 {renderWidowPile()}
                 {renderLastTrickOverlay()}
