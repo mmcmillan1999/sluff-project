@@ -9,6 +9,7 @@ import TableLayout from './game/TableLayout';
 import PlayerSeat from './game/PlayerSeat';
 import ActionControls from './game/ActionControls';
 import InsurancePrompt from './game/InsurancePrompt';
+import BidWinnerSplash from './game/BidWinnerSplash';
 import IosPwaPrompt from './game/IosPwaPrompt';
 import { END_ROUND_TOTAL_MS } from '../config/endRoundTiming';
 import LobbyChat from './LobbyChat';
@@ -39,6 +40,8 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const [showLayoutDev, setShowLayoutDev] = useState(false);
     const [showAnchorDebug, setShowAnchorDebug] = useState(false); // Toggle debug overlay
     const [selectedFrogDiscards, setSelectedFrogDiscards] = useState([]);
+    const [bidSplashInfo, setBidSplashInfo] = useState(null);
+    const splashStateRef = useRef(null);
     const [shareNotice, setShareNotice] = useState(null);
     const shareNoticeTimerRef = useRef(null);
     const turnPlayerRef = useRef(null);
@@ -47,10 +50,8 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const gameStateRef = useRef(null);
     const highBidRef = useRef(null);
     const passedCountRef = useRef(0);
-    const trumpSuitRef = useRef(null);
     const roundModalTimerRef = useRef(null);
     const roundModalScheduledRef = useRef(false);
-    const insurancePromptShownRef = useRef(false);
     const errorTimerRef = useRef(null);
     const dropZoneRef = useRef(null);
 
@@ -133,18 +134,22 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         return player?.playerName || String(targetPlayerId);
     }, [currentTableState]);
 
+    // Round-start fanfare: when the table transitions from a bidding-flow state
+    // into the Playing Phase, splash "bid winner VS the team" and replay the
+    // winning bid sound. Requiring a known pre-play state means a mid-round
+    // reconnect (null -> Playing Phase) doesn't re-trigger it.
     useEffect(() => {
-        if (currentTableState && !isSpectator) {
-            const insurance = currentTableState.insurance;
-            if (insurance?.isActive && !insurancePromptShownRef.current) {
-                setShowInsurancePrompt(true);
-                insurancePromptShownRef.current = true;
-            }
-            if (!insurance?.isActive && insurancePromptShownRef.current) {
-                insurancePromptShownRef.current = false;
-            }
+        const state = currentTableState?.state;
+        const PRE_PLAY_STATES = ['Bidding Phase', 'Awaiting Frog Upgrade Decision', 'Frog Widow Exchange', 'Trump Selection'];
+        if (state === 'Playing Phase' && PRE_PLAY_STATES.includes(splashStateRef.current) && currentTableState?.bidWinnerInfo) {
+            setBidSplashInfo({
+                playerName: currentTableState.bidWinnerInfo.playerName,
+                bid: currentTableState.bidWinnerInfo.bid,
+                trumpSuit: currentTableState.trumpSuit
+            });
         }
-    }, [currentTableState, isSpectator]);
+        splashStateRef.current = state;
+    }, [currentTableState]);
 
     useEffect(() => {
         if (currentTableState) {
@@ -255,14 +260,9 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         const passedCount = currentTableState.playersWhoPassedThisRound?.length || 0;
         if (passedCount > passedCountRef.current) playSound('bidPass');
         passedCountRef.current = passedCount;
-        // Trump-suit announcement when the Solo winner names their suit (S/C/D only).
-        const ts = currentTableState.trumpSuit || null;
-        if (ts && ts !== trumpSuitRef.current && currentTableState.bidWinnerInfo?.bid === 'Solo') {
-            const suitSound = { S: 'suitSpades', C: 'suitClubs', D: 'suitDiamonds' }[ts];
-            if (suitSound) playSound(suitSound);
-        }
-        trumpSuitRef.current = ts;
-        // Note: the round-end fanfare now plays at the widow flip (TableLayout),
+        // Note: the Solo trump-suit announcement now plays inside the round-start
+        // VS splash (BidWinnerSplash), a beat after the bid sound replays.
+        // The round-end fanfare plays at the widow flip (TableLayout),
         // not here, so the drumroll has time to build first.
         gameStateRef.current = state;
         // Clear selected discards when leaving Frog Widow Exchange
@@ -633,7 +633,16 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                     })}
                 </div>
             )}
-            <InsurancePrompt 
+            {bidSplashInfo && (
+                <BidWinnerSplash
+                    info={bidSplashInfo}
+                    seatAssignments={seatAssignments}
+                    playSound={playSound}
+                    onDone={() => setBidSplashInfo(null)}
+                />
+            )}
+
+            <InsurancePrompt
                 show={showInsurancePrompt}
                 insuranceState={currentTableState.insurance}
                 selfPlayerName={selfPlayerName}
@@ -742,6 +751,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                         selfPlayerName={selfPlayerName}
                         isSpectator={isSpectator}
                         emitEvent={emitEvent}
+                        onOpenPrompt={() => setShowInsurancePrompt(true)}
                     />
                     <div className="button-panel">
                         <button className="game-menu-btn" onClick={() => setShowGameMenu(prev => !prev)}>

@@ -54,6 +54,7 @@
     min-width: 3.5vh; /* Reduced min width */
     text-align: center;
     line-height: 1;
+    cursor: pointer; /* tap opens the full insurance prompt */
 }
 
 .value-display.player-value-get {

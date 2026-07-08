@@ -5,7 +5,7 @@ import './InsuranceControls.css'; // Import the new CSS file
  * Renders a super-compact insurance negotiation panel for 3-player games,
  * focusing on values and buttons with no text labels.
  */
-const InsuranceControls = ({ insuranceState, selfPlayerName, isSpectator, emitEvent }) => {
+const InsuranceControls = ({ insuranceState, selfPlayerName, isSpectator, emitEvent, onOpenPrompt }) => {
     const isActive = !!(insuranceState && insuranceState.isActive && !isSpectator);
 
     const { bidderPlayerName, bidderRequirement, defenderOffers, dealExecuted } = insuranceState || {};
@@ -70,10 +70,10 @@ const InsuranceControls = ({ insuranceState, selfPlayerName, isSpectator, emitEv
                     <div className="deal-made-text">DEAL!</div>
                 ) : (
                     <>
-                        <div className={gapValueClasses} title="Gap to Deal">{gapToDeal}</div>
+                        <div className={gapValueClasses} title="Gap to Deal (tap for details)" onClick={onOpenPrompt} role="button">{gapToDeal}</div>
                         {(isBidder || isDefender) && (
                             <>
-                                <div className={playerValueClasses.join(' ')} title={isBidder ? 'Your Ask' : 'Your Offer'}>{playerValue}</div>
+                                <div className={playerValueClasses.join(' ')} title={`${isBidder ? 'Your Ask' : 'Your Offer'} (tap for details)`} onClick={onOpenPrompt} role="button">{playerValue}</div>
                                 <button onClick={() => handleAdjustInsurance(-1)} className={decreaseButtonClasses.join(' ')} title="Decrease">-</button>
                                 <button onClick={() => handleAdjustInsurance(1)} className={increaseButtonClasses.join(' ')} title="Increase">+</button>
                             </>
