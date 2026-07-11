@@ -232,7 +232,11 @@ const RoundSummaryModal = ({
         });
     };
 
-    const TrickPointRecapPanel = () => {
+    // These panels are plain render helpers, not component types: defining a
+    // component inside render would give it a new identity every re-render,
+    // remounting the embedded RoundScoreCeremony and restarting its count
+    // whenever a table-state broadcast lands mid-ceremony.
+    const renderTrickPointRecapPanel = () => {
         const bidderWonPoints = pointChanges[bidderName] > 0;
         const panelClasses = ['summary-points-section'];
         if (!insuranceDealWasMade) {
@@ -254,7 +258,7 @@ const RoundSummaryModal = ({
         );
     };
 
-    const InsuranceRecapPanel = () => {
+    const renderInsuranceRecapPanel = () => {
         if (!insurance || !insurance.bidMultiplier) {
             // Settlement presentation must not depend on the live insurance
             // controls surviving a reconnect or late state refresh. The round
@@ -349,8 +353,8 @@ const RoundSummaryModal = ({
                         </div>
                     )}
                     
-                    <TrickPointRecapPanel />
-                    {!detailsVisible && <InsuranceRecapPanel />}
+                    {renderTrickPointRecapPanel()}
+                    {!detailsVisible && renderInsuranceRecapPanel()}
 
                 </div>
 

@@ -158,6 +158,48 @@ describe('RoundSummaryModal staged presentation', () => {
         vi.useRealTimers();
     });
 
+    test('a state rebroadcast mid-count does not restart the score ceremony', () => {
+        vi.useFakeTimers();
+        const onScoreComplete = vi.fn();
+        // Fresh object identities mimic a server broadcast arriving during the
+        // count (presentation acks rebroadcast table state to everyone).
+        const makeSummary = () => ({
+            isGameOver: false,
+            dealerOfRoundId: 1,
+            finalScores: { Alice: 132, Bob: 114, Cara: 114 },
+            pointChanges: { Alice: 12, Bob: -6, Cara: -6 },
+            finalBidderPoints: 72,
+            finalDefenderPoints: 48,
+            bidType: 'Frog',
+            insuranceDealWasMade: false,
+            insuranceHindsight: {},
+            widowForReveal: [],
+            widowPointsValue: 0
+        });
+        const props = {
+            ...baseProps,
+            playerId: 1,
+            title: 'Round Recap',
+            onContinue: vi.fn(),
+            scoreStage: 'counting',
+            onScoreComplete,
+            prefersReducedMotion: false,
+            insurance: {},
+            bidWinnerInfo: { playerName: 'Alice' },
+            playerOrderActive: ['Alice', 'Bob', 'Cara']
+        };
+        const { rerender } = render(<RoundSummaryModal {...props} summaryData={makeSummary()} />);
+
+        const ceremonyNode = screen.getByLabelText('Counting round score');
+        act(() => vi.advanceTimersByTime(600));
+        rerender(<RoundSummaryModal {...props} summaryData={makeSummary()} />);
+
+        expect(screen.getByLabelText('Counting round score')).toBe(ceremonyNode);
+        act(() => vi.runAllTimers());
+        expect(onScoreComplete).toHaveBeenCalledTimes(1);
+        vi.useRealTimers();
+    });
+
     test('collapses open trick details so an insurance score count always mounts', () => {
         vi.useFakeTimers();
         const onScoreComplete = vi.fn();
