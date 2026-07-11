@@ -22,8 +22,13 @@ class GameEngine {
         // 'private' (browsable, invite links, humans only) or 'quickplay'
         // (hidden matchmaking pool, GameService fills seats with bots).
         this.tableType = tableType;
-        // While a quick-play table holds 3 players, this is the epoch-ms
-        // deadline of the 20s search for a 4th human (clients show a countdown).
+        // Quick Play is a server-owned state machine. The generation changes
+        // at every decision/timer boundary so stale socket decisions and timer
+        // callbacks cannot mutate a recycled table.
+        this.qpPhase = tableType === 'quickplay' ? 'filling' : null;
+        this.qpGeneration = 0;
+        // Epoch-ms deadline while the table is explicitly seeking a fourth
+        // human. It is null during the three-player decision phase.
         this.qpWindowEndsAt = null;
         this.serverVersion = SERVER_VERSION;
         this.state = "Waiting for Players";
@@ -167,6 +172,9 @@ class GameEngine {
 
     addBotPlayer() {
         if (this.gameStarted || this.gameStartPending || this.playerOrder.count >= 4) return;
+        // Quick Play's fourth seat is reserved for a human after the table has
+        // explicitly entered its fourth-player search.
+        if (this.tableType === 'quickplay' && this.playerOrder.count >= 3) return;
         const currentBotNames = new Set(Object.values(this.players).filter(p => p.isBot).map(p => p.playerName));
         const availableNames = BOT_NAMES.filter(name => !currentBotNames.has(name));
         if (availableNames.length === 0) return;
@@ -282,10 +290,41 @@ class GameEngine {
         return true;
     }
 
-    startGame(requestingUserId) {
+    startGame(requestingUserId, options = {}) {
         if (this.gameStarted || this.gameStartPending) return this._effects();
         if (!this.players[requestingUserId] || this.players[requestingUserId].isSpectator) return this._effects();
         const activePlayerIds = this.playerOrder.allIds;
+
+        if (this.tableType === 'quickplay') {
+            const authorization = options.quickPlayStart;
+            const expectedMode = this.qpPhase === 'starting_3'
+                ? 3
+                : this.qpPhase === 'starting_4' ? 4 : null;
+            const fourthPlayer = activePlayerIds.length === 4
+                ? this.players[activePlayerIds[3]]
+                : null;
+            const authorized = authorization
+                && authorization.generation === this.qpGeneration
+                && authorization.playerMode === expectedMode
+                && activePlayerIds.length === expectedMode
+                && this.players[requestingUserId].isBot !== true
+                && (expectedMode !== 4 || (
+                    fourthPlayer
+                    && fourthPlayer.isBot !== true
+                    && fourthPlayer.isSpectator !== true
+                ));
+
+            if (!authorized) {
+                return this._effects([{
+                    type: 'EMIT_TO_SOCKET',
+                    payload: {
+                        socketId: this.players[requestingUserId].socketId,
+                        event: 'gameStartError',
+                        data: { message: 'Use the Quick Play table choice to start this game.' },
+                    },
+                }]);
+            }
+        }
         if (activePlayerIds.length < 3) {
             return this._effects([{ type: 'EMIT_TO_SOCKET', payload: { socketId: this.players[requestingUserId].socketId, event: 'gameStartError', data: { message: "Need at least 3 players to start." } } }]);
         }
@@ -446,6 +485,10 @@ class GameEngine {
         // Re-arm the terminal-state watchdogs (GameService) for the next game.
         this.gameOverHandled = false;
         this.drawCompleteHandled = false;
+        if (this.tableType === 'quickplay') {
+            this.qpPhase = 'filling';
+            this.qpGeneration += 1;
+        }
         this.qpWindowEndsAt = null;
         this._initializeNewRoundState(); 
         for (const userId in this.players) {
@@ -707,11 +750,11 @@ class GameEngine {
             defenders.forEach(defName => { this.insurance.defenderOffers[defName] = -60 * multiplier; });
         }
 
-        // 7s covers the client-side splash (2.5s breather + ~4.2s animation)
-        // plus network slack. Guarded so a reset/forfeit during the window
+        // 6s covers the condensed client splash (1.7s breather + 3s animation)
+        // plus a 1.3s scheduling/network margin. Guarded so a reset/forfeit during the window
         // doesn't get yanked back into play.
         return { type: 'START_TIMER', payload: {
-            duration: 7000,
+            duration: 6000,
             onTimeout: (engineRef) => {
                 if (engineRef.state !== "Bid Announcement") return [];
                 engineRef.state = "Playing Phase";
@@ -741,7 +784,8 @@ class GameEngine {
         const activeTurnOrder = this.gameStarted ? this.playerOrder.turnOrder : this.playerOrder.allIds;
         const state = {
             tableId: this.tableId, tableName: this.tableName, theme: this.theme, state: this.state, players: this.players,
-            tableType: this.tableType, qpWindowEndsAt: this.qpWindowEndsAt,
+            tableType: this.tableType, qpPhase: this.qpPhase, qpGeneration: this.qpGeneration,
+            qpWindowEndsAt: this.qpWindowEndsAt,
             playerOrderActive: activeTurnOrder.map(id => this.players[id]?.playerName).filter(Boolean),
             // Full seating roster in join order (includes the sitting-out dealer
             // in 4-player). Clients derive fixed seats from this, not from

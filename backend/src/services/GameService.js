@@ -25,6 +25,7 @@
             this.io = io;
             this.pool = pool;
             this.engines = {};
+            this.qpGenerationCounter = 0;
             this.adaptiveInsurance = new AdaptiveInsuranceStrategy(pool, io);
             this._initializeEngines();
 
@@ -61,6 +62,7 @@
                     const tableName = `${theme.name} Quick Play`;
                     const processTimerEffects = (effects = []) => this._executeEffects(tableId, effects);
                     this.engines[tableId] = new GameEngine(tableId, theme.id, tableName, processTimerEffects, 'quickplay');
+                    this.engines[tableId].qpGeneration = ++this.qpGenerationCounter;
                 }
             });
             this.qpTimers = {};
@@ -129,29 +131,97 @@
         }
 
         // ===================== QUICK PLAY MATCHMAKER =====================
-        // Flow (docs/FOUR_PLAYER_SPEC.md sibling — see whiteboard, July 2026):
-        // click Play Now -> seat at a filling table (or open a fresh one).
-        // Each empty seat toward 3 players gets a random 5-10s timer; a human
-        // click takes the seat and cancels it, a firing timer seats a bot.
-        // At 3 players a 20s humans-only window for a 4th opens (clients show
-        // a Start 3-Player button); a 4th human starts 4P immediately, the
-        // window expiring starts 3P. Bots never take the 4th seat.
+        // Fill to three, stop for an explicit table-wide decision, then either
+        // freeze/start that roster or seek one human fourth for 20 seconds. A
+        // search timeout returns to the decision; it never silently starts 3P.
+        // Bots can fill seats two/three, but can never occupy seat four.
 
         _humanCount(engine) {
             return Object.values(engine.players).filter(p => !p.isBot && !p.isSpectator).length;
         }
 
+        _quickPlayNow() {
+            return typeof this.nowOverride === 'function' ? this.nowOverride() : Date.now();
+        }
+
+        _clearQuickPlayTimer(tableId, kind) {
+            const timers = this.qpTimers[tableId];
+            const record = timers?.[kind];
+            if (!record) return;
+            const handle = Object.prototype.hasOwnProperty.call(record, 'handle')
+                ? record.handle
+                : record;
+            if (handle !== undefined && handle !== null) clearTimeout(handle);
+            timers[kind] = null;
+        }
+
+        _advanceQuickPlayPhase(engine, phase, windowEndsAt = null) {
+            this._clearQuickPlayTimer(engine.tableId, 'fill');
+            this._clearQuickPlayTimer(engine.tableId, 'window');
+            const serviceGeneration = Number.isSafeInteger(this.qpGenerationCounter)
+                ? this.qpGenerationCounter
+                : 0;
+            const engineGeneration = Number.isSafeInteger(engine.qpGeneration)
+                ? engine.qpGeneration
+                : 0;
+            this.qpGenerationCounter = Math.max(serviceGeneration, engineGeneration) + 1;
+            engine.qpGeneration = this.qpGenerationCounter;
+            engine.qpPhase = phase;
+            engine.qpWindowEndsAt = windowEndsAt;
+            return engine.qpGeneration;
+        }
+
+        canAcceptQuickPlayHuman(engine) {
+            if (!engine || engine.tableType !== 'quickplay' || engine.gameStarted || engine.gameStartPending) return false;
+            if (engine.qpPhase === 'filling') return engine.playerOrder.count < 3;
+            if (engine.qpPhase === 'seeking_fourth') {
+                return engine.playerOrder.count === 3
+                    && Number.isFinite(engine.qpWindowEndsAt)
+                    && this._quickPlayNow() < engine.qpWindowEndsAt;
+            }
+            return false;
+        }
+
         findQuickPlayTable(themeId) {
-            const pool = Object.values(this.engines).filter(e =>
-                e.tableType === 'quickplay' && e.theme === themeId && !e.gameStarted && !e.gameStartPending);
+            const pool = Object.values(this.engines).filter(engine => (
+                engine.theme === themeId && this.canAcceptQuickPlayHuman(engine)
+            ));
+            const seekingFourth = pool.find(engine => engine.qpPhase === 'seeking_fourth');
+            if (seekingFourth) return seekingFourth;
             // Prefer a table already filling with at least one human...
-            const filling = pool.find(e => this._humanCount(e) > 0 && e.playerOrder.count < 4);
+            const filling = pool.find(engine => this._humanCount(engine) > 0);
             if (filling) return filling;
             // ...else a completely fresh table...
-            const empty = pool.find(e => e.playerOrder.count === 0);
+            const empty = pool.find(engine => engine.playerOrder.count === 0);
             if (empty) return empty;
             // ...else anything not started with an open seat (bots-only leftovers).
-            return pool.find(e => e.playerOrder.count < 4) || null;
+            return pool[0] || null;
+        }
+
+        // Intentionally synchronous: callers finish balance/auth I/O first,
+        // then select and mutate the target table in one JavaScript turn.
+        claimQuickPlaySeat(themeId, user, socketId, tokens) {
+            const existingEngine = Object.values(this.engines).find(engine => engine.players[user.id]);
+            if (existingEngine?.tableType === 'quickplay'
+                && existingEngine.theme === themeId
+                && !existingEngine.gameStarted
+                && !existingEngine.gameStartPending) {
+                existingEngine.reconnectPlayer(user.id, { id: socketId }, tokens);
+                return existingEngine;
+            }
+
+            const engine = this.findQuickPlayTable(themeId);
+            if (!engine || !this.canAcceptQuickPlayHuman(engine)) return null;
+            engine.joinTable(user, socketId, tokens, false);
+            const player = engine.players[user.id];
+            if (!player || player.isSpectator || !engine.playerOrder.includes(user.id)) {
+                if (player?.isSpectator && !engine.gameStarted && !engine.gameStartPending) {
+                    delete engine.players[user.id];
+                }
+                return null;
+            }
+            this.evaluateQuickPlayTable(engine.tableId, { restartFill: true });
+            return engine;
         }
 
         // restartFill: true when a human just took a seat — their arrival
@@ -161,13 +231,13 @@
             if (!engine || engine.tableType !== 'quickplay') return;
             const timers = this.qpTimers[tableId] || (this.qpTimers[tableId] = {});
             const timerFn = this.timerOverride || setTimeout;
-            const clearFill = () => { if (timers.fill) { clearTimeout(timers.fill); timers.fill = null; } };
-            const clearWindow = () => {
-                if (timers.window) { clearTimeout(timers.window); timers.window = null; }
-                engine.qpWindowEndsAt = null;
-            };
 
-            if (engine.gameStarted || engine.gameStartPending) { clearFill(); clearWindow(); return; }
+            if (engine.gameStarted || engine.gameStartPending) {
+                this._clearQuickPlayTimer(tableId, 'fill');
+                this._clearQuickPlayTimer(tableId, 'window');
+                engine.qpWindowEndsAt = null;
+                return;
+            }
 
             const humans = this._humanCount(engine);
             const seated = engine.playerOrder.count;
@@ -176,61 +246,148 @@
                 // Abandoned mid-fill: sweep the bots so the table returns to the
                 // pool clean. (Seated humans who merely disconnected pre-game are
                 // removed by disconnectPlayer, so 0 humans really means empty.)
-                clearFill(); clearWindow();
+                this._advanceQuickPlayPhase(engine, 'filling');
                 let guard = 8;
                 while (guard-- > 0 && Object.values(engine.players).some(p => p.isBot)) engine.removeBot();
                 if (engine.playerOrder.count === 0) engine.state = 'Waiting for Players';
+                this.emitGameState(tableId);
                 return;
             }
 
             if (seated < 3) {
-                clearWindow();
-                if (restartFill) clearFill();
+                if (engine.qpPhase !== 'filling' || restartFill) {
+                    this._advanceQuickPlayPhase(engine, 'filling');
+                }
                 if (!timers.fill) {
                     const delay = 5000 + Math.floor(Math.random() * 5000);
-                    timers.fill = timerFn(() => {
-                        timers.fill = null;
+                    const generation = engine.qpGeneration;
+                    const expectedSeats = seated;
+                    const record = { generation, expectedSeats, handle: null };
+                    timers.fill = record;
+                    record.handle = timerFn(() => {
+                        if (timers.fill === record) timers.fill = null;
                         const eng = this.engines[tableId];
-                        if (!eng || eng.gameStarted || eng.gameStartPending) return;
-                        if (this._humanCount(eng) > 0 && eng.playerOrder.count < 3) {
-                            eng.addBotPlayer();
-                            this.emitGameState(tableId);
-                        }
-                        this.evaluateQuickPlayTable(tableId);
-                    }, delay) || true; // truthy marker when a test timer override returns undefined
+                        if (!eng || eng.gameStarted || eng.gameStartPending
+                            || eng.qpPhase !== 'filling'
+                            || eng.qpGeneration !== generation
+                            || eng.playerOrder.count !== expectedSeats
+                            || this._humanCount(eng) < 1
+                            || eng.playerOrder.count >= 3) return;
+                        eng.addBotPlayer();
+                        this.emitGameState(tableId);
+                        this.evaluateQuickPlayTable(tableId, { restartFill: true });
+                    }, delay);
                 }
                 return;
             }
 
             if (seated === 3) {
-                clearFill();
-                if (!timers.window) {
-                    engine.qpWindowEndsAt = Date.now() + 20000;
+                this._clearQuickPlayTimer(tableId, 'fill');
+                if (engine.qpPhase === 'seeking_fourth') return;
+                if (engine.qpPhase !== 'decision_pending') {
+                    this._advanceQuickPlayPhase(engine, 'decision_pending');
                     this.emitGameState(tableId);
-                    timers.window = timerFn(() => {
-                        timers.window = null;
-                        const eng = this.engines[tableId];
-                        if (!eng || eng.gameStarted || eng.gameStartPending) { if (eng) eng.qpWindowEndsAt = null; return; }
-                        eng.qpWindowEndsAt = null;
-                        this._startQuickPlayGame(tableId);
-                    }, 20000) || true;
                 }
                 return;
             }
 
-            // 4 seated (the 4th is always a human) — start immediately.
-            clearFill(); clearWindow();
-            this._startQuickPlayGame(tableId);
+            const fourthPlayer = engine.players[engine.playerOrder.allIds[3]];
+            if (seated === 4
+                && engine.qpPhase === 'seeking_fourth'
+                && Number.isFinite(engine.qpWindowEndsAt)
+                && this._quickPlayNow() < engine.qpWindowEndsAt
+                && fourthPlayer?.isBot !== true) {
+                const generation = this._advanceQuickPlayPhase(engine, 'starting_4');
+                this.emitGameState(tableId);
+                void this._startQuickPlayGame(tableId, generation, 4);
+                return;
+            }
+
+            // A terminal reset may retain an intact four-human roster. Starting
+            // it again would charge every player without fresh consent, so it
+            // returns to an explicit, generation-scoped 4P decision. The same
+            // recovery handles a rolled-back 4P start transaction.
+            if (seated === 4 && fourthPlayer?.isBot !== true
+                && engine.qpPhase !== 'decision_pending') {
+                this._advanceQuickPlayPhase(engine, 'decision_pending');
+                this.emitGameState(tableId);
+            }
         }
 
-        async _startQuickPlayGame(tableId) {
+        quickPlayDecision(tableId, userId, choice, generation) {
             const engine = this.engines[tableId];
-            if (!engine || engine.gameStarted || engine.gameStartPending) return;
+            const player = engine?.players[userId];
+            const seated = engine?.playerOrder.count;
+            const fourthPlayer = seated === 4
+                ? engine.players[engine.playerOrder.allIds[3]]
+                : null;
+            if (!engine || engine.tableType !== 'quickplay'
+                || !player || player.isBot || player.isSpectator || player.disconnected
+                || engine.gameStarted || engine.gameStartPending
+                || engine.qpPhase !== 'decision_pending'
+                || engine.qpGeneration !== generation
+                || ![3, 4].includes(seated)
+                || this._humanCount(engine) < 1
+                || (seated === 4 && (fourthPlayer?.isBot || fourthPlayer?.isSpectator))) {
+                return { accepted: false, reason: 'stale_or_ineligible' };
+            }
+
+            if ((choice === 'start3' && seated === 3) || (choice === 'start4' && seated === 4)) {
+                const playerMode = seated;
+                const startGeneration = this._advanceQuickPlayPhase(engine, `starting_${playerMode}`);
+                this.emitGameState(tableId);
+                void this._startQuickPlayGame(tableId, startGeneration, playerMode);
+                return { accepted: true, choice, generation: startGeneration };
+            }
+
+            if (choice === 'seek4' && seated === 3) {
+                const deadline = this._quickPlayNow() + 20000;
+                const searchGeneration = this._advanceQuickPlayPhase(engine, 'seeking_fourth', deadline);
+                const timers = this.qpTimers[tableId] || (this.qpTimers[tableId] = {});
+                const timerFn = this.timerOverride || setTimeout;
+                const expectedHumans = this._humanCount(engine);
+                const record = { generation: searchGeneration, deadline, handle: null };
+                timers.window = record;
+                const expireSearch = () => {
+                    const current = this.engines[tableId];
+                    if (timers.window !== record
+                        || !current || current.gameStarted || current.gameStartPending
+                        || current.qpPhase !== 'seeking_fourth'
+                        || current.qpGeneration !== searchGeneration
+                        || current.playerOrder.count !== 3
+                        || this._humanCount(current) !== expectedHumans
+                        || current.qpWindowEndsAt !== deadline
+                    ) return;
+                    const remaining = deadline - this._quickPlayNow();
+                    if (remaining > 0) {
+                        record.handle = timerFn(expireSearch, remaining);
+                        return;
+                    }
+                    timers.window = null;
+                    this._advanceQuickPlayPhase(current, 'decision_pending');
+                    this.emitGameState(tableId);
+                };
+                record.handle = timerFn(expireSearch, 20000);
+                this.emitGameState(tableId);
+                return { accepted: true, choice, generation: searchGeneration };
+            }
+
+            return { accepted: false, reason: 'invalid_choice' };
+        }
+
+        async _startQuickPlayGame(tableId, generation, playerMode) {
+            const engine = this.engines[tableId];
+            const expectedPhase = playerMode === 3 ? 'starting_3' : 'starting_4';
+            if (!engine || engine.gameStarted || engine.gameStartPending
+                || engine.qpPhase !== expectedPhase
+                || engine.qpGeneration !== generation
+                || engine.playerOrder.count !== playerMode) return;
             const firstHuman = Object.values(engine.players).find(p => !p.isBot && !p.isSpectator);
             if (!firstHuman) { this.evaluateQuickPlayTable(tableId); return; }
             engine.qpWindowEndsAt = null;
-            await this.startGame(tableId, firstHuman.userId);
-            // Start can fail (e.g. a broke player got kicked) — re-arm the fill.
+            await this.startGame(tableId, firstHuman.userId, {
+                quickPlayStart: { generation, playerMode },
+            });
             if (!engine.gameStarted) this.evaluateQuickPlayTable(tableId);
         }
         // =================================================================
@@ -239,10 +396,8 @@
             await this._performAction(tableId, (engine) => engine.playCard(userId, card));
         }
         
-        async startGame(tableId, requestingUserId) {
-            await this._performAction(tableId, (engine) => engine.startGame(requestingUserId));
-            // A human pressing Start during the quick-play 4th-player window
-            // must cancel the window timer (evaluate no-ops once started).
+        async startGame(tableId, requestingUserId, options = {}) {
+            await this._performAction(tableId, (engine) => engine.startGame(requestingUserId, options));
             if (this.engines[tableId]?.tableType === 'quickplay') this.evaluateQuickPlayTable(tableId);
         }
         
@@ -295,6 +450,9 @@
 
         async resetGame(tableId) {
             await this._performAction(tableId, (engine) => engine.reset());
+            if (this.engines[tableId]?.tableType === 'quickplay') {
+                this.evaluateQuickPlayTable(tableId);
+            }
         }
         
         async handleGameOver(payload) {
@@ -356,8 +514,14 @@
 
         _clearQuickPlayTimers() {
             for (const timers of Object.values(this.qpTimers || {})) {
-                if (timers?.fill) clearTimeout(timers.fill);
-                if (timers?.window) clearTimeout(timers.window);
+                const fillHandle = timers?.fill && Object.prototype.hasOwnProperty.call(timers.fill, 'handle')
+                    ? timers.fill.handle
+                    : timers?.fill;
+                const windowHandle = timers?.window && Object.prototype.hasOwnProperty.call(timers.window, 'handle')
+                    ? timers.window.handle
+                    : timers?.window;
+                if (fillHandle !== undefined && fillHandle !== null) clearTimeout(fillHandle);
+                if (windowHandle !== undefined && windowHandle !== null) clearTimeout(windowHandle);
             }
             this.qpTimers = {};
         }

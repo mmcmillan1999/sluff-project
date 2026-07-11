@@ -46,6 +46,31 @@ function testPlayAndFrogGuards() {
     assert.ok(accepted.effects.some(effect => effect.type === 'START_TIMER'));
 }
 
+function testBidAnnouncementTimerLifecycle() {
+    const engine = makeEngine('bid-announcement-timer');
+    engine.bidWinnerInfo = { userId: 1, playerName: 'Alice', bid: 'Solo' };
+
+    const timer = engine._transitionToPlayingPhase();
+    assert.equal(engine.state, 'Bid Announcement');
+    assert.equal(timer.type, 'START_TIMER');
+    assert.equal(timer.payload.duration, 6000, 'server hold leaves 1.3s beyond the condensed 4.7s client sequence');
+
+    const effects = timer.payload.onTimeout(engine);
+    assert.equal(engine.state, 'Playing Phase');
+    assert.deepEqual(effects, [{ type: 'BROADCAST_STATE' }]);
+    assert.deepEqual(timer.payload.onTimeout(engine), [], 'the announcement timer is single-use');
+
+    const interrupted = makeEngine('interrupted-bid-announcement');
+    interrupted.bidWinnerInfo = { userId: 1, playerName: 'Alice', bid: 'Frog' };
+    const interruptedTimer = interrupted._transitionToPlayingPhase();
+    interrupted.state = 'Game Over';
+    assert.deepEqual(
+        interruptedTimer.payload.onTimeout(interrupted),
+        [],
+        'a reset or forfeit cannot resurrect play after the splash'
+    );
+}
+
 function testInsuranceOvershootIsZeroSum() {
     const engine = makeEngine();
     engine.state = 'Playing Phase';
@@ -811,6 +836,7 @@ async function testForfeitSettlement() {
 
 async function runBackendIntegrityTests() {
     testPlayAndFrogGuards();
+    testBidAnnouncementTimerLifecycle();
     testInsuranceOvershootIsZeroSum();
     testDrawVotePausesPlayAndGuardsTransitions();
     testSocketActionGuard();

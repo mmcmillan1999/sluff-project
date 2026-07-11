@@ -73,7 +73,7 @@ describe('App Component and Game Flow', () => {
             }
         });
 
-        expect(screen.getByText('All players passed. Revealing the widow...')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'All passed · Widow reveal' })).toBeInTheDocument();
         expect(screen.getAllByText('A')).toHaveLength(2);
         expect(screen.getAllByText('K')).toHaveLength(2);
         expect(screen.getAllByText('Q')).toHaveLength(2);

@@ -21,6 +21,7 @@ import SoundControls from './game/SoundControls';
 import { shareInvite, getInviteUrl } from '../utils/tableInvites';
 import { SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS } from '../constants';
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
+import { useBidWinnerSplash } from '../hooks/useBidWinnerSplash';
 
 
 const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, handleShowHowToPlay, emitEvent, playSound, socket, handleOpenFeedbackModal, soundSettings }) => {
@@ -41,10 +42,8 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const [showLayoutDev, setShowLayoutDev] = useState(false);
     const [showAnchorDebug, setShowAnchorDebug] = useState(false); // Toggle debug overlay
     const [selectedFrogDiscards, setSelectedFrogDiscards] = useState([]);
-    const [bidSplashInfo, setBidSplashInfo] = useState(null);
-    const splashStateRef = useRef(null);
-    const splashTimerRef = useRef(null);
     const [shareNotice, setShareNotice] = useState(null);
+    const [quickPlayDecisionRejectionNonce, setQuickPlayDecisionRejectionNonce] = useState(0);
     const shareNoticeTimerRef = useRef(null);
     const turnPlayerRef = useRef(null);
     const trickWinnerRef = useRef(null);
@@ -57,6 +56,10 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const errorTimerRef = useRef(null);
     const dropZoneRef = useRef(null);
     const prefersReducedMotion = usePrefersReducedMotion();
+    const { bidSplashInfo, dismissBidSplash } = useBidWinnerSplash(
+        currentTableState,
+        prefersReducedMotion
+    );
 
     const selfPlayerInTable = currentTableState ? currentTableState.players[playerId] : null;
     const isSpectator = selfPlayerInTable?.isSpectator;
@@ -94,15 +97,22 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         };
 
         const handleDrawDeclined = () => {};
+        // The event is only a retry signal. The next authoritative gameState
+        // remains the sole source of phase/generation data.
+        const handleQuickPlayDecisionRejected = () => {
+            setQuickPlayDecisionRejectionNonce(value => value + 1);
+        };
 
         socket.on('new_lobby_message', handleNewChatMessage);
         socket.on('error', handlePlayerError);
         socket.on('drawDeclined', handleDrawDeclined);
+        socket.on('quickPlayDecisionRejected', handleQuickPlayDecisionRejected);
 
         return () => {
             socket.off('new_lobby_message', handleNewChatMessage);
             socket.off('error', handlePlayerError);
             socket.off('drawDeclined', handleDrawDeclined);
+            socket.off('quickPlayDecisionRejected', handleQuickPlayDecisionRejected);
             if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
         };
     }, [socket]);
@@ -136,44 +146,6 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         const player = Object.values(currentTableState.players).find(p => p.userId === targetPlayerId);
         return player?.playerName || String(targetPlayerId);
     }, [currentTableState]);
-
-    // Round-start fanfare: the server holds play in a dedicated "Bid
-    // Announcement" state (~5.5s) while clients run the VS splash, so no cards
-    // can hit the table mid-animation. Splash after a breather so the live bid
-    // call finishes first. Requiring a known pre-play state means a mid-round
-    // reconnect (null -> Bid Announcement) doesn't re-trigger it.
-    const SPLASH_DELAY_MS = 2500;
-    useEffect(() => {
-        const state = currentTableState?.state;
-        const PRE_PLAY_STATES = ['Bidding Phase', 'Awaiting Frog Upgrade Decision', 'Frog Widow Exchange', 'Trump Selection'];
-        if (prefersReducedMotion) {
-            if (splashTimerRef.current) clearTimeout(splashTimerRef.current);
-            splashTimerRef.current = null;
-            setBidSplashInfo(null);
-            splashStateRef.current = state;
-            return;
-        }
-        if (state === 'Bid Announcement' && PRE_PLAY_STATES.includes(splashStateRef.current) && currentTableState?.bidWinnerInfo) {
-            const info = {
-                playerName: currentTableState.bidWinnerInfo.playerName,
-                bid: currentTableState.bidWinnerInfo.bid,
-                trumpSuit: currentTableState.trumpSuit,
-                // The actual defending team: active players minus the bidder.
-                // (Derived from playerOrderActive, NOT the seat map — in
-                // 4-player the sitting-out dealer has a seat but no team.)
-                defenders: currentTableState.playerOrderActive.filter(
-                    name => name !== currentTableState.bidWinnerInfo.playerName
-                )
-            };
-            if (splashTimerRef.current) clearTimeout(splashTimerRef.current);
-            splashTimerRef.current = setTimeout(() => setBidSplashInfo(info), SPLASH_DELAY_MS);
-        }
-        splashStateRef.current = state;
-    }, [currentTableState, prefersReducedMotion]);
-
-    useEffect(() => () => {
-        if (splashTimerRef.current) clearTimeout(splashTimerRef.current);
-    }, []);
 
     useEffect(() => {
         if (currentTableState) {
@@ -679,7 +651,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                     info={bidSplashInfo}
                     seatAssignments={seatAssignments}
                     playSound={playSound}
-                    onDone={() => setBidSplashInfo(null)}
+                    onDone={dismissBidSplash}
                 />
             )}
 
@@ -763,6 +735,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 isAdmin={user?.is_admin}
                 selectedFrogDiscards={selectedFrogDiscards}
                 showDebugAnchors={showAnchorDebug}
+                quickPlayDecisionRejectionNonce={quickPlayDecisionRejectionNonce}
             />
             
             <footer className="game-footer">

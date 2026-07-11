@@ -31,6 +31,17 @@
 }
 
 .game-table {
+    /* Keep every trick plate on one shared, mirrored horizontal rail. The
+       3vw subtraction nudges the old 9vh anchors outward while the safe-area
+       floor keeps plates clear of rounded/notched viewport edges. */
+    --trick-pile-left-inset: max(
+        calc(env(safe-area-inset-left, 0px) + 1.5vw),
+        calc(9vh - 3vw)
+    );
+    --trick-pile-right-inset: max(
+        calc(env(safe-area-inset-right, 0px) + 1.5vw),
+        calc(9vh - 3vw)
+    );
     flex-grow: 1;
     position: relative;
     display: flex;
@@ -160,25 +171,25 @@
 
 /* Bottom positions */
 .pile-bottom-left {
-    left: 9vh;  /* 9vh from left edge */
+    left: var(--trick-pile-left-inset);
     bottom: 5%;
 }
 
 .pile-bottom-right {
-    right: 9vh;  /* 9vh from right edge */
+    right: var(--trick-pile-right-inset);
     left: auto;
     bottom: 5%;
 }
 
 /* Top positions - mirrored from bottom */
 .pile-top-left {
-    left: 9vh;  /* 9vh from left edge */
+    left: var(--trick-pile-left-inset);
     bottom: auto;
     top: 10.5vh;  /* 10.5vh from top edge */
 }
 
 .pile-top-right {
-    right: 9vh;  /* 9vh from right edge */
+    right: var(--trick-pile-right-inset);
     left: auto;
     bottom: auto;
     top: 10.5vh;  /* 10.5vh from top edge */
@@ -671,22 +682,22 @@
 
 /* Position overlay near each pile position */
 .last-trick-overlay-container.pile-bottom-left {
-    left: 9vh; /* Match pile position - 9vh from edge */
+    left: var(--trick-pile-left-inset);
     bottom: 12%; /* Just above the pile */
 }
 
 .last-trick-overlay-container.pile-bottom-right {
-    right: 9vh; /* Match pile position - 9vh from edge */
+    right: var(--trick-pile-right-inset);
     bottom: 12%; /* Just above the pile */
 }
 
 .last-trick-overlay-container.pile-top-left {
-    left: 9vh; /* Match pile position - 9vh from edge */
+    left: var(--trick-pile-left-inset);
     top: 19.5vh; /* Just below the pile - adjusted for 10.5vh position */
 }
 
 .last-trick-overlay-container.pile-top-right {
-    right: 9vh; /* Match pile position - 9vh from edge */
+    right: var(--trick-pile-right-inset);
     top: 19.5vh; /* Just below the pile - adjusted for 10.5vh position */
 }
 

@@ -77,6 +77,7 @@ const registerGameHandlers = (io, gameService, options = {}) => {
         : DEFAULT_SOCKET_AUTH_REFRESH_INTERVAL_MS;
     const scheduleInterval = options.setIntervalFn || setInterval;
     const cancelInterval = options.clearIntervalFn || clearInterval;
+    const latestSocketIdByUser = new Map();
 
     io.use((socket, next) => {
         const token = socket.handshake?.auth?.token;
@@ -99,7 +100,14 @@ const registerGameHandlers = (io, gameService, options = {}) => {
 
     io.on("connection", (socket) => {
         socket.data = socket.data || {};
+        latestSocketIdByUser.set(String(socket.user.id), socket.id);
         console.log(`Socket connected: ${socket.user.username} (ID: ${socket.user.id}, Socket: ${socket.id})`);
+
+        const isCurrentSocketController = () => (
+            socket.connected !== false
+            && io.sockets?.sockets?.get(socket.id) === socket
+            && latestSocketIdByUser.get(String(socket.user.id)) === socket.id
+        );
 
         const emitRedactedState = () => emitRedactedStateForSocket(socket, gameService);
         const requireFreshAdmin = denialMessage => requireFreshSocketAdmin(
@@ -222,35 +230,50 @@ const registerGameHandlers = (io, gameService, options = {}) => {
             }
         });
 
-        // Shared seating flow for joinTable and quickPlay: fetch tokens, leave
-        // any previous table, join the room, seat the player, broadcast.
+        const activeSeatIsLocked = (engine, player) => (
+            !!engine
+            && !!player
+            && !player.isSpectator
+            && (engine.gameStarted || engine.gameStartPending)
+            && !['Game Over', 'DrawComplete'].includes(engine.state)
+        );
+        const findSeatEngines = () => Object.values(gameService.getAllEngines())
+            .filter(candidate => candidate.players[socket.user.id]);
+        const hasSeatControlledByAnotherSocket = () => findSeatEngines().some(candidate => {
+            const player = candidate.players[socket.user.id];
+            return !!player?.socketId && player.socketId !== socket.id;
+        });
+        const readTokenBalance = async () => {
+            const tokenResult = await gameService.pool.query(
+                "SELECT SUM(amount) AS tokens FROM transactions WHERE user_id = $1",
+                [socket.user.id],
+            );
+            return parseFloat(tokenResult.rows[0]?.tokens || 0).toFixed(2);
+        };
+
+        // Shared fixed-table seating flow. Quick Play uses a separate path so
+        // its target is selected only after this asynchronous balance read.
         const seatUserAtTable = async (engineToJoin, asSpectator = false) => {
             const tableId = engineToJoin.tableId;
             const existingPlayer = engineToJoin.players[socket.user.id];
-            const activeSeatIsLocked = (engine, player) => (
-                !!engine
-                && !!player
-                && !player.isSpectator
-                && (engine.gameStarted || engine.gameStartPending)
-                && !['Game Over', 'DrawComplete'].includes(engine.state)
-            );
             if (asSpectator && activeSeatIsLocked(engineToJoin, existingPlayer)) {
                 throw new Error('An active player cannot switch to spectator mode during a game.');
             }
-            const findOtherSeatEngines = () => Object.values(gameService.getAllEngines())
-                .filter(candidate => candidate.players[socket.user.id] && candidate.tableId !== tableId);
+            const findOtherSeatEngines = () => findSeatEngines()
+                .filter(candidate => candidate.tableId !== tableId);
             const previousEngines = findOtherSeatEngines();
             if (previousEngines.some(engine => activeSeatIsLocked(engine, engine.players[socket.user.id]))) {
                 throw new Error('You cannot join another table while your current game is active.');
             }
-            const tokenResult = await gameService.pool.query("SELECT SUM(amount) AS tokens FROM transactions WHERE user_id = $1", [socket.user.id]);
-            const tokens = parseFloat(tokenResult.rows[0].tokens || 0).toFixed(2);
+            const tokens = await readTokenBalance();
+            if (!isCurrentSocketController() || hasSeatControlledByAnotherSocket()) return false;
 
             // Observer mode is an admin capability. Refresh it after the balance
             // read so no stale JWT claim survives into the seating mutation.
             if (asSpectator && !(await requireFreshAdmin(
                 'Only administrators can request observer mode.',
             ))) return false;
+            if (!isCurrentSocketController() || hasSeatControlledByAnotherSocket()) return false;
 
             // The balance read yields to PostgreSQL. Re-check both seats after
             // it returns because another socket may have requested a start in
@@ -266,6 +289,11 @@ const registerGameHandlers = (io, gameService, options = {}) => {
             if (currentPreviousEngines.some(engine => activeSeatIsLocked(engine, engine.players[socket.user.id]))) {
                 throw new Error('You cannot join another table while your current game is active.');
             }
+            if (engineToJoin.tableType === 'quickplay'
+                && !currentExistingPlayer
+                && !gameService.canAcceptQuickPlayHuman(engineToJoin)) {
+                throw new Error('That Quick Play seat is no longer available.');
+            }
 
             for (const previousEngine of currentPreviousEngines) {
                 previousEngine.leaveTable(socket.user.id);
@@ -278,6 +306,14 @@ const registerGameHandlers = (io, gameService, options = {}) => {
             engineToJoin.joinTable(socket.user, socket.id, tokens, asSpectator);
 
             const joinedPlayer = engineToJoin.players[socket.user.id];
+            if (engineToJoin.tableType === 'quickplay'
+                && !asSpectator
+                && (!joinedPlayer || joinedPlayer.isSpectator || !engineToJoin.playerOrder.includes(socket.user.id))) {
+                if (joinedPlayer?.isSpectator && !engineToJoin.gameStarted && !engineToJoin.gameStartPending) {
+                    delete engineToJoin.players[socket.user.id];
+                }
+                throw new Error('That Quick Play seat is no longer available.');
+            }
             if (asSpectator && socket.user.is_admin === true && joinedPlayer?.isSpectator) {
                 joinedPlayer.wasExplicitSpectator = true;
                 socket.data.trustedAdminObserver = true;
@@ -323,24 +359,62 @@ const registerGameHandlers = (io, gameService, options = {}) => {
             }
         });
 
-        // Quick Play: pick (or open) a matchmaking table for the theme and
-        // seat the player; the GameService matchmaker handles the rest.
+        // Quick Play: complete I/O first, then select and claim a live target
+        // without another await. Losing concurrent fourth players are matched
+        // into another eligible table instead of falling through as spectators.
         socket.on("quickPlay", async (payload) => {
             if (!isPlainObject(payload) || typeof payload.theme !== 'string') {
                 return socket.emit('error', { message: 'Invalid quick play request.' });
             }
             const { theme } = payload;
-            const engineToJoin = gameService.findQuickPlayTable(theme);
-            if (!engineToJoin) {
-                return socket.emit("error", { message: "All quick play tables are busy — try again in a moment." });
-            }
             try {
-                await seatUserAtTable(engineToJoin, false);
-                // A human arrival restarts the next seat's 5-10s fill window.
-                gameService.evaluateQuickPlayTable(engineToJoin.tableId, { restartFill: true });
+                const tokens = await readTokenBalance();
+                // Balance I/O yields. A disconnect or replacement connection in
+                // that window revokes this continuation before it can create a
+                // ghost seat or overwrite the replacement controller's socket.
+                if (!isCurrentSocketController() || hasSeatControlledByAnotherSocket()) return;
+                const occupiedEngines = findSeatEngines();
+                if (occupiedEngines.some(candidate => activeSeatIsLocked(candidate, candidate.players[socket.user.id]))) {
+                    throw new Error('You cannot join another table while your current game is active.');
+                }
+
+                const engineToJoin = gameService.claimQuickPlaySeat(
+                    theme,
+                    socket.user,
+                    socket.id,
+                    tokens,
+                );
+                if (!engineToJoin) {
+                    socket.emit('error', {
+                        message: 'Every Quick Play table changed while you were joining. Your current seat is safe; tap Play Now to try again.',
+                    });
+                    return;
+                }
+
+                // Claim succeeds synchronously before releasing any old
+                // waiting-room seat. If every matchmaking table is busy, the
+                // retry response leaves the user exactly where they were.
+                for (const previousEngine of occupiedEngines) {
+                    if (previousEngine === engineToJoin) continue;
+                    previousEngine.leaveTable(socket.user.id);
+                    socket.leave(previousEngine.tableId);
+                    gameService.emitGameState(previousEngine.tableId);
+                    if (previousEngine.tableType === 'quickplay') {
+                        gameService.evaluateQuickPlayTable(previousEngine.tableId);
+                    }
+                }
+
+                socket.join(engineToJoin.tableId);
+                socket.data.trustedAdminObserver = false;
+                socket.emit('joinedTable', { gameState: gameService.getStateForSocket(engineToJoin, socket) });
+                gameService.emitGameState(engineToJoin.tableId);
+                gameService.io.emit('lobbyState', gameService.getLobbyState());
             } catch(err) {
                 console.error(`Error in quickPlay for user ${socket.user.id}:`, err);
-                socket.emit("error", { message: "Could not retrieve your token balance." });
+                const message = err.message?.includes('cannot join another table')
+                    ? err.message
+                    : 'Could not join Quick Play right now.';
+                socket.emit("error", { message });
             }
         });
 
@@ -421,6 +495,7 @@ const registerGameHandlers = (io, gameService, options = {}) => {
             // Emit updated state
             gameService.emitGameState(tableId);
             gameService.io.emit('lobbyState', gameService.getLobbyState());
+            if (engine.tableType === 'quickplay') gameService.evaluateQuickPlayTable(tableId);
             
             socket.emit("notification", { message: "You are now a spectator." });
         });
@@ -435,9 +510,31 @@ const registerGameHandlers = (io, gameService, options = {}) => {
             engine.addBotPlayer(payload.name || 'Lee');
             gameService.emitGameState(engine.tableId);
             gameService.io.emit('lobbyState', gameService.getLobbyState());
+            if (engine.tableType === 'quickplay') gameService.evaluateQuickPlayTable(engine.tableId);
         });
         
         onTableAction("startGame", {}, ({ payload: { tableId } }) => gameService.startGame(tableId, socket.user.id));
+        onTableAction("quickPlayDecision", {
+            validate: payload => (
+                ['start3', 'seek4', 'start4'].includes(payload.choice)
+                && Number.isSafeInteger(payload.generation)
+                && payload.generation >= 0
+            ) ? null : 'Invalid Quick Play decision.',
+        }, ({ engine, payload: { choice, generation } }) => {
+            const result = gameService.quickPlayDecision(
+                engine.tableId,
+                socket.user.id,
+                choice,
+                generation,
+            );
+            if (!result.accepted) {
+                socket.emit('quickPlayDecisionRejected', {
+                    message: 'That Quick Play choice is no longer available.',
+                    qpPhase: engine.qpPhase,
+                    qpGeneration: engine.qpGeneration,
+                });
+            }
+        });
         onTableAction("playCard", { validate: validators.card }, ({ payload: { tableId, card } }) => gameService.playCard(tableId, socket.user.id, card));
         onTableAction("dealCards", {}, ({ payload: { tableId } }) => gameService.dealCards(tableId, socket.user.id));
         onTableAction("placeBid", { validate: validators.bid }, ({ payload: { tableId, bid } }) => gameService.placeBid(tableId, socket.user.id, bid));
@@ -464,6 +561,7 @@ const registerGameHandlers = (io, gameService, options = {}) => {
             engine.removeBot();
             gameService.emitGameState(engine.tableId);
             gameService.io.emit('lobbyState', gameService.getLobbyState());
+            if (engine.tableType === 'quickplay') gameService.evaluateQuickPlayTable(engine.tableId);
         });
         
         // Admin spectator start game handler
@@ -667,6 +765,25 @@ const registerGameHandlers = (io, gameService, options = {}) => {
         socket.on("disconnect", async () => {
             socketIdentityRefreshStopped = true;
             cancelInterval(socketIdentityRefreshTimer);
+            const socketUserKey = String(socket.user.id);
+            if (latestSocketIdByUser.get(socketUserKey) === socket.id) {
+                // A user may still have an older tab/connection alive. Promote
+                // the newest remaining local socket so the safety guard recovers
+                // instead of forcing that tab to reconnect before matchmaking.
+                let fallbackSocketId = null;
+                const connectedSockets = io.sockets?.sockets;
+                if (connectedSockets && typeof connectedSockets.values === 'function') {
+                    for (const candidate of connectedSockets.values()) {
+                        if (candidate.id !== socket.id
+                            && candidate.connected !== false
+                            && String(candidate.user?.id) === socketUserKey) {
+                            fallbackSocketId = candidate.id;
+                        }
+                    }
+                }
+                if (fallbackSocketId) latestSocketIdByUser.set(socketUserKey, fallbackSocketId);
+                else latestSocketIdByUser.delete(socketUserKey);
+            }
             console.log(`Socket disconnected: ${socket.user.username} (ID: ${socket.user.id}, Socket: ${socket.id})`);
             const enginePlayerIsOn = Object.values(gameService.getAllEngines()).find(e => e.players[socket.user.id]);
             if (enginePlayerIsOn) {

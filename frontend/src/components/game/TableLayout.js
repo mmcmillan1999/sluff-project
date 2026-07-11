@@ -5,7 +5,7 @@ import ScoreProgressBar from './ScoreProgressBar';
 import PlayerSeatPositioner from './PlayerSeatPositioner';
 import {
     FINAL_TRICK_HOLD_MS, FINAL_TRICK_FLY_MS,
-    BANNER_START_MS, BANNER_DURATION_MS,
+    BANNER_START_MS,
     WIDOW_TO_CENTER_START_MS, WIDOW_TO_CENTER_MS,
     WIDOW_FLIP_START_MS, WIDOW_FLIP_MS,
     WIDOW_TO_PILE_MS, WIDOW_OVERLAY_TO_PILE_MS,
@@ -44,7 +44,8 @@ const TableLayout = ({
     playSound,
     dropZoneRef,
     isAdmin = false,
-    showDebugAnchors = false
+    showDebugAnchors = false,
+    quickPlayDecisionRejectionNonce = 0
 }) => {
     const [lastTrickVisible, setLastTrickVisible] = useState(false);
     const [lastTrickPosition, setLastTrickPosition] = useState(null);
@@ -59,9 +60,8 @@ const TableLayout = ({
     // Refs to the played-card "fly" wrappers (one per seat) + the hold-then-fly timer.
     const flyRefs = useRef({});
     const flyTimerRef = useRef(null);
-    // End-of-round celebration: "WIDOW REVEAL!" banner + the widow cards flying
-    // from the widow pile to center and on to the awarded team's pile.
-    const [widowRevealVisible, setWidowRevealVisible] = useState(false);
+    // End-of-round celebration: the widow cards fly from the widow pile to
+    // center and on to the awarded team's pile.
     const [widowCelebrationActive, setWidowCelebrationActive] = useState(false);
     const [widowFlipped, setWidowFlipped] = useState(false);
     const widowCardRefs = useRef([]);
@@ -205,7 +205,7 @@ const TableLayout = ({
     // and jumps straight to scoring, so we run the whole flourish here when the
     // round-end state arrives, then GameTableView delays the recap modal to match.
     //   1) magnet the final trick onto its pile
-    //   2) "WIDOW REVEAL!" banner
+    //   2) drumroll begins
     //   3) widow cards fly from the widow pile to center
     //   4) hold in center
     //   5) widow cards fly to the awarded team's pile
@@ -221,7 +221,6 @@ const TableLayout = ({
             if (endRoundKeyRef.current) {
                 endRoundKeyRef.current = null;
                 clearEndRoundTimers();
-                setWidowRevealVisible(false);
                 setWidowCelebrationActive(false);
                 setWidowFlipped(false);
             }
@@ -247,12 +246,11 @@ const TableLayout = ({
             });
         }, FINAL_TRICK_HOLD_MS + FINAL_TRICK_FLY_MS));
 
-        // 2) Banner + drumroll begin (anticipation).
+        // 2) Drumroll begins (anticipation). The widow movement and flip make
+        // the reveal self-explanatory, so no text banner covers the table.
         endRoundTimersRef.current.push(setTimeout(() => {
-            setWidowRevealVisible(true);
             if (playSound) playSound('drumroll');
         }, BANNER_START_MS));
-        endRoundTimersRef.current.push(setTimeout(() => setWidowRevealVisible(false), BANNER_START_MS + BANNER_DURATION_MS));
 
         // 3) Mount the widow overlay (face-down) just before it should start moving;
         //    the positioning effect below measures + animates it once it's in the DOM.
@@ -722,22 +720,6 @@ const TableLayout = ({
         );
     };
 
-    const renderWidowRevealAnnouncement = () => {
-        if (!widowRevealVisible) {
-            return null;
-        }
-
-        return (
-            <div className="trump-broken-announcement">
-                <div className="trump-broken-content widow-reveal-content">
-                    <div className="trump-broken-lightning">🃏</div>
-                    <div className="trump-broken-text">WIDOW REVEAL!</div>
-                    <div className="trump-broken-lightning">🃏</div>
-                </div>
-            </div>
-        );
-    };
-
     // Overlay of the widow cards animated from the widow pile -> center -> awarded
     // pile during the end-of-round celebration (positioning driven by the effect above).
     const renderWidowCelebration = () => {
@@ -967,7 +949,6 @@ const TableLayout = ({
                 {renderWidowPeekOverlay()}
                 {/* Pucks are now rendered individually below */}
                 {renderTrumpBrokenAnnouncement()}
-                {renderWidowRevealAnnouncement()}
                 {renderWidowCelebration()}
                 {renderDealerDeck()}
 
@@ -1001,6 +982,7 @@ const TableLayout = ({
                     handleLeaveTable={handleLeaveTable}
                     renderCard={renderCard}
                     isAdmin={isAdmin}
+                    quickPlayDecisionRejectionNonce={quickPlayDecisionRejectionNonce}
                 />
             </div>
         </main>

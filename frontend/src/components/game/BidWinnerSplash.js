@@ -9,17 +9,56 @@ import { SUIT_SYMBOLS, SUIT_COLORS } from '../../constants';
 // Timeline (ms from mount). The splash itself mounts SPLASH_DELAY_MS after the
 // bids resolve (GameTableView), which gives the live bid call time to finish
 // before this replays it.
-const BID_SOUND_AT = 400;    // replay lands just as the names hit their marks
-const SUIT_SOUND_AT = 1100;  // Solo only: suit announce a beat after the bid
-const FLY_AT = 3250;         // bidder leaves first; team follows 0.35s later (CSS)
-const DONE_AT = 4200;        // parent unmounts the overlay
+export const BID_SPLASH_TIMING = Object.freeze({
+    BID_SOUND_AT: 250,   // replay lands just as the names hit their marks
+    SUIT_SOUND_AT: 900,  // Solo only: suit announce a beat after the bid
+    FLY_AT: 2200,        // bidder leaves first; team follows shortly after (CSS)
+    DONE_AT: 3000        // parent unmounts after every fly-to-seat transition
+});
 
 const BID_SOUNDS = { 'Frog': 'bidFrog', 'Solo': 'bidSolo', 'Heart Solo': 'bidHeartSolo' };
 const SUIT_SOUNDS = { S: 'suitSpades', C: 'suitClubs', D: 'suitDiamonds' };
 
-// VS-layout positions (vw/vh), roughly centered on the table oval
-const BIDDER_POS = { x: 50, y: 28 };
-const DEFENDER_POS = [{ x: 50, y: 54 }, { x: 50, y: 62 }];
+const SEAT_POSITION_BY_ASSIGNMENT = Object.freeze({
+    self: 'bottom',
+    opponentLeft: 'left',
+    opponentRight: 'right',
+    opponentAcross: 'top'
+});
+
+const CONFIG_BY_SEAT_POSITION = Object.freeze({
+    bottom: PLAYER_SEAT_CONFIG.south,
+    left: PLAYER_SEAT_CONFIG.west,
+    right: PLAYER_SEAT_CONFIG.east,
+    top: PLAYER_SEAT_CONFIG.north
+});
+
+// PlayerSeatPositioner publishes its effective anchor after applying portrait
+// collision mode. Read that live value so the fly-out lands on the seat users
+// actually see, with the static config retained only as a defensive fallback.
+export const seatAnchorForPlayer = (name, seatAssignments, root = globalThis.document) => {
+    const assignment = Object.keys(SEAT_POSITION_BY_ASSIGNMENT).find(
+        key => seatAssignments?.[key] === name
+    );
+    const seatPosition = assignment ? SEAT_POSITION_BY_ASSIGNMENT[assignment] : null;
+    if (!seatPosition) return { anchorX: 50, anchorY: 45 };
+
+    const seatElement = root?.querySelector?.(
+        `.player-seat-positioner.player-seat-${seatPosition}`
+    );
+    const measuredX = Number.parseFloat(seatElement?.dataset?.anchorX);
+    const measuredY = Number.parseFloat(seatElement?.dataset?.anchorY);
+    if (Number.isFinite(measuredX) && Number.isFinite(measuredY)) {
+        return { anchorX: measuredX, anchorY: measuredY };
+    }
+
+    return CONFIG_BY_SEAT_POSITION[seatPosition] || { anchorX: 50, anchorY: 45 };
+};
+
+// VS-layout positions (vw/vh). This tighter grouping sits about 6vh above the
+// old composition while leaving breathing room below the north-seat nameplate.
+const BIDDER_POS = { x: 50, y: 23 };
+const DEFENDER_POS = [{ x: 50, y: 46.5 }, { x: 50, y: 52.5 }];
 
 const BidWinnerSplash = ({ info, seatAssignments, playSound, onDone }) => {
     const [flying, setFlying] = useState(false);
@@ -27,6 +66,7 @@ const BidWinnerSplash = ({ info, seatAssignments, playSound, onDone }) => {
     callbacksRef.current = { playSound, onDone };
 
     const { playerName: bidderName, bid, trumpSuit } = info;
+    const { BID_SOUND_AT, SUIT_SOUND_AT, FLY_AT, DONE_AT } = BID_SPLASH_TIMING;
 
     useEffect(() => {
         const timers = [
@@ -40,14 +80,6 @@ const BidWinnerSplash = ({ info, seatAssignments, playSound, onDone }) => {
         return () => timers.forEach(clearTimeout);
     }, [bid, trumpSuit]);
 
-    const seatAnchorFor = (name) => {
-        if (name === seatAssignments.self) return PLAYER_SEAT_CONFIG.south;
-        if (name === seatAssignments.opponentLeft) return PLAYER_SEAT_CONFIG.west;
-        if (name === seatAssignments.opponentRight) return PLAYER_SEAT_CONFIG.east;
-        if (name === seatAssignments.opponentAcross) return PLAYER_SEAT_CONFIG.north;
-        return { anchorX: 50, anchorY: 45 };
-    };
-
     // Defenders come from the round's active players (passed by the trigger);
     // seat-derived fallback for safety. Never includes the 4-player dealer.
     const defenders = (info.defenders && info.defenders.length > 0)
@@ -60,7 +92,7 @@ const BidWinnerSplash = ({ info, seatAssignments, playSound, onDone }) => {
         ].filter(name => name && name !== bidderName);
 
     const posStyle = (vsPos, name) => {
-        const target = flying ? seatAnchorFor(name) : null;
+        const target = flying ? seatAnchorForPlayer(name, seatAssignments) : null;
         return {
             left: `${target ? target.anchorX : vsPos.x}vw`,
             top: `${target ? target.anchorY : vsPos.y}vh`

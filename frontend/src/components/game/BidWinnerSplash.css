@@ -24,17 +24,22 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.6vh;
+    gap: 0.35vh;
     font-family: 'Oswald', sans-serif;
     text-align: center;
+    max-width: min(84vw, 44vh);
     white-space: nowrap;
 }
 
 .bid-splash-playername {
-    font-size: 5vh;
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 4.1vh;
     font-weight: 600;
-    letter-spacing: 0.2vh;
-    line-height: 1.1;
+    letter-spacing: 0.16vh;
+    line-height: 1.05;
 }
 
 .bid-splash-name.bidder .bid-splash-playername {
@@ -43,30 +48,30 @@
 }
 
 .bid-splash-name.defender .bid-splash-playername {
-    font-size: 4vh;
+    font-size: 3.3vh;
     /* defender-team blue, matching the trick-pile / winning-card glow */
     color: #60a5fa;
     text-shadow: 0 0 1.2vh rgba(59, 130, 246, 0.65), 0 0.4vh 0.8vh rgba(0, 0, 0, 0.8);
 }
 
 .bid-splash-bid {
-    font-size: 2.4vh;
+    font-size: 2vh;
     font-weight: 600;
-    letter-spacing: 0.3vh;
+    letter-spacing: 0.24vh;
     color: #212529;
     background-color: #fbfaf4;
     border-radius: 0.6vh;
-    padding: 0.2vh 1.2vh;
+    padding: 0.15vh 1vh;
     box-shadow: 0 0.4vh 0.8vh rgba(0, 0, 0, 0.5);
 }
 
 .bid-splash-vs {
     position: absolute;
     left: 50vw;
-    top: 42vh;
+    top: 35vh;
     transform: translate(-50%, -50%) rotate(-6deg);
     font-family: 'Oswald', sans-serif;
-    font-size: 8vh;
+    font-size: 6.5vh;
     font-weight: 600;
     font-style: italic;
     color: #dc3545;
@@ -74,8 +79,8 @@
         0 0 0.3vh #fff,
         0 0 1.8vh rgba(220, 53, 69, 0.8),
         0 0.5vh 1vh rgba(0, 0, 0, 0.8);
-    animation: bid-splash-vs-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) 0.25s backwards;
-    transition: opacity 0.3s ease, transform 0.3s ease;
+    animation: bid-splash-vs-pop 0.26s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s backwards;
+    transition: opacity 0.25s ease, transform 0.25s ease;
 }
 .bid-splash-overlay.flying .bid-splash-vs {
     opacity: 0;
@@ -91,13 +96,13 @@
    fill-mode is backwards (not both) so the ended animation releases the
    transform and the fly-out transition below can take over. */
 .bid-splash-name.bidder {
-    animation: bid-splash-from-left 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    animation: bid-splash-from-left 0.32s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 .bid-splash-name.defender {
-    animation: bid-splash-from-right 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.08s backwards;
+    animation: bid-splash-from-right 0.32s cubic-bezier(0.22, 1, 0.36, 1) 0.06s backwards;
 }
 .bid-splash-name.defender + .bid-splash-name.defender {
-    animation-delay: 0.15s;
+    animation-delay: 0.12s;
 }
 
 @keyframes bid-splash-from-left {
@@ -112,17 +117,17 @@
 /* Fly-out: left/top move to the seat anchors (set inline), names shrink away */
 .bid-splash-overlay.flying .bid-splash-name {
     transition:
-        left 0.5s cubic-bezier(0.4, 0, 0.2, 1),
-        top 0.5s cubic-bezier(0.4, 0, 0.2, 1),
-        transform 0.5s cubic-bezier(0.4, 0, 0.2, 1),
-        opacity 0.5s ease;
+        left 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+        top 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+        transform 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 0.45s ease;
     transform: translate(-50%, -50%) scale(0.3);
     opacity: 0;
 }
 
 /* The bidder peels off first; the team gives chase a beat later. */
 .bid-splash-overlay.flying .bid-splash-name.defender {
-    transition-delay: 0.35s;
+    transition-delay: 0.2s;
 }
 
 @media (prefers-reduced-motion: reduce) {
