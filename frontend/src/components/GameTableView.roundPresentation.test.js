@@ -2,7 +2,7 @@ import React from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import GameTableView from './GameTableView';
-import { END_ROUND_TOTAL_MS } from '../config/endRoundTiming';
+import { END_ROUND_TOTAL_MS, SETTLED_RECAP_HOLD_MS } from '../config/endRoundTiming';
 
 vi.mock('../services/api', () => ({
     getLobbyChatHistory: vi.fn(() => new Promise(() => {}))
@@ -33,10 +33,6 @@ vi.mock('./game/RoundSummaryModal', () => ({
         if (scoreStage === 'complete') return <div>Score Totals Complete</div>;
         return <button type="button" onClick={onContinue}>{continueLabel}</button>;
     }
-}));
-
-vi.mock('./game/RoundScoreCeremony', () => ({
-    ROUND_SCORE_CEREMONY_TIMING: { MAX_TOTAL_MS: 100 }
 }));
 
 vi.mock('./game/GameOverPodium', () => ({
@@ -225,16 +221,17 @@ describe('GameTableView round presentation sequence', () => {
         const serverTime = 10_000;
         renderGame(makeState({
             serverTime,
-            presentationReadyAt: serverTime + 1000
+            presentationReadyAt: serverTime + 7000
         }));
 
         fireEvent.click(screen.getByRole('button', { name: 'Collect Points' }));
         fireEvent.click(screen.getByRole('button', { name: 'Finish Score Ceremony' }));
-        act(() => vi.advanceTimersByTime(100));
-
         expect(screen.getByTestId('alice-table-score')).toHaveTextContent('132');
         expect(screen.getByTestId('round-presentation-complete')).toHaveTextContent('false');
-        act(() => vi.advanceTimersByTime(925));
+        act(() => vi.advanceTimersByTime(SETTLED_RECAP_HOLD_MS));
+        expect(screen.getByText('Score Totals Complete')).toBeInTheDocument();
+        expect(screen.getByTestId('round-presentation-complete')).toHaveTextContent('false');
+        act(() => vi.advanceTimersByTime(2025));
         expect(screen.getByTestId('round-presentation-complete')).toHaveTextContent('true');
     });
 
@@ -284,7 +281,7 @@ describe('GameTableView round presentation sequence', () => {
 
         fireEvent.click(screen.getByRole('button', { name: 'Collect Points' }));
         fireEvent.click(screen.getByRole('button', { name: 'Finish Score Ceremony' }));
-        act(() => vi.advanceTimersByTime(100));
+        act(() => vi.advanceTimersByTime(SETTLED_RECAP_HOLD_MS));
 
         expect(emitEvent).toHaveBeenCalledTimes(1);
         expect(emitEvent).toHaveBeenLastCalledWith('ackRoundPresentation', { presentationReadyAt });
@@ -455,13 +452,16 @@ describe('GameTableView round presentation sequence', () => {
         expect(screen.getByTestId('alice-table-score')).toHaveTextContent('132');
         expect(screen.getByText('Score Totals Complete')).toBeInTheDocument();
         expect(screen.getByTestId('round-presentation-complete')).toHaveTextContent('false');
-        act(() => vi.advanceTimersByTime(100));
+        act(() => vi.advanceTimersByTime(SETTLED_RECAP_HOLD_MS - 1));
+        expect(screen.getByText('Score Totals Complete')).toBeInTheDocument();
+        expect(screen.getByTestId('round-presentation-complete')).toHaveTextContent('false');
+        act(() => vi.advanceTimersByTime(1));
         expect(screen.getByTestId('round-presentation-complete')).toHaveTextContent('true');
         expect(screen.getByRole('button', { name: 'Chat' })).toBeEnabled();
     });
 
-    test('routes the final round from score settlement into the persistent podium actions', async () => {
-        const user = userEvent.setup();
+    test('holds final totals for five seconds before opening the persistent podium', () => {
+        vi.useFakeTimers();
         const emitEvent = vi.fn();
         const handleLeaveTable = vi.fn();
         const state = makeState({ state: 'Game Over', isGameOver: true });
@@ -476,15 +476,19 @@ describe('GameTableView round presentation sequence', () => {
         };
         renderGame(state, { emitEvent, handleLeaveTable });
 
-        await user.click(await screen.findByRole('button', { name: 'Collect Points' }));
-        await user.click(screen.getByRole('button', { name: 'Finish Score Ceremony' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Collect Points' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Finish Score Ceremony' }));
 
         expect(screen.getByText('Score Totals Complete')).toBeInTheDocument();
         expect(screen.queryByRole('dialog', { name: 'Winner podium' })).not.toBeInTheDocument();
-        await waitFor(() => expect(screen.getByRole('dialog', { name: 'Winner podium' })).toBeInTheDocument());
+        act(() => vi.advanceTimersByTime(SETTLED_RECAP_HOLD_MS - 1));
+        expect(screen.getByText('Score Totals Complete')).toBeInTheDocument();
+        expect(screen.queryByRole('dialog', { name: 'Winner podium' })).not.toBeInTheDocument();
+        act(() => vi.advanceTimersByTime(1));
+        expect(screen.getByRole('dialog', { name: 'Winner podium' })).toBeInTheDocument();
         expect(screen.getByTestId('podium-token-settlement')).toHaveTextContent('"playerName":"Alice"');
-        await user.click(screen.getByRole('button', { name: 'Rematch' }));
-        await user.click(screen.getByRole('button', { name: 'Lobby' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Rematch' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Lobby' }));
         expect(emitEvent).toHaveBeenCalledWith('resetGame');
         expect(handleLeaveTable).toHaveBeenCalledTimes(1);
     });

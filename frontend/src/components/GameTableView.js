@@ -6,7 +6,6 @@ import DrawVoteModal from './game/DrawVoteModal';
 import PlayerHand from './game/PlayerHand';
 import InsuranceControls from './game/InsuranceControls';
 import RoundSummaryModal from './game/RoundSummaryModal';
-import { ROUND_SCORE_CEREMONY_TIMING } from './game/RoundScoreCeremony';
 import GameOverPodium from './game/GameOverPodium';
 import TableLayout from './game/TableLayout';
 import PlayerSeat from './game/PlayerSeat';
@@ -14,7 +13,7 @@ import ActionControls from './game/ActionControls';
 import InsurancePrompt from './game/InsurancePrompt';
 import BidWinnerSplash from './game/BidWinnerSplash';
 import IosPwaPrompt from './game/IosPwaPrompt';
-import { END_ROUND_TOTAL_MS } from '../config/endRoundTiming';
+import { END_ROUND_TOTAL_MS, SETTLED_RECAP_HOLD_MS } from '../config/endRoundTiming';
 import LobbyChat from './LobbyChat';
 import AdminObserverMode from './AdminObserverMode';
 import LayoutDevPanel from './LayoutDevPanel';
@@ -42,8 +41,6 @@ const ROUND_SCORES_RELEASED_PHASES = new Set([
     'settled',
     'podium'
 ]);
-const FINAL_RECAP_TOTALS_HOLD_MS = 700;
-
 const scoresBeforeRound = (summary, fallbackScores) => {
     if (!summary) return null;
     const finalScores = summary.finalScores || fallbackScores || {};
@@ -101,7 +98,6 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const roundPresentationAckRef = useRef(null);
     const roundPresentationConfirmedAckRef = useRef(null);
     const roundAdvanceTimerRef = useRef(null);
-    const scoreCeremonyStartedAtRef = useRef(null);
     const errorTimerRef = useRef(null);
     const dropZoneRef = useRef(null);
     const prefersReducedMotion = usePrefersReducedMotion();
@@ -465,7 +461,6 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 clearTimeout(roundAdvanceTimerRef.current);
                 roundAdvanceTimerRef.current = null;
             }
-            scoreCeremonyStartedAtRef.current = null;
             setShowRoundSummaryModal(false);
             setRoundPresentationPhase('idle');
         }
@@ -480,7 +475,6 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
 
     const handleRoundRecapContinue = useCallback(() => {
         if (hasRoundScoreChanges && !roundSummary?.forfeit) {
-            scoreCeremonyStartedAtRef.current = Date.now();
             setRoundPresentationPhase('scoring');
             return;
         }
@@ -489,41 +483,22 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     }, [hasRoundScoreChanges, roundSummary]);
 
     const handleScoreCeremonyComplete = useCallback(() => {
-        if (roundSummary?.isGameOver) {
-            // Keep the settled recap visible for a beat so the player can see
-            // the new totals before the podium takes over (also important when
-            // reduced motion completes the count immediately).
-            setRoundPresentationPhase('score-settled-waiting');
-            if (roundAdvanceTimerRef.current) clearTimeout(roundAdvanceTimerRef.current);
-            roundAdvanceTimerRef.current = setTimeout(() => {
-                roundAdvanceTimerRef.current = null;
-                setShowRoundSummaryModal(false);
-                setRoundPresentationPhase('podium');
-            }, FINAL_RECAP_TOTALS_HOLD_MS);
-            return;
-        }
-
-        // Skip/reduced-motion is local, but advancing the round is shared. Keep
-        // the dealer action gated until the longest normal ceremony window has
-        // elapsed so one client cannot cut off everyone else's score reveal.
-        const elapsed = scoreCeremonyStartedAtRef.current
-            ? Date.now() - scoreCeremonyStartedAtRef.current
-            : ROUND_SCORE_CEREMONY_TIMING.MAX_TOTAL_MS;
-        const remaining = Math.max(0, ROUND_SCORE_CEREMONY_TIMING.MAX_TOTAL_MS - elapsed);
-        if (remaining === 0) {
-            setShowRoundSummaryModal(false);
-            setRoundPresentationPhase('settled');
-            return;
-        }
-
+        // Start the reading window only after the score animation finishes.
+        // If the server's shared presentation clock runs longer, keep the recap
+        // up through that deadline so it transitions directly into an enabled
+        // podium or next-round action instead of exposing a dead table gap.
+        const sharedClockRemaining = hasSharedPresentationClock
+            ? Math.max(0, localPresentationDeadline - Date.now())
+            : 0;
+        const settledRecapHold = Math.max(SETTLED_RECAP_HOLD_MS, sharedClockRemaining);
         setRoundPresentationPhase('score-settled-waiting');
         if (roundAdvanceTimerRef.current) clearTimeout(roundAdvanceTimerRef.current);
         roundAdvanceTimerRef.current = setTimeout(() => {
             roundAdvanceTimerRef.current = null;
             setShowRoundSummaryModal(false);
-            setRoundPresentationPhase('settled');
-        }, remaining);
-    }, [roundSummary?.isGameOver]);
+            setRoundPresentationPhase(roundSummary?.isGameOver ? 'podium' : 'settled');
+        }, settledRecapHold);
+    }, [hasSharedPresentationClock, localPresentationDeadline, roundSummary?.isGameOver]);
 
     useEffect(() => {
         const presentationComplete = roundPresentationPhase === 'settled'
@@ -828,7 +803,6 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         roundModalScheduledRef.current = false;
         if (roundAdvanceTimerRef.current) clearTimeout(roundAdvanceTimerRef.current);
         roundAdvanceTimerRef.current = null;
-        scoreCeremonyStartedAtRef.current = null;
     }, []);
 
     const handleForfeit = () => {
