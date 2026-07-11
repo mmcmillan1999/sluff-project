@@ -21,6 +21,11 @@ async function runLeaderboardTests() {
     const pool = {
         query: async (text, params) => {
             queries.push({ text, params });
+            if (/FROM\s+users\s+WHERE\s+id\s*=\s*\$1/i.test(text)) {
+                return {
+                    rows: [{ id: 42, username: 'safe-player', is_admin: false }],
+                };
+            }
             return {
                 rows: [{
                     user_id: 42,
@@ -89,8 +94,10 @@ async function runLeaderboardTests() {
             tokens: '12.50',
         }]);
 
-        assert.strictEqual(queries.length, 1, 'An authenticated request should query once.');
-        const selectClause = queries[0].text.split(/\bFROM\b/i)[0];
+        assert.strictEqual(queries.length, 2, 'An authenticated request should hydrate the user before reading the leaderboard.');
+        assert.deepStrictEqual(queries[0].params, [42]);
+        const leaderboardQuery = queries[1];
+        const selectClause = leaderboardQuery.text.split(/\bFROM\b/i)[0];
         assert(!/\bemail\b/i.test(selectClause), 'The query must not select email addresses.');
         assert(!/\bis_admin\b/i.test(selectClause), 'The query must not select admin status.');
         assert(!/\buser_id\b/i.test(selectClause), 'The query must not select database user IDs.');
@@ -119,7 +126,7 @@ async function runLeaderboardTests() {
 if (require.main === module) {
     runLeaderboardTests().catch((error) => {
         console.error(error);
-        process.exit(1);
+        process.exitCode = 1;
     });
 }
 

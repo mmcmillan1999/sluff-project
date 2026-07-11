@@ -3,8 +3,22 @@
     const GameEngine = require('../core/GameEngine');
     const transactionManager = require('../data/transactionManager');
     const { THEMES, TABLE_COSTS, SERVER_VERSION } = require('../core/constants');
-    const gameLogic = require('../core/logic');
     const AdaptiveInsuranceStrategy = require('../core/bot-strategies/AdaptiveInsuranceStrategy');
+
+    const MAX_SETTLEMENT_ATTEMPTS = 3;
+    const TRANSIENT_SETTLEMENT_CODES = new Set([
+        '40001', // serialization failure
+        '40P01', // deadlock detected
+        '53300', // too many connections
+        '57P01', // admin shutdown
+        '08000', '08003', '08006', '08001', '08004', '08007', '08P01',
+    ]);
+
+    const isTransientSettlementError = error => (
+        error?.transient === true
+        || TRANSIENT_SETTLEMENT_CODES.has(error?.code)
+        || (typeof error?.code === 'string' && error.code.startsWith('08'))
+    );
 
     class GameService {
         constructor(io, pool) {
@@ -28,13 +42,13 @@
 
         _initializeEngines() {
             let tableCounter = 1;
-            const emitLobbyUpdateCallback = () => this.io.emit('lobbyState', this.getLobbyState());
             THEMES.forEach(theme => {
                 for (let i = 0; i < theme.count; i++) {
                     const tableId = `table-${tableCounter}`;
                     const tableNumber = i + 1;
                     const tableName = `${theme.name} #${tableNumber}`;
-                    this.engines[tableId] = new GameEngine(tableId, theme.id, tableName, emitLobbyUpdateCallback, 'private');
+                    const processTimerEffects = (effects = []) => this._executeEffects(tableId, effects);
+                    this.engines[tableId] = new GameEngine(tableId, theme.id, tableName, processTimerEffects, 'private');
                     tableCounter++;
                 }
             });
@@ -45,26 +59,66 @@
                 for (let i = 1; i <= QP_TABLES_PER_THEME; i++) {
                     const tableId = `qp-${theme.id}-${i}`;
                     const tableName = `${theme.name} Quick Play`;
-                    this.engines[tableId] = new GameEngine(tableId, theme.id, tableName, emitLobbyUpdateCallback, 'quickplay');
+                    const processTimerEffects = (effects = []) => this._executeEffects(tableId, effects);
+                    this.engines[tableId] = new GameEngine(tableId, theme.id, tableName, processTimerEffects, 'quickplay');
                 }
             });
             this.qpTimers = {};
             console.log(`${Object.keys(this.engines).length} in-memory game engines initialized (${tableCounter - 1} private + quick-play pool).`);
         }
 
-        getEngineById(tableId) { return this.engines[tableId]; }
+        getEngineById(tableId) {
+            return Object.prototype.hasOwnProperty.call(this.engines, tableId)
+                ? this.engines[tableId]
+                : undefined;
+        }
         getAllEngines() { return this.engines; }
+        hasActiveOrPendingGame() {
+            return Object.values(this.engines).some(engine => (
+                engine.gameStartPending === true
+                || engine.gameStarted === true
+            ));
+        }
+
+        getStateForSocket(engineOrTableId, socket) {
+            const engine = typeof engineOrTableId === 'string'
+                ? this.getEngineById(engineOrTableId)
+                : engineOrTableId;
+            if (!engine || !socket) return null;
+
+            const userId = socket.user?.id
+                ?? Object.values(engine.players).find(player => player.socketId === socket.id)?.userId;
+            return engine.getStateForClient({
+                userId,
+                isAdmin: socket.user?.is_admin === true,
+                trustedAdminObserver: socket.data?.trustedAdminObserver === true,
+            });
+        }
+
+        emitGameState(tableId) {
+            const engine = this.getEngineById(tableId);
+            if (!engine) return;
+
+            // Emit a separately serialized object to each authenticated seat.
+            // A room-wide payload can never safely contain a player's hand.
+            for (const player of Object.values(engine.players)) {
+                if (player.isBot || !player.socketId) continue;
+                const recipient = this.io.sockets?.sockets?.get(player.socketId);
+                if (!recipient) continue;
+                recipient.emit('gameState', this.getStateForSocket(engine, recipient));
+            }
+        }
+
         getLobbyState() {
             const groupedByTheme = THEMES.map(theme => {
                 const themeTables = Object.values(this.engines)
                     .filter(engine => engine.theme === theme.id && engine.tableType !== 'quickplay')
                     .map(engine => {
-                        const clientState = engine.getStateForClient();
-                        const activePlayers = Object.values(clientState.players).filter(p => !p.isSpectator);
+                        const activePlayers = Object.values(engine.players).filter(p => !p.isSpectator);
                         return {
-                            tableId: clientState.tableId,
-                            tableName: clientState.tableName,
-                            state: clientState.state,
+                            tableId: engine.tableId,
+                            tableName: engine.tableName,
+                            state: engine.state,
                             playerCount: activePlayers.length,
                             players: activePlayers.map(p => ({ userId: p.userId, playerName: p.playerName }))
                         };
@@ -89,7 +143,7 @@
 
         findQuickPlayTable(themeId) {
             const pool = Object.values(this.engines).filter(e =>
-                e.tableType === 'quickplay' && e.theme === themeId && !e.gameStarted);
+                e.tableType === 'quickplay' && e.theme === themeId && !e.gameStarted && !e.gameStartPending);
             // Prefer a table already filling with at least one human...
             const filling = pool.find(e => this._humanCount(e) > 0 && e.playerOrder.count < 4);
             if (filling) return filling;
@@ -113,7 +167,7 @@
                 engine.qpWindowEndsAt = null;
             };
 
-            if (engine.gameStarted) { clearFill(); clearWindow(); return; }
+            if (engine.gameStarted || engine.gameStartPending) { clearFill(); clearWindow(); return; }
 
             const humans = this._humanCount(engine);
             const seated = engine.playerOrder.count;
@@ -137,10 +191,10 @@
                     timers.fill = timerFn(() => {
                         timers.fill = null;
                         const eng = this.engines[tableId];
-                        if (!eng || eng.gameStarted) return;
+                        if (!eng || eng.gameStarted || eng.gameStartPending) return;
                         if (this._humanCount(eng) > 0 && eng.playerOrder.count < 3) {
                             eng.addBotPlayer();
-                            this.io.to(tableId).emit('gameState', eng.getStateForClient());
+                            this.emitGameState(tableId);
                         }
                         this.evaluateQuickPlayTable(tableId);
                     }, delay) || true; // truthy marker when a test timer override returns undefined
@@ -152,11 +206,11 @@
                 clearFill();
                 if (!timers.window) {
                     engine.qpWindowEndsAt = Date.now() + 20000;
-                    this.io.to(tableId).emit('gameState', engine.getStateForClient());
+                    this.emitGameState(tableId);
                     timers.window = timerFn(() => {
                         timers.window = null;
                         const eng = this.engines[tableId];
-                        if (!eng || eng.gameStarted) { if (eng) eng.qpWindowEndsAt = null; return; }
+                        if (!eng || eng.gameStarted || eng.gameStartPending) { if (eng) eng.qpWindowEndsAt = null; return; }
                         eng.qpWindowEndsAt = null;
                         this._startQuickPlayGame(tableId);
                     }, 20000) || true;
@@ -171,7 +225,7 @@
 
         async _startQuickPlayGame(tableId) {
             const engine = this.engines[tableId];
-            if (!engine || engine.gameStarted) return;
+            if (!engine || engine.gameStarted || engine.gameStartPending) return;
             const firstHuman = Object.values(engine.players).find(p => !p.isBot && !p.isSpectator);
             if (!firstHuman) { this.evaluateQuickPlayTable(tableId); return; }
             engine.qpWindowEndsAt = null;
@@ -215,167 +269,102 @@
         async submitDrawVote(tableId, userId, vote) {
             await this._performAction(tableId, (engine) => engine.submitDrawVote(userId, vote));
         }
+
+        async requestDraw(tableId, userId) {
+            await this._performAction(tableId, (engine) => {
+                const result = engine.requestDraw(userId);
+                if (engine.drawRequest.isActive && engine.pendingBotAction) {
+                    clearTimeout(engine.pendingBotAction);
+                    engine.pendingBotAction = null;
+                }
+                return result;
+            });
+        }
+
+        async updateInsuranceSetting(tableId, userId, settingType, value) {
+            await this._performAction(tableId, (engine) => engine.updateInsuranceSetting(userId, settingType, value));
+        }
+
+        async forfeitGame(tableId, userId) {
+            await this._performAction(tableId, (engine) => engine.forfeitGame(userId));
+        }
+
+        async startForfeitTimer(tableId, userId, targetPlayerName) {
+            await this._performAction(tableId, (engine) => engine.startForfeitTimer(userId, targetPlayerName));
+        }
+
+        async resetGame(tableId) {
+            await this._performAction(tableId, (engine) => engine.reset());
+        }
         
         async handleGameOver(payload) {
-            const { scores, theme, gameId, players } = payload;
-            const tableCost = TABLE_COSTS[theme] || 0;
-            const transactionPromises = [];
-            const statPromises = [];
-            const payoutDetails = {};
-
-            const transactionFn = (args) => transactionPromises.push(transactionManager.postTransaction(this.pool, args));
-            const statUpdateFn = (query, params) => statPromises.push(this.pool.query(query, params));
-
-            const finalRankings = Object.values(players)
-                .filter(p => !p.isSpectator)
-                .map(p => ({ ...p, score: scores[p.playerName] || 0 }))
-                .sort((a, b) => b.score - a.score);
-
-            const winners = finalRankings.filter(p => p.score === finalRankings[0].score);
-            const gameWinnerName = winners.map(w => w.playerName).join(' & ');
-            
-            if (finalRankings.length === 3) {
-                const [p1, p2, p3] = finalRankings;
-
-                if (p1.score > p2.score && p2.score > p3.score) {
-                    if (!p1.isBot) {
-                        transactionFn({ userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 2, description: `Win and Payout from ${p3.playerName}` });
-                        statUpdateFn("UPDATE users SET wins = wins + 1 WHERE id = $1", [p1.userId]);
-                        payoutDetails[p1.userId] = `You finished 1st and won ${tableCost.toFixed(2)} tokens!`;
-                    }
-                    if (!p2.isBot) {
-                        transactionFn({ userId: p2.userId, gameId, type: 'wash_payout', amount: tableCost, description: `Wash - Buy-in returned` });
-                        statUpdateFn("UPDATE users SET washes = washes + 1 WHERE id = $1", [p2.userId]);
-                        payoutDetails[p2.userId] = `You finished 2nd. Your buy-in was returned.`;
-                    }
-                    if (!p3.isBot) {
-                        statUpdateFn("UPDATE users SET losses = losses + 1 WHERE id = $1", [p3.userId]);
-                        payoutDetails[p3.userId] = `You finished last and lost your buy-in of ${tableCost.toFixed(2)} tokens.`;
-                    }
-                }
-                else if (p1.score === p2.score && p2.score > p3.score) {
-                    if (!p1.isBot) {
-                        transactionFn({ userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 1.5, description: `Win (tie) - Split payout from ${p3.playerName}` });
-                        statUpdateFn("UPDATE users SET wins = wins + 1 WHERE id = $1", [p1.userId]);
-                        payoutDetails[p1.userId] = `You tied for 1st, splitting the winnings for a net gain of ${(tableCost * 0.5).toFixed(2)} tokens!`;
-                    }
-                    if (!p2.isBot) {
-                        transactionFn({ userId: p2.userId, gameId, type: 'win_payout', amount: tableCost * 1.5, description: `Win (tie) - Split payout from ${p3.playerName}` });
-                        statUpdateFn("UPDATE users SET wins = wins + 1 WHERE id = $1", [p2.userId]);
-                        payoutDetails[p2.userId] = `You tied for 1st, splitting the winnings for a net gain of ${(tableCost * 0.5).toFixed(2)} tokens!`;
-                    }
-                    if (!p3.isBot) {
-                        statUpdateFn("UPDATE users SET losses = losses + 1 WHERE id = $1", [p3.userId]);
-                        payoutDetails[p3.userId] = `You finished last and lost your buy-in of ${tableCost.toFixed(2)} tokens.`;
-                    }
-                }
-                else if (p1.score > p2.score && p2.score === p3.score) {
-                    if (!p1.isBot) {
-                        transactionFn({ userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 3, description: `Win - Collects full pot` });
-                        statUpdateFn("UPDATE users SET wins = wins + 1 WHERE id = $1", [p1.userId]);
-                        payoutDetails[p1.userId] = `You won and collected the full pot of ${(tableCost * 2).toFixed(2)} tokens!`;
-                    }
-                    if (!p2.isBot) {
-                        statUpdateFn("UPDATE users SET losses = losses + 1 WHERE id = $1", [p2.userId]);
-                        payoutDetails[p2.userId] = `You tied for last and lost your buy-in of ${tableCost.toFixed(2)} tokens.`;
-                    }
-                    if (!p3.isBot) {
-                        statUpdateFn("UPDATE users SET losses = losses + 1 WHERE id = $1", [p3.userId]);
-                        payoutDetails[p3.userId] = `You tied for last and lost your buy-in of ${tableCost.toFixed(2)} tokens.`;
-                    }
-                }
-                else {
-                    finalRankings.forEach(p => {
-                        if (!p.isBot) {
-                            transactionFn({ userId: p.userId, gameId, type: 'wash_payout', amount: tableCost, description: `3-Way Tie - Buy-in returned` });
-                            statUpdateFn("UPDATE users SET washes = washes + 1 WHERE id = $1", [p.userId]);
-                            payoutDetails[p.userId] = "3-Way Tie! Your buy-in was returned.";
-                        }
-                    });
-                }
-            }
-            else if (finalRankings.length === 4) {
-                // 4-player pot: 4 buy-ins split 3 : 1 : 0 : 0 by final rank.
-                // Players tied across ranks pool those ranks' parts and split
-                // them evenly (see docs/FOUR_PLAYER_SPEC.md). A "part" is one
-                // buy-in, so shares are expressed in buy-ins returned.
-                const PARTS = [3, 1, 0, 0];
-                const RANK_LABELS = ['1st', '2nd', '3rd', '4th'];
-                let i = 0;
-                while (i < finalRankings.length) {
-                    let j = i;
-                    while (j + 1 < finalRankings.length && finalRankings[j + 1].score === finalRankings[i].score) j++;
-                    const group = finalRankings.slice(i, j + 1);
-                    const pooledParts = PARTS.slice(i, j + 1).reduce((a, b) => a + b, 0);
-                    const share = pooledParts / group.length;
-                    const amount = tableCost * share;
-                    const rankLabel = group.length === 1 ? RANK_LABELS[i] : `tied ${RANK_LABELS[i]}-${RANK_LABELS[j]}`;
-
-                    for (const p of group) {
-                        if (p.isBot) continue;
-                        if (share > 1) {
-                            transactionFn({ userId: p.userId, gameId, type: 'win_payout', amount, description: `Win (${rankLabel}) - ${share.toFixed(2)} buy-ins from the 4-player pot` });
-                            statUpdateFn("UPDATE users SET wins = wins + 1 WHERE id = $1", [p.userId]);
-                            payoutDetails[p.userId] = `You finished ${rankLabel} and won a net ${(amount - tableCost).toFixed(2)} tokens!`;
-                        } else if (share === 1) {
-                            transactionFn({ userId: p.userId, gameId, type: 'wash_payout', amount, description: `Wash (${rankLabel}) - Buy-in returned` });
-                            statUpdateFn("UPDATE users SET washes = washes + 1 WHERE id = $1", [p.userId]);
-                            payoutDetails[p.userId] = `You finished ${rankLabel}. Your buy-in was returned.`;
-                        } else if (share > 0) {
-                            transactionFn({ userId: p.userId, gameId, type: 'win_payout', amount, description: `Partial recovery (${rankLabel}) - ${share.toFixed(2)} buy-ins` });
-                            statUpdateFn("UPDATE users SET losses = losses + 1 WHERE id = $1", [p.userId]);
-                            payoutDetails[p.userId] = `You finished ${rankLabel} and recovered ${amount.toFixed(2)} of your ${tableCost.toFixed(2)} token buy-in.`;
-                        } else {
-                            statUpdateFn("UPDATE users SET losses = losses + 1 WHERE id = $1", [p.userId]);
-                            payoutDetails[p.userId] = `You finished ${rankLabel} and lost your buy-in of ${tableCost.toFixed(2)} tokens.`;
-                        }
-                    }
-                    i = j + 1;
-                }
-            }
-
-            try {
-                await Promise.all(transactionPromises);
-                await Promise.all(statPromises);
-                await transactionManager.updateGameRecordOutcome(this.pool, gameId, `Game Over! Winner: ${gameWinnerName}`);
-            } catch(err) {
-                console.error("Database error during game over update:", err);
-            }
-
-            return { gameWinnerName, payoutDetails };
+            return transactionManager.handleNormalGameTransactions(this.pool, payload);
         }
 
         async handleDrawOutcome(payload) {
             const { outcome, ...tableData } = payload;
-            try {
-                const summary = await transactionManager.handleDrawTransactions(this.pool, tableData, outcome);
-                return summary;
-            } catch (error) {
-                console.error(`[SERVICE] Error handling draw outcome for game ${payload.gameId}:`, error);
-                return {
-                    isGameOver: true,
-                    drawOutcome: 'Error',
-                    message: 'An error occurred processing the game end. Please contact an admin.',
-                    payouts: {},
-                };
+            return transactionManager.handleDrawTransactions(this.pool, tableData, outcome);
+        }
+
+        async handleForfeit(payload) {
+            return transactionManager.handleForfeitTransactions(this.pool, payload);
+        }
+
+        async _runSettlementWithRetry(engine, kind, operation) {
+            if (!engine.settlement || engine.settlement.kind !== kind) {
+                engine.beginSettlement(kind);
             }
+
+            let lastError = null;
+            for (let attempt = 1; attempt <= MAX_SETTLEMENT_ATTEMPTS; attempt++) {
+                engine.settlement.status = 'pending';
+                engine.settlement.attempts = attempt;
+                try {
+                    const result = await operation();
+                    engine.completeSettlement();
+                    return { ok: true, result };
+                } catch (error) {
+                    lastError = error;
+                    engine.settlement.lastErrorCode = error?.code || 'SETTLEMENT_ERROR';
+                    const shouldRetry = attempt < MAX_SETTLEMENT_ATTEMPTS
+                        && isTransientSettlementError(error);
+                    if (!shouldRetry) break;
+                    await this._waitForSettlementRetry(attempt);
+                }
+            }
+
+            engine.failSettlement(lastError?.code || 'SETTLEMENT_ERROR');
+            return { ok: false, error: lastError };
+        }
+
+        async _waitForSettlementRetry(attempt) {
+            if (this.settlementRetryDelayOverride) {
+                await this.settlementRetryDelayOverride(attempt);
+                return;
+            }
+            const delay = attempt === 1 ? 100 : 400;
+            await new Promise(resolve => setTimeout(resolve, delay));
         }
 
         resetAllEngines() {
             console.log("[ADMIN] Resetting all game engines to initial state.");
+            this._clearQuickPlayTimers();
             this.engines = {};
             this._initializeEngines();
             this.io.emit('lobbyState', this.getLobbyState());
         }
 
+        _clearQuickPlayTimers() {
+            for (const timers of Object.values(this.qpTimers || {})) {
+                if (timers?.fill) clearTimeout(timers.fill);
+                if (timers?.window) clearTimeout(timers.window);
+            }
+            this.qpTimers = {};
+        }
+
         async _performAction(tableId, actionFn) {
             const engine = this.getEngineById(tableId);
             if (!engine) return;
-
-            if (engine.pendingBotAction) {
-                clearTimeout(engine.pendingBotAction);
-                engine.pendingBotAction = null;
-            }
 
             const result = actionFn(engine);
             if (result && result.effects) {
@@ -390,7 +379,7 @@
             for (const effect of effects) {
                 switch (effect.type) {
                     case 'BROADCAST_STATE':
-                        this.io.to(tableId).emit('gameState', engine.getStateForClient());
+                        this.emitGameState(tableId);
                         // --- THE FIX: No longer call _triggerBots here. ---
                         
                         // Log insurance hindsight values for bots when round ends
@@ -451,33 +440,112 @@
                         });
                         break;
                     case 'HANDLE_GAME_OVER': {
-                        const gameOverResult = await this.handleGameOver(effect.payload);
-                        if (effect.onComplete) {
-                            engine.roundSummary.gameWinner = gameOverResult.gameWinnerName;
-                            engine.roundSummary.payoutDetails = gameOverResult.payoutDetails;
+                        const settlement = await this._runSettlementWithRetry(
+                            engine,
+                            'normal',
+                            () => this.handleGameOver(effect.payload),
+                        );
+                        if (settlement.ok && engine.roundSummary) {
+                            engine.roundSummary.gameWinner = settlement.result.gameWinnerName;
+                            engine.roundSummary.payoutDetails = settlement.result.payoutDetails;
+                            if (effect.onComplete) effect.onComplete(settlement.result);
+                        } else if (engine.roundSummary) {
+                            console.error(`[SERVICE] Normal settlement failed for game ${effect.payload.gameId}:`, settlement.error);
+                            engine.roundSummary.message = 'Game settlement needs administrator review. No partial payout was committed.';
                         }
-                        this.io.to(tableId).emit('gameState', engine.getStateForClient());
+                        this.emitGameState(tableId);
                         break;
                     }
                     case 'HANDLE_DRAW_OUTCOME': {
-                        const summary = await this.handleDrawOutcome(effect.payload);
-                        if (effect.onComplete) {
-                            effect.onComplete(summary);
+                        const settlement = await this._runSettlementWithRetry(
+                            engine,
+                            'draw',
+                            () => this.handleDrawOutcome(effect.payload),
+                        );
+                        if (settlement.ok) {
+                            if (effect.onComplete) effect.onComplete(settlement.result);
+                        } else {
+                            console.error(`[SERVICE] Draw settlement failed for game ${effect.payload.gameId}:`, settlement.error);
+                            engine.roundSummary = {
+                                isGameOver: true,
+                                drawOutcome: 'Settlement Failed',
+                                message: 'Draw settlement needs administrator review. No partial payout was committed.',
+                                payouts: {},
+                                finalScores: { ...engine.scores },
+                            };
                         }
-                        this.io.to(tableId).emit('gameState', engine.getStateForClient());
+                        this.emitGameState(tableId);
+                        break;
+                    }
+                    case 'HANDLE_FORFEIT': {
+                        const settlement = await this._runSettlementWithRetry(
+                            engine,
+                            'forfeit',
+                            () => this.handleForfeit(effect.payload),
+                        );
+                        if (settlement.ok && engine.roundSummary) {
+                            engine.roundSummary.gameWinner = settlement.result.gameWinnerName;
+                            engine.roundSummary.payoutDetails = settlement.result.payoutDetails;
+                        } else if (engine.roundSummary) {
+                            console.error(`[SERVICE] Forfeit settlement failed for game ${effect.payload.gameId}:`, settlement.error);
+                            engine.roundSummary.message = 'Forfeit settlement needs administrator review. No partial payout was committed.';
+                        }
+                        this.emitGameState(tableId);
+                        break;
+                    }
+                    case 'START_FORFEIT_TIMER': {
+                        if (engine.internalTimers.forfeit) break;
+                        const { targetPlayerName } = effect.payload;
+                        engine.internalTimers.forfeit = setInterval(async () => {
+                            const currentEngine = this.getEngineById(tableId);
+                            const target = Object.values(currentEngine?.players || {})
+                                .find(player => player.playerName === targetPlayerName);
+                            if (!currentEngine || !target?.disconnected || currentEngine.forfeiture.targetPlayerName !== targetPlayerName) {
+                                currentEngine?._clearForfeitTimer();
+                                if (currentEngine) this.emitGameState(tableId);
+                                return;
+                            }
+
+                            currentEngine.forfeiture.timeLeft -= 1;
+                            if (currentEngine.forfeiture.timeLeft <= 0) {
+                                currentEngine._clearForfeitTimer();
+                                const followUp = currentEngine._resolveForfeit(targetPlayerName, 'disconnect timeout');
+                                await this._executeEffects(tableId, followUp);
+                            } else {
+                                this.emitGameState(tableId);
+                            }
+                        }, 1000);
                         break;
                     }
                     case 'START_GAME_TRANSACTIONS': {
+                        let startResult;
                         try {
-                            const gameId = await transactionManager.createGameRecord(this.pool, effect.payload.table);
-                            console.log(`[GAME-START] Created game record with ID: ${gameId}`);
-                            const updatedTokens = await transactionManager.handleGameStartTransaction(this.pool, effect.payload.table, effect.payload.playerIds, gameId);
-                            if (effect.onSuccess) effect.onSuccess(gameId, updatedTokens);
+                            startResult = await transactionManager.startGameTransaction(
+                                this.pool,
+                                effect.payload.table,
+                                effect.payload.playerIds,
+                            );
                         } catch (err) {
                             const insufficientFundsMatch = err.message.match(/(.+) has insufficient tokens/);
                             const brokePlayerName = insufficientFundsMatch ? insufficientFundsMatch[1] : null;
                             if (effect.onFailure) effect.onFailure(err, brokePlayerName);
                             this.io.to(tableId).emit('gameStartFailed', { message: err.message, kickedPlayer: brokePlayerName });
+                            break;
+                        }
+
+                        // The database commit is already durable here. Keep
+                        // transition failures out of the transaction-failure
+                        // path: claiming a rollback or allowing a retry would
+                        // risk charging the same roster twice.
+                        try {
+                            if (effect.onSuccess) {
+                                effect.onSuccess(startResult.gameId, startResult.updatedTokens);
+                            }
+                        } catch (err) {
+                            console.error(
+                                `[CRITICAL] Game ${startResult.gameId} committed for table ${tableId}, but the in-memory start transition failed. Manual recovery is required.`,
+                                err,
+                            );
                         }
                         break;
                     }
@@ -515,17 +583,22 @@
             // path at all: the table sat in DrawComplete forever and re-seated
             // its players into the finished game on every reconnect.)
             if (engine.state === 'Game Over' || engine.state === 'DrawComplete') {
+                if (engine.settlement?.status !== 'complete') return;
                 const handledFlag = engine.state === 'Game Over' ? 'gameOverHandled' : 'drawCompleteHandled';
                 if (!engine[handledFlag]) {
                     engine[handledFlag] = true;
                     const terminalState = engine.state;
+                    const terminalGameId = engine.gameId;
                     console.log(`[CLEANUP] ${terminalState} detected on table ${tableId}. Resetting in 16 seconds...`);
                     setTimeout(() => {
                         const currentEngine = this.getEngineById(tableId);
-                        if (currentEngine && currentEngine.state === terminalState) {
+                        if (currentEngine
+                            && currentEngine.state === terminalState
+                            && currentEngine.gameId === terminalGameId
+                            && currentEngine.settlement?.status === 'complete') {
                             console.log(`[CLEANUP] Resetting table ${tableId} after ${terminalState}`);
                             currentEngine.reset();
-                            this.io.to(tableId).emit('gameState', currentEngine.getStateForClient());
+                            this.emitGameState(tableId);
                             this.io.emit('lobbyState', this.getLobbyState());
 
                             // Quick-play tables re-enter matchmaking after a game
@@ -592,7 +665,7 @@
                 } else if (engine.state === 'Frog Widow Exchange' && engine.bidWinnerInfo?.userId == botUserId && engine.widowDiscardsForFrogBidder.length === 0) {
                     const discards = bot.submitFrogDiscards();
                     scheduleTurnAction(this.submitFrogDiscards, standardDelay, botUserId, discards);
-                } else if (engine.state === 'Playing Phase' && engine.trickTurnPlayerId == botUserId) {
+                } else if (engine.state === 'Playing Phase' && !engine.drawRequest.isActive && engine.trickTurnPlayerId == botUserId) {
                     const card = bot.playCard();
                     if (card) {
                         scheduleTurnAction(this.playCard, playDelay, botUserId, card);
@@ -617,7 +690,7 @@
                 }
             }
 
-            if (engine.state === 'Playing Phase' && engine.insurance.isActive && !engine.insurance.dealExecuted) {
+            if (engine.state === 'Playing Phase' && !engine.drawRequest.isActive && engine.insurance.isActive && !engine.insurance.dealExecuted) {
                 console.log(`[INSURANCE] Processing insurance for table ${tableId} - ${Object.keys(engine.bots).length} bots`);
                 let insuranceDelay = 500;
                 for (const botId in engine.bots) {
@@ -630,7 +703,7 @@
                             const decision = await this.adaptiveInsurance.calculateInsuranceMove(currentEngine, bot);
                             if (decision) {
                                 currentEngine.updateInsuranceSetting(bot.userId, decision.settingType, decision.value);
-                                this.io.to(tableId).emit('gameState', currentEngine.getStateForClient());
+                                this.emitGameState(tableId);
                                 
                                 // Log the decision for learning
                                 console.log(`[INSURANCE] Logging decision for ${bot.playerName}, gameId: ${currentEngine.gameId}`);

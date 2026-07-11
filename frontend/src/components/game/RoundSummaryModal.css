@@ -116,6 +116,14 @@
     animation: pulsating-blue-border 2s infinite;
 }
 
+@media (prefers-reduced-motion: reduce) {
+    .summary-points-section,
+    .insurance-recap-panel {
+        animation: none !important;
+        transition: none !important;
+    }
+}
+
 .insurance-recap-panel .summary-totals-panel {
     margin: 15px -15px -15px -15px;
     border-top: 1px solid #ddd;
@@ -301,4 +309,51 @@
 
 .scrollable-tricks::-webkit-scrollbar-thumb:hover {
     background: #555;
+}
+
+.forfeit-summary-panel,
+.forfeit-scores-panel {
+    margin-bottom: 15px;
+    padding: 15px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: #f3f4f6;
+    color: #374151;
+    text-align: left;
+}
+
+.forfeit-summary-panel p,
+.forfeit-summary-panel h3 {
+    margin: 5px 0;
+}
+
+.forfeit-player {
+    font-size: 1.08em;
+    color: #1f2937;
+}
+
+.forfeit-reason {
+    color: #6b7280;
+}
+
+.forfeit-settlement-note {
+    padding: 8px;
+    border-radius: 5px;
+    background: #fff3cd;
+    color: #7c5a00;
+}
+
+.forfeit-winner {
+    color: #166534;
+}
+
+.forfeit-scores-panel h4 {
+    margin: 0 0 8px;
+    color: #1f2937;
+    font-family: 'Oswald', sans-serif;
+}
+
+.forfeit-scores-table th:last-child,
+.forfeit-scores-table td:last-child {
+    text-align: right;
 }

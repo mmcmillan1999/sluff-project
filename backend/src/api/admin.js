@@ -4,63 +4,18 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcrypt');
 const securityMonitor = require('../utils/securityMonitor');
+const requireAuth = require('../middleware/requireAuth');
 
 // This function creates the router and gives it the database pool
 const createAdminRoutes = (pool, jwt) => {
   const router = express.Router();
- 
-  const checkAuth = (req, res, next) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).send('Authentication required.');
-    }
-    const token = authHeader.split(' ')[1];
-    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-      if (err) {
-        return res.status(403).send('Invalid or expired token.');
-      }
-      req.user = user;
-      next();
-    });
-  };
+  const checkAuth = requireAuth(pool, jwt);
+
   // A middleware to check if the user is an admin
-  const isAdmin = async (req, res, next) => {
-    // This assumes you have a way to get the user's ID from the request,
-    // for example, from a decoded JWT token attached by another middleware.
-    // Since your io.use middleware handles JWT, a separate one for Express is needed.
-    // For now, we'll placeholder this logic.
-    const userId = req.user?.id;
-    if (!userId) return res.status(401).send('Authentication required.');
-
-    try {
-      const { rows } = await pool.query("SELECT is_admin FROM users WHERE id = $1", [userId]);
-      if (rows.length > 0 && rows[0].is_admin) {
-        return next();
-      }
-      res.status(403).send('Access Forbidden: Requires admin privileges.');
-    } catch (err) {
-      console.error("Admin check failed:", err);
-      res.status(500).send('Server error during admin check.');
-    }
-  };
-
-  // Middleware to check if user is admin
-  const requireAdmin = (req, res, next) => {
-      const authHeader = req.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-          return res.status(401).json({ error: 'No token provided' });
-      }
-
-      const token = authHeader.split(' ')[1];
-      jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-          if (err) return res.status(403).json({ error: 'Invalid token' });
-          if (!user.is_admin) return res.status(403).json({ error: 'Admin access required' });
-          req.user = user;
-          next();
-      });
+  const isAdmin = (req, res, next) => {
+    if (req.user?.is_admin === true) return next();
+    return res.status(403).send('Access Forbidden: Requires admin privileges.');
   };
 
   // GET /api/admin/mercy-token-report

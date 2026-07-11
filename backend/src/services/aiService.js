@@ -4,6 +4,12 @@ const OpenAI = require('openai');
 const Anthropic = require('@anthropic-ai/sdk');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const Groq = require('groq-sdk');
+const { BID_HIERARCHY, BID_MULTIPLIERS } = require('../core/constants');
+
+const BID_ORDER_TEXT = BID_HIERARCHY.join(' < ');
+const BID_MULTIPLIER_TEXT = Object.entries(BID_MULTIPLIERS)
+    .map(([bid, multiplier]) => `${bid}=${multiplier}x`)
+    .join(', ');
 
 // Single source of truth for every model the bots can use.
 // id = what the UI/bots reference; apiModel = what the provider API expects.
@@ -349,7 +355,7 @@ CRITICAL: Return ONLY a JSON object with these exact fields:
 - "card": string (the card code like "AS", "10H", "9C")
 - "reasoning": string (max 100 characters explaining your choice)
 
-Example response: {"card": "3S", "reasoning": "Force opponent to trump low card, they're void in spades"}`;
+Example response: {"card": "6S", "reasoning": "Force opponent to trump low card, they're void in spades"}`;
         } else if (type === 'bid') {
             return `You are an expert Sluff card game player in the bidding phase.
 
@@ -358,9 +364,10 @@ The valid bids will be shown in the prompt. DO NOT choose any bid not in the val
 
 Bid meanings:
 - Pass: Skip bidding
-- Solo: Bid to choose trump (not hearts)
-- Frog: Higher bid, get widow exchange (3 cards)
-- Heart Solo: Highest bid, hearts are trump
+Bid order (lowest to highest): ${BID_ORDER_TEXT}
+- Frog (${BID_MULTIPLIERS.Frog}x): Take the 3-card widow, then discard exactly 3 cards; hearts are trump
+- Solo (${BID_MULTIPLIERS.Solo}x): Choose diamonds, clubs, or spades as trump; the bidder receives the widow points
+- Heart Solo (${BID_MULTIPLIERS['Heart Solo']}x): Hearts are trump; the team that wins the last trick receives the widow points
 
 CRITICAL: Return ONLY a JSON object with these exact fields:
 - "bid": string (MUST be one of the valid bids provided in the prompt)
@@ -371,40 +378,40 @@ Example response: {"bid": "Solo", "reasoning": "Strong spades suit with multiple
             return `You are an expert Sluff card game player in the insurance phase.
 
 INSURANCE SYSTEM:
-- BIDDER: Player who won the bid, trying to win the round
-- DEFENDERS: Two players opposing the bidder (you may be one)
-- Bidder sets REQUIREMENT (points they want to collect)
-- Defenders make OFFERS (points they'll RECEIVE if bidder wins - protection!)
-- Deal executes when: sum of defender offers >= bidder requirement
-- NOTE: In the UI, negative values = incoming points (good for defenders)
+- BIDDER: Player who won the bid and sets the insurance REQUIREMENT
+- DEFENDERS: Two active opponents who each set an insurance OFFER
+- The deal locks immediately and unconditionally when combined defender offers meet or exceed the bidder requirement
+- Locking never waits for, or depends on, whether the bidder later wins or loses the round
+- Once locked, the agreed insurance transfers replace the normal round score exchange
+- The bidder's settlement is the exact combined offer total; each defender receives the opposite of their own signed offer, so the deal is zero-sum
 
-POINT CALCULATION:
-Bid Multipliers: Solo=1x, Frog=2x, Heart Solo=3x
+NORMAL SCORE EXCHANGE (only if no insurance deal locks):
+Bid Multipliers: ${BID_MULTIPLIER_TEXT}
 Base target: 60 points
 
-BIDDER scoring (delta from 60 points × bid multiplier):
-- If WIN: delta × bid_mult × 2 (collects from 2 defenders)
-- If LOSE: delta × bid_mult × 3 (pays out to 2 defenders)
-Example Frog: Win by 10 pts = +10×2×2=+40, Lose by 10 pts = -10×2×3=-60
+BIDDER scoring without a locked deal (delta from 60 points × bid multiplier):
+- Above 60: bidder collects one exchange share from each of 2 defenders (2 shares total)
+- Below 60: bidder pays 3 exchange shares (2 defenders plus the score absorber/dealer)
+- Frog example: 10 above 60 = +10×${BID_MULTIPLIERS.Frog}×2=+20; 10 below 60 = -10×${BID_MULTIPLIERS.Frog}×3=-30
 
-DEFENDER scoring:
-- Max risk: 60 × bid_mult (Solo=60, Frog=120, Heart Solo=180)
-
-OUTCOMES:
-- If bidder WINS: Defenders pay their offers to bidder
-- If bidder LOSES: Bidder pays requirement to defenders (split)
+MAX NORMAL EXCHANGE PER DEFENDER:
+- Frog=${60 * BID_MULTIPLIERS.Frog}, Solo=${60 * BID_MULTIPLIERS.Solo}, Heart Solo=${60 * BID_MULTIPLIERS['Heart Solo']}
 
 YOUR ROLE: You're either the BIDDER or a DEFENDER
-- If BIDDER: Set requirement based on your confidence
-- If DEFENDER: Offer based on bidder's likelihood to win
+- If BIDDER: Set a requirement for the fixed insurance transfer you will accept
+- If DEFENDER: Set an offer for the fixed insurance transfer you will accept
+- Evaluate the likely no-deal score only as negotiation context; a locked deal applies regardless of the card result
 
-CRITICAL: Return ONLY a JSON object with POSITIVE point values:
-- If you're BIDDER: {"offer": 0, "requirement": [60-360 points you want], "reasoning": "[why]"}
-- If you're DEFENDER: {"offer": [0-180 points you'll RECEIVE if bidder wins], "requirement": 0, "reasoning": "[why]"}
-NOTE: Always use positive numbers! The system converts them appropriately.
+SIGNED VALUE RULES:
+- Positive defender offer = defender pays those points to the bidder
+- Negative defender offer = defender asks the bidder to pay them
+- Positive bidder requirement = bidder requires a net receipt; a negative requirement accepts a net payment
 
-DEFENDER STRATEGY: If bidder is strong, ALWAYS make an offer to limit losses!
-Refusing when bidder will win = lose DOUBLE the points!`;
+CRITICAL: Return ONLY a JSON object using signed engine values:
+- If you're BIDDER: {"offer": 0, "requirement": [signed value from -120×multiplier to +120×multiplier], "reasoning": "[why]"}
+- If you're DEFENDER: {"offer": [signed value from -60×multiplier to +60×multiplier], "requirement": 0, "reasoning": "[why]"}
+
+DEFENDER STRATEGY: Compare a fixed insurance transfer with your normal no-deal risk before choosing an offer.`;
         }
     }
 
@@ -419,7 +426,7 @@ Refusing when bidder will win = lose DOUBLE the points!`;
         }
 
         // Use provided valid bids or default to all bids
-        const availableBids = validBids || ['Pass', 'Solo', 'Frog', 'Heart Solo'];
+        const availableBids = validBids || [...BID_HIERARCHY];
 
         return `Bidding Phase:
 - Your hand: ${myHand.join(', ')}
@@ -430,15 +437,17 @@ Refusing when bidder will win = lose DOUBLE the points!`;
 VALID BIDS (choose ONLY from these): ${availableBids.join(', ')}
 
 Rules:
-- Solo/Frog: You pick trump (not hearts), need strong non-heart suit
-- Heart Solo: Hearts are trump, need strong hearts
+- Bid order (lowest to highest): ${BID_ORDER_TEXT}
+- Frog (${BID_MULTIPLIERS.Frog}x): Take the 3-card widow, discard exactly 3 cards, and play with hearts as trump
+- Solo (${BID_MULTIPLIERS.Solo}x): Choose diamonds, clubs, or spades as trump; the bidder receives the widow points
+- Heart Solo (${BID_MULTIPLIERS['Heart Solo']}x): Hearts are trump; the last-trick winner's team receives the widow points
 - You MUST choose from the valid bids listed above
 
 Consider:
 1. Point cards: A=11, 10=10, K=4, Q=3, J=2 (Aces and 10s are most valuable)
 2. Long suits (5+ cards) are strong for bidding
 3. Heart Solo requires 4+ hearts with high cards
-4. Frog allows widow exchange (3 cards)`;
+4. Frog's widow exchange can improve a weak hand, but it remains the lowest non-pass bid`;
     }
 
     _buildCardPrompt(gameState, legalPlays) {
@@ -489,7 +498,7 @@ Consider:
 - Trump suit: ${trumpSuit || 'None'}
 - Lead suit: ${leadSuit || 'None (you lead)'}
 - Current trick: ${currentTrick.map(t => `${t.player}: ${t.card}`).join(', ') || 'Empty (you lead)'}
-- Trick ${trickNumber}/13 (${roundPhase} game)
+- Trick ${trickNumber}/11 (${roundPhase} game)
 
 Current Standing:
 - Tricks captured: ${Object.entries(capturedTricksCount || {}).map(([p, c]) => `${p}: ${c}`).join(', ')}
@@ -526,7 +535,7 @@ Choose the best card. Consider:
 
         // Calculate current game state
         const tricksPlayed = trickNumber - 1;
-        const tricksRemaining = 13 - tricksPlayed;
+        const tricksRemaining = 11 - tricksPlayed;
         const bidderPoints = pointsCaptured?.[bidder] || 0;
         const totalPointsCaptured = Object.values(pointsCaptured || {}).reduce((sum, pts) => sum + pts, 0);
         const pointsRemaining = 120 - totalPointsCaptured;
@@ -552,8 +561,9 @@ Choose the best card. Consider:
 - Your hand: ${myHand.join(', ')} (worth ${myPoints} points)
 - You: ${myName} (${role})
 - Bidder: ${bidder} (${bidType})
+- Bid multiplier: ${BID_MULTIPLIERS[bidType] || 1}x
 
-CURRENT GAME STATE (Trick ${trickNumber}/13):
+CURRENT GAME STATE (Trick ${trickNumber}/11):
 - Points captured: Bidder=${bidderPoints}, Total=${totalPointsCaptured}, Remaining=${pointsRemaining}
 - Bidder needs 60 to break even, currently at ${bidderPoints}
 - Expected bidder final: ${Math.round(expectedBidderFinal)} points (${bidderDelta > 0 ? '+' : ''}${bidderDelta} from 60)
@@ -565,31 +575,36 @@ YOUR ANALYSIS:
 
 STRATEGIC INSURANCE CALCULATION:
 ${(() => {
-    const bidMultiplier = bidType === 'Heart Solo' ? 3 : bidType === 'Frog' ? 2 : 1;
+    const bidMultiplier = BID_MULTIPLIERS[bidType] || 1;
+    const normalExchangeShare = Math.abs(bidderDelta) * bidMultiplier;
 
     if (isBidder) {
-        // Bidder calculates expected score impact
-        const myExpectedDelta = bidderDelta;
-        const myExpectedScore = myExpectedDelta * bidMultiplier * 2; // 2-way payout if win
-        const myExpectedLoss = -Math.abs(myExpectedDelta) * bidMultiplier * 3; // 3-way payout if lose
+        const projectedNormalChange = bidderDelta > 0
+            ? normalExchangeShare * 2
+            : bidderDelta < 0 ? -normalExchangeShare * 3 : 0;
+        const suggestedRequirement = Math.max(0, Math.abs(projectedNormalChange) - 20);
 
-        return `As BIDDER, your expected outcome:
-- If you WIN by ${Math.abs(bidderDelta)} points: You gain ${Math.abs(myExpectedScore)} points
-- If you LOSE by ${Math.abs(bidderDelta)} points: You lose ${Math.abs(myExpectedLoss)} points
-- Set requirement SLIGHTLY BELOW your expected gain (ask for ${Math.max(0, Math.abs(myExpectedScore) - 20)} points)
-- This ensures insurance executes if you're winning as expected`;
+        return `As BIDDER, compare insurance with the normal no-deal outcome:
+- Projected normal score exchange: ${projectedNormalChange >= 0 ? '+' : ''}${projectedNormalChange} points
+- A locked insurance deal replaces that result with the fixed signed offer total, regardless of who wins
+- Consider a requirement near ${suggestedRequirement} points based on that no-deal exposure
+- The deal locks as soon as combined defender offers meet or exceed your requirement`;
     } else {
-        // Defender calculates protection needed
-        const bidderExpectedDelta = bidderDelta;
-        const myRiskIfBidderWins = Math.abs(bidderExpectedDelta) * bidMultiplier;
-        const myGainIfBidderLoses = Math.abs(bidderExpectedDelta) * bidMultiplier / 2;
+        const projectedNormalChange = bidderDelta > 0
+            ? -normalExchangeShare
+            : bidderDelta < 0 ? normalExchangeShare : 0;
+        const suggestedOfferMagnitude = Math.min(
+            60 * bidMultiplier,
+            bidderDelta > 0 ? normalExchangeShare : Math.round(normalExchangeShare * 0.3),
+        );
+        const suggestedOffer = bidderDelta >= 0 ? suggestedOfferMagnitude : -suggestedOfferMagnitude;
 
-        return `As DEFENDER, your risk analysis:
-- If bidder WINS by ${Math.abs(bidderDelta)}: You lose ${myRiskIfBidderWins} points
-- If bidder LOSES by ${Math.abs(bidderDelta)}: You gain ${Math.round(myGainIfBidderLoses)} points
-- Expected outcome: Bidder ${bidderDelta > 0 ? 'WINS' : 'LOSES'}
-- Offer ${bidderDelta > 0 ? Math.min(60 * bidMultiplier, myRiskIfBidderWins - 10) : Math.round(myRiskIfBidderWins * 0.3)} points protection
-- This protects you if outcome matches expectation`;
+        return `As DEFENDER, compare insurance with the normal no-deal outcome:
+- Projected normal score exchange: ${projectedNormalChange >= 0 ? '+' : ''}${projectedNormalChange} points
+- A locked insurance deal replaces that result with the fixed signed agreement, regardless of who wins
+- Consider a signed offer near ${suggestedOffer} points based on that no-deal exposure
+- Positive offers pay the bidder; negative offers ask the bidder to pay you
+- The deal locks as soon as all defender offers together meet or exceed the bidder requirement`;
     }
 })()}
 

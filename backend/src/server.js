@@ -20,7 +20,6 @@ const createDbTables = require('./data/createTables');
 const createAiRoutes = require('./api/ai');
 const createPingRoutes = require('./api/ping');
 const createBotInsuranceStatsRoutes = require('./api/botInsuranceStats');
-const insuranceHandler = require('./core/handlers/insuranceHandler');
 
 
 const app = express();
@@ -91,15 +90,6 @@ server.listen(PORT, async () => {
 
     registerGameHandlers(io, gameService);
 
-    io.on('connection', (socket) => {
-      socket.on('updateInsuranceSetting', ({ tableId, settingType, value }) => {
-        const engine = gameService.getEngineById(tableId);
-        insuranceHandler.updateInsuranceSetting(engine, socket.user.id, settingType, value);
-        io.to(tableId).emit('gameState', engine.getStateForClient());
-        io.emit('lobbyState', gameService.getLobbyState());
-      });
-    });
-    
     app.use('/api/auth', createAuthRoutes(pool, bcrypt, jwt, io));
     app.use('/api/leaderboard', createLeaderboardRoutes(pool, jwt));
     app.use('/api/admin', createAdminRoutes(pool, jwt));

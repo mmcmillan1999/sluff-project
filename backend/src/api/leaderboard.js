@@ -5,7 +5,7 @@ const requireAuth = require('../middleware/requireAuth');
 module.exports = function(pool, jwt) {
     const router = express.Router();
 
-    router.get('/', requireAuth(jwt), async (req, res) => {
+    router.get('/', requireAuth(pool, jwt), async (req, res) => {
         try {
             const query = `
                 SELECT 

@@ -37,8 +37,7 @@
 .lobby-view {
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  height: 100dvh; /* Dynamic viewport height for mobile browsers */
+  height: 100%; /* App owns the advertising-header portion of the viewport */
   background-color: #212121;
   color: white;
   overflow: hidden;
@@ -643,11 +642,12 @@
   .lobby-main {
     display: grid;
     grid-template-columns: 300px 1fr 400px;
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
     gap: 30px;
     padding: 30px;
     padding-bottom: 30px;
-    height: calc(100vh - 120px - 40px); /* Header + Nav + Footer */
+    height: auto;
+    min-height: 0;
   }
   
   /* Desktop sidebar (new) */
@@ -753,7 +753,9 @@
   /* Main content area */
   .tables-section {
     grid-column: 2;
-    grid-row: 1 / -1;
+    grid-row: 2;
+    min-height: 0;
+    overflow-y: auto;
   }
   
   .bulletin-section {
@@ -761,6 +763,13 @@
     grid-row: 1;
     max-height: 300px;
     overflow-y: auto;
+  }
+
+  .quickplay-section {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+    margin-bottom: 0;
   }
   
   /* Responsive table grid for desktop */
@@ -1085,6 +1094,16 @@
 .qp-card.qp-pending .qp-play-pill {
   background: rgba(255, 255, 255, 0.6);
   animation: qp-pending-pulse 0.9s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .user-tokens.pulse-eligible,
+  .table-grid,
+  #bulletin-content,
+  .qp-card.qp-pending .qp-play-pill {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
 @keyframes qp-pending-pulse {

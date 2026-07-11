@@ -1,44 +1,53 @@
-// backend/tests/run_all_tests.js
+const path = require('path');
 
-// Import the actual test functions from their files
-const runBotTests = require('./bot.test.js');
-const runGameLogicTests = require('./gameLogic.unit.test.js');
-const runLegalMovesTests = require('./legalMoves.test.js');
-const runTableIntegrationTests = require('./Table.integration.test.js');
-const testGameOverPayouts = require('./payouts.test.js'); // Import the new test suite
-const { runMercyTokenTests } = require('./mercyToken.test.js'); // Import mercy token tests
+const suites = [
+    { name: 'BotPlayer', file: './bot.test.js' },
+    { name: 'game logic', file: './gameLogic.unit.test.js' },
+    { name: 'legal moves', file: './legalMoves.test.js' },
+    { name: 'mercy tokens', file: './mercyToken.test.js', exportName: 'runMercyTokenTests' },
+    { name: 'table integration', file: './Table.integration.test.js' },
+    { name: 'payouts', file: './payouts.test.js' },
+    { name: 'quick play', file: './quickPlay.test.js' },
+    { name: 'four-player mode', file: './fourPlayer.test.js' },
+    { name: 'leaderboard privacy', file: './leaderboard.test.js' },
+    { name: 'inactive-user maintenance', file: './pruneInactiveUsers.test.js' },
+    { name: 'viewer-safe game state', file: './gameStateSerializer.test.js' },
+    { name: 'backend integrity', file: './backendIntegrity.test.js' },
+    { name: 'atomic game settlement', file: './gameSettlementIntegrity.test.js' },
+    { name: 'authentication integrity', file: './authenticationIntegrity.test.js' },
+    { name: 'AI prompt rule contract', file: './aiPromptRules.test.js' },
+];
 
-async function run() {
-    try {
-        console.log('--- Running All Backend Unit & Integration Tests ---');
-        
-        // --- UNIT TESTS ---
-        console.log('\n[1/6] Running BotPlayer.js tests...');
-        runBotTests();
-        
-        console.log('\n[2/6] Running gameLogic.unit.test.js tests...');
-        runGameLogicTests();
-
-        console.log('\n[3/6] Running legalMoves.test.js tests...');
-        runLegalMovesTests();
-        
-        console.log('\n[4/6] Running mercy token tests...');
-        await runMercyTokenTests();
-        
-        // --- INTEGRATION TESTS ---
-        console.log('\n[5/6] Running Table.integration.test.js...');
-        await runTableIntegrationTests();
-        
-        console.log('\n[6/6] Running payouts.test.js...');
-        await testGameOverPayouts();
-
-        console.log('\n--- ✅ All applicable tests passed! ---');
-        process.exit(0); // Exit with success code
-    } catch (error) {
-        console.error('\n--- ❌ A test failed! ---');
-        // The individual test files will log their own detailed errors.
-        process.exit(1); // Exit with failure code
+function loadRunner(suite) {
+    const absolutePath = path.resolve(__dirname, suite.file);
+    const testModule = require(absolutePath);
+    const runner = suite.exportName ? testModule[suite.exportName] : testModule;
+    if (typeof runner !== 'function') {
+        throw new TypeError(`${suite.file} must export a test runner function.`);
     }
+    return runner;
 }
 
-run();
+async function run() {
+    console.log('--- Running safe backend unit and integration tests ---');
+
+    let completed = 0;
+    for (const suite of suites) {
+        const runner = loadRunner(suite);
+        console.log(`\n[${completed + 1}] ${suite.name}`);
+        await runner();
+        completed += 1;
+    }
+
+    console.log(`\n--- All ${completed} safe backend suites passed. ---`);
+}
+
+if (require.main === module) {
+    run().catch(error => {
+        console.error('\n--- Backend test run failed. ---');
+        console.error(error);
+        process.exitCode = 1;
+    });
+}
+
+module.exports = run;

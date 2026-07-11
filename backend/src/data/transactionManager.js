@@ -1,8 +1,12 @@
 // backend/src/data/transactionManager.js
 
 const { TABLE_COSTS } = require('../core/constants');
-const gameLogic = require('../core/logic'); // Need this for payout calculations
 const securityMonitor = require('../utils/securityMonitor');
+const {
+    buildDrawSettlement,
+    buildForfeitSettlement,
+    buildNormalGameSettlement,
+} = require('../settlement/gameSettlement');
 
 const createGameRecord = async (pool, table) => {
     const { tableId, theme, playerMode } = table;
@@ -78,6 +82,12 @@ const handleMercyTokenRequest = async (pool, userId, username = null) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
+
+        // Serialize all balance/rate-limit decisions for this account. Without
+        // the row lock, parallel requests can each observe zero recent grants
+        // and all insert a mercy token before any sibling transaction commits.
+        // Game starts lock the same row, so grants and buy-ins now coordinate.
+        await client.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [userId]);
 
         // Check current token balance
         const tokenQuery = "SELECT SUM(amount) AS current_tokens FROM transactions WHERE user_id = $1";
@@ -158,7 +168,12 @@ const handleMercyTokenRequest = async (pool, userId, username = null) => {
     }
 };
 
-const updateGameRecordOutcome = async (pool, gameId, outcome) => { /* ... (no change) ... */ };
+const updateGameRecordOutcome = async (pool, gameId, outcome) => {
+    await pool.query(
+        'UPDATE game_history SET outcome = $1, end_time = NOW() WHERE game_id = $2',
+        [outcome, gameId],
+    );
+};
 
 const handleGameStartTransaction = async (pool, table, playerIds, gameId) => {
     const cost = -(TABLE_COSTS[table.theme] || 1);
@@ -219,81 +234,254 @@ const handleGameStartTransaction = async (pool, table, playerIds, gameId) => {
     }
 };
 
-// --- NEW ROBUST FUNCTION WITH LOGGING ---
-const handleDrawTransactions = async (pool, table, outcome) => {
+// Creates the in-progress game and charges every funded human as one database
+// unit.  The user row locks serialize overlapping starts before balances are
+// read, while the surrounding transaction guarantees a failed charge cannot
+// leave an orphaned game_history row.
+const startGameTransaction = async (pool, table, playerIds) => {
+    if (!Array.isArray(playerIds)) throw new TypeError('playerIds must be an array');
+    const fundedPlayerIds = [...new Set(playerIds)];
+    if (fundedPlayerIds.some(id => !Number.isInteger(id) || id <= 0)) {
+        throw new TypeError('playerIds must contain positive integer user ids');
+    }
+
+    const cost = -(TABLE_COSTS[table.theme] ?? 1);
+    const requiredBalance = Math.abs(cost);
     const client = await pool.connect();
-    console.log(`[DB] Starting DRAW transaction for game_id ${table.gameId}, outcome: ${outcome}`);
+    let transactionStarted = false;
+
     try {
         await client.query('BEGIN');
+        transactionStarted = true;
 
-        const tableCost = TABLE_COSTS[table.theme] || 0;
-        const gameId = table.gameId;
-        const humanPlayers = Object.values(table.players).filter(p => !p.isBot && !p.isSpectator);
-        const statPromises = [];
-        const transactionPromises = [];
-        const summaryData = {
-            isGameOver: true,
-            drawOutcome: outcome,
-            gameWinner: "Draw",
-            payouts: {},
-            finalScores: table.scores,
-        };
+        const gameResult = await client.query(
+            `INSERT INTO game_history (table_id, theme, player_count, outcome)
+             VALUES ($1, $2, $3, 'In Progress')
+             RETURNING game_id`,
+            [table.tableId, table.theme, table.playerMode],
+        );
+        const gameId = gameResult.rows[0].game_id;
 
-        if (outcome === 'wash') {
-            console.log(`[DB] Processing WASH payouts for ${humanPlayers.length} players.`);
-            for (const player of humanPlayers) {
-                summaryData.payouts[player.playerName] = { totalReturn: tableCost };
-                transactionPromises.push(client.query(
-                    `INSERT INTO transactions (user_id, game_id, transaction_type, amount, description) VALUES ($1, $2, 'wash_payout', $3, $4)`,
-                    [player.userId, gameId, tableCost, `Draw (Wash) - Buy-in returned`]
-                ));
-                statPromises.push(client.query("UPDATE users SET washes = washes + 1 WHERE id = $1", [player.userId]));
-            }
-        } else if (outcome === 'split') {
-            console.log(`[DB] Calculating SPLIT payouts...`);
-            const splitResult = gameLogic.calculateDrawSplitPayout(table);
-            if (splitResult.wash) { // Fallback for 4-player games etc.
-                console.log(`[DB] Split cannot be calculated, falling back to WASH.`);
-                return await handleDrawTransactions(pool, table, 'wash'); // Recursive call with 'wash'
-            }
-            summaryData.payouts = splitResult.payouts;
-            for (const playerName in splitResult.payouts) {
-                const payoutInfo = splitResult.payouts[playerName];
-                console.log(`[DB] Processing SPLIT payout for ${playerName}: ${payoutInfo.totalReturn.toFixed(2)} tokens.`);
-                transactionPromises.push(client.query(
-                    `INSERT INTO transactions (user_id, game_id, transaction_type, amount, description) VALUES ($1, $2, 'win_payout', $3, $4)`,
-                    [payoutInfo.userId, gameId, payoutInfo.totalReturn, `Draw (Split) - Payout`]
-                ));
-                statPromises.push(client.query("UPDATE users SET washes = washes + 1 WHERE id = $1", [payoutInfo.userId]));
+        let lockedUsers = [];
+        let balanceRows = [];
+        if (fundedPlayerIds.length > 0) {
+            const lockedResult = await client.query(
+                `SELECT id, username
+                 FROM users
+                 WHERE id = ANY($1::int[])
+                 ORDER BY id
+                 FOR UPDATE`,
+                [fundedPlayerIds],
+            );
+            lockedUsers = lockedResult.rows;
+
+            const balanceResult = await client.query(
+                `SELECT user_id, COALESCE(SUM(amount), 0) AS current_tokens
+                 FROM transactions
+                 WHERE user_id = ANY($1::int[])
+                 GROUP BY user_id`,
+                [fundedPlayerIds],
+            );
+            balanceRows = balanceResult.rows;
+        }
+
+        const usernames = Object.fromEntries(lockedUsers.map(row => [row.id, row.username]));
+        const playerBalances = Object.fromEntries(
+            balanceRows.map(row => [row.user_id, parseFloat(row.current_tokens || 0)]),
+        );
+
+        for (const userId of fundedPlayerIds) {
+            const balance = playerBalances[userId] || 0;
+            if (balance < requiredBalance) {
+                const username = usernames[userId] || `Player ID ${userId}`;
+                throw new Error(`${username} has insufficient tokens. Needs ${requiredBalance}, but has ${balance.toFixed(2)}.`);
             }
         }
 
-        await Promise.all(transactionPromises);
-        console.log(`[DB] ${transactionPromises.length} transaction records posted.`);
-        await Promise.all(statPromises);
-        console.log(`[DB] ${statPromises.length} user stat records updated.`);
-        
-        await client.query(`UPDATE game_history SET outcome = $1, end_time = NOW() WHERE game_id = $2`, [`Game Over! Draw (${outcome})`, gameId]);
-        console.log(`[DB] Finalized game_history for game_id ${gameId}.`);
-        
-        await client.query('COMMIT');
-        console.log(`[DB] ✅ DRAW transaction for game_id ${gameId} committed successfully.`);
-        return summaryData;
+        for (const userId of fundedPlayerIds) {
+            await client.query(
+                `INSERT INTO transactions
+                    (user_id, game_id, transaction_type, amount, description)
+                 VALUES ($1, $2, 'buy_in', $3, $4)`,
+                [userId, gameId, cost, `Table buy-in for game #${gameId}`],
+            );
+        }
 
-    } catch (err) {
-        await client.query('ROLLBACK');
-        console.error(`[DB] ❌ DRAW transaction for game_id ${table.gameId} FAILED and was rolled back. Error:`, err);
-        throw err; // Re-throw the error to be caught by the service
+        await client.query('COMMIT');
+
+        const updatedTokens = {};
+        for (const userId of fundedPlayerIds) {
+            updatedTokens[userId] = (playerBalances[userId] || 0) + cost;
+        }
+        console.log(`âœ… Atomic game start committed for game ${gameId}`);
+        return { gameId, updatedTokens };
+    } catch (error) {
+        if (transactionStarted) await client.query('ROLLBACK');
+        console.error('âŒ Atomic game start failed and was rolled back:', error.message);
+        throw error;
     } finally {
         client.release();
     }
 };
+
+const SETTLEMENT_STAT_COLUMNS = new Set(['wins', 'losses', 'washes']);
+
+class SettlementConflictError extends Error {
+    constructor(gameId, expectedOutcome, persistedOutcome) {
+        super(`Game ${gameId} is already settled as "${persistedOutcome}", not "${expectedOutcome}".`);
+        this.name = 'SettlementConflictError';
+        this.code = 'SETTLEMENT_CONFLICT';
+    }
+}
+
+async function settleGameTransaction(pool, settlement) {
+    validateSettlement(settlement);
+    const client = await pool.connect();
+    let transactionOpen = false;
+
+    try {
+        await client.query('BEGIN');
+        transactionOpen = true;
+
+        const gameResult = await client.query(
+            'SELECT outcome FROM game_history WHERE game_id = $1 FOR UPDATE',
+            [settlement.gameId],
+        );
+        if (!gameResult.rows?.length) {
+            const error = new Error(`Game history row ${settlement.gameId} does not exist.`);
+            error.code = 'SETTLEMENT_GAME_NOT_FOUND';
+            throw error;
+        }
+
+        const persistedOutcome = gameResult.rows[0].outcome;
+        if (persistedOutcome !== 'In Progress') {
+            if (persistedOutcome !== settlement.outcome) {
+                throw new SettlementConflictError(
+                    settlement.gameId,
+                    settlement.outcome,
+                    persistedOutcome,
+                );
+            }
+            await client.query('COMMIT');
+            transactionOpen = false;
+            return { ...settlement.result, alreadySettled: true };
+        }
+
+        const userIds = [...new Set([
+            ...settlement.payouts.map(payout => payout.userId),
+            ...settlement.stats.map(stat => stat.userId),
+        ])].sort((left, right) => left - right);
+        if (userIds.length > 0) {
+            const lockedUsers = await client.query(
+                `SELECT id FROM users
+                 WHERE id = ANY($1::int[])
+                 ORDER BY id
+                 FOR UPDATE`,
+                [userIds],
+            );
+            if ((lockedUsers.rows || []).length !== userIds.length) {
+                const error = new Error(`One or more funded users for game ${settlement.gameId} no longer exist.`);
+                error.code = 'SETTLEMENT_USER_NOT_FOUND';
+                throw error;
+            }
+        }
+
+        for (const payout of settlement.payouts) {
+            await client.query(
+                `INSERT INTO transactions
+                    (user_id, game_id, transaction_type, amount, description)
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [
+                    payout.userId,
+                    settlement.gameId,
+                    payout.type,
+                    (payout.amountCents / 100).toFixed(2),
+                    payout.description,
+                ],
+            );
+        }
+
+        for (const stat of settlement.stats) {
+            await client.query(
+                `UPDATE users SET ${stat.column} = ${stat.column} + 1 WHERE id = $1`,
+                [stat.userId],
+            );
+        }
+
+        const updateResult = await client.query(
+            `UPDATE game_history
+             SET outcome = $1, end_time = NOW()
+             WHERE game_id = $2 AND outcome = 'In Progress'`,
+            [settlement.outcome, settlement.gameId],
+        );
+        if (updateResult.rowCount === 0) {
+            throw new Error(`Game ${settlement.gameId} changed while settlement was locked.`);
+        }
+
+        await client.query('COMMIT');
+        transactionOpen = false;
+        return { ...settlement.result, alreadySettled: false };
+    } catch (error) {
+        if (transactionOpen) {
+            try {
+                await client.query('ROLLBACK');
+            } catch (rollbackError) {
+                console.error(`[DB] Failed to roll back settlement for game ${settlement.gameId}:`, rollbackError);
+            }
+        }
+        throw error;
+    } finally {
+        client.release();
+    }
+}
+
+function validateSettlement(settlement) {
+    if (!settlement || !Number.isInteger(settlement.gameId) || settlement.gameId <= 0) {
+        throw new TypeError('Settlement requires a positive integer gameId');
+    }
+    if (typeof settlement.outcome !== 'string' || !settlement.outcome) {
+        throw new TypeError('Settlement requires a terminal outcome');
+    }
+    if (!Array.isArray(settlement.payouts) || !Array.isArray(settlement.stats)) {
+        throw new TypeError('Settlement requires payout and stat arrays');
+    }
+    for (const payout of settlement.payouts) {
+        if (!Number.isInteger(payout.userId) || payout.userId <= 0
+            || !Number.isInteger(payout.amountCents) || payout.amountCents < 0
+            || typeof payout.type !== 'string' || typeof payout.description !== 'string') {
+            throw new TypeError('Invalid settlement payout');
+        }
+    }
+    for (const stat of settlement.stats) {
+        if (!Number.isInteger(stat.userId) || stat.userId <= 0
+            || !SETTLEMENT_STAT_COLUMNS.has(stat.column)) {
+            throw new TypeError('Invalid settlement stat update');
+        }
+    }
+}
+
+const handleNormalGameTransactions = async (pool, table) => (
+    settleGameTransaction(pool, buildNormalGameSettlement(table))
+);
+
+const handleDrawTransactions = async (pool, table, outcome) => (
+    settleGameTransaction(pool, buildDrawSettlement(table, outcome))
+);
+
+const handleForfeitTransactions = async (pool, table) => (
+    settleGameTransaction(pool, buildForfeitSettlement(table))
+);
 
 module.exports = {
     createGameRecord,
     postTransaction,
     updateGameRecordOutcome,
     handleGameStartTransaction,
-    handleDrawTransactions, // EXPORT NEW FUNCTION
-    handleMercyTokenRequest, // EXPORT NEW FUNCTION
+    startGameTransaction,
+    handleNormalGameTransactions,
+    handleDrawTransactions,
+    handleForfeitTransactions,
+    handleMercyTokenRequest,
+    settleGameTransaction,
+    SettlementConflictError,
 };

@@ -196,3 +196,11 @@
 .player-hand-card-wrapper.physics-active {
     will-change: transform, opacity;
 }
+
+@media (prefers-reduced-motion: reduce) {
+    .turn-indicator-overlay,
+    .frog-confirm-button {
+        animation: none !important;
+        transition: none !important;
+    }
+}

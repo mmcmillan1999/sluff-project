@@ -12,6 +12,7 @@ import FeedbackModal from "./components/FeedbackModal.js";
 import FeedbackView from "./components/FeedbackView.js";
 import LobbyHeader from "./components/LobbyHeader.js";
 import GameHeader from "./components/GameHeader.js";
+import HowToPlayModal from "./components/HowToPlayModal.js";
 import { submitFeedback } from "./services/api.js";
 import { extractInviteTableId } from "./utils/tableInvites.js";
 import { newBuildAvailable } from "./utils/clientVersion.js";
@@ -40,10 +41,12 @@ function App() {
     const [lobbyThemes, setLobbyThemes] = useState([]);
     const [currentTableState, setCurrentTableState] = useState(null);
     const [errorMessage, setErrorMessage] = useState('');
+    const [connectionNotice, setConnectionNotice] = useState(null);
     const [serverVersion, setServerVersion] = useState('');
     const [showMercyWindow, setShowMercyWindow] = useState(false);
     const { playSound, enableSound, soundSettings } = useSounds();
     const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+    const [showHowToPlay, setShowHowToPlay] = useState(false);
     const [feedbackGameContext, setFeedbackGameContext] = useState(null);
     // Invite link (/join/<tableId>): parsed once on load, held until the user
     // is logged in and the socket is up, then consumed by the auto-join effect.
@@ -51,6 +54,10 @@ function App() {
     const [pendingInviteTableId, setPendingInviteTableId] = useState(() =>
         extractInviteTableId(window.location.href) || window.__sluffInviteTableId || null
     );
+    const currentTableId = currentTableState?.tableId;
+    const hasConnectedRef = React.useRef(false);
+    const errorMessageTimerRef = React.useRef(null);
+    const connectionNoticeTimerRef = React.useRef(null);
 
     const handleLogout = useCallback(() => {
         localStorage.removeItem("sluff_token");
@@ -90,6 +97,9 @@ function App() {
         setFeedbackGameContext(null);
     };
 
+    const handleShowHowToPlay = useCallback(() => setShowHowToPlay(true), []);
+    const handleCloseHowToPlay = useCallback(() => setShowHowToPlay(false), []);
+
     const handleSubmitFeedback = async (feedbackData) => {
         await submitFeedback(feedbackData);
     };
@@ -117,12 +127,12 @@ function App() {
     };
 
     const handleLeaveTable = useCallback(() => {
-        if (currentTableState) {
-            socket.emit("leaveTable", { tableId: currentTableState.tableId });
+        if (currentTableId) {
+            socket.emit("leaveTable", { tableId: currentTableId });
         }
         handleReturnToLobby();
         setCurrentTableState(null);
-    }, [currentTableState]);
+    }, [currentTableId]);
 
     useEffect(() => {
         if (token && !user) {
@@ -144,7 +154,24 @@ function App() {
             socket.connect();
             socket.emit("requestUserSync");
 
-            const onConnect = () => {}; // console.log("Socket connected!");
+            const onConnect = () => {
+                if (connectionNoticeTimerRef.current) clearTimeout(connectionNoticeTimerRef.current);
+                if (hasConnectedRef.current) {
+                    setConnectionNotice({ kind: 'online', message: 'Back online' });
+                    connectionNoticeTimerRef.current = setTimeout(() => setConnectionNotice(null), 2500);
+                } else {
+                    setConnectionNotice(null);
+                    hasConnectedRef.current = true;
+                }
+            };
+            const onDisconnect = (reason) => {
+                if (reason === 'io client disconnect') return;
+                if (connectionNoticeTimerRef.current) clearTimeout(connectionNoticeTimerRef.current);
+                setConnectionNotice({ kind: 'reconnecting', message: 'Connection lost. Reconnecting…' });
+            };
+            const onReconnectAttempt = () => {
+                setConnectionNotice({ kind: 'reconnecting', message: 'Reconnecting…' });
+            };
             const onUpdateUser = (updatedUser) => {
                 // console.log('[DEBUG] updateUser received from server:', updatedUser);
                 // console.log('[DEBUG] is_admin from server:', updatedUser.is_admin);
@@ -179,14 +206,18 @@ function App() {
                 setView('gameTable');
             };
             const onError = (error) => {
-                const msg = error.message || error;
-                setErrorMessage(msg);
-                setTimeout(() => setErrorMessage(''), 5000);
+                const msg = error?.message || error || 'Something went wrong.';
+                setErrorMessage(String(msg));
+                if (errorMessageTimerRef.current) clearTimeout(errorMessageTimerRef.current);
+                errorMessageTimerRef.current = setTimeout(() => setErrorMessage(''), 5000);
             };
             const onConnectError = (err) => {
-                console.error("Connection Error:", err.message);
-                if (err.message.includes("Authentication error")) {
+                const message = err?.message || 'Connection failed';
+                console.error("Connection Error:", message);
+                if (message.includes("Authentication error")) {
                     handleLogout();
+                } else {
+                    setConnectionNotice({ kind: 'reconnecting', message: 'Unable to reach Sluff. Reconnecting…' });
                 }
             };
             const onForceReset = (message) => {
@@ -199,6 +230,8 @@ function App() {
             const onForceLobbyReturn = () => handleLeaveTable();
 
             socket.on('connect', onConnect);
+            socket.on('disconnect', onDisconnect);
+            socket.io?.on('reconnect_attempt', onReconnectAttempt);
             socket.on('updateUser', onUpdateUser);
             socket.on('lobbyState', onLobbyState);
             socket.on('gameState', onGameState);
@@ -212,6 +245,8 @@ function App() {
 
             return () => {
                 socket.off('connect', onConnect);
+                socket.off('disconnect', onDisconnect);
+                socket.io?.off('reconnect_attempt', onReconnectAttempt);
                 socket.off('updateUser', onUpdateUser);
                 socket.off('lobbyState', onLobbyState);
                 socket.off('gameState', onGameState);
@@ -222,11 +257,15 @@ function App() {
                 socket.off('gameStartFailed', onGameStartFailed);
                 socket.off('notification', onNotification);
                 socket.off('forceLobbyReturn', onForceLobbyReturn);
+                if (errorMessageTimerRef.current) clearTimeout(errorMessageTimerRef.current);
+                if (connectionNoticeTimerRef.current) clearTimeout(connectionNoticeTimerRef.current);
             };
         } else {
             if (socket.connected) {
                 socket.disconnect();
             }
+            hasConnectedRef.current = false;
+            setConnectionNotice(null);
         }
     }, [token, handleLogout, handleLeaveTable]);
 
@@ -398,21 +437,34 @@ function App() {
         }
     };
 
+    const hasAdvertisingHeader = view === 'lobby' || view === 'gameTable';
+
     return (
         <>
+            {(errorMessage || connectionNotice) && (
+                <div
+                    className={`app-status-toast ${errorMessage ? 'is-error' : `is-${connectionNotice.kind}`}`}
+                    role={errorMessage ? 'alert' : 'status'}
+                    aria-live={errorMessage ? 'assertive' : 'polite'}
+                    aria-atomic="true"
+                >
+                    {errorMessage || connectionNotice.message}
+                </div>
+            )}
             {/* Render appropriate header based on current view */}
             {renderHeader()}
             
-            <div className="app-content-container">
+            <div className={`app-content-container ${hasAdvertisingHeader ? 'with-header' : 'no-header'} app-view-${view}`}>
                 <MercyWindow show={showMercyWindow} onClose={() => setShowMercyWindow(false)} emitEvent={emitEvent} user={user} />
                 <FeedbackModal show={showFeedbackModal} onClose={handleCloseFeedbackModal} onSubmit={handleSubmitFeedback} gameContext={feedbackGameContext} />
+                <HowToPlayModal show={showHowToPlay} onClose={handleCloseHowToPlay} returnFocusSelector={view === 'gameTable' ? '.game-menu-btn' : '.hamburger-btn'} />
 
                 {(() => {
                     switch (view) {
                         case 'lobby':
-                            return <LobbyView user={user} lobbyThemes={lobbyThemes} serverVersion={serverVersion} handleJoinTable={handleJoinTable} handleQuickPlay={handleQuickPlay} handleJoinTableAsSpectator={handleJoinTableAsSpectator} handleLogout={handleLogout} handleRequestFreeToken={handleRequestFreeToken} handleShowLeaderboard={() => setView('leaderboard')} handleShowAdmin={handleShowAdmin} handleShowFeedback={() => setView('feedback')} errorMessage={errorMessage} emitEvent={emitEvent} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} soundSettings={soundSettings} />;
+                            return <LobbyView user={user} lobbyThemes={lobbyThemes} serverVersion={serverVersion} handleJoinTable={handleJoinTable} handleQuickPlay={handleQuickPlay} handleJoinTableAsSpectator={handleJoinTableAsSpectator} handleLogout={handleLogout} handleRequestFreeToken={handleRequestFreeToken} handleShowLeaderboard={() => setView('leaderboard')} handleShowAdmin={handleShowAdmin} handleShowFeedback={() => setView('feedback')} handleShowHowToPlay={handleShowHowToPlay} errorMessage={errorMessage} emitEvent={emitEvent} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} soundSettings={soundSettings} />;
                         case 'gameTable':
-                            return currentTableState ? <GameTableView user={user} playerId={user.id} currentTableState={currentTableState} handleLeaveTable={handleLeaveTable} handleLogout={handleLogout} errorMessage={errorMessage} emitEvent={emitEvent} playSound={playSound} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} soundSettings={soundSettings} /> : <div>Loading table...</div>;
+                            return currentTableState ? <GameTableView user={user} playerId={user.id} currentTableState={currentTableState} handleLeaveTable={handleLeaveTable} handleLogout={handleLogout} handleShowHowToPlay={handleShowHowToPlay} errorMessage={errorMessage} emitEvent={emitEvent} playSound={playSound} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} soundSettings={soundSettings} /> : <div>Loading table...</div>;
                         case 'leaderboard':
                             return <LeaderboardView user={user} onReturnToLobby={handleReturnToLobby} handleResetAllTokens={handleResetAllTokens} handleShowAdmin={handleShowAdmin} />;
                         case 'feedback':

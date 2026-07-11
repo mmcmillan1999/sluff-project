@@ -3,7 +3,7 @@
 const BotPlayer = require('./BotPlayer');
 const aiService = require('../services/aiService');
 const { getLegalMoves } = require('./legalMoves');
-const { CARD_POINT_VALUES, RANKS_ORDER } = require('./constants');
+const { CARD_POINT_VALUES, RANKS_ORDER, BID_HIERARCHY } = require('./constants');
 
 class SuperBot extends BotPlayer {
     constructor(userId, name, engine, aiModel = 'gpt-5.4-mini') {
@@ -20,13 +20,11 @@ class SuperBot extends BotPlayer {
             const gameState = this._buildGameState();
             const currentHighestBid = this.engine.currentHighestBidDetails?.bid || null;
             
-            // Define bid hierarchy
-            const bidHierarchy = ['Pass', 'Solo', 'Frog', 'Heart Solo'];
-            const currentBidIndex = currentHighestBid ? bidHierarchy.indexOf(currentHighestBid) : -1;
+            const currentBidIndex = currentHighestBid ? BID_HIERARCHY.indexOf(currentHighestBid) : -1;
             
             // Calculate valid bids (exactly like the frontend does for human players)
-            const validBids = bidHierarchy.filter(bid => 
-                bid === 'Pass' || bidHierarchy.indexOf(bid) > currentBidIndex
+            const validBids = BID_HIERARCHY.filter(bid =>
+                bid === 'Pass' || BID_HIERARCHY.indexOf(bid) > currentBidIndex
             );
             
             console.log(`[BID] ${this.playerName}: Current highest="${currentHighestBid}", valid options: ${validBids.join(', ')}`);
@@ -132,7 +130,7 @@ class SuperBot extends BotPlayer {
             console.log(`   - Points captured: ${JSON.stringify(gameState.pointsCaptured)}`);
             console.log(`   - Tricks captured: ${JSON.stringify(gameState.capturedTricksCount)}`);
             console.log(`   - Bidder: ${gameState.bidder} (${gameState.bidType})`);
-            console.log(`   - Trick ${gameState.trickNumber}/13`);
+            console.log(`   - Trick ${gameState.trickNumber}/11`);
             
             const aiDecision = await aiService.getInsuranceDecision(
                 this.aiModel,
@@ -151,28 +149,22 @@ class SuperBot extends BotPlayer {
                 const isBidder = (this.engine.bidWinnerInfo?.playerName === this.playerName);
                 console.log(`📊 [INSURANCE-DEBUG] Role check: bidWinner="${this.engine.bidWinnerInfo?.playerName}", me="${this.playerName}", isBidder=${isBidder}`);
                 
-                // IMPORTANT: For defenders, negative values = incoming points (good for them)
-                // The AI returns positive values, we need to convert for defenders
                 let finalOffer, finalReq;
                 
                 if (isBidder) {
-                    // Bidder: positive requirement = points they want
                     finalOffer = 0;
-                    finalReq = Math.max(0, Math.min(maxReq, aiDecision.requirement));
+                    finalReq = Math.max(-maxReq, Math.min(maxReq, aiDecision.requirement));
                     console.log(`🎯 ${this.playerName} (BIDDER) Insurance Requirement: ${finalReq} points`);
                     console.log(`   → Reasoning: "${aiDecision.reasoning}"`);
-                    console.log(`   → AI wanted ${aiDecision.requirement}, clamped to [0, ${maxReq}]`);
+                    console.log(`   → AI wanted ${aiDecision.requirement}, clamped to [${-maxReq}, ${maxReq}]`);
                 } else {
-                    // Defender: negative offer = points they'll receive if bidder wins
-                    // Convert positive AI response to negative for game engine
-                    const offerAmount = Math.max(0, Math.min(maxOffer, aiDecision.offer));
-                    finalOffer = -offerAmount; // Make it negative (incoming points)
+                    // Preserve engine semantics: a positive signed offer pays
+                    // the bidder; a negative one asks the bidder to pay defender.
+                    finalOffer = Math.max(-maxOffer, Math.min(maxOffer, aiDecision.offer));
                     finalReq = 0;
-                    console.log(`🎯 ${this.playerName} (DEFENDER) Insurance Offer: ${offerAmount} points`);
+                    console.log(`🎯 ${this.playerName} (DEFENDER) Insurance Offer: ${finalOffer} points`);
                     console.log(`   → Reasoning: "${aiDecision.reasoning}"`);
-                    if (offerAmount > 0) {
-                        console.log(`   → Protection: Will receive ${offerAmount} points if bidder wins`);
-                    }
+                    console.log(`   → AI wanted ${aiDecision.offer}, clamped to [${-maxOffer}, ${maxOffer}]`);
                 }
                 
                 console.log(`📊 [INSURANCE-DEBUG] ${this.playerName} final decision:`, { offer: finalOffer, requirement: finalReq });

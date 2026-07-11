@@ -13,6 +13,7 @@ import {
 import './KeyAndModal.css';
 import './TableLayout.css';
 import { SUIT_SYMBOLS } from '../../constants';
+import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion';
 
 // Full deck of 36 cards (9 ranks × 4 suits)
 const FULL_DECK = [
@@ -42,6 +43,7 @@ const TableLayout = ({
     handleLeaveTable,
     playSound,
     dropZoneRef,
+    isAdmin = false,
     showDebugAnchors = false
 }) => {
     const [lastTrickVisible, setLastTrickVisible] = useState(false);
@@ -71,6 +73,7 @@ const TableLayout = ({
     const displayedTrickTotalRef = useRef(trickTotal(currentTableState.capturedTricks));
     const pendingTrickTargetRef = useRef(null);
     const laggedTrickTimerRef = useRef(null);
+    const prefersReducedMotion = usePrefersReducedMotion();
 
     const clearEndRoundTimers = () => {
         endRoundTimersRef.current.forEach(clearTimeout);
@@ -104,7 +107,7 @@ const TableLayout = ({
         const newTotal = trickTotal(captured);
         const oldTotal = displayedTrickTotalRef.current;
 
-        if (!isSpectator && newTotal > oldTotal) {
+        if (!isSpectator && !prefersReducedMotion && newTotal > oldTotal) {
             if (pendingTrickTargetRef.current !== newTotal) {
                 pendingTrickTargetRef.current = newTotal;
                 if (laggedTrickTimerRef.current) clearTimeout(laggedTrickTimerRef.current);
@@ -123,12 +126,13 @@ const TableLayout = ({
             setLaggedCapturedTricks(captured);
             displayedTrickTotalRef.current = newTotal;
         }
-    }, [currentTableState.capturedTricks, isSpectator]);
+    }, [currentTableState.capturedTricks, isSpectator, prefersReducedMotion]);
 
     // Shared helper: measure the played cards + the winning pile, hold, then slide
     // and shrink the cards onto that pile. Used by both the per-trick linger and
     // the final trick of the round.
     const flyTrickToWinnerPile = useCallback((winnerIsBidder) => {
+        if (prefersReducedMotion) return;
         const targetEl = document.querySelector(`.trick-pile-base.${winnerIsBidder ? 'bidder' : 'defender'}-base`);
         if (!targetEl) return; // graceful fallback: cards simply remain, then unmount
         const t = targetEl.getBoundingClientRect();
@@ -153,7 +157,7 @@ const TableLayout = ({
                 el.style.transform = `translate(${el.__fly.dx}px, ${el.__fly.dy}px) scale(0.6)`;
             });
         }, FINAL_TRICK_HOLD_MS);
-    }, []);
+    }, [prefersReducedMotion]);
 
     // Track trump broken state changes and trigger announcement
     useEffect(() => {
@@ -185,7 +189,7 @@ const TableLayout = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useLayoutEffect(() => {
         const { state, lastCompletedTrick, bidWinnerInfo } = currentTableState;
-        if (state !== 'TrickCompleteLinger' || isSpectator || !lastCompletedTrick || !bidWinnerInfo) {
+        if (state !== 'TrickCompleteLinger' || isSpectator || prefersReducedMotion || !lastCompletedTrick || !bidWinnerInfo) {
             return undefined;
         }
         flyTrickToWinnerPile(lastCompletedTrick.winnerName === bidWinnerInfo.playerName);
@@ -195,7 +199,7 @@ const TableLayout = ({
                 flyTimerRef.current = null;
             }
         };
-    }, [currentTableState.state]);
+    }, [currentTableState.state, prefersReducedMotion]);
 
     // End-of-round celebration sequence. The final (11th) trick skips the linger
     // and jumps straight to scoring, so we run the whole flourish here when the
@@ -210,7 +214,7 @@ const TableLayout = ({
     useLayoutEffect(() => {
         const { state, roundSummary, lastCompletedTrick, bidWinnerInfo } = currentTableState;
         const isRoundEnd = (state === 'Awaiting Next Round Trigger' || state === 'Game Over')
-            && roundSummary && lastCompletedTrick && bidWinnerInfo && !isSpectator;
+            && roundSummary && lastCompletedTrick && bidWinnerInfo && !isSpectator && !prefersReducedMotion;
 
         if (!isRoundEnd) {
             // Reset once we've moved on to the next round / away from the recap.
@@ -259,7 +263,7 @@ const TableLayout = ({
             setWidowFlipped(true);
             if (playSound) playSound('roundEnd');
         }, WIDOW_FLIP_START_MS));
-    }, [currentTableState.state]);
+    }, [currentTableState.state, prefersReducedMotion]);
 
     // Drives the widow overlay: measured FLIP from the widow pile -> center
     // (held) -> the awarded team's pile. Runs when the overlay mounts.
@@ -344,6 +348,13 @@ const TableLayout = ({
         }
     };
 
+    const activateOnKey = (event, callback) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            callback();
+        }
+    };
+
     // Widow peek (4-player only): the sitting-out dealer taps the widow pile
     // to see its cards, same rhythm as the last-trick peek. Anyone else who
     // taps gets the "no peeking" treatment.
@@ -384,9 +395,11 @@ const TableLayout = ({
 
     const renderPlayedCardsOnTable = () => {
         const isLingerState = currentTableState.state === 'TrickCompleteLinger';
-        const cardsToDisplay = isLingerState ? currentTableState.lastCompletedTrick.cards : currentTableState.currentTrickCards;
+        const cardsToDisplay = isLingerState ? currentTableState.lastCompletedTrick?.cards : currentTableState.currentTrickCards;
 
-        if (!cardsToDisplay || cardsToDisplay.length === 0 || isSpectator) {
+        // Cards already played to the table are public information. Spectators
+        // receive this play list without receiving any player's hidden hand.
+        if (!cardsToDisplay || cardsToDisplay.length === 0) {
             return null;
         }
 
@@ -596,14 +609,14 @@ const TableLayout = ({
             <>
                 {/* Render bidder pile in its assigned position */}
                 <div className={`trick-pile-container ${bidderPileClass}`}>
-                    <div className={`trick-pile-base bidder-base ${bidderWonLast ? 'pulsating-gold' : ''}`} onClick={() => handleTrickPileClick('bidder', bidderPileClass)}>
+                    <div className={`trick-pile-base bidder-base ${bidderWonLast ? 'pulsating-gold' : ''}`} onClick={() => handleTrickPileClick('bidder', bidderPileClass)} onKeyDown={(event) => activateOnKey(event, () => handleTrickPileClick('bidder', bidderPileClass))} role="button" tabIndex={lastCompletedTrick ? 0 : -1} aria-disabled={!lastCompletedTrick} aria-label={`Bidder trick pile, ${bidderTricksCount} tricks`}>
                         <TrickPile count={bidderTricksCount} />
                     </div>
                 </div>
                 
                 {/* Render defender pile in its assigned position */}
                 <div className={`trick-pile-container ${defenderPileClass}`}>
-                    <div className={`trick-pile-base defender-base ${defenderWonLast ? 'pulsating-blue' : ''}`} onClick={() => handleTrickPileClick('defender', defenderPileClass)}>
+                    <div className={`trick-pile-base defender-base ${defenderWonLast ? 'pulsating-blue' : ''}`} onClick={() => handleTrickPileClick('defender', defenderPileClass)} onKeyDown={(event) => activateOnKey(event, () => handleTrickPileClick('defender', defenderPileClass))} role="button" tabIndex={lastCompletedTrick ? 0 : -1} aria-disabled={!lastCompletedTrick} aria-label={`Defender trick pile, ${defenderTricksCount} tricks`}>
                         <TrickPile count={defenderTricksCount} />
                     </div>
                 </div>
@@ -779,6 +792,8 @@ const TableLayout = ({
             deckPosition = 'left';
         } else if (seatAssignments.opponentRight === dealerName) {
             deckPosition = 'right';
+        } else if (seatAssignments.opponentAcross === dealerName) {
+            deckPosition = 'top';
         } else {
             return null; // Dealer not in current player's view
         }
@@ -846,6 +861,10 @@ const TableLayout = ({
             <div
                 className={`trick-pile-container ${widowPileClass}`}
                 onClick={dealerCanPeek ? handleWidowPileClick : undefined}
+                onKeyDown={dealerCanPeek ? (event) => activateOnKey(event, handleWidowPileClick) : undefined}
+                role={dealerCanPeek ? 'button' : undefined}
+                tabIndex={dealerCanPeek ? 0 : undefined}
+                aria-label={dealerCanPeek ? 'Widow pile. Reveal if you are the sitting dealer' : 'Widow pile'}
                 style={dealerCanPeek ? { cursor: 'pointer', pointerEvents: 'auto' } : undefined}
             >
                 <div className="trick-pile-base widow-base">

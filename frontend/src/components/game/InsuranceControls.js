@@ -2,8 +2,8 @@ import React from 'react';
 import './InsuranceControls.css'; // Import the new CSS file
 
 /**
- * Renders a super-compact insurance negotiation panel for 3-player games,
- * focusing on values and buttons with no text labels.
+ * Compact insurance negotiation panel for the active three-player round.
+ * Four-player games use the same trio while the dealer sits out.
  */
 const InsuranceControls = ({ insuranceState, selfPlayerName, isSpectator, emitEvent, onOpenPrompt }) => {
     const isActive = !!(insuranceState && insuranceState.isActive && !isSpectator);
@@ -29,7 +29,14 @@ const InsuranceControls = ({ insuranceState, selfPlayerName, isSpectator, emitEv
         emitEvent("updateInsuranceSetting", { settingType, value: newValue });
     };
 
-    const sumOfOffers = Object.values(defenderOffers || {}).reduce((sum, offer) => sum + offer, 0);
+    const openDetailsOnKey = (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onOpenPrompt?.();
+        }
+    };
+
+    const sumOfOffers = Object.values(defenderOffers || {}).reduce((sum, offer) => sum + (Number(offer) || 0), 0);
     const gapToDeal = (bidderRequirement ?? 0) - sumOfOffers;
     const playerValue = isBidder ? bidderRequirement : myOffer;
 
@@ -67,22 +74,29 @@ const InsuranceControls = ({ insuranceState, selfPlayerName, isSpectator, emitEv
         <div className={['insurance-controls-container', isActive ? '' : 'is-inactive'].join(' ').trim()}>
             {isActive ? (
                 dealExecuted ? (
-                    <div className="deal-made-text">DEAL!</div>
+                    <div className="deal-made-text">DEAL LOCKED</div>
                 ) : (
                     <>
-                        <div className={gapValueClasses} title="Gap to Deal (tap for details)" onClick={onOpenPrompt} role="button">{gapToDeal}</div>
+                        <span className="insurance-purpose-label" title="Insurance can lock a known score exchange before the tricks are finished">LOCK SCORE</span>
+                        <div className={gapValueClasses} title={`${gapToDeal > 0 ? `${gapToDeal} more points are needed to lock a deal` : 'The insurance deal is ready to lock'} (tap for details)`} onClick={onOpenPrompt} onKeyDown={openDetailsOnKey} role="button" tabIndex={0} aria-label={`Deal gap: ${gapToDeal}. ${gapToDeal > 0 ? `${gapToDeal} more points needed` : 'Deal threshold reached'}. Open insurance details`}>
+                            <span className="insurance-value-label">GAP</span>
+                            <span>{gapToDeal}</span>
+                        </div>
                         {(isBidder || isDefender) && (
                             <>
-                                <div className={playerValueClasses.join(' ')} title={`${isBidder ? 'Your Ask' : 'Your Offer'} (tap for details)`} onClick={onOpenPrompt} role="button">{playerValue}</div>
-                                <button onClick={() => handleAdjustInsurance(-1)} className={decreaseButtonClasses.join(' ')} title="Decrease">-</button>
-                                <button onClick={() => handleAdjustInsurance(1)} className={increaseButtonClasses.join(' ')} title="Increase">+</button>
+                                <div className={playerValueClasses.join(' ')} title={`${isBidder ? 'Your Ask' : 'Your Offer'} (tap for details)`} onClick={onOpenPrompt} onKeyDown={openDetailsOnKey} role="button" tabIndex={0} aria-label={`${isBidder ? 'Your insurance ask' : 'Your insurance offer'}: ${playerValue}. Open details`}>
+                                    <span className="insurance-value-label">{isBidder ? 'ASK' : 'OFFER'}</span>
+                                    <span>{playerValue}</span>
+                                </div>
+                                <button onClick={() => handleAdjustInsurance(-1)} className={decreaseButtonClasses.join(' ')} title="Decrease" aria-label={`Decrease ${isBidder ? 'insurance ask' : 'insurance offer'}`}>-</button>
+                                <button onClick={() => handleAdjustInsurance(1)} className={increaseButtonClasses.join(' ')} title="Increase" aria-label={`Increase ${isBidder ? 'insurance ask' : 'insurance offer'}`}>+</button>
                             </>
                         )}
                     </>
                 )
             ) : (
                 // Placeholder to reserve space when inactive
-                <div className="insurance-placeholder" aria-hidden="true">Insurance</div>
+                <div className="insurance-placeholder" aria-hidden="true">Insurance: lock score</div>
             )}
         </div>
     );

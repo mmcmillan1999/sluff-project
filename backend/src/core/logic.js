@@ -40,15 +40,19 @@ function determineTrickWinner(trickCards, leadSuit, trumpSuit) {
 // =================================================================
 
 function calculateForfeitPayout(table, forfeitingPlayerName) {
+    const forfeitingPlayer = Object.values(table.players).find(p => p.playerName === forfeitingPlayerName);
     const remainingPlayers = Object.values(table.players).filter(p => 
         !p.isSpectator && 
+        !p.isBot &&
         p.playerName !== forfeitingPlayerName
     );
 
     if (remainingPlayers.length === 0) return {};
 
     const tableBuyIn = TABLE_COSTS[table.theme] || 0;
-    const forfeitedPot = tableBuyIn;
+    // Bots do not fund a buy-in, so a bot forfeit can only return the human
+    // players' own stakes; it cannot mint an extra buy-in.
+    const forfeitedPot = forfeitingPlayer?.isBot ? 0 : tableBuyIn;
     const totalScoreOfRemaining = remainingPlayers.reduce((sum, player) => sum + (table.scores[player.playerName] || 0), 0);
     
     const payoutDetails = {};
@@ -146,7 +150,12 @@ function calculateRoundScoreDetails(table) {
 
     if (insurance.dealExecuted) {
         const agreement = insurance.executedDetails.agreement;
-        pointChanges[agreement.bidderPlayerName] += agreement.bidderRequirement;
+        const defenderOfferTotal = Object.values(agreement.defenderOffers || {})
+            .reduce((sum, offer) => sum + (Number(offer) || 0), 0);
+        const bidderSettlement = Number.isFinite(agreement.bidderSettlement)
+            ? agreement.bidderSettlement
+            : defenderOfferTotal;
+        pointChanges[agreement.bidderPlayerName] += bidderSettlement;
         for (const defenderName in agreement.defenderOffers) {
             pointChanges[defenderName] -= agreement.defenderOffers[defenderName];
         }

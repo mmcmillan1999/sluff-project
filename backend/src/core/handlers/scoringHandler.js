@@ -49,17 +49,12 @@ function calculateRoundScores(engine) {
     engine.state = isGameOver ? "Game Over" : "Awaiting Next Round Trigger";
 
     if (isGameOver) {
+        engine.beginSettlement('normal');
         effects.push({
             type: 'HANDLE_GAME_OVER',
-            payload: {
-                scores: engine.scores,
-                theme: engine.theme,
-                gameId: engine.gameId,
-                players: engine.players,
-                // All seated players (not just the round's active trio) so
-                // 4-player game-over ranks the sitting-out dealer too.
-                playerOrderActive: engine.playerOrder.allIds.map(id => engine.players[id]),
-            },
+            // Snapshot before the first database await. A reset, reconnect, or
+            // socket action cannot mutate the roster used for money or stats.
+            payload: engine._createSettlementSnapshot(),
         });
     }
 

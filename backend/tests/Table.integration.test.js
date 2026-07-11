@@ -5,6 +5,7 @@ const GameEngine = require('../src/core/GameEngine');
 const GameService = require('../src/services/GameService');
 const gameLogic = require('../src/core/logic'); 
 const PlayerList = require('../src/core/PlayerList');
+const { createGameServiceWithoutHeartbeat, withControlledTimeouts } = require('./test-helpers');
 
 // --- Mocks and Helpers ---
 const mockIo = { to: () => ({ emit: () => {} }), emit: () => {}, sockets: { sockets: new Map() } };
@@ -33,13 +34,11 @@ class MockEffectProcessor {
     }
 }
 
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
 // --- Test Cases ---
 
 async function testBotBiddingProcess() {
     console.log("Running Test: testBotBiddingProcess...");
-    const gameService = new GameService(mockIo, null);
+    const gameService = createGameServiceWithoutHeartbeat(GameService, mockIo, null);
     const engine = gameService.getEngineById('table-1');
     const humanId = 101;
     engine.joinTable({ id: humanId, username: "HumanPlayer" }, "socket123");
@@ -54,8 +53,11 @@ async function testBotBiddingProcess() {
     await gameService.dealCards('table-1', humanId);
     assert.strictEqual(engine.state, "Bidding Phase");
     assert.strictEqual(engine.biddingTurnPlayerId, firstBidderId);
-    console.log("  - Waiting for bot to make a bid...");
-    await sleep(1500);
+    console.log("  - Triggering the bot heartbeat with a controlled action timer...");
+    await withControlledTimeouts(async ({ runNext }) => {
+        gameService._triggerBots('table-1');
+        await runNext();
+    });
     const bidsMade = engine.playersWhoPassedThisRound.length + (engine.currentHighestBidDetails ? 1 : 0);
     assert.strictEqual(bidsMade, 1, "Expected exactly one bid to have been made by the bot.");
     console.log("...Success! Bot bidding was triggered correctly.\n");
@@ -68,7 +70,7 @@ async function testAllPlayersPass() {
         mockSetTimeout(callback, duration) { this.callbacks.push(callback); this.duration = duration; }
         async tick() { while(this.callbacks.length > 0) { const cb = this.callbacks.shift(); await cb(); } }
     })();
-    const gameService = new GameService(mockIo, null);
+    const gameService = createGameServiceWithoutHeartbeat(GameService, mockIo, null);
     gameService.timerOverride = mockTimer.mockSetTimeout.bind(mockTimer);
     const engine = gameService.getEngineById('table-1');
     engine.joinTable({ id: 1, username: "Player A" }, "s1");
@@ -94,7 +96,7 @@ async function testAllPlayersPass() {
 
 async function testBotHandlesFrogUpgrade() {
     console.log("Running Test: testBotHandlesFrogUpgrade...");
-    const gameService = new GameService(mockIo, null);
+    const gameService = createGameServiceWithoutHeartbeat(GameService, mockIo, null);
     const engine = gameService.getEngineById('table-1');
     const humanId = 101;
     const bot1Id = -1;
@@ -140,9 +142,13 @@ async function testDrawRequestLifecycle() {
     let engine = setupEngineForDraw();
     engine.requestDraw(1);
     assert.strictEqual(engine.drawRequest.isActive, true, "Draw request should be active after initiation.");
-    engine.submitDrawVote(2, 'no');
+    const declinedResult = engine.submitDrawVote(2, 'no');
     assert.strictEqual(engine.drawRequest.isActive, false, "Draw request should be inactive after a 'no' vote.");
-    assert.strictEqual(engine.state, "Playing Phase", "Game state should remain 'Playing Phase' after a 'no' vote.");
+    assert.strictEqual(engine.state, "DrawDeclined", "Players should see the draw-declined result before play resumes.");
+    const declineTimer = declinedResult.effects.find(effect => effect.type === 'START_TIMER');
+    assert.ok(declineTimer, 'A declined draw should schedule the return to play.');
+    declineTimer.payload.onTimeout(engine);
+    assert.strictEqual(engine.state, "Playing Phase", "Play should resume after the draw-declined notice.");
     console.log("  - Passed: 'No' vote correctly cancels draw.");
 
     engine = setupEngineForDraw();
@@ -151,7 +157,7 @@ async function testDrawRequestLifecycle() {
     const finalVoteResult = engine.submitDrawVote(3, 'wash');
     await effectProcessor.processEffects(engine, finalVoteResult.effects); // Process the async effect
     assert.strictEqual(engine.drawRequest.isActive, false, "Draw request should be inactive after all votes.");
-    assert.strictEqual(engine.state, "Game Over", "Game state should be 'Game Over' after unanimous vote.");
+    assert.strictEqual(engine.state, "DrawComplete", "The draw summary should be shown after a unanimous vote.");
     console.log("  - Passed: Unanimous 'wash' vote ends the game.");
 
     engine = setupEngineForDraw();
@@ -159,7 +165,7 @@ async function testDrawRequestLifecycle() {
     engine.submitDrawVote(2, 'split');
     const mixedVoteResult = engine.submitDrawVote(3, 'split');
     await effectProcessor.processEffects(engine, mixedVoteResult.effects); // Process the async effect
-    assert.strictEqual(engine.state, "Game Over", "Game state should be 'Game Over' after mixed positive vote.");
+    assert.strictEqual(engine.state, "DrawComplete", "The draw summary should be shown after a mixed positive vote.");
     console.log("  - Passed: Mixed 'split'/'wash' vote ends the game.");
     console.log("...Success! Draw request lifecycle works correctly.\n");
 }
@@ -252,7 +258,9 @@ async function runAllTests() {
 }
 
 if (require.main === module) {
-    runAllTests().catch(() => process.exit(1));
+    runAllTests().catch(() => {
+        process.exitCode = 1;
+    });
 }
 
 module.exports = runAllTests;

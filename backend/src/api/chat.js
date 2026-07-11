@@ -1,28 +1,14 @@
 // backend/src/api/chat.js
 
 const express = require('express');
-
-// Middleware to verify JWT token
-const checkAuth = (jwt) => (req, res, next) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).send('Authentication required.');
-    }
-    const token = authHeader.split(' ')[1];
-    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-        if (err) {
-            return res.status(403).send('Invalid or expired token.');
-        }
-        req.user = user;
-        next();
-    });
-};
+const requireAuth = require('../middleware/requireAuth');
 
 const createChatRoutes = (pool, io, jwt) => {
     const router = express.Router();
+    const checkAuth = requireAuth(pool, jwt);
 
     // GET /api/chat - Fetch recent chat messages
-    router.get('/', checkAuth(jwt), async (req, res) => {
+    router.get('/', checkAuth, async (req, res) => {
         try {
             const limit = parseInt(req.query.limit, 10) || 50;
             const query = `
@@ -44,7 +30,7 @@ const createChatRoutes = (pool, io, jwt) => {
     });
 
     // POST /api/chat - Post a new message
-    router.post('/', checkAuth(jwt), async (req, res) => {
+    router.post('/', checkAuth, async (req, res) => {
         const { id: userId, username } = req.user;
         const { message } = req.body;
 

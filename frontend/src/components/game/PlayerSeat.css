@@ -156,6 +156,14 @@
 /* Fallback for when team is unknown */
 .player-seat.active-turn { animation: pulsing-glow-defender 1.5s infinite; }
 
+@media (prefers-reduced-motion: reduce) {
+    .player-seat.active-turn,
+    .timeout-display {
+        animation: none !important;
+        transition: none !important;
+    }
+}
+
 /* Puck base styles */
 .puck {
     position: absolute;

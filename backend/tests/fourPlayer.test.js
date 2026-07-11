@@ -5,14 +5,36 @@ const assert = require('assert');
 
 const GameService = require('../src/services/GameService');
 const gameLogic = require('../src/core/logic');
+const { createGameServiceWithoutHeartbeat } = require('./test-helpers');
 
 const mockIo = { to: () => ({ emit: () => {} }), emit: () => {}, sockets: { sockets: new Map() } };
 
-const mockPool = { query: () => Promise.resolve({ rows: [], rowCount: 0 }) };
+const mockPool = {
+    queries: [],
+    query(text, params) {
+        this.queries.push({ text, params });
+        if (text.includes('SELECT outcome FROM game_history')) {
+            return Promise.resolve({ rows: [{ outcome: 'In Progress' }], rowCount: 1 });
+        }
+        if (text.includes('SELECT id FROM users') && text.includes('FOR UPDATE')) {
+            return Promise.resolve({ rows: (params[0] || []).map(id => ({ id })), rowCount: params[0]?.length || 0 });
+        }
+        if (text.includes('UPDATE game_history')) {
+            return Promise.resolve({ rows: [], rowCount: 1 });
+        }
+        return Promise.resolve({ rows: [], rowCount: 0 });
+    },
+    async connect() {
+        return {
+            query: this.query.bind(this),
+            release() {},
+        };
+    },
+};
 
-(async () => {
+async function runFourPlayerTests() {
     const timers = [];
-    const gameService = new GameService(mockIo, mockPool);
+    const gameService = createGameServiceWithoutHeartbeat(GameService, mockIo, mockPool);
     gameService.timerOverride = (cb, duration) => { timers.push({ cb, duration }); };
     const drainTimers = async () => { while (timers.length) await timers.shift().cb(); };
 
@@ -154,5 +176,13 @@ const mockPool = { query: () => Promise.resolve({ rows: [], rowCount: 0 }) };
     assert.ok(res.payoutDetails[1].includes('buy-in was returned'), '4-way tie washes everyone (1 part each)');
 
     console.log('FOUR-PLAYER SMOKE TEST PASSED');
-    process.exit(0);
-})().catch(err => { console.error(err); process.exit(1); });
+}
+
+if (require.main === module) {
+    runFourPlayerTests().catch(err => {
+        console.error(err);
+        process.exitCode = 1;
+    });
+}
+
+module.exports = runFourPlayerTests;

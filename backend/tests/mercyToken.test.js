@@ -72,6 +72,13 @@ async function runMercyTokenTests() {
     assert(transactionInserts[0].text.includes('free_token_mercy'), 'Should use correct transaction type');
     assert(transactionInserts[0].text.includes('1'), 'Should add 1 token');
     assert(transactionInserts[0].text.includes('Mercy token requested by user'), 'Should have correct description');
+    const beginIndex = mockPool1.queries.findIndex(q => q.text === 'BEGIN');
+    const lockIndex = mockPool1.queries.findIndex(q => q.text.includes('FROM users') && q.text.includes('FOR UPDATE'));
+    const balanceIndex = mockPool1.queries.findIndex(q => q.text.includes('SELECT SUM(amount)'));
+    const rateLimitIndex = mockPool1.queries.findIndex(q => q.text.includes('mercy_count'));
+    assert(lockIndex > beginIndex, 'Mercy grants should lock the user after BEGIN');
+    assert(lockIndex < balanceIndex, 'The user lock must precede the balance decision');
+    assert(lockIndex < rateLimitIndex, 'The user lock must precede the hourly-limit decision');
     
     console.log('    ✓ Valid mercy token request test passed');
 
@@ -201,6 +208,6 @@ if (require.main === module) {
     runMercyTokenTests().catch(err => {
         console.error('Mercy token test suite failed:', err.message);
         console.error(err.stack);
-        process.exit(1);
+        process.exitCode = 1;
     });
 }

@@ -3,6 +3,7 @@
 const assert = require('assert');
 const GameEngine = require('../src/core/GameEngine');
 const GameService = require('../src/services/GameService');
+const { createGameServiceWithoutHeartbeat } = require('./test-helpers');
 
 // --- Mocks and Helpers ---
 const mockIo = { to: () => ({ emit: () => {} }), emit: () => {}, sockets: { sockets: new Map() } };
@@ -13,10 +14,25 @@ class MockPool {
     }
     query(text, params) {
         this.queries.push({ text, params });
+        if (text.includes('SELECT outcome FROM game_history')) {
+            return Promise.resolve({ rows: [{ outcome: 'In Progress' }], rowCount: 1 });
+        }
+        if (text.includes('SELECT id FROM users') && text.includes('FOR UPDATE')) {
+            return Promise.resolve({ rows: (params[0] || []).map(id => ({ id })), rowCount: params[0]?.length || 0 });
+        }
         if (text.includes('INSERT INTO transactions')) {
             return Promise.resolve({ rows: [{ transaction_id: 1 }], rowCount: 1 });
         }
+        if (text.includes('UPDATE game_history')) {
+            return Promise.resolve({ rows: [], rowCount: 1 });
+        }
         return Promise.resolve({ rows: [], rowCount: 0 });
+    }
+    async connect() {
+        return {
+            query: this.query.bind(this),
+            release() {},
+        };
     }
     reset() {
         this.queries = [];
@@ -27,9 +43,9 @@ async function testGameOverPayouts() {
     console.log("Running Test Suite: testGameOverPayouts...");
 
     const mockPool = new MockPool();
-    const gameService = new GameService(mockIo, mockPool);
+    const gameService = createGameServiceWithoutHeartbeat(GameService, mockIo, mockPool);
     
-    const createGameOverPayload = (humanScores, botCount = 0) => {
+    const createGameOverPayload = (humanScores, botScores = []) => {
         const engine = new GameEngine('payout-test', 'fort-creek', 'Payout Test');
         let userId = 101;
         for (const [name, score] of Object.entries(humanScores)) {
@@ -37,8 +53,13 @@ async function testGameOverPayouts() {
             engine.scores[name] = score;
             userId++;
         }
-        for (let i = 0; i < botCount; i++) {
+        for (const score of botScores) {
+            const existingPlayerIds = new Set(Object.keys(engine.players));
             engine.addBotPlayer();
+            const bot = Object.entries(engine.players)
+                .find(([id, player]) => player.isBot && !existingPlayerIds.has(id))?.[1];
+            assert.ok(bot, 'Expected addBotPlayer to add a bot.');
+            engine.scores[bot.playerName] = score;
         }
         engine.gameId = 123;
         engine.playerOrder.setTurnOrder(Object.values(engine.players)[0].userId);
@@ -70,25 +91,25 @@ async function testGameOverPayouts() {
     mockPool.reset();
     let payload3H_Tie1st = createGameOverPayload({ 'P1': 100, 'P2': 100, 'P3': 0 });
     await gameService.handleGameOver(payload3H_Tie1st);
-    verifyQueries("3 Humans (Tie for 1st)", { transactions: 2, stats: 2 });
+    verifyQueries("3 Humans (Tie for 1st)", { transactions: 2, stats: 3 });
     
     // --- THIS IS THE FAILING TEST ---
     // Re-enabled to prove the logic is missing for bot games.
     
     // --- SCENARIO: 2 HUMANS, 1 BOT ---
     mockPool.reset();
-    let payload2H1B_Win = createGameOverPayload({ 'P1': 100, 'P2': 50 }, 1);
+    let payload2H1B_Win = createGameOverPayload({ 'P1': 100, 'P2': 50 }, [120]);
     await gameService.handleGameOver(payload2H1B_Win);
-    verifyQueries("2 Humans, 1 Bot (Win/Loss)", { transactions: 1, stats: 2 });
+    verifyQueries("2 Humans, 1 Bot (Bot win / Human wash-loss)", { transactions: 1, stats: 2 });
 
     mockPool.reset();
-    let payload2H1B_Tie = createGameOverPayload({ 'P1': 100, 'P2': 100 }, 1);
+    let payload2H1B_Tie = createGameOverPayload({ 'P1': 100, 'P2': 100 }, [50]);
     await gameService.handleGameOver(payload2H1B_Tie);
-    verifyQueries("2 Humans, 1 Bot (Tie)", { transactions: 2, stats: 1 });
+    verifyQueries("2 Humans, 1 Bot (Humans tie for first)", { transactions: 2, stats: 2 });
 
     // --- SCENARIO: 1 HUMAN, 2 BOTS ---
     mockPool.reset();
-    let payload1H2B_Win = createGameOverPayload({ 'P1': 100 }, 2);
+    let payload1H2B_Win = createGameOverPayload({ 'P1': 100 }, [50, 0]);
     await gameService.handleGameOver(payload1H2B_Win);
     verifyQueries("1 Human, 2 Bots (Win)", { transactions: 1, stats: 1 });
     
@@ -98,7 +119,7 @@ async function testGameOverPayouts() {
 if (require.main === module) {
     testGameOverPayouts().catch(e => {
         console.error(e);
-        process.exit(1);
+        process.exitCode = 1;
     });
 }
 

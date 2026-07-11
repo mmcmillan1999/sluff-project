@@ -1,6 +1,6 @@
 // frontend/src/components/game/ActionControls.js
 import React, { useState, useEffect } from 'react';
-import { BID_HIERARCHY } from '../../constants';
+import { BID_HIERARCHY, BID_MULTIPLIERS } from '../../constants';
 import { shareInvite, getInviteUrl } from '../../utils/tableInvites';
 
 const ActionControls = ({
@@ -51,6 +51,8 @@ const ActionControls = ({
             window.prompt('Copy this invite link:', getInviteUrl(currentTableState.tableId));
         }
     };
+
+    const bidLabel = (bid) => bid === 'Pass' ? bid : `${bid} · ${BID_MULTIPLIERS[bid]}×`;
 
     switch (currentTableState.state) {
         case "Waiting for Players":
@@ -123,8 +125,9 @@ const ActionControls = ({
                                 key={bid}
                                 onClick={() => emitEvent("placeBid", { bid })} 
                                 className="game-button" 
+                                aria-label={bid === 'Pass' ? 'Pass' : `${bid}, ${BID_MULTIPLIERS[bid]} times scoring multiplier`}
                                 disabled={bid !== "Pass" && BID_HIERARCHY.indexOf(bid) <= currentHighestBidLevel}>
-                                {bid}
+                                {bidLabel(bid)}
                             </button>
                         ))}
                     </div>
@@ -142,7 +145,7 @@ const ActionControls = ({
                         <>
                             <h4>A Solo bid was made.</h4>
                             <p>Upgrade your Frog to Heart Solo?</p>
-                            <button onClick={() => emitEvent("placeBid", { bid: "Heart Solo" })} className="game-button">Upgrade to Heart Solo</button>
+                            <button onClick={() => emitEvent("placeBid", { bid: "Heart Solo" })} className="game-button">Upgrade to Heart Solo · {BID_MULTIPLIERS['Heart Solo']}×</button>
                             <button onClick={() => emitEvent("placeBid", { bid: "Pass" })} className="game-button">Pass</button>
                         </>
                     ) : (
@@ -157,12 +160,15 @@ const ActionControls = ({
                         <>
                             <h4>Choose Trump Suit:</h4>
                             <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginTop: '10px' }}>
-                                {["D", "C", "S"].map(suit => renderCard(`?${suit}`, {
-                                    key: suit,
-                                    large: true,
-                                    isButton: true,
-                                    onClick: () => emitEvent("chooseTrump", { suit })
-                                }))}
+                                {["D", "C", "S"].map(suit => (
+                                    <React.Fragment key={suit}>
+                                        {renderCard(`?${suit}`, {
+                                            large: true,
+                                            isButton: true,
+                                            onClick: () => emitEvent("chooseTrump", { suit })
+                                        })}
+                                    </React.Fragment>
+                                ))}
                             </div>
                         </>
                     ) : (
@@ -176,7 +182,9 @@ const ActionControls = ({
                 <div className="action-prompt-container">
                     <h4>All players passed. Revealing the widow...</h4>
                     <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginTop: '10px' }}>
-                        {widowCards.map((card, index) => renderCard(card, { key: index, large: true }))}
+                    {widowCards.map((card, index) => (
+                        <React.Fragment key={`${card}-${index}`}>{renderCard(card, { large: true })}</React.Fragment>
+                    ))}
                     </div>
                 </div>
             );
@@ -187,7 +195,9 @@ const ActionControls = ({
                 <div className="action-prompt-container">
                     <h4>{isBidder ? "You received these cards from the Widow:" : "Revealed Widow (Frog)"}</h4>
                     <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
-                        {revealedWidow.map((card, index) => renderCard(card, { key: `widow-${index}`, large: true }))}
+                        {revealedWidow.map((card, index) => (
+                            <React.Fragment key={`${card}-${index}`}>{renderCard(card, { large: true })}</React.Fragment>
+                        ))}
                     </div>
                     <p style={{ fontStyle: 'italic', marginTop: '15px' }}>
                         {isBidder ? "Select 3 cards from your hand below to discard." : `${currentTableState.bidWinnerInfo?.playerName} is exchanging cards...`}

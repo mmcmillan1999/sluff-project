@@ -20,9 +20,10 @@ import { getLobbyChatHistory } from '../services/api';
 import SoundControls from './game/SoundControls';
 import { shareInvite, getInviteUrl } from '../utils/tableInvites';
 import { SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS } from '../constants';
+import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
 
 
-const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, emitEvent, playSound, socket, handleOpenFeedbackModal, soundSettings }) => {
+const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, handleShowHowToPlay, emitEvent, playSound, socket, handleOpenFeedbackModal, soundSettings }) => {
     const [seatAssignments, setSeatAssignments] = useState({ self: null, opponentLeft: null, opponentRight: null });
     const [showRoundSummaryModal, setShowRoundSummaryModal] = useState(false);
     const [showInsurancePrompt, setShowInsurancePrompt] = useState(false);
@@ -55,6 +56,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const roundModalScheduledRef = useRef(false);
     const errorTimerRef = useRef(null);
     const dropZoneRef = useRef(null);
+    const prefersReducedMotion = usePrefersReducedMotion();
 
     const selfPlayerInTable = currentTableState ? currentTableState.players[playerId] : null;
     const isSpectator = selfPlayerInTable?.isSpectator;
@@ -144,6 +146,13 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     useEffect(() => {
         const state = currentTableState?.state;
         const PRE_PLAY_STATES = ['Bidding Phase', 'Awaiting Frog Upgrade Decision', 'Frog Widow Exchange', 'Trump Selection'];
+        if (prefersReducedMotion) {
+            if (splashTimerRef.current) clearTimeout(splashTimerRef.current);
+            splashTimerRef.current = null;
+            setBidSplashInfo(null);
+            splashStateRef.current = state;
+            return;
+        }
         if (state === 'Bid Announcement' && PRE_PLAY_STATES.includes(splashStateRef.current) && currentTableState?.bidWinnerInfo) {
             const info = {
                 playerName: currentTableState.bidWinnerInfo.playerName,
@@ -160,7 +169,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             splashTimerRef.current = setTimeout(() => setBidSplashInfo(info), SPLASH_DELAY_MS);
         }
         splashStateRef.current = state;
-    }, [currentTableState]);
+    }, [currentTableState, prefersReducedMotion]);
 
     useEffect(() => () => {
         if (splashTimerRef.current) clearTimeout(splashTimerRef.current);
@@ -244,7 +253,12 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         const { state, roundSummary } = currentTableState;
         const isModalState = state === "WidowReveal" || state === "Awaiting Next Round Trigger" || state === "Game Over";
         if (roundSummary && isModalState) {
-            if (!roundModalScheduledRef.current) {
+            if (prefersReducedMotion) {
+                if (roundModalTimerRef.current) clearTimeout(roundModalTimerRef.current);
+                roundModalTimerRef.current = null;
+                roundModalScheduledRef.current = true;
+                setShowRoundSummaryModal(true);
+            } else if (!roundModalScheduledRef.current) {
                 roundModalScheduledRef.current = true;
                 const delay = isSpectator ? 0 : END_ROUND_TOTAL_MS;
                 roundModalTimerRef.current = setTimeout(() => setShowRoundSummaryModal(true), delay);
@@ -258,7 +272,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             setShowRoundSummaryModal(false);
         }
         return undefined;
-    }, [currentTableState, isSpectator]);
+    }, [currentTableState, isSpectator, prefersReducedMotion]);
 
     useEffect(() => {
         if (!currentTableState || !selfPlayerName || isSpectator) return;
@@ -557,6 +571,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 <SoundControls soundSettings={soundSettings} />
             </div>
             <div className="game-menu-actions">
+                <button onClick={() => { handleShowHowToPlay(); setShowGameMenu(false); }} className="game-menu-button">How to Play</button>
                 <button onClick={handleShareInvite} className="game-menu-button invite">📨 Invite Friends</button>
                 <button onClick={handleLeaveTable} className="game-menu-button secondary">Back to Lobby</button>
                 <button 
@@ -772,6 +787,16 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                     showDebug={false}
                 />
                 <div className="footer-controls-wrapper">
+                    {['Playing Phase', 'TrickCompleteLinger'].includes(currentTableState.state) && currentTableState.bidWinnerInfo && (
+                        <div
+                            className="round-status-hud"
+                            title={`${currentTableState.bidWinnerInfo.playerName}: ${currentTableState.bidderCardPoints || 0} card points; ${currentTableState.tricksPlayedCount || 0} of 11 tricks complete`}
+                        >
+                            <span>Tricks {currentTableState.tricksPlayedCount || 0}/11</span>
+                            <span className="round-status-divider" aria-hidden="true">·</span>
+                            <span className="round-status-bidder">{currentTableState.bidWinnerInfo.playerName} {currentTableState.bidderCardPoints || 0}/60</span>
+                        </div>
+                    )}
                     <InsuranceControls
                         insuranceState={currentTableState.insurance}
                         selfPlayerName={selfPlayerName}
