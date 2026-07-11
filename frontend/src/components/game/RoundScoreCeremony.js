@@ -157,7 +157,8 @@ const RoundScoreCeremony = ({
     onSkip,
     prefersReducedMotion,
     soundNames = ROUND_SCORE_CEREMONY_SOUNDS,
-    title = 'Round totals'
+    title = 'Round totals',
+    embedded = false
 }) => {
     const headingId = useId();
     const candidateRows = buildRoundScoreRows({
@@ -174,16 +175,24 @@ const RoundScoreCeremony = ({
     const plan = useMemo(() => createRoundScoreCeremonyPlan(rows.length), [rows.length]);
     const reducedMotion = useCeremonyReducedMotion(prefersReducedMotion);
     const [displayTotals, setDisplayTotals] = useState(() => totalsFromRows(rows, 'previousScore'));
-    const [revealedNames, setRevealedNames] = useState(() => new Set());
+    const [revealedNames, setRevealedNames] = useState(() => (
+        embedded ? new Set(rows.map(row => row.name)) : new Set()
+    ));
     const [settledNames, setSettledNames] = useState(() => new Set());
     const [activeName, setActiveName] = useState(null);
     const [complete, setComplete] = useState(false);
     const [announcement, setAnnouncement] = useState('Preparing score updates.');
     const timersRef = useRef(new Set());
-    const ceremonyRef = useModalFocus(true, 'button:not(:disabled)');
+    // The standalone ceremony owns its dialog focus. When embedded in the
+    // round recap, the recap remains the one and only modal/focus trap.
+    const ceremonyRef = useModalFocus(!embedded, 'button:not(:disabled)');
     const completedRef = useRef(false);
     const callbacksRef = useRef({ playSound, onComplete, onSkip, soundNames });
     callbacksRef.current = { playSound, onComplete, onSkip, soundNames };
+
+    useEffect(() => {
+        if (embedded) ceremonyRef.current?.focus({ preventScroll: true });
+    }, [embedded, ceremonyRef]);
 
     const clearTimers = useCallback(() => {
         timersRef.current.forEach(timer => clearTimeout(timer));
@@ -227,7 +236,7 @@ const RoundScoreCeremony = ({
         clearTimers();
         completedRef.current = false;
         setDisplayTotals(totalsFromRows(rows, 'previousScore'));
-        setRevealedNames(new Set());
+        setRevealedNames(embedded ? new Set(rows.map(row => row.name)) : new Set());
         setSettledNames(new Set());
         setActiveName(null);
         setComplete(false);
@@ -282,7 +291,7 @@ const RoundScoreCeremony = ({
 
         schedule(() => finish(false), plan.completionMs);
         return clearTimers;
-    }, [clearTimers, finish, plan, reducedMotion, rows, safelyPlay, schedule]);
+    }, [clearTimers, embedded, finish, plan, reducedMotion, rows, safelyPlay, schedule]);
 
     const handleSkip = () => {
         if (completedRef.current) return;
@@ -296,19 +305,24 @@ const RoundScoreCeremony = ({
     return (
         <section
             ref={ceremonyRef}
-            className={`round-score-ceremony${complete ? ' round-score-ceremony--complete' : ''}`}
-            aria-labelledby={headingId}
+            className={`round-score-ceremony${embedded ? ' round-score-ceremony--embedded' : ''}${complete ? ' round-score-ceremony--complete' : ''}`}
+            aria-label={embedded ? title : undefined}
+            aria-labelledby={embedded ? undefined : headingId}
             data-reduced-motion={reducedMotion ? 'true' : 'false'}
             tabIndex={-1}
         >
-            <header className="round-score-ceremony__header">
-                <span className="round-score-ceremony__eyebrow">Score ceremony</span>
-                <h2 id={headingId}>{title}</h2>
-                <p>Round points settle into the table totals.</p>
-            </header>
+            {!embedded && (
+                <header className="round-score-ceremony__header">
+                    <span className="round-score-ceremony__eyebrow">Score ceremony</span>
+                    <h2 id={headingId}>{title}</h2>
+                    <p>Round points settle into the table totals.</p>
+                </header>
+            )}
 
             <div className="round-score-ceremony__score-heading" aria-hidden="true">
-                <span>Player</span><span>Previous</span><span>Round</span><span>Total</span>
+                <span>Player</span>
+                {!embedded && <span>Previous</span>}
+                <span>Round</span><span>{embedded ? 'New Total' : 'Total'}</span>
             </div>
             <ol className="round-score-ceremony__players">
                 {rows.map(row => {
@@ -323,9 +337,11 @@ const RoundScoreCeremony = ({
                     return (
                         <li className={classes} key={row.name}>
                             <span className="round-score-ceremony__name" title={row.name}>{row.name}</span>
-                            <span className="round-score-ceremony__previous" aria-label={`${row.name} previous score ${formatCeremonyScore(row.previousScore)}`}>
-                                {formatCeremonyScore(row.previousScore)}
-                            </span>
+                            {!embedded && (
+                                <span className="round-score-ceremony__previous" aria-label={`${row.name} previous score ${formatCeremonyScore(row.previousScore)}`}>
+                                    {formatCeremonyScore(row.previousScore)}
+                                </span>
+                            )}
                             <span
                                 className={`round-score-ceremony__delta ${row.pointChange > 0 ? 'is-positive' : row.pointChange < 0 ? 'is-negative' : 'is-even'}`}
                                 aria-hidden={!revealed}

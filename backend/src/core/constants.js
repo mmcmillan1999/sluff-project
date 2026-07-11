@@ -1,6 +1,6 @@
 // backend/src/core/constants.js
 
-const SERVER_VERSION = "12.8.0 Seat-aware trick and widow plates";
+const SERVER_VERSION = "12.9.0 Recap scoring and podium payouts";
 
 const SUITS = { H: "Hearts", D: "Diamonds", C: "Clubs", S: "Spades" };
 const RANKS_ORDER = ["6", "7", "8", "9", "J", "Q", "K", "10", "A"];

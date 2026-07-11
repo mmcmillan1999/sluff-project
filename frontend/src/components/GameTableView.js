@@ -6,7 +6,7 @@ import DrawVoteModal from './game/DrawVoteModal';
 import PlayerHand from './game/PlayerHand';
 import InsuranceControls from './game/InsuranceControls';
 import RoundSummaryModal from './game/RoundSummaryModal';
-import RoundScoreCeremony, { ROUND_SCORE_CEREMONY_TIMING } from './game/RoundScoreCeremony';
+import { ROUND_SCORE_CEREMONY_TIMING } from './game/RoundScoreCeremony';
 import GameOverPodium from './game/GameOverPodium';
 import TableLayout from './game/TableLayout';
 import PlayerSeat from './game/PlayerSeat';
@@ -42,6 +42,7 @@ const ROUND_SCORES_RELEASED_PHASES = new Set([
     'settled',
     'podium'
 ]);
+const FINAL_RECAP_TOTALS_HOLD_MS = 700;
 
 const scoresBeforeRound = (summary, fallbackScores) => {
     if (!summary) return null;
@@ -182,6 +183,12 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     ), [currentTableState, previousRoundScores, shouldHoldTableScores]);
     const hasRoundScoreChanges = Object.values(roundSummary?.pointChanges || {})
         .some(value => Number.isFinite(Number(value)) && Number(value) !== 0);
+    const selfRoundPointChange = Number(roundSummary?.pointChanges?.[selfPlayerName]);
+    const scoreCollectionLabel = Number.isFinite(selfRoundPointChange)
+        ? (selfRoundPointChange > 0
+            ? 'Collect Points'
+            : (selfRoundPointChange < 0 ? 'Hand Over Points' : 'Count the Score'))
+        : 'Count the Score';
     const terminalSettlementStatus = currentTableState?.settlement?.status;
     const terminalSettlementBlocked = Boolean(
         roundSummary?.isGameOver
@@ -472,18 +479,27 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     }, [roundPresentationControlsLocked]);
 
     const handleRoundRecapContinue = useCallback(() => {
-        setShowRoundSummaryModal(false);
         if (hasRoundScoreChanges && !roundSummary?.forfeit) {
             scoreCeremonyStartedAtRef.current = Date.now();
             setRoundPresentationPhase('scoring');
             return;
         }
+        setShowRoundSummaryModal(false);
         setRoundPresentationPhase(roundSummary?.isGameOver ? 'podium' : 'settled');
     }, [hasRoundScoreChanges, roundSummary]);
 
     const handleScoreCeremonyComplete = useCallback(() => {
         if (roundSummary?.isGameOver) {
-            setRoundPresentationPhase('podium');
+            // Keep the settled recap visible for a beat so the player can see
+            // the new totals before the podium takes over (also important when
+            // reduced motion completes the count immediately).
+            setRoundPresentationPhase('score-settled-waiting');
+            if (roundAdvanceTimerRef.current) clearTimeout(roundAdvanceTimerRef.current);
+            roundAdvanceTimerRef.current = setTimeout(() => {
+                roundAdvanceTimerRef.current = null;
+                setShowRoundSummaryModal(false);
+                setRoundPresentationPhase('podium');
+            }, FINAL_RECAP_TOTALS_HOLD_MS);
             return;
         }
 
@@ -495,6 +511,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             : ROUND_SCORE_CEREMONY_TIMING.MAX_TOTAL_MS;
         const remaining = Math.max(0, ROUND_SCORE_CEREMONY_TIMING.MAX_TOTAL_MS - elapsed);
         if (remaining === 0) {
+            setShowRoundSummaryModal(false);
             setRoundPresentationPhase('settled');
             return;
         }
@@ -503,6 +520,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         if (roundAdvanceTimerRef.current) clearTimeout(roundAdvanceTimerRef.current);
         roundAdvanceTimerRef.current = setTimeout(() => {
             roundAdvanceTimerRef.current = null;
+            setShowRoundSummaryModal(false);
             setRoundPresentationPhase('settled');
         }, remaining);
     }, [roundSummary?.isGameOver]);
@@ -1040,43 +1058,32 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 playerOrderActive={currentTableState.playerOrderActive}
                 handleLeaveTable={handleLeaveTable}
                 handleLogout={handleLogout}
-                showScoreTotals={false}
+                showScoreTotals={!roundSummary?.forfeit}
                 title={roundSummary?.forfeit
                     ? 'Game Ended by Forfeit'
                     : (roundSummary?.isGameOver ? 'Final Round Recap' : 'Round Recap')}
                 continueLabel={hasRoundScoreChanges && !roundSummary?.forfeit
-                    ? 'Count the Score'
+                    ? scoreCollectionLabel
                     : (roundSummary?.isGameOver ? 'View Final Standings' : 'Continue')}
                 onContinue={handleRoundRecapContinue}
+                scoreStage={roundPresentationPhase === 'scoring'
+                    ? 'counting'
+                    : (roundPresentationPhase === 'score-settled-waiting' ? 'complete' : 'preview')}
+                playerOrder={currentTableState.seatingOrder || currentTableState.playerOrderActive}
+                playSound={playSound}
+                onScoreComplete={handleScoreCeremonyComplete}
+                prefersReducedMotion={prefersReducedMotion}
                 tutorialHint={tutorialCoachActive && roundPresentationPhase === 'recap'
                     ? (roundSummary?.forfeit ? TUTORIAL_FORFEIT_RECAP_HINT : TUTORIAL_RECAP_HINT)
                     : null}
             />
-
-            {roundPresentationPhase === 'scoring' && roundSummary && (
-                <div
-                    className="modal-overlay round-score-ceremony-overlay"
-                    role="dialog"
-                    aria-modal="true"
-                    aria-label="Round score ceremony"
-                >
-                    <RoundScoreCeremony
-                        finalScores={roundSummary.finalScores}
-                        pointChanges={roundSummary.pointChanges}
-                        playerOrder={currentTableState.seatingOrder || currentTableState.playerOrderActive}
-                        playSound={playSound}
-                        onComplete={handleScoreCeremonyComplete}
-                        prefersReducedMotion={prefersReducedMotion}
-                        title={roundSummary.isGameOver ? 'Final Round Totals' : 'Round Totals'}
-                    />
-                </div>
-            )}
 
             <GameOverPodium
                 show={roundPresentationPhase === 'podium' && currentTableState.state === 'Game Over'}
                 gameWinner={roundSummary?.gameWinner}
                 finalScores={roundSummary?.finalScores}
                 forfeit={roundSummary?.forfeit}
+                tokenSettlement={roundSummary?.tokenSettlement}
                 statusMessage={terminalSettlementMessage}
                 actionsDisabled={!sharedPresentationReady || !serverRoundPresentationReady}
                 onRematch={(terminalSettlementBlocked || isSpectator)

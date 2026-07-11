@@ -217,4 +217,33 @@ describe('RoundScoreCeremony presentation and lifecycle', () => {
         expect(screen.getByRole('status')).toHaveTextContent('No round score changes to show');
         expect(onComplete).toHaveBeenCalledWith({ skipped: false, rows: [] });
     });
+
+    test('embedded mode keeps recap focus ownership and uses the compact three-column table', () => {
+        const onComplete = vi.fn();
+        render(
+            <div role="dialog" aria-label="Round Recap">
+                <button type="button" autoFocus>Recap control</button>
+                <RoundScoreCeremony
+                    {...scores}
+                    embedded
+                    title="Counting round score"
+                    onComplete={onComplete}
+                    prefersReducedMotion={false}
+                />
+            </div>
+        );
+
+        const embeddedCeremony = screen.getByLabelText('Counting round score');
+        expect(embeddedCeremony).toHaveFocus();
+        expect(embeddedCeremony).toHaveClass('round-score-ceremony--embedded');
+        expect(screen.queryByRole('heading', { name: 'Counting round score' })).not.toBeInTheDocument();
+        expect(screen.queryByText('Previous')).not.toBeInTheDocument();
+        expect(screen.getByText('New Total')).toBeInTheDocument();
+        expect(screen.getByText('+12')).toHaveAttribute('aria-hidden', 'false');
+        expect(screen.getByText('-24')).toHaveAttribute('aria-hidden', 'false');
+
+        act(() => vi.runAllTimers());
+        expect(screen.getByLabelText('Alice score')).toHaveTextContent('132');
+        expect(onComplete).toHaveBeenCalledTimes(1);
+    });
 });

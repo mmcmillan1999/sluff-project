@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import RoundSummaryModal from './RoundSummaryModal';
 
@@ -32,7 +32,7 @@ const cases = [
 ];
 
 describe.each(cases)('RoundSummaryModal $label summary', ({ playerId, forfeit, winner, payout, expectedReason }) => {
-    test('renders minimal settlement data without trick recap fields', () => {
+    test('renders minimal settlement data without trick recap or token-payout prose', () => {
         render(
             <RoundSummaryModal
                 {...baseProps}
@@ -51,7 +51,7 @@ describe.each(cases)('RoundSummaryModal $label summary', ({ playerId, forfeit, w
         expect(screen.getByRole('heading', { name: `${forfeit.forfeitingPlayerName} forfeited the game.` })).toBeInTheDocument();
         expect(screen.getByText(expectedReason)).toBeInTheDocument();
         expect(screen.getByLabelText(`Game winner: ${winner}`)).toBeInTheDocument();
-        expect(screen.getByText(payout)).toBeInTheDocument();
+        expect(screen.queryByText(payout)).not.toBeInTheDocument();
 
         const scoresPanel = screen.getByRole('heading', { name: 'Final Scores' }).closest('.forfeit-scores-panel');
         const scoreTable = within(scoresPanel).getByRole('table');
@@ -65,7 +65,7 @@ describe.each(cases)('RoundSummaryModal $label summary', ({ playerId, forfeit, w
 });
 
 describe('RoundSummaryModal staged presentation', () => {
-    test('keeps new totals hidden until the player advances to the score ceremony', async () => {
+    test('shows round changes, conceals new totals, and supports a personalized score action', async () => {
         const user = userEvent.setup();
         const onContinue = vi.fn();
         render(
@@ -74,8 +74,9 @@ describe('RoundSummaryModal staged presentation', () => {
                 playerId={1}
                 title="Round Recap"
                 continueLabel="Count the Score"
+                scoreActionLabel="Collect Points"
                 onContinue={onContinue}
-                showScoreTotals={false}
+                scoreStage="preview"
                 tutorialHint={{
                     eyebrow: 'Round recap',
                     title: 'See where every point came from',
@@ -103,11 +104,170 @@ describe('RoundSummaryModal staged presentation', () => {
         expect(screen.getByRole('dialog', { name: 'Round Recap' })).toBeInTheDocument();
         expect(screen.getByRole('status')).toHaveTextContent('See where every point came from');
         expect(screen.getByText(/Card points and the bid multiplier/i)).toBeInTheDocument();
-        expect(screen.queryByText('New Total')).not.toBeInTheDocument();
+        expect(screen.getByText('New Total')).toBeInTheDocument();
+        expect(screen.getByText('+12')).toBeInTheDocument();
+        expect(screen.getAllByText('-6')).toHaveLength(2);
+        expect(screen.getByLabelText('Alice new total is hidden until the score is counted')).toHaveTextContent('—');
         expect(screen.queryByText('132')).not.toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Count the Score' })).toHaveFocus();
-        await user.click(screen.getByRole('button', { name: 'Count the Score' }));
+        expect(screen.getByRole('button', { name: 'Collect Points' })).toHaveFocus();
+        await user.click(screen.getByRole('button', { name: 'Collect Points' }));
         expect(onContinue).toHaveBeenCalledTimes(1);
+    });
+
+    test('runs the score count inside the recap without adding a nested modal', () => {
+        vi.useFakeTimers();
+        const onScoreComplete = vi.fn();
+        render(
+            <RoundSummaryModal
+                {...baseProps}
+                playerId={1}
+                title="Round Recap"
+                onContinue={vi.fn()}
+                scoreStage="counting"
+                onScoreComplete={onScoreComplete}
+                prefersReducedMotion={false}
+                insurance={{}}
+                bidWinnerInfo={{ playerName: 'Alice' }}
+                playerOrderActive={['Alice', 'Bob', 'Cara']}
+                playerOrder={['Bob', 'Alice', 'Cara']}
+                summaryData={{
+                    isGameOver: false,
+                    dealerOfRoundId: 1,
+                    finalScores: { Alice: 132, Bob: 114, Cara: 114 },
+                    pointChanges: { Alice: 12, Bob: -6, Cara: -6 },
+                    finalBidderPoints: 72,
+                    finalDefenderPoints: 48,
+                    bidType: 'Frog',
+                    insuranceDealWasMade: false,
+                    insuranceHindsight: {},
+                    widowForReveal: [],
+                    widowPointsValue: 0
+                }}
+            />
+        );
+
+        const recap = screen.getByRole('dialog', { name: 'Round Recap' });
+        expect(within(recap).getByLabelText('Counting round score')).toBeInTheDocument();
+        expect(within(recap).queryByRole('dialog')).not.toBeInTheDocument();
+        expect(screen.getByText('+12')).toHaveAttribute('aria-hidden', 'false');
+        expect(screen.queryByRole('button', { name: 'Count the Score' })).not.toBeInTheDocument();
+
+        act(() => vi.runAllTimers());
+        expect(screen.getByLabelText('Alice score')).toHaveTextContent('132');
+        expect(onScoreComplete).toHaveBeenCalledTimes(1);
+        vi.useRealTimers();
+    });
+
+    test('collapses open trick details so an insurance score count always mounts', () => {
+        vi.useFakeTimers();
+        const onScoreComplete = vi.fn();
+        const props = {
+            ...baseProps,
+            playerId: 1,
+            title: 'Round Recap',
+            onContinue: vi.fn(),
+            onScoreComplete,
+            prefersReducedMotion: false,
+            insurance: {
+                bidMultiplier: 1,
+                bidderRequirement: 120,
+                defenderOffers: { Bob: 10, Cara: 10 }
+            },
+            bidWinnerInfo: { playerName: 'Alice' },
+            playerOrderActive: ['Alice', 'Bob', 'Cara'],
+            summaryData: {
+                isGameOver: false,
+                dealerOfRoundId: 1,
+                finalScores: { Alice: 132, Bob: 114, Cara: 114 },
+                pointChanges: { Alice: 12, Bob: -6, Cara: -6 },
+                finalBidderPoints: 72,
+                finalDefenderPoints: 48,
+                bidType: 'Frog',
+                insuranceDealWasMade: true,
+                insuranceHindsight: {},
+                allTricks: {},
+                widowForReveal: [],
+                widowPointsValue: 0
+            }
+        };
+        const { rerender } = render(<RoundSummaryModal {...props} scoreStage="preview" />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Show Trick Breakdown' }));
+        expect(screen.getByRole('button', { name: 'Hide Trick Breakdown' })).toBeInTheDocument();
+
+        rerender(<RoundSummaryModal {...props} scoreStage="counting" />);
+        expect(screen.getByLabelText('Counting round score')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Show Trick Breakdown' })).not.toBeInTheDocument();
+
+        act(() => vi.runAllTimers());
+        expect(onScoreComplete).toHaveBeenCalledTimes(1);
+        vi.useRealTimers();
+    });
+
+    test('counts an executed insurance round even when live insurance controls are unavailable', () => {
+        vi.useFakeTimers();
+        const onScoreComplete = vi.fn();
+        render(
+            <RoundSummaryModal
+                {...baseProps}
+                playerId={1}
+                title="Round Recap"
+                onContinue={vi.fn()}
+                scoreStage="counting"
+                onScoreComplete={onScoreComplete}
+                prefersReducedMotion={false}
+                insurance={null}
+                bidWinnerInfo={{ playerName: 'Alice' }}
+                playerOrderActive={['Alice', 'Bob', 'Cara']}
+                summaryData={{
+                    isGameOver: false,
+                    finalScores: { Alice: 132, Bob: 114, Cara: 114 },
+                    pointChanges: { Alice: 12, Bob: -6, Cara: -6 },
+                    finalBidderPoints: 72,
+                    finalDefenderPoints: 48,
+                    bidType: 'Frog',
+                    insuranceDealWasMade: true,
+                    insuranceHindsight: {},
+                    widowForReveal: [],
+                    widowPointsValue: 0
+                }}
+            />
+        );
+
+        expect(screen.getByLabelText('Counting round score')).toBeInTheDocument();
+        act(() => vi.runAllTimers());
+        expect(onScoreComplete).toHaveBeenCalledTimes(1);
+        vi.useRealTimers();
+    });
+
+    test('shows authoritative final totals after counting without another action button', () => {
+        render(
+            <RoundSummaryModal
+                {...baseProps}
+                playerId={1}
+                title="Round Recap"
+                onContinue={vi.fn()}
+                scoreStage="complete"
+                insurance={{}}
+                bidWinnerInfo={{ playerName: 'Alice' }}
+                playerOrderActive={['Alice', 'Bob', 'Cara']}
+                summaryData={{
+                    isGameOver: false,
+                    finalScores: { Alice: 132, Bob: 114, Cara: 114 },
+                    pointChanges: { Alice: 12, Bob: -6, Cara: -6 },
+                    finalBidderPoints: 72,
+                    finalDefenderPoints: 48,
+                    bidType: 'Frog',
+                    insuranceDealWasMade: false,
+                    insuranceHindsight: {},
+                    widowForReveal: [],
+                    widowPointsValue: 0
+                }}
+            />
+        );
+
+        expect(screen.getByLabelText('Alice new total 132')).toHaveTextContent('132');
+        expect(screen.queryByRole('button', { name: 'Count the Score' })).not.toBeInTheDocument();
     });
 
     test('can hand a forfeit recap to the podium without exposing final scores early', async () => {
@@ -121,6 +281,7 @@ describe('RoundSummaryModal staged presentation', () => {
                 continueLabel="View Final Standings"
                 onContinue={onContinue}
                 showScoreTotals={false}
+                scoreStage="preview"
                 summaryData={{
                     isGameOver: true,
                     forfeit: { forfeitingPlayerName: 'Alice', reason: 'voluntary forfeit' },
@@ -160,6 +321,41 @@ describe('RoundSummaryModal staged presentation', () => {
         );
 
         expect(screen.getByRole('status')).toHaveTextContent('administrator review');
+    });
+
+    test('does not mix the overall coin payout message into a final-round loss recap', () => {
+        const payoutMessage = 'You finished 1st and won a net 1.00 tokens!';
+        render(
+            <RoundSummaryModal
+                {...baseProps}
+                playerId={2}
+                title="Final Round Recap"
+                scoreActionLabel="Hand Over Points"
+                onContinue={vi.fn()}
+                scoreStage="preview"
+                insurance={{}}
+                bidWinnerInfo={{ playerName: 'Alice' }}
+                playerOrderActive={['Alice', 'Bob', 'Cara']}
+                summaryData={{
+                    isGameOver: true,
+                    gameWinner: 'Bob',
+                    payoutDetails: { 2: payoutMessage },
+                    finalScores: { Alice: 132, Bob: 114, Cara: -6 },
+                    pointChanges: { Alice: 12, Bob: -6, Cara: -6 },
+                    finalBidderPoints: 72,
+                    finalDefenderPoints: 48,
+                    bidType: 'Frog',
+                    insuranceDealWasMade: false,
+                    insuranceHindsight: {},
+                    widowForReveal: [],
+                    widowPointsValue: 0
+                }}
+            />
+        );
+
+        expect(screen.getByRole('heading', { name: 'Final Round Recap' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Hand Over Points' })).toBeInTheDocument();
+        expect(screen.queryByText(payoutMessage)).not.toBeInTheDocument();
     });
 
     test('collapses trick details when the recap closes before a later round', async () => {

@@ -982,6 +982,7 @@
                         if (settlement.ok && engine.roundSummary) {
                             engine.roundSummary.gameWinner = settlement.result.gameWinnerName;
                             engine.roundSummary.payoutDetails = settlement.result.payoutDetails;
+                            engine.roundSummary.tokenSettlement = settlement.result.tokenSettlement;
                             if (effect.onComplete) effect.onComplete(settlement.result);
                         } else if (engine.roundSummary) {
                             console.error(`[SERVICE] Normal settlement failed for game ${effect.payload.gameId}:`, settlement.error);
@@ -1034,6 +1035,7 @@
                         if (settlement.ok && engine.roundSummary) {
                             engine.roundSummary.gameWinner = settlement.result.gameWinnerName;
                             engine.roundSummary.payoutDetails = settlement.result.payoutDetails;
+                            engine.roundSummary.tokenSettlement = settlement.result.tokenSettlement;
                         } else if (engine.roundSummary) {
                             console.error(`[SERVICE] Forfeit settlement failed for game ${effect.payload.gameId}:`, settlement.error);
                             engine.roundSummary.message = 'Forfeit settlement needs administrator review. No partial payout was committed.';

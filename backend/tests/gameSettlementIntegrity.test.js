@@ -10,6 +10,7 @@ const {
 const transactionManager = require('../src/data/transactionManager');
 const { validators } = require('../src/events/socketActionGuard');
 const {
+    buildDrawSettlement,
     buildForfeitSettlement,
     buildNormalGameSettlement,
 } = require('../src/settlement/gameSettlement');
@@ -45,6 +46,10 @@ function statByUser(plan, userId) {
     return plan.stats.find(stat => stat.userId === userId)?.column;
 }
 
+function tokenEntry(plan, playerName) {
+    return plan.result.tokenSettlement.entries.find(entry => entry.playerName === playerName);
+}
+
 function testBotNeutralExactCentPlans() {
     const botsOnly = buildNormalGameSettlement(makeTable(
         1,
@@ -54,6 +59,15 @@ function testBotNeutralExactCentPlans() {
     assert.equal(botsOnly.result.gameWinnerName, 'Bot B');
     assert.equal(botsOnly.payouts.length, 0);
     assert.equal(botsOnly.stats.length, 0);
+    assert.equal(botsOnly.result.tokenSettlement.buyInCents, 100);
+    assert.equal(botsOnly.result.tokenSettlement.potCents, 0);
+    assert.ok(botsOnly.result.tokenSettlement.entries.every(entry => (
+        entry.isBot
+        && !entry.funded
+        && entry.grossReturnCents === 0
+        && entry.netChangeCents === 0
+        && entry.tokenOutcome === 'not_funded'
+    )));
 
     const oneHuman = buildNormalGameSettlement(makeTable(
         2,
@@ -63,6 +77,23 @@ function testBotNeutralExactCentPlans() {
     assert.equal(oneHuman.result.gameWinnerName, 'Bot Winner', 'visible winner includes bot results');
     assert.equal(sumPayoutCents(oneHuman), 100, 'one funded human receives exactly one buy-in');
     assert.equal(statByUser(oneHuman, 1), 'washes', 'practice against bots cannot farm wins/losses');
+    assert.deepEqual(tokenEntry(oneHuman, 'Alice'), {
+        playerName: 'Alice',
+        isBot: false,
+        funded: true,
+        grossReturnCents: 100,
+        netChangeCents: 0,
+        tokenOutcome: 'even',
+    });
+    assert.deepEqual(tokenEntry(oneHuman, 'Bot Winner'), {
+        playerName: 'Bot Winner',
+        isBot: true,
+        funded: false,
+        grossReturnCents: 0,
+        netChangeCents: 0,
+        tokenOutcome: 'not_funded',
+    });
+    assert.equal(oneHuman.result.tokenSettlement.potCents, 100);
 
     const twoHumans = buildNormalGameSettlement(makeTable(
         3,
@@ -74,6 +105,13 @@ function testBotNeutralExactCentPlans() {
     assert.equal(payoutByUser(twoHumans, 2), 0);
     assert.equal(statByUser(twoHumans, 1), 'wins');
     assert.equal(statByUser(twoHumans, 2), 'losses');
+    assert.equal(tokenEntry(twoHumans, 'Alice').grossReturnCents, 200);
+    assert.equal(tokenEntry(twoHumans, 'Alice').netChangeCents, 100);
+    assert.equal(tokenEntry(twoHumans, 'Alice').tokenOutcome, 'gain');
+    assert.equal(tokenEntry(twoHumans, 'Bob').grossReturnCents, 0);
+    assert.equal(tokenEntry(twoHumans, 'Bob').netChangeCents, -100);
+    assert.equal(tokenEntry(twoHumans, 'Bob').tokenOutcome, 'loss');
+    assert.equal(twoHumans.result.tokenSettlement.potCents, 200);
 
     const twoHumanTie = buildNormalGameSettlement(makeTable(
         4,
@@ -109,6 +147,17 @@ function testBotNeutralExactCentPlans() {
         [14, 13, 13, 0],
         'indivisible tie cents use deterministic user-id remainder order',
     );
+    assert.deepEqual(
+        remainderTie.result.tokenSettlement.entries.map(entry => entry.grossReturnCents),
+        [14, 13, 13, 0],
+        'the public settlement uses the exact committed cent allocations',
+    );
+    assert.deepEqual(
+        remainderTie.result.tokenSettlement.entries.map(entry => entry.netChangeCents),
+        [4, 3, 3, -10],
+    );
+    assert.equal(remainderTie.result.tokenSettlement.buyInCents, 10);
+    assert.equal(remainderTie.result.tokenSettlement.potCents, 40);
 
     const botForfeit = buildForfeitSettlement({
         ...makeTable(8, [['Alice', 100], ['Bob', 80]], [['Bot', 50]]),
@@ -117,6 +166,60 @@ function testBotNeutralExactCentPlans() {
     });
     assert.equal(sumPayoutCents(botForfeit), 200);
     assert.ok(botForfeit.stats.every(stat => stat.column === 'washes'));
+    assert.equal(tokenEntry(botForfeit, 'Alice').netChangeCents, 0);
+    assert.equal(tokenEntry(botForfeit, 'Bob').netChangeCents, 0);
+    assert.equal(tokenEntry(botForfeit, 'Bot').tokenOutcome, 'not_funded');
+
+    const humanForfeit = buildForfeitSettlement({
+        ...makeTable(9, [['Alice', 100], ['Bob', 80]], [['Bot', 50]]),
+        forfeitingPlayerName: 'Alice',
+        reason: 'voluntary forfeit',
+    });
+    assert.deepEqual(
+        humanForfeit.result.tokenSettlement.entries.map(entry => [
+            entry.playerName,
+            entry.grossReturnCents,
+            entry.netChangeCents,
+            entry.tokenOutcome,
+        ]),
+        [
+            ['Alice', 0, -100, 'loss'],
+            ['Bob', 200, 100, 'gain'],
+            ['Bot', 0, 0, 'not_funded'],
+        ],
+    );
+
+    const drawWash = buildDrawSettlement(
+        makeTable(10, [['Alice', 100], ['Bob', 80]], [['Bot', 50]]),
+        'wash',
+    );
+    assert.deepEqual(
+        drawWash.result.tokenSettlement.entries.map(entry => [
+            entry.playerName,
+            entry.grossReturnCents,
+            entry.netChangeCents,
+        ]),
+        [
+            ['Alice', 100, 0],
+            ['Bob', 100, 0],
+            ['Bot', 0, 0],
+        ],
+    );
+
+    const spectatorTable = makeTable(11, [['Alice', 100]], [['Bot', 50]]);
+    spectatorTable.players[99] = {
+        userId: 99,
+        playerName: 'Spectator',
+        isBot: false,
+        isSpectator: true,
+    };
+    spectatorTable.seatingOrderIds.push(99);
+    const spectatorPlan = buildNormalGameSettlement(spectatorTable);
+    assert.equal(
+        spectatorPlan.result.tokenSettlement.entries.some(entry => entry.playerName === 'Spectator'),
+        false,
+        'spectators never appear in the table settlement breakdown',
+    );
 }
 
 function createSettlementPool({
@@ -411,6 +514,46 @@ async function testImmutableLifecycleRetryAndSummary() {
     assert.equal(pool.state.stats.get(1).washes, 1);
     assert.equal(engine.roundSummary.gameWinner, bots[0].playerName, 'summary always receives actual visible winner');
     assert.match(engine.roundSummary.payoutDetails[1], /buy-in was returned/i);
+    assert.deepEqual(tokenEntry({ result: engine.roundSummary }, 'Alice'), {
+        playerName: 'Alice',
+        isBot: false,
+        funded: true,
+        grossReturnCents: 100,
+        netChangeCents: 0,
+        tokenOutcome: 'even',
+    });
+
+    const forfeitEngine = new GameEngine('forfeit-settlement-service', 'fort-creek', 'Forfeit Settlement Service');
+    forfeitEngine.joinTable({ id: 1, username: 'Alice' }, 'forfeit-socket-1', '10.00');
+    forfeitEngine.joinTable({ id: 2, username: 'Bob' }, 'forfeit-socket-2', '10.00');
+    forfeitEngine.addBotPlayer();
+    const forfeitBot = Object.values(forfeitEngine.players).find(player => player.isBot);
+    forfeitEngine.gameStarted = true;
+    forfeitEngine.gameId = 32;
+    forfeitEngine.state = 'Playing Phase';
+    forfeitEngine.scores.Alice = 120;
+    forfeitEngine.scores.Bob = 80;
+    const forfeitResolution = forfeitEngine.forfeitGame(1);
+    const forfeitEffect = forfeitResolution.effects.find(effect => effect.type === 'HANDLE_FORFEIT');
+    const forfeitService = makeService(
+        forfeitEngine,
+        createSettlementPool({ gameId: 32, userIds: [1, 2] }),
+    );
+    await forfeitService._executeEffects(forfeitEngine.tableId, [forfeitEffect]);
+    assert.equal(forfeitEngine.settlement.status, 'complete');
+    assert.deepEqual(
+        forfeitEngine.roundSummary.tokenSettlement.entries.map(entry => [
+            entry.playerName,
+            entry.grossReturnCents,
+            entry.netChangeCents,
+        ]),
+        [
+            ['Alice', 0, -100],
+            ['Bob', 200, 100],
+            [forfeitBot.playerName, 0, 0],
+        ],
+        'the forfeit summary receives the committed structured settlement',
+    );
 
     const failedEngine = new GameEngine('failed-settlement', 'fort-creek', 'Failed Settlement');
     failedEngine.joinTable({ id: 1, username: 'Alice' }, 'failed-socket', '10.00');
@@ -434,6 +577,11 @@ async function testImmutableLifecycleRetryAndSummary() {
     }]);
     assert.equal(failedEngine.settlement.status, 'failed');
     assert.equal(failedEngine.settlement.attempts, 3, 'automatic retries are bounded');
+    assert.equal(
+        Object.prototype.hasOwnProperty.call(failedEngine.roundSummary, 'tokenSettlement'),
+        false,
+        'a failed normal settlement never publishes an uncommitted breakdown',
+    );
     assert.equal(failedEngine.reset().effects.length, 0, 'failed settlement blocks reset and preserves recovery state');
     assert.equal(
         validators.terminalReset({}, { engine: failedEngine }),
@@ -452,6 +600,32 @@ async function testImmutableLifecycleRetryAndSummary() {
         global.setTimeout = originalSetTimeout;
     }
     assert.equal(scheduled.length, 0, 'terminal cleanup is not scheduled for a failed settlement');
+
+    const failedForfeitEngine = new GameEngine('failed-forfeit-settlement', 'fort-creek', 'Failed Forfeit Settlement');
+    failedForfeitEngine.joinTable({ id: 1, username: 'Alice' }, 'failed-forfeit-1', '10.00');
+    failedForfeitEngine.joinTable({ id: 2, username: 'Bob' }, 'failed-forfeit-2', '10.00');
+    failedForfeitEngine.addBotPlayer();
+    failedForfeitEngine.gameStarted = true;
+    failedForfeitEngine.gameId = 33;
+    failedForfeitEngine.state = 'Playing Phase';
+    const failedForfeitResolution = failedForfeitEngine.forfeitGame(1);
+    const failedForfeitEffect = failedForfeitResolution.effects.find(effect => effect.type === 'HANDLE_FORFEIT');
+    const failedForfeitService = makeService(
+        failedForfeitEngine,
+        createSettlementPool({ gameId: 33, userIds: [1, 2] }),
+    );
+    failedForfeitService.handleForfeit = async () => {
+        const error = new Error('injected permanent forfeit settlement failure');
+        error.code = 'FORFEIT_SETTLEMENT_FAILED';
+        throw error;
+    };
+    await failedForfeitService._executeEffects(failedForfeitEngine.tableId, [failedForfeitEffect]);
+    assert.equal(failedForfeitEngine.settlement.status, 'failed');
+    assert.equal(
+        Object.prototype.hasOwnProperty.call(failedForfeitEngine.roundSummary, 'tokenSettlement'),
+        false,
+        'a failed forfeit settlement never publishes an uncommitted breakdown',
+    );
 }
 
 async function testResetGateAndTerminalGameIdentity() {

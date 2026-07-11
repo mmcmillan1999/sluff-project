@@ -254,6 +254,45 @@ function normalPayoutMessage(entry, buyInCents) {
     return `You finished ${entry.rankLabel} and lost your buy-in of ${formatCents(buyInCents)} tokens.`;
 }
 
+function buildTokenSettlement(players, buyInCents, allocationEntries) {
+    const grossReturnsByUserId = new Map(
+        allocationEntries.map(entry => [String(entry.player.userId), entry.cents]),
+    );
+    const orderedPlayers = [...players].sort((left, right) => (
+        left.seatIndex - right.seatIndex
+        || compareIdentity(left, right)
+    ));
+    const entries = orderedPlayers.map(player => {
+        const funded = player.isBot !== true;
+        const grossReturnCents = funded
+            ? (grossReturnsByUserId.get(String(player.userId)) || 0)
+            : 0;
+        const netChangeCents = funded ? grossReturnCents - buyInCents : 0;
+        const tokenOutcome = !funded
+            ? 'not_funded'
+            : netChangeCents > 0
+                ? 'gain'
+                : netChangeCents < 0
+                    ? 'loss'
+                    : 'even';
+
+        return {
+            playerName: player.playerName,
+            isBot: player.isBot === true,
+            funded,
+            grossReturnCents,
+            netChangeCents,
+            tokenOutcome,
+        };
+    });
+
+    return {
+        buyInCents,
+        potCents: entries.reduce((sum, entry) => sum + (entry.funded ? buyInCents : 0), 0),
+        entries,
+    };
+}
+
 function payoutTypeFor(entry, buyInCents) {
     return entry.stat === 'washes' && entry.cents === buyInCents
         ? 'wash_payout'
@@ -284,13 +323,14 @@ function buildNormalGameSettlement(table) {
             });
         }
     }
+    const tokenSettlement = buildTokenSettlement(players, buyInCents, allocations);
 
     return {
         gameId: table.gameId,
         outcome: `Game Over! Winner: ${gameWinnerName}`,
         payouts,
         stats,
-        result: { gameWinnerName, payoutDetails },
+        result: { gameWinnerName, payoutDetails, tokenSettlement },
     };
 }
 
@@ -351,6 +391,7 @@ function buildDrawSettlement(table, requestedOutcome) {
         drawOutcome: resolvedOutcome,
         gameWinner: 'Draw',
         payouts: summaryPayouts,
+        tokenSettlement: buildTokenSettlement(players, buyInCents, entries),
         finalScores: { ...(table.scores || {}) },
         message: resolvedOutcome === 'wash'
             ? 'The game ended in a wash. Every funded human buy-in was returned.'
@@ -425,13 +466,19 @@ function buildForfeitSettlement(table) {
     const gameWinnerName = remainingPlayers.length
         ? remainingPlayers.map(player => player.playerName).join(' & ')
         : 'Forfeit';
+    const tokenSettlement = buildTokenSettlement(players, buyInCents, entries);
 
     return {
         gameId: table.gameId,
         outcome: `Game Over! ${table.forfeitingPlayerName} forfeited (${table.reason})`,
         payouts,
         stats,
-        result: { gameWinnerName, payoutDetails, forfeitingPlayerIsBot: forfeitingPlayer?.isBot === true },
+        result: {
+            gameWinnerName,
+            payoutDetails,
+            forfeitingPlayerIsBot: forfeitingPlayer?.isBot === true,
+            tokenSettlement,
+        },
     };
 }
 

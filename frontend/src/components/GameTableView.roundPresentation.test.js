@@ -21,23 +21,28 @@ vi.mock('../hooks/useBidWinnerSplash', () => ({
 }));
 
 vi.mock('./game/RoundSummaryModal', () => ({
-    default: ({ showModal, continueLabel, onContinue }) => showModal ? (
-        <button type="button" onClick={onContinue}>{continueLabel}</button>
-    ) : null
+    default: ({ showModal, continueLabel, onContinue, scoreStage, onScoreComplete }) => {
+        if (!showModal) return null;
+        if (scoreStage === 'counting') {
+            return (
+                <button type="button" onClick={() => onScoreComplete({ skipped: false, rows: [] })}>
+                    Finish Score Ceremony
+                </button>
+            );
+        }
+        if (scoreStage === 'complete') return <div>Score Totals Complete</div>;
+        return <button type="button" onClick={onContinue}>{continueLabel}</button>;
+    }
 }));
 
 vi.mock('./game/RoundScoreCeremony', () => ({
-    ROUND_SCORE_CEREMONY_TIMING: { MAX_TOTAL_MS: 100 },
-    default: ({ onComplete }) => (
-        <button type="button" onClick={() => onComplete({ skipped: false, rows: [] })}>
-            Finish Score Ceremony
-        </button>
-    )
+    ROUND_SCORE_CEREMONY_TIMING: { MAX_TOTAL_MS: 100 }
 }));
 
 vi.mock('./game/GameOverPodium', () => ({
-    default: ({ show, onRematch, onLobby, actionsDisabled }) => show ? (
+    default: ({ show, onRematch, onLobby, actionsDisabled, tokenSettlement }) => show ? (
         <div role="dialog" aria-label="Winner podium">
+            <span data-testid="podium-token-settlement">{JSON.stringify(tokenSettlement || null)}</span>
             <button type="button" onClick={onRematch} disabled={actionsDisabled || !onRematch}>Rematch</button>
             <button type="button" onClick={onLobby}>Lobby</button>
         </div>
@@ -197,11 +202,21 @@ describe('GameTableView round presentation sequence', () => {
         motionPreference.reduced = false;
         renderGame(makeState());
 
-        expect(screen.queryByRole('button', { name: 'Count the Score' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Collect Points' })).not.toBeInTheDocument();
         act(() => vi.advanceTimersByTime(END_ROUND_TOTAL_MS - 1));
-        expect(screen.queryByRole('button', { name: 'Count the Score' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Collect Points' })).not.toBeInTheDocument();
         act(() => vi.advanceTimersByTime(1));
-        expect(screen.getByRole('button', { name: 'Count the Score' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Collect Points' })).toBeInTheDocument();
+    });
+
+    test('personalizes the recap action for the player giving up round points', () => {
+        renderGame(makeState(), {
+            playerId: 2,
+            user: { id: 2, username: 'Bob', is_admin: false }
+        });
+
+        expect(screen.getByRole('button', { name: 'Hand Over Points' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Collect Points' })).not.toBeInTheDocument();
     });
 
     test('uses serverTime to honor the shared clock when the client clock is badly skewed', () => {
@@ -213,7 +228,7 @@ describe('GameTableView round presentation sequence', () => {
             presentationReadyAt: serverTime + 1000
         }));
 
-        fireEvent.click(screen.getByRole('button', { name: 'Count the Score' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Collect Points' }));
         fireEvent.click(screen.getByRole('button', { name: 'Finish Score Ceremony' }));
         act(() => vi.advanceTimersByTime(100));
 
@@ -233,7 +248,7 @@ describe('GameTableView round presentation sequence', () => {
         });
         const { rerender, props } = renderGame(pendingState, { emitEvent });
 
-        expect(screen.queryByRole('button', { name: 'Count the Score' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Collect Points' })).not.toBeInTheDocument();
         expect(screen.queryByRole('dialog', { name: 'Winner podium' })).not.toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Chat' })).toBeEnabled();
         expect(emitEvent).not.toHaveBeenCalledWith('ackRoundPresentation', expect.anything());
@@ -267,7 +282,7 @@ describe('GameTableView round presentation sequence', () => {
         });
         const { rerender, props } = renderGame(state, { emitEvent });
 
-        fireEvent.click(screen.getByRole('button', { name: 'Count the Score' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Collect Points' }));
         fireEvent.click(screen.getByRole('button', { name: 'Finish Score Ceremony' }));
         act(() => vi.advanceTimersByTime(100));
 
@@ -361,7 +376,7 @@ describe('GameTableView round presentation sequence', () => {
         }));
 
         expect(screen.getByTestId('alice-table-score')).toHaveTextContent('132');
-        expect(screen.queryByRole('button', { name: 'Count the Score' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Collect Points' })).not.toBeInTheDocument();
         expect(await screen.findByRole('dialog', { name: 'Winner podium' })).toBeInTheDocument();
     });
 
@@ -431,13 +446,14 @@ describe('GameTableView round presentation sequence', () => {
 
         expect(screen.getByTestId('alice-table-score')).toHaveTextContent('120');
         expect(screen.queryByRole('button', { name: 'Chat' })).not.toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: 'Count the Score' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Collect Points' }));
 
         expect(screen.getByTestId('alice-table-score')).toHaveTextContent('120');
         expect(screen.getByTestId('round-presentation-complete')).toHaveTextContent('false');
         fireEvent.click(screen.getByRole('button', { name: 'Finish Score Ceremony' }));
 
         expect(screen.getByTestId('alice-table-score')).toHaveTextContent('132');
+        expect(screen.getByText('Score Totals Complete')).toBeInTheDocument();
         expect(screen.getByTestId('round-presentation-complete')).toHaveTextContent('false');
         act(() => vi.advanceTimersByTime(100));
         expect(screen.getByTestId('round-presentation-complete')).toHaveTextContent('true');
@@ -448,12 +464,25 @@ describe('GameTableView round presentation sequence', () => {
         const user = userEvent.setup();
         const emitEvent = vi.fn();
         const handleLeaveTable = vi.fn();
-        renderGame(makeState({ state: 'Game Over', isGameOver: true }), { emitEvent, handleLeaveTable });
+        const state = makeState({ state: 'Game Over', isGameOver: true });
+        state.roundSummary.tokenSettlement = {
+            buyInCents: 100,
+            potCents: 300,
+            entries: [
+                { playerName: 'Alice', funded: true, grossReturnCents: 200, netChangeCents: 100 },
+                { playerName: 'Bob', funded: true, grossReturnCents: 100, netChangeCents: 0 },
+                { playerName: 'Cara', funded: true, grossReturnCents: 0, netChangeCents: -100 }
+            ]
+        };
+        renderGame(state, { emitEvent, handleLeaveTable });
 
-        await user.click(await screen.findByRole('button', { name: 'Count the Score' }));
+        await user.click(await screen.findByRole('button', { name: 'Collect Points' }));
         await user.click(screen.getByRole('button', { name: 'Finish Score Ceremony' }));
 
+        expect(screen.getByText('Score Totals Complete')).toBeInTheDocument();
+        expect(screen.queryByRole('dialog', { name: 'Winner podium' })).not.toBeInTheDocument();
         await waitFor(() => expect(screen.getByRole('dialog', { name: 'Winner podium' })).toBeInTheDocument());
+        expect(screen.getByTestId('podium-token-settlement')).toHaveTextContent('"playerName":"Alice"');
         await user.click(screen.getByRole('button', { name: 'Rematch' }));
         await user.click(screen.getByRole('button', { name: 'Lobby' }));
         expect(emitEvent).toHaveBeenCalledWith('resetGame');

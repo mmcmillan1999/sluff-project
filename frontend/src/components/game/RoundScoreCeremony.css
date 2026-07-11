@@ -232,6 +232,96 @@
     border: 0;
 }
 
+/* Embedded mode belongs to RoundSummaryModal's existing totals panel. It keeps
+   the familiar three-column recap table and deliberately does not look or act
+   like a second modal layered inside the first one. */
+.round-score-ceremony--embedded {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+    color: #343a40;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    font-family: 'Merriweather', serif;
+}
+
+.round-score-ceremony--embedded:focus {
+    outline: none;
+}
+
+.round-score-ceremony--embedded .round-score-ceremony__score-heading,
+.round-score-ceremony--embedded .round-score-ceremony__player {
+    grid-template-columns: minmax(0, 1fr) 4.5rem 5.25rem;
+    column-gap: 0.35rem;
+}
+
+.round-score-ceremony--embedded .round-score-ceremony__score-heading {
+    padding: 0 0.5rem 0.45rem;
+    color: #495057;
+    font-family: 'Merriweather', serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0;
+    text-transform: none;
+    border-bottom: 2px solid #c5cbd1;
+}
+
+.round-score-ceremony--embedded .round-score-ceremony__player {
+    min-height: 2.7rem;
+    padding: 0.38rem 0.5rem;
+    color: #343a40;
+    background: rgba(255, 255, 255, 0.45);
+    border-color: transparent;
+    border-bottom-color: rgba(173, 181, 189, 0.45);
+    border-radius: 0;
+    opacity: 1;
+}
+
+.round-score-ceremony--embedded .round-score-ceremony__player.is-active {
+    background: rgba(246, 207, 116, 0.22);
+    border-color: rgba(202, 138, 4, 0.42);
+    border-radius: 0.45rem;
+}
+
+.round-score-ceremony--embedded .round-score-ceremony__player.is-settled .round-score-ceremony__total {
+    color: #7c5a00;
+}
+
+.round-score-ceremony--embedded .round-score-ceremony__name {
+    color: #343a40;
+    font-family: 'Merriweather', serif;
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.round-score-ceremony--embedded .round-score-ceremony__delta {
+    opacity: 1;
+    transform: none;
+}
+
+.round-score-ceremony--embedded .round-score-ceremony__total {
+    color: #343a40;
+    font-size: 1.05rem;
+}
+
+.round-score-ceremony--embedded .round-score-ceremony__skip {
+    min-width: 7.5rem;
+    margin-top: 0.65rem;
+    color: #495057;
+    background: rgba(255, 255, 255, 0.55);
+    border-color: #adb5bd;
+}
+
+.round-score-ceremony--embedded .round-score-ceremony__skip:hover,
+.round-score-ceremony--embedded .round-score-ceremony__skip:focus-visible {
+    color: #343a40;
+    background: #fff;
+    border-color: #8b6b1f;
+}
+
 @keyframes round-score-total-settle {
     0% { transform: scale(0.9); }
     60% { transform: scale(1.14); }
@@ -268,6 +358,22 @@
     .round-score-ceremony__delta {
         min-width: 2.2rem;
         padding-inline: 0.25rem;
+    }
+
+    .round-score-ceremony--embedded {
+        padding: 0;
+        border-radius: 0;
+    }
+
+    .round-score-ceremony--embedded .round-score-ceremony__score-heading,
+    .round-score-ceremony--embedded .round-score-ceremony__player {
+        grid-template-columns: minmax(0, 1fr) 3.55rem 4.2rem;
+        column-gap: 0.18rem;
+    }
+
+    .round-score-ceremony--embedded .round-score-ceremony__score-heading,
+    .round-score-ceremony--embedded .round-score-ceremony__player {
+        padding-inline: 0.35rem;
     }
 }
 

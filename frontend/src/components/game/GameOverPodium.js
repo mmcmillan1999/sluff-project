@@ -32,6 +32,85 @@ const CONFETTI = Object.freeze([
 
 const normalizeName = value => String(value || '').trim().toLocaleLowerCase();
 
+const normalizeCents = (value, { allowNegative = false } = {}) => {
+    const numericValue = Number(value);
+    if (!Number.isSafeInteger(numericValue)) return null;
+    if (!allowNegative && numericValue < 0) return null;
+    return numericValue;
+};
+
+const formatTokenAmount = cents => `${(Math.abs(cents) / 100).toFixed(2)} tokens`;
+
+const formatTokenNet = cents => {
+    if (cents > 0) return `+${formatTokenAmount(cents)}`;
+    if (cents < 0) return `-${formatTokenAmount(cents)}`;
+    return formatTokenAmount(0);
+};
+
+const tokenOutcomeLabel = (tokenOutcome, netChangeCents, grossReturnCents) => {
+    const normalizedOutcome = String(tokenOutcome || '').trim().toLocaleLowerCase();
+    if (['wash', 'washes', 'buy-in returned', 'returned'].includes(normalizedOutcome)) {
+        return 'Buy-in returned';
+    }
+    if (['loss', 'losses', 'lost', 'no return'].includes(normalizedOutcome)) {
+        return grossReturnCents > 0 ? 'Partial return' : 'No return';
+    }
+    if (['win', 'wins', 'won', 'gain'].includes(normalizedOutcome)) {
+        return 'Token gain';
+    }
+    if (netChangeCents > 0) return 'Token gain';
+    if (netChangeCents < 0) return grossReturnCents > 0 ? 'Partial return' : 'No return';
+    return 'Even';
+};
+
+export const normalizeTokenSettlement = (tokenSettlement) => {
+    if (tokenSettlement === null || tokenSettlement === undefined) return null;
+    if (!tokenSettlement || typeof tokenSettlement !== 'object'
+        || ['failed', 'error'].includes(String(tokenSettlement.status || '').toLocaleLowerCase())) {
+        return { available: false, entries: [] };
+    }
+
+    const buyInCents = normalizeCents(tokenSettlement.buyInCents);
+    const potCents = normalizeCents(tokenSettlement.potCents);
+    const sourceEntries = Array.isArray(tokenSettlement.entries) ? tokenSettlement.entries : [];
+    const entries = sourceEntries
+        .filter(entry => entry && typeof entry === 'object'
+            && typeof entry.playerName === 'string' && entry.playerName.trim())
+        .map(entry => {
+            const playerName = entry.playerName.trim();
+            const practiceSeat = entry.isBot === true || entry.funded === false;
+            if (practiceSeat) {
+                return {
+                    playerName,
+                    practiceSeat: true,
+                    available: true,
+                    outcomeLabel: 'Practice seat',
+                };
+            }
+
+            const grossReturnCents = normalizeCents(entry.grossReturnCents);
+            const netChangeCents = normalizeCents(entry.netChangeCents, { allowNegative: true });
+            const available = grossReturnCents !== null && netChangeCents !== null;
+            return {
+                playerName,
+                practiceSeat: false,
+                available,
+                grossReturnCents,
+                netChangeCents,
+                outcomeLabel: available
+                    ? tokenOutcomeLabel(entry.tokenOutcome, netChangeCents, grossReturnCents)
+                    : 'Settlement unavailable',
+            };
+        });
+
+    return {
+        available: entries.length > 0,
+        buyInCents,
+        potCents,
+        entries,
+    };
+};
+
 const declaredWinnerNames = (gameWinner) => {
     const rawWinner = String(gameWinner || '').trim();
     const normalizedWinner = normalizeName(rawWinner);
@@ -214,10 +293,12 @@ const GameOverPodium = ({
     rematchLabel = 'Rematch',
     lobbyLabel = 'Lobby',
     statusMessage = null,
-    actionsDisabled = false
+    actionsDisabled = false,
+    tokenSettlement = null
 }) => {
     const headingId = useId();
     const detailId = useId();
+    const tokenSettlementHeadingId = useId();
     const dialogRef = useModalFocus(show, 'button:not(:disabled)');
     const [submitted, setSubmitted] = useState(false);
 
@@ -230,6 +311,7 @@ const GameOverPodium = ({
 
     const entries = rankPodiumPlayers({ gameWinner, finalScores, forfeit });
     const outcome = outcomeCopy(entries, forfeit, gameWinner);
+    const normalizedTokenSettlement = normalizeTokenSettlement(tokenSettlement);
     const podiumCount = Math.min(4, Math.max(3, entries.length || 3));
     const invokeAction = (callback, { requiresReady = false } = {}) => {
         if (submitted
@@ -296,6 +378,65 @@ const GameOverPodium = ({
                     </div>
                 ) : (
                     <p className="game-over-podium__unavailable">Final scores are unavailable.</p>
+                )}
+
+                {normalizedTokenSettlement && (
+                    <section
+                        className="game-over-podium__settlement"
+                        aria-labelledby={tokenSettlementHeadingId}
+                    >
+                        <div className="game-over-podium__settlement-header">
+                            <h2 id={tokenSettlementHeadingId}>Token settlement</h2>
+                            {normalizedTokenSettlement.available && (
+                                <p>
+                                    {[
+                                        normalizedTokenSettlement.buyInCents !== null
+                                            ? `${formatTokenAmount(normalizedTokenSettlement.buyInCents)} buy-in`
+                                            : null,
+                                        normalizedTokenSettlement.potCents !== null
+                                            ? `${formatTokenAmount(normalizedTokenSettlement.potCents)} pot`
+                                            : null,
+                                    ].filter(Boolean).join(' · ')}
+                                </p>
+                            )}
+                        </div>
+
+                        {normalizedTokenSettlement.available ? (
+                            <ul
+                                className="game-over-podium__settlement-list"
+                                aria-label="Token settlement results"
+                            >
+                                {normalizedTokenSettlement.entries.map((entry, index) => (
+                                    <li
+                                        className="game-over-podium__settlement-entry"
+                                        key={`${entry.playerName}-${index}`}
+                                    >
+                                        <span
+                                            className="game-over-podium__settlement-name"
+                                            title={entry.playerName}
+                                        >
+                                            {entry.playerName}
+                                        </span>
+                                        <span className="game-over-podium__settlement-result">
+                                            <strong>{entry.outcomeLabel}</strong>
+                                            {entry.practiceSeat && <small>No tokens exchanged</small>}
+                                            {!entry.practiceSeat && entry.available && (
+                                                <small>
+                                                    {formatTokenAmount(entry.grossReturnCents)} returned
+                                                    {' · '}
+                                                    net {formatTokenNet(entry.netChangeCents)}
+                                                </small>
+                                            )}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : (
+                            <p className="game-over-podium__settlement-unavailable" role="status">
+                                Token settlement details are unavailable.
+                            </p>
+                        )}
+                    </section>
                 )}
 
                 <footer className="game-over-podium__actions">

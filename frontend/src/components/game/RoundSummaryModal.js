@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import './RoundSummaryModal.css';
 import { CARD_POINT_VALUES, BID_MULTIPLIERS, PLACEHOLDER_ID_CLIENT } from '../../constants';
 import PointsBreakdownBar from './PointsBreakdownBar';
+import RoundScoreCeremony from './RoundScoreCeremony';
 import { useModalFocus } from '../../hooks/useModalFocus';
 
 const RoundSummaryModal = ({
@@ -20,7 +21,13 @@ const RoundSummaryModal = ({
     showScoreTotals = true,
     title,
     continueLabel = 'Continue',
+    scoreActionLabel,
     onContinue,
+    scoreStage = 'complete',
+    playerOrder,
+    playSound,
+    onScoreComplete,
+    prefersReducedMotion,
     tutorialHint = null
 }) => {
     const [detailsVisible, setDetailsVisible] = useState(false);
@@ -30,10 +37,10 @@ const RoundSummaryModal = ({
     );
 
     useEffect(() => {
-        if (!showModal) {
+        if (!showModal || scoreStage === 'counting') {
             setDetailsVisible(false);
         }
-    }, [showModal]);
+    }, [scoreStage, showModal]);
 
     if (!showModal || !summaryData) {
         return null;
@@ -54,14 +61,15 @@ const RoundSummaryModal = ({
         widowPointsValue,
         bidType,
         drawOutcome,
-        payoutDetails,
         lastCompletedTrick,
         insuranceDealWasMade,
         finalScores
     } = summaryData;
 
-    const myPayoutMessage = isGameOver && payoutDetails ? payoutDetails[playerId] : null;
     const modalTitle = title || (isGameOver ? 'Game Over' : 'Round Over');
+    const normalizedScoreStage = scoreStage === 'preview' || scoreStage === 'counting'
+        ? scoreStage
+        : 'complete';
     const tutorialHintPanel = tutorialHint ? (
         <aside className="summary-tutorial-hint" role="status" aria-live="polite">
             <span>{tutorialHint.eyebrow}</span>
@@ -88,11 +96,6 @@ const RoundSummaryModal = ({
                     <div className="summary-main-area">
                         <h2>{title || 'Game Ended by Forfeit'}</h2>
                         {tutorialHintPanel}
-                        {myPayoutMessage && (
-                            <div className="payout-details-banner">
-                                <p>{myPayoutMessage}</p>
-                            </div>
-                        )}
 
                         <div className="forfeit-summary-panel">
                             <h3 className="forfeit-player"><strong>{forfeitingPlayerName}</strong> forfeited the game.</h3>
@@ -157,7 +160,7 @@ const RoundSummaryModal = ({
     const bidMultiplier = BID_MULTIPLIERS[bidType] || 1;
     const exchangeValue = rawDifference * bidMultiplier;
 
-    const renderTotalsTable = (changes, totals) => {
+    const renderTotalsTable = (changes, totals, { concealTotals = false } = {}) => {
         // In four-player rounds the dealer sits out and therefore is absent from
         // playerOrderActive, but still has a score/change entry worth showing.
         const sortedPlayerNames = [...new Set([
@@ -188,7 +191,14 @@ const RoundSummaryModal = ({
                                         <td className={change > 0 ? 'positive' : (change < 0 ? 'negative' : '')}>
                                             {change > 0 ? `+${change}` : change}
                                         </td>
-                                        <td>{totals?.[name] ?? '—'}</td>
+                                        <td
+                                            className={concealTotals ? 'summary-total-pending' : undefined}
+                                            aria-label={concealTotals
+                                                ? `${name} new total is hidden until the score is counted`
+                                                : `${name} new total ${totals?.[name] ?? 'unavailable'}`}
+                                        >
+                                            {concealTotals ? '—' : (totals?.[name] ?? '—')}
+                                        </td>
                                     </tr>
                                 );
                         })}
@@ -196,6 +206,30 @@ const RoundSummaryModal = ({
                 </table>
             </div>
         );
+    };
+
+    const scoreRowsOrder = playerOrder || [bidderName, ...defenderNames];
+    const renderScoreTotals = () => {
+        if (!showScoreTotals) return null;
+        if (normalizedScoreStage === 'counting') {
+            return (
+                <div className="summary-totals-panel summary-totals-panel--counting">
+                    <RoundScoreCeremony
+                        embedded
+                        finalScores={finalScores}
+                        pointChanges={pointChanges}
+                        playerOrder={scoreRowsOrder}
+                        playSound={playSound}
+                        onComplete={onScoreComplete}
+                        prefersReducedMotion={prefersReducedMotion}
+                        title="Counting round score"
+                    />
+                </div>
+            );
+        }
+        return renderTotalsTable(pointChanges, finalScores, {
+            concealTotals: normalizedScoreStage === 'preview'
+        });
     };
 
     const TrickPointRecapPanel = () => {
@@ -215,13 +249,23 @@ const RoundSummaryModal = ({
                 <div className="point-calculation-recap">
                     Δ60: {rawDifference} pts × {bidMultiplier}x ({bidType}) = {exchangeValue} pts
                 </div>
-                {!insuranceDealWasMade && showScoreTotals && renderTotalsTable(pointChanges, finalScores)}
+                {!insuranceDealWasMade && renderScoreTotals()}
             </div>
         );
     };
 
     const InsuranceRecapPanel = () => {
-        if (!insurance || !insurance.bidMultiplier) return null;
+        if (!insurance || !insurance.bidMultiplier) {
+            // Settlement presentation must not depend on the live insurance
+            // controls surviving a reconnect or late state refresh. The round
+            // summary is authoritative, so always keep its score count mounted.
+            return insuranceDealWasMade ? (
+                <div className="insurance-recap-panel">
+                    <h4>Insurance Deal Executed</h4>
+                    {renderScoreTotals()}
+                </div>
+            ) : null;
+        }
         
         const dealStatusText = insuranceDealWasMade ? "by taking deal" : "by not taking deal";
         const bidderGainedPoints = pointChanges[bidderName] > 0;
@@ -249,7 +293,7 @@ const RoundSummaryModal = ({
                         );
                     })}
                 </div>
-                {insuranceDealWasMade && showScoreTotals && renderTotalsTable(pointChanges, finalScores)}
+                {insuranceDealWasMade && renderScoreTotals()}
             </div>
         );
     };
@@ -299,11 +343,6 @@ const RoundSummaryModal = ({
                 <div className="summary-main-area">
                     <h2>{modalTitle}</h2>
                     {tutorialHintPanel}
-                    {myPayoutMessage && (
-                        <div className="payout-details-banner">
-                            <p>{myPayoutMessage}</p>
-                        </div>
-                    )}
                     {isGameOver && message && message !== 'Game Over!' && (
                         <div className="settlement-status-banner" role="status">
                             {message}
@@ -315,7 +354,7 @@ const RoundSummaryModal = ({
 
                 </div>
 
-                {!drawOutcome && (
+                {!drawOutcome && normalizedScoreStage !== 'counting' && (
                     <div className="summary-details-section">
                         <button className="details-toggle" onClick={() => setDetailsVisible(!detailsVisible)}>
                             {detailsVisible ? 'Hide Trick Breakdown' : 'Show Trick Breakdown'}
@@ -330,37 +369,40 @@ const RoundSummaryModal = ({
                     </div>
                 )}
                 
-                <div className="summary-action-area">
-                    {onContinue ? (
-                        <button type="button" onClick={onContinue} className="game-button summary-continue-button">
-                            {continueLabel}
-                        </button>
-                    ) : (
-                        <>
-                            {!isGameOver && playerId === dealerOfRoundId && (
-                                <button onClick={() => emitEvent("requestNextRound")} className="game-button">
-                                    Start Next Round
-                                </button>
-                            )}
-                            {!isGameOver && playerId !== dealerOfRoundId && (
-                                <p>Waiting for {getPlayerNameByUserId(dealerOfRoundId)} to start the next round...</p>
-                            )}
-                            {isGameOver && (
-                                <div className="game-over-actions">
-                                    <button onClick={() => emitEvent("resetGame")} className="game-button">
-                                        Play Again
+                {normalizedScoreStage !== 'counting'
+                    && (normalizedScoreStage === 'preview' || !onContinue) && (
+                    <div className="summary-action-area">
+                        {onContinue ? (
+                            <button type="button" onClick={onContinue} className="game-button summary-continue-button">
+                                {scoreActionLabel || continueLabel}
+                            </button>
+                        ) : (
+                            <>
+                                {!isGameOver && playerId === dealerOfRoundId && (
+                                    <button onClick={() => emitEvent("requestNextRound")} className="game-button">
+                                        Start Next Round
                                     </button>
-                                    <button onClick={handleLeaveTable} className="game-button" style={{backgroundColor: '#17a2b8'}}>
-                                        Back to Lobby
-                                    </button>
-                                    <button onClick={handleLogout} className="game-button" style={{backgroundColor: '#6c757d'}}>
-                                        Logout
-                                    </button>
-                                </div>
-                            )}
-                        </>
-                    )}
-                </div>
+                                )}
+                                {!isGameOver && playerId !== dealerOfRoundId && (
+                                    <p>Waiting for {getPlayerNameByUserId(dealerOfRoundId)} to start the next round...</p>
+                                )}
+                                {isGameOver && (
+                                    <div className="game-over-actions">
+                                        <button onClick={() => emitEvent("resetGame")} className="game-button">
+                                            Play Again
+                                        </button>
+                                        <button onClick={handleLeaveTable} className="game-button" style={{backgroundColor: '#17a2b8'}}>
+                                            Back to Lobby
+                                        </button>
+                                        <button onClick={handleLogout} className="game-button" style={{backgroundColor: '#6c757d'}}>
+                                            Logout
+                                        </button>
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );

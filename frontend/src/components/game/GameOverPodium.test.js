@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import GameOverPodium, { rankPodiumPlayers } from './GameOverPodium';
+import GameOverPodium, { normalizeTokenSettlement, rankPodiumPlayers } from './GameOverPodium';
 
 const baseScores = {
     Alice: 104,
@@ -70,7 +70,159 @@ describe('rankPodiumPlayers', () => {
     });
 });
 
+describe('normalizeTokenSettlement', () => {
+    test('keeps score-independent human returns and practice seats explicit', () => {
+        expect(normalizeTokenSettlement({
+            buyInCents: 10,
+            potCents: 20,
+            entries: [
+                {
+                    playerName: 'Alice',
+                    isBot: false,
+                    funded: true,
+                    grossReturnCents: 20,
+                    netChangeCents: 10,
+                    tokenOutcome: 'wins'
+                },
+                {
+                    playerName: 'Bot Winner',
+                    isBot: true,
+                    funded: false,
+                    grossReturnCents: 0,
+                    netChangeCents: 0,
+                    tokenOutcome: 'practice'
+                }
+            ]
+        })).toEqual({
+            available: true,
+            buyInCents: 10,
+            potCents: 20,
+            entries: [
+                {
+                    playerName: 'Alice',
+                    practiceSeat: false,
+                    available: true,
+                    grossReturnCents: 20,
+                    netChangeCents: 10,
+                    outcomeLabel: 'Token gain'
+                },
+                {
+                    playerName: 'Bot Winner',
+                    practiceSeat: true,
+                    available: true,
+                    outcomeLabel: 'Practice seat'
+                }
+            ]
+        });
+    });
+
+    test('distinguishes an absent settlement from failed settlement data', () => {
+        expect(normalizeTokenSettlement()).toBeNull();
+        expect(normalizeTokenSettlement({ status: 'failed' })).toEqual({
+            available: false,
+            entries: []
+        });
+    });
+
+    test('labels a funded partial recovery without calling it no return', () => {
+        const settlement = normalizeTokenSettlement({
+            buyInCents: 100,
+            potCents: 400,
+            entries: [{
+                playerName: 'Bob',
+                funded: true,
+                grossReturnCents: 50,
+                netChangeCents: -50,
+                tokenOutcome: 'loss'
+            }]
+        });
+
+        expect(settlement.entries[0].outcomeLabel).toBe('Partial return');
+    });
+});
+
 describe('GameOverPodium', () => {
+    test('shows token returns separately when the score champion is a practice bot', () => {
+        render(
+            <GameOverPodium
+                gameWinner="Bot Winner"
+                finalScores={{ 'Bot Winner': 160, Alice: 80, Bob: -4 }}
+                tokenSettlement={{
+                    buyInCents: 10,
+                    potCents: 20,
+                    entries: [
+                        {
+                            playerName: 'Bot Winner',
+                            isBot: true,
+                            funded: false,
+                            grossReturnCents: 0,
+                            netChangeCents: 0,
+                            tokenOutcome: 'practice'
+                        },
+                        {
+                            playerName: 'Alice',
+                            isBot: false,
+                            funded: true,
+                            grossReturnCents: 20,
+                            netChangeCents: 10,
+                            tokenOutcome: 'wins'
+                        },
+                        {
+                            playerName: 'Bob',
+                            isBot: false,
+                            funded: true,
+                            grossReturnCents: 0,
+                            netChangeCents: -10,
+                            tokenOutcome: 'losses'
+                        }
+                    ]
+                }}
+                onRematch={vi.fn()}
+                onLobby={vi.fn()}
+            />
+        );
+
+        expect(screen.getByRole('heading', { name: 'Bot Winner Wins' })).toBeInTheDocument();
+        const settlement = screen.getByRole('region', { name: 'Token settlement' });
+        expect(within(settlement).getByText('0.10 tokens buy-in · 0.20 tokens pot')).toBeInTheDocument();
+        const results = within(settlement).getByRole('list', { name: 'Token settlement results' });
+        const rows = within(results).getAllByRole('listitem');
+        expect(rows).toHaveLength(3);
+        expect(within(rows[0]).getByText('Practice seat')).toBeInTheDocument();
+        expect(within(rows[0]).getByText('No tokens exchanged')).toBeInTheDocument();
+        expect(within(rows[1]).getByText('Token gain')).toBeInTheDocument();
+        expect(within(rows[1]).getByText('0.20 tokens returned · net +0.10 tokens')).toBeInTheDocument();
+        expect(within(rows[2]).getByText('No return')).toBeInTheDocument();
+        expect(within(rows[2]).getByText('0.00 tokens returned · net -0.10 tokens')).toBeInTheDocument();
+    });
+
+    test('omits an absent token settlement and reports supplied failed data without guessing', () => {
+        const { rerender } = render(
+            <GameOverPodium
+                gameWinner="Cara"
+                finalScores={baseScores}
+                onRematch={vi.fn()}
+                onLobby={vi.fn()}
+            />
+        );
+
+        expect(screen.queryByRole('region', { name: 'Token settlement' })).not.toBeInTheDocument();
+
+        rerender(
+            <GameOverPodium
+                gameWinner="Cara"
+                finalScores={baseScores}
+                tokenSettlement={{ status: 'failed' }}
+                onRematch={vi.fn()}
+                onLobby={vi.fn()}
+            />
+        );
+
+        const settlement = screen.getByRole('region', { name: 'Token settlement' });
+        expect(within(settlement).getByRole('status')).toHaveTextContent('unavailable');
+        expect(within(settlement).queryByText(/NaN|undefined|Infinity/)).not.toBeInTheDocument();
+    });
+
     test('renders an accessible persistent three-player victory dialog', () => {
         const { container } = render(
             <GameOverPodium
