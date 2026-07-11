@@ -1,6 +1,6 @@
 // backend/src/core/constants.js
 
-const SERVER_VERSION = "12.9.1 Five-second settled recap hold";
+const SERVER_VERSION = "13.0.0 Accountable token ledger";
 
 const SUITS = { H: "Hearts", D: "Diamonds", C: "Clubs", S: "Spades" };
 const RANKS_ORDER = ["6", "7", "8", "9", "J", "Q", "K", "10", "A"];

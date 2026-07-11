@@ -10,7 +10,7 @@ const RECOVERY_STATEMENT_TIMEOUT_MS = 5000;
 // A live game may miss two scheduled heartbeats without becoming eligible for
 // recovery; the third missed interval is the earliest safe recovery boundary.
 const MIN_GRACE_HEARTBEAT_INTERVALS = 3;
-const RECOVERED_OUTCOME = 'Abandoned after server interruption - funded human buy-ins refunded';
+const RECOVERED_OUTCOME = 'Abandoned after server interruption - funded player buy-ins refunded';
 const MANUAL_REVIEW_OUTCOME = 'Abandoned after server interruption - manual ledger review required';
 const RECOVERED_STATUS = 'abandoned_refunded';
 const MANUAL_REVIEW_STATUS = 'manual_review';
@@ -27,6 +27,7 @@ const candidateQuery = `
         SELECT candidate.game_id
         FROM game_history candidate
         WHERE candidate.outcome = 'In Progress'
+          AND candidate.recovery_eligible IS TRUE
           AND COALESCE(candidate.last_activity_at, candidate.start_time)
               <= NOW() - ($1::bigint * INTERVAL '1 millisecond')
           AND NOT (candidate.game_id = ANY($2::int[]))
@@ -73,6 +74,9 @@ async function findAbandonedGameCandidates(pool, {
         startTime: row.start_time,
         lastActivityAt: row.last_activity_at,
         heartbeatOwnerId: row.heartbeat_owner_id || null,
+        // fundedHumanCount is retained for response compatibility with older
+        // maintenance tooling; persistent bot principals are now included.
+        fundedPlayerCount: Number(row.funded_human_count || 0),
         fundedHumanCount: Number(row.funded_human_count || 0),
         refundTotal: Number(row.refund_total || 0),
     }));
@@ -115,6 +119,7 @@ async function reconcileAbandonedGame(pool, gameId, {
                     end_time,
                     player_count,
                     heartbeat_owner_id,
+                    recovery_eligible,
                     reconciliation_status,
                     reconciled_at,
                     COALESCE(last_activity_at, start_time)
@@ -152,6 +157,22 @@ async function reconcileAbandonedGame(pool, gameId, {
             await client.query('COMMIT');
             transactionOpen = false;
             return { gameId: normalizedGameId, status: 'already_terminal', refunds: [] };
+        }
+
+        // Rows predating the hardened lifecycle cannot safely be classified.
+        // A completed historical loss and a genuinely abandoned game often
+        // have the exact same old shape: outcome="In Progress" plus one or
+        // more negative buy-ins. Never manufacture a refund from that
+        // ambiguous evidence.
+        if (game.recovery_eligible !== true) {
+            await client.query('COMMIT');
+            transactionOpen = false;
+            return {
+                gameId: normalizedGameId,
+                status: 'legacy_quarantined',
+                reason: 'pre_hardened_lifecycle',
+                refunds: [],
+            };
         }
 
         if (game.is_stale !== true) {

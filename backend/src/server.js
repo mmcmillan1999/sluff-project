@@ -17,6 +17,7 @@ const createAdminRoutes = require('./api/admin');
 const createFeedbackRoutes = require('./api/feedback');
 const createChatRoutes = require('./api/chat');
 const createDbTables = require('./data/createTables');
+const { ensureBotAccounts } = require('./data/botAccounts');
 const createPingRoutes = require('./api/ping');
 const createBotInsuranceStatsRoutes = require('./api/botInsuranceStats');
 const {
@@ -99,7 +100,8 @@ async function initializeApplication() {
     console.log('Database connection successful.');
     await createDbTables(pool);
 
-    const gameService = new GameService(io, pool);
+    const botAccounts = await ensureBotAccounts(pool);
+    const gameService = new GameService(io, pool, { botAccounts });
     const recoveryTiming = recoveryTimingFromEnvironment();
     recoveryMonitor = createAbandonedGameRecoveryMonitor({
         pool,

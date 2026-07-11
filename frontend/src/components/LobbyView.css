@@ -251,9 +251,8 @@
   /* -webkit-overflow-scrolling is deprecated in iOS 13+ */
 }
 
-/* Collapsible Section Toggles */
-.tables-toggle,
-.bulletin-toggle {
+/* Collapsible Section Toggle */
+.tables-toggle {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -269,13 +268,11 @@
   transition: background-color 0.2s;
 }
 
-.tables-toggle:hover,
-.bulletin-toggle:hover {
+.tables-toggle:hover {
   background-color: #252525;
 }
 
-.tables-toggle:focus,
-.bulletin-toggle:focus {
+.tables-toggle:focus {
   outline: 2px solid #4c9ffe;
   outline-offset: 2px;
 }
@@ -309,18 +306,6 @@
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(1vh); }
   to { opacity: 1; transform: translateY(0); }
-}
-
-/* Bulletin Section */
-.bulletin-section {
-  margin-bottom: 3vh;
-}
-
-#bulletin-content {
-  padding: 2vh;
-  background: #1f1f1f;
-  border-radius: var(--base-radius);
-  animation: fadeIn 0.3s ease;
 }
 
 /* =====================================================
@@ -518,10 +503,6 @@
   }
   
   .tables-section {
-    grid-column: 1;
-  }
-  
-  .bulletin-section {
     grid-column: 1;
   }
   
@@ -776,13 +757,6 @@
     overflow-y: auto;
   }
   
-  .bulletin-section {
-    grid-column: 3;
-    grid-row: 1;
-    max-height: 300px;
-    overflow-y: auto;
-  }
-
   .quickplay-section {
     grid-column: 2;
     grid-row: 1;
@@ -799,7 +773,7 @@
   /* Chat on desktop */
   .lobby-chat-container {
     grid-column: 3;
-    grid-row: 2;
+    grid-row: 1 / -1;
     position: static;
     height: auto;
     min-height: 400px;
@@ -817,9 +791,8 @@
     display: none; /* No minimize on desktop */
   }
   
-  /* Enhanced toggles for desktop */
-  .tables-toggle,
-  .bulletin-toggle {
+  /* Enhanced toggle for desktop */
+  .tables-toggle {
     padding: 15px 20px;
     margin-bottom: 15px;
     border-radius: 8px;
@@ -885,10 +858,14 @@
     grid-column: 1;
     grid-row: 2;
   }
-  
-  .bulletin-section {
+
+  .quickplay-section {
     grid-column: 1;
     grid-row: 1;
+  }
+
+  .desktop-sidebar {
+    display: none;
   }
   
   .lobby-chat-container {
@@ -1117,7 +1094,6 @@
 @media (prefers-reduced-motion: reduce) {
   .user-tokens.pulse-eligible,
   .table-grid,
-  #bulletin-content,
   .qp-card.qp-pending .qp-play-pill {
     animation: none !important;
     transition: none !important;

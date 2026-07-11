@@ -133,20 +133,24 @@ function allocateWeightedCents(totalCents, players, weightForPlayer) {
     return allocations;
 }
 
-function validateHumanPlayers(players) {
+function isFundedPlayer(player) {
+    return Number.isInteger(player?.userId) && player.userId > 0;
+}
+
+function validateFundedPlayers(players) {
     const seen = new Set();
     for (const player of players) {
         if (!Number.isInteger(player.userId) || player.userId <= 0) {
-            throw new TypeError(`Invalid funded human user id: ${player.userId}`);
+            throw new TypeError(`Invalid funded player user id: ${player.userId}`);
         }
-        if (seen.has(player.userId)) throw new Error(`Duplicate funded human user id: ${player.userId}`);
+        if (seen.has(player.userId)) throw new Error(`Duplicate funded player user id: ${player.userId}`);
         seen.add(player.userId);
     }
 }
 
-function normalHumanAllocations(humans, buyInCents) {
-    const rankings = rankPlayers(humans);
-    validateHumanPlayers(rankings);
+function normalFundedAllocations(fundedPlayers, buyInCents) {
+    const rankings = rankPlayers(fundedPlayers);
+    validateFundedPlayers(rankings);
     const entries = rankings.map((player, index) => ({
         player,
         cents: 0,
@@ -231,7 +235,7 @@ function normalHumanAllocations(humans, buyInCents) {
         return entries;
     }
 
-    throw new RangeError(`Unsupported funded human count: ${entries.length}`);
+    throw new RangeError(`Unsupported funded player count: ${entries.length}`);
 }
 
 function ordinal(rank) {
@@ -263,7 +267,7 @@ function buildTokenSettlement(players, buyInCents, allocationEntries) {
         || compareIdentity(left, right)
     ));
     const entries = orderedPlayers.map(player => {
-        const funded = player.isBot !== true;
+        const funded = isFundedPlayer(player);
         const grossReturnCents = funded
             ? (grossReturnsByUserId.get(String(player.userId)) || 0)
             : 0;
@@ -301,10 +305,10 @@ function payoutTypeFor(entry, buyInCents) {
 
 function buildNormalGameSettlement(table) {
     const players = normalizePlayers(table);
-    const humans = players.filter(player => !player.isBot);
+    const fundedPlayers = players.filter(isFundedPlayer);
     const buyInCents = tableCostCents(table.theme);
-    const allocations = normalHumanAllocations(humans, buyInCents);
-    const expectedPot = humans.length * buyInCents;
+    const allocations = normalFundedAllocations(fundedPlayers, buyInCents);
+    const expectedPot = fundedPlayers.length * buyInCents;
     assertExactPot(allocations, expectedPot, 'normal game');
 
     const gameWinnerName = actualWinnerName(players);
@@ -330,22 +334,23 @@ function buildNormalGameSettlement(table) {
         outcome: `Game Over! Winner: ${gameWinnerName}`,
         payouts,
         stats,
+        botUserIds: fundedPlayers.filter(player => player.isBot).map(player => player.userId),
         result: { gameWinnerName, payoutDetails, tokenSettlement },
     };
 }
 
 function buildDrawSettlement(table, requestedOutcome) {
     const players = normalizePlayers(table);
-    const humans = players.filter(player => !player.isBot);
-    validateHumanPlayers(humans);
+    const fundedPlayers = players.filter(isFundedPlayer);
+    validateFundedPlayers(fundedPlayers);
     const buyInCents = tableCostCents(table.theme);
-    const resolvedOutcome = requestedOutcome === 'split' && humans.length === 3 ? 'split' : 'wash';
+    const resolvedOutcome = requestedOutcome === 'split' && fundedPlayers.length === 3 ? 'split' : 'wash';
     const payoutCents = new Map();
 
     if (resolvedOutcome === 'wash') {
-        for (const player of humans) payoutCents.set(player.userId, buyInCents);
+        for (const player of fundedPlayers) payoutCents.set(player.userId, buyInCents);
     } else {
-        const ascending = [...humans].sort((left, right) => (
+        const ascending = [...fundedPlayers].sort((left, right) => (
             left.score - right.score || compareIdentity(left, right)
         ));
         const lowest = ascending[0];
@@ -367,8 +372,8 @@ function buildDrawSettlement(table, requestedOutcome) {
         }
     }
 
-    const entries = humans.map(player => ({ player, cents: payoutCents.get(player.userId) || 0 }));
-    assertExactPot(entries, humans.length * buyInCents, `draw ${resolvedOutcome}`);
+    const entries = fundedPlayers.map(player => ({ player, cents: payoutCents.get(player.userId) || 0 }));
+    assertExactPot(entries, fundedPlayers.length * buyInCents, `draw ${resolvedOutcome}`);
     const payouts = [];
     const summaryPayouts = {};
     for (const entry of entries) {
@@ -394,31 +399,32 @@ function buildDrawSettlement(table, requestedOutcome) {
         tokenSettlement: buildTokenSettlement(players, buyInCents, entries),
         finalScores: { ...(table.scores || {}) },
         message: resolvedOutcome === 'wash'
-            ? 'The game ended in a wash. Every funded human buy-in was returned.'
-            : 'The game ended in a split pot. Human payouts are based on score.',
+            ? 'The game ended in a wash. Every funded buy-in was returned.'
+            : 'The game ended in a split pot. Payouts are based on score.',
     };
     return {
         gameId: table.gameId,
         outcome: `Game Over! Draw (${resolvedOutcome})`,
         payouts,
-        stats: humans.map(player => ({ userId: player.userId, column: 'washes' })),
+        stats: fundedPlayers.map(player => ({ userId: player.userId, column: 'washes' })),
+        botUserIds: fundedPlayers.filter(player => player.isBot).map(player => player.userId),
         result: summary,
     };
 }
 
 function buildForfeitSettlement(table) {
     const players = normalizePlayers(table);
-    const humans = players.filter(player => !player.isBot);
-    validateHumanPlayers(humans);
+    const fundedPlayers = players.filter(isFundedPlayer);
+    validateFundedPlayers(fundedPlayers);
     const buyInCents = tableCostCents(table.theme);
     const forfeitingPlayer = players.find(player => player.playerName === table.forfeitingPlayerName);
-    const forfeitingHuman = humans.find(player => player.playerName === table.forfeitingPlayerName);
-    const recipients = humans.filter(player => player.playerName !== table.forfeitingPlayerName);
+    const forfeitingFundedPlayer = fundedPlayers.find(player => player.playerName === table.forfeitingPlayerName);
+    const recipients = fundedPlayers.filter(player => player.playerName !== table.forfeitingPlayerName);
     const payoutCents = new Map();
     const stats = [];
 
-    if (!forfeitingHuman) {
-        for (const player of humans) {
+    if (!forfeitingFundedPlayer) {
+        for (const player of fundedPlayers) {
             payoutCents.set(player.userId, buyInCents);
             stats.push({ userId: player.userId, column: 'washes' });
         }
@@ -431,15 +437,15 @@ function buildForfeitSettlement(table) {
                 stats.push({ userId: player.userId, column: 'wins' });
             }
         }
-        stats.push({ userId: forfeitingHuman.userId, column: 'losses' });
+        stats.push({ userId: forfeitingFundedPlayer.userId, column: 'losses' });
     }
 
-    const expectedPaidPot = forfeitingHuman && recipients.length === 0
+    const expectedPaidPot = forfeitingFundedPlayer && recipients.length === 0
         ? 0
-        : humans.length * buyInCents;
-    const entries = recipients.length === 0 && forfeitingHuman
+        : fundedPlayers.length * buyInCents;
+    const entries = recipients.length === 0 && forfeitingFundedPlayer
         ? []
-        : humans.filter(player => player !== forfeitingHuman).map(player => ({
+        : fundedPlayers.filter(player => player !== forfeitingFundedPlayer).map(player => ({
             player,
             cents: payoutCents.get(player.userId) || 0,
         }));
@@ -448,19 +454,19 @@ function buildForfeitSettlement(table) {
     const payoutDetails = {};
     const payouts = [];
     for (const entry of entries) {
-        payoutDetails[entry.player.userId] = forfeitingHuman
+        payoutDetails[entry.player.userId] = forfeitingFundedPlayer
             ? `You received ${formatCents(entry.cents)} tokens after ${table.forfeitingPlayerName} forfeited.`
-            : 'A bot forfeited. Your funded buy-in was returned.';
+            : 'An unfunded bot forfeited. Your funded buy-in was returned.';
         if (entry.cents > 0) {
             payouts.push({
                 userId: entry.player.userId,
-                type: forfeitingHuman ? 'forfeit_payout' : 'wash_payout',
+                type: forfeitingFundedPlayer ? 'forfeit_payout' : 'wash_payout',
                 amountCents: entry.cents,
                 description: `Payout after ${table.forfeitingPlayerName} forfeited game #${table.gameId}`,
             });
         }
     }
-    if (forfeitingHuman) payoutDetails[forfeitingHuman.userId] = 'You forfeited and lost your buy-in.';
+    if (forfeitingFundedPlayer) payoutDetails[forfeitingFundedPlayer.userId] = 'You forfeited and lost your buy-in.';
 
     const remainingPlayers = players.filter(player => player.playerName !== table.forfeitingPlayerName);
     const gameWinnerName = remainingPlayers.length
@@ -473,6 +479,7 @@ function buildForfeitSettlement(table) {
         outcome: `Game Over! ${table.forfeitingPlayerName} forfeited (${table.reason})`,
         payouts,
         stats,
+        botUserIds: fundedPlayers.filter(player => player.isBot).map(player => player.userId),
         result: {
             gameWinnerName,
             payoutDetails,

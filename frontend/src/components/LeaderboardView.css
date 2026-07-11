@@ -145,6 +145,24 @@
     text-overflow: ellipsis;
 }
 
+.leaderboard-username {
+    vertical-align: middle;
+}
+
+.bot-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 5px;
+    border: 1px solid rgba(255, 193, 7, 0.55);
+    border-radius: 999px;
+    color: #ffc107;
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.62em;
+    line-height: 1.35;
+    letter-spacing: 0.06em;
+    vertical-align: middle;
+}
+
 .leaderboard-table thead th {
     background-color: #212121;
     font-family: 'Oswald', sans-serif;

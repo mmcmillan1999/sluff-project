@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import './LobbyView.css';
-import Bulletin from './Bulletin';
+import BulletinTicker from './BulletinTicker';
 import LobbyTableCard from './LobbyTableCard';
 import LobbyChat from './LobbyChat';
 import SoundControls from './game/SoundControls';
@@ -31,7 +31,7 @@ export const deriveLobbyPlayerStats = (user = {}) => {
     };
 };
 
-const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQuickPlay, handleJoinTableAsSpectator, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowAdmin, handleShowFeedback, handleShowHowToPlay, handleResetTutorial, emitEvent, socket, handleOpenFeedbackModal, soundSettings }) => {
+const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQuickPlay, handleJoinTableAsSpectator, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowTokenLedger, handleShowBulletin, handleShowAdmin, handleShowFeedback, handleShowHowToPlay, handleResetTutorial, emitEvent, socket, handleOpenFeedbackModal, soundSettings }) => {
 
     const [activeTab, setActiveTab] = useState('');
     const [showMenu, setShowMenu] = useState(false);
@@ -39,7 +39,6 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
     const [tablesCollapsed, setTablesCollapsed] = useState(true);
     // Brief "seating you" feedback on the tapped Quick Play card.
     const [quickPlayPending, setQuickPlayPending] = useState(null);
-    const [bulletinCollapsed, setBulletinCollapsed] = useState(false);
     const [chatMessages, setChatMessages] = useState([]);
     const [chatMinimized, setChatMinimized] = useState(false);
     const [tutorialResetPending, setTutorialResetPending] = useState(false);
@@ -205,6 +204,12 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
                             Leaderboard
                             <span className="keyboard-shortcut">L</span>
                         </button>
+                        <button onClick={handleShowTokenLedger} className="quick-action-btn">
+                            Token Ledger
+                        </button>
+                        <button onClick={handleShowBulletin} className="quick-action-btn">
+                            Sluff Bulletin
+                        </button>
                         <button onClick={handleShowFeedback} className="quick-action-btn">
                             Feedback Repository
                         </button>
@@ -253,6 +258,8 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
                 <p className="tutorial-reset-error" role="alert">{tutorialResetError}</p>
             )}
             <button onClick={() => { handleShowLeaderboard(); setShowMenu(false); }} className="lobby-menu-button">Leaderboard</button>
+            <button onClick={() => { handleShowTokenLedger(); setShowMenu(false); }} className="lobby-menu-button">Token Ledger</button>
+            <button onClick={() => { handleShowBulletin(); setShowMenu(false); }} className="lobby-menu-button">Sluff Bulletin</button>
             <button onClick={() => { handleShowFeedback(); setShowMenu(false); }} className="lobby-menu-button">Feedback Repository</button>
             <button onClick={() => { handleOpenFeedbackModal(); setShowMenu(false); }} className="lobby-menu-button">Submit Feedback</button>
             <button onClick={() => { handleRequestFreeToken(); setShowMenu(false); }} className="lobby-menu-button">Request Free Token</button>
@@ -316,7 +323,9 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
                     </div>
                 </div>
             </header>
-            
+
+            <BulletinTicker onOpen={handleShowBulletin} />
+
             <main className="lobby-main">
                 {/* Desktop sidebar - only shown on desktop */}
                 {renderDesktopSidebar()}
@@ -401,26 +410,6 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
                                 )) : <p className="loading-text">Loading tables...</p>}
                             </div>
                         </>
-                    )}
-                </div>
-                
-                <div className="bulletin-section">
-                    <div
-                        className="bulletin-toggle"
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => setBulletinCollapsed(v => !v)}
-                        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setBulletinCollapsed(v => !v)}
-                        aria-expanded={!bulletinCollapsed}
-                        aria-controls="bulletin-content"
-                    >
-                        <span className="toggle-title">Bulletin</span>
-                        <span className="toggle-caret">{bulletinCollapsed ? '►' : '▼'}</span>
-                    </div>
-                    {!bulletinCollapsed && (
-                        <div id="bulletin-content">
-                            <Bulletin />
-                        </div>
                     )}
                 </div>
                 

@@ -159,8 +159,33 @@ async function runMercyTokenTests() {
     
     console.log('    ✓ Rate limiting test passed');
 
-    // Test 5: postTransaction input validation
-    console.log('  Test 5: postTransaction input validation');
+    // Test 5: Public/player mercy cannot be used for a bot principal.
+    console.log('  Test 5: Bot principals use only automatic mercy');
+    const mockPoolBot = createMockPool();
+    mockPoolBot.connect = async () => {
+        const client = await createMockPool().connect();
+        client.query = async (text, params) => {
+            mockPoolBot.queries.push({ text, params });
+            if (text.includes('FROM users') && text.includes('FOR UPDATE')) {
+                return { rows: [{ id: 123, is_bot: true }] };
+            }
+            if (text === 'BEGIN' || text === 'COMMIT' || text === 'ROLLBACK') return { rows: [] };
+            return { rows: [] };
+        };
+        return client;
+    };
+    const botResult = await transactionManager.handleMercyTokenRequest(mockPoolBot, 123, 'Mike Knight');
+    assert.strictEqual(botResult.success, false);
+    assert(botResult.error.includes('automatically'));
+    assert.strictEqual(
+        mockPoolBot.queries.filter(query => query.text.includes('INSERT INTO transactions')).length,
+        0,
+        'the public mercy path never credits a bot account',
+    );
+    assert(mockPoolBot.queries.some(query => query.text === 'ROLLBACK'));
+
+    // Test 6: postTransaction input validation
+    console.log('  Test 6: postTransaction input validation');
     const mockPool5 = createMockPool();
     
     // Test invalid userId

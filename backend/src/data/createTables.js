@@ -57,10 +57,15 @@ const createDbTables = async (pool) => {
                 wins INTEGER DEFAULT 0,
                 losses INTEGER DEFAULT 0,
                 washes INTEGER DEFAULT 0,
-                is_admin BOOLEAN DEFAULT FALSE
+                is_admin BOOLEAN DEFAULT FALSE,
+                is_bot BOOLEAN NOT NULL DEFAULT FALSE
             );
         `);
         
+        await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_bot BOOLEAN NOT NULL DEFAULT FALSE");
+        await pool.query("ALTER TABLE users ALTER COLUMN is_bot SET DEFAULT FALSE");
+        await pool.query("UPDATE users SET is_bot = FALSE WHERE is_bot IS NULL");
+        await pool.query("ALTER TABLE users ALTER COLUMN is_bot SET NOT NULL");
         await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE");
         await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token TEXT");
         await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token_expires TIMESTAMP WITH TIME ZONE");
@@ -84,6 +89,7 @@ const createDbTables = async (pool) => {
                 start_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 last_activity_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 heartbeat_owner_id VARCHAR(128),
+                recovery_eligible BOOLEAN NOT NULL DEFAULT TRUE,
                 end_time TIMESTAMP WITH TIME ZONE,
                 outcome TEXT,
                 reconciliation_status VARCHAR(50),
@@ -98,6 +104,13 @@ const createDbTables = async (pool) => {
         await pool.query("ALTER TABLE game_history ADD COLUMN IF NOT EXISTS last_activity_at TIMESTAMP WITH TIME ZONE");
         await pool.query("ALTER TABLE game_history ALTER COLUMN last_activity_at SET DEFAULT CURRENT_TIMESTAMP");
         await pool.query("ALTER TABLE game_history ADD COLUMN IF NOT EXISTS heartbeat_owner_id VARCHAR(128)");
+        // Legacy game rows cannot be distinguished reliably from completed
+        // losses because older code often left both as "In Progress" with only
+        // a buy-in in the ledger. Keep those rows NULL (quarantined), while the
+        // TRUE default makes every game created after this migration eligible
+        // for the hardened crash-recovery path.
+        await pool.query("ALTER TABLE game_history ADD COLUMN IF NOT EXISTS recovery_eligible BOOLEAN");
+        await pool.query("ALTER TABLE game_history ALTER COLUMN recovery_eligible SET DEFAULT TRUE");
         await pool.query("ALTER TABLE game_history ADD COLUMN IF NOT EXISTS reconciliation_status VARCHAR(50)");
         await pool.query("ALTER TABLE game_history ADD COLUMN IF NOT EXISTS reconciled_at TIMESTAMP WITH TIME ZONE");
         await pool.query("ALTER TABLE game_history ADD COLUMN IF NOT EXISTS reconciled_by VARCHAR(128)");
@@ -122,11 +135,64 @@ const createDbTables = async (pool) => {
 
         // Ensure transaction_time column exists (for existing databases)
         await pool.query("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS transaction_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP");
+        // The first production schema called the event-time column `timestamp`.
+        // When transaction_time was later added with a default, PostgreSQL gave
+        // every pre-existing row the migration timestamp. Restore the original
+        // event time only for clearly backfilled cohorts (two or more rows that
+        // share a later transaction_time), while leaving both the legacy column
+        // and every already-correct/new row untouched.
+        await pool.query(`
+            DO $migration$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = current_schema()
+                      AND table_name = 'transactions'
+                      AND column_name = 'timestamp'
+                ) THEN
+                    EXECUTE $repair$
+                        UPDATE transactions AS target
+                        SET transaction_time = target."timestamp"
+                        WHERE target."timestamp" IS NOT NULL
+                          AND (
+                              target.transaction_time IS NULL
+                              OR (
+                                  target.transaction_time > target."timestamp"
+                                  AND EXISTS (
+                                      SELECT 1
+                                      FROM transactions AS cohort
+                                      WHERE cohort.transaction_id <> target.transaction_id
+                                        AND cohort.transaction_time = target.transaction_time
+                                        AND cohort."timestamp" IS NOT NULL
+                                        AND cohort.transaction_time > cohort."timestamp"
+                                  )
+                              )
+                          )
+                    $repair$;
+                END IF;
+            END
+            $migration$;
+        `);
         await pool.query("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS idempotency_key TEXT");
         await pool.query(`
             CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_idempotency_key
             ON transactions (idempotency_key)
             WHERE idempotency_key IS NOT NULL
+        `);
+        await pool.query(`
+            CREATE INDEX IF NOT EXISTS idx_transactions_user_history
+            ON transactions (user_id, transaction_id DESC)
+        `);
+        await pool.query(`
+            CREATE INDEX IF NOT EXISTS idx_transactions_game_history
+            ON transactions (game_id, transaction_id)
+            WHERE game_id IS NOT NULL
+        `);
+        await pool.query(`
+            CREATE INDEX IF NOT EXISTS idx_transactions_mercy_history
+            ON transactions (user_id, transaction_time DESC)
+            WHERE transaction_type = 'free_token_mercy'
         `);
 
         await pool.query(`

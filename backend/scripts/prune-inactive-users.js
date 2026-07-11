@@ -61,6 +61,7 @@ const candidateQuery = `
         COALESCE(u.is_admin, FALSE) AS is_admin
     FROM users u
     WHERE COALESCE(u.wins, 0) + COALESCE(u.losses, 0) + COALESCE(u.washes, 0) < $1
+      AND COALESCE(u.is_bot, FALSE) = FALSE
       AND ($2::boolean OR COALESCE(u.is_admin, FALSE) = FALSE)
       AND NOT EXISTS (
           SELECT 1
@@ -88,6 +89,7 @@ const activeGameProtectedQuery = `
     JOIN game_history active_game
       ON active_game.game_id = active_transaction.game_id
     WHERE COALESCE(u.wins, 0) + COALESCE(u.losses, 0) + COALESCE(u.washes, 0) < $1
+      AND COALESCE(u.is_bot, FALSE) = FALSE
       AND ($2::boolean OR COALESCE(u.is_admin, FALSE) = FALSE)
       AND (
           active_game.outcome = 'In Progress'
@@ -104,6 +106,7 @@ const protectedAdminQuery = `
         TRUE AS is_admin
     FROM users
     WHERE COALESCE(wins, 0) + COALESCE(losses, 0) + COALESCE(washes, 0) < $1
+      AND COALESCE(is_bot, FALSE) = FALSE
       AND COALESCE(is_admin, FALSE) = TRUE
     ORDER BY games_played ASC, id ASC
 `;

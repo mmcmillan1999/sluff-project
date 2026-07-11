@@ -80,10 +80,12 @@ const admin = { id: 8, username: 'AdminTest', games_played: 0, is_admin: true };
 
 async function runTests() {
     assert.match(candidateQuery, /NOT EXISTS/i);
+    assert.match(candidateQuery, /COALESCE\(u\.is_bot, FALSE\)\s*=\s*FALSE/i);
     assert.match(candidateQuery, /active_game\.outcome\s*=\s*'In Progress'/i);
     assert.match(candidateQuery, /active_game\.reconciliation_status\s*=\s*'manual_review'/i);
     assert.match(activeGameProtectedQuery, /active_game\.outcome\s*=\s*'In Progress'/i);
     assert.match(activeGameProtectedQuery, /active_game\.reconciliation_status\s*=\s*'manual_review'/i);
+    assert.match(activeGameProtectedQuery, /COALESCE\(u\.is_bot, FALSE\)\s*=\s*FALSE/i);
     assert.deepStrictEqual(parseArgs([]), {
         execute: false,
         includeAdmins: false,

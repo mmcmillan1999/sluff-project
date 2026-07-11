@@ -17,11 +17,18 @@ const PlayerList = require('./PlayerList');
 const biddingHandler = require('./handlers/biddingHandler');
 const { serializeGameState } = require('../serialization/gameStateSerializer');
 const { createSettlementSnapshot } = require('../settlement/gameSettlement');
-
-const BOT_NAMES = ["Mike Knight", "Grandma Joe", "Grampa Blane", "Kimba", "Courtney Sr.", "Cliff"];
+const { BOT_NAMES } = require('../data/botAccounts');
 
 class GameEngine {
-    constructor(tableId, theme, tableName, emitLobbyUpdateCallback, tableType = 'private') {
+    constructor(
+        tableId,
+        theme,
+        tableName,
+        emitLobbyUpdateCallback,
+        tableType = 'private',
+        botAccounts = [],
+        botSeatLease = null,
+    ) {
         this.emitLobbyUpdateCallback = emitLobbyUpdateCallback || (() => {});
 
         this.tableId = tableId;
@@ -55,6 +62,23 @@ class GameEngine {
         this.dealer = null;
         this.internalTimers = {};
         this.bots = {};
+        // Production supplies persistent bot principals so bot seats participate
+        // in the same funded ledger and statistics as human seats. Keeping the
+        // empty-list fallback preserves lightweight engine construction in unit
+        // tests and local tools that do not have a database-backed bot roster.
+        this.botAccounts = Array.isArray(botAccounts)
+            ? botAccounts.filter(profile => (
+                Number.isInteger(profile?.id)
+                && profile.id > 0
+                && typeof profile.username === 'string'
+                && profile.username.length > 0
+            )).map(profile => ({ ...profile }))
+            : [];
+        this.botSeatLease = botSeatLease
+            && typeof botSeatLease.acquire === 'function'
+            && typeof botSeatLease.release === 'function'
+            ? botSeatLease
+            : null;
         this._nextBotId = -1;
         this.pendingBotAction = null;
         this._initializeNewRoundState();
@@ -193,18 +217,56 @@ class GameEngine {
         // explicitly entered its fourth-player search. Only the server-owned,
         // generation-checked fallback method below may cross this boundary.
         if (this.tableType === 'quickplay' && this.playerOrder.count >= 3 && !allowQuickPlayFourth) return;
-        const currentBotNames = new Set(Object.values(this.players).filter(p => p.isBot).map(p => p.playerName));
-        const availableNames = BOT_NAMES.filter(name => !currentBotNames.has(name));
-        if (availableNames.length === 0) return;
-        
-        const botName = availableNames[Math.floor(Math.random() * availableNames.length)];
-        const botId = this._nextBotId--;
-        
-        this.players[botId] = { userId: botId, playerName: botName, socketId: null, isSpectator: false, disconnected: false, isBot: true, tokens: 'N/A' };
-        this.bots[botId] = new BotPlayer(botId, botName, this);
-        if (!this.scores[botName]) this.scores[botName] = 120;
-        if (!this.playerOrder.includes(botId)) {
-            this.playerOrder.add(botId);
+        const currentBots = Object.values(this.players).filter(player => player.isBot);
+        const currentBotNames = new Set(currentBots.map(player => player.playerName));
+        const currentBotIds = new Set(currentBots.map(player => Number(player.userId)));
+        const availableProfiles = this.botAccounts.filter(profile => (
+            !currentBotIds.has(profile.id) && !currentBotNames.has(profile.username)
+        ));
+        const usePersistentProfile = this.botAccounts.length > 0;
+        let botName;
+        let botId;
+        let tokens;
+        let persistentLeaseAcquired = false;
+
+        if (usePersistentProfile) {
+            if (availableProfiles.length === 0) return;
+            const firstProfileIndex = Math.floor(Math.random() * availableProfiles.length);
+            let profile = null;
+            for (let offset = 0; offset < availableProfiles.length; offset += 1) {
+                const candidate = availableProfiles[(firstProfileIndex + offset) % availableProfiles.length];
+                if (!this.botSeatLease || this.botSeatLease.acquire(candidate.id)) {
+                    profile = candidate;
+                    persistentLeaseAcquired = Boolean(this.botSeatLease);
+                    break;
+                }
+            }
+            if (!profile) return;
+            botName = profile.username;
+            botId = profile.id;
+            tokens = profile.tokens;
+        } else {
+            const availableNames = BOT_NAMES.filter(name => !currentBotNames.has(name));
+            if (availableNames.length === 0) return;
+            botName = availableNames[Math.floor(Math.random() * availableNames.length)];
+            botId = this._nextBotId--;
+            tokens = 'N/A';
+        }
+
+        try {
+            this.players[botId] = { userId: botId, playerName: botName, socketId: null, isSpectator: false, disconnected: false, isBot: true, tokens };
+            this.bots[botId] = new BotPlayer(botId, botName, this);
+            if (!this.scores[botName]) this.scores[botName] = 120;
+            if (!this.playerOrder.includes(botId)) {
+                this.playerOrder.add(botId);
+            }
+        } catch (error) {
+            delete this.players[botId];
+            delete this.bots[botId];
+            delete this.scores[botName];
+            this.playerOrder.remove(botId);
+            if (persistentLeaseAcquired) this.botSeatLease.release(botId);
+            throw error;
         }
         if (this.playerOrder.count >= 3 && !this.gameStarted) this.state = 'Ready to Start';
         return this.players[botId];
@@ -266,11 +328,20 @@ class GameEngine {
         delete this.scores[botInfo.playerName];
         delete this.bots[normalizedBotId];
         delete this.players[normalizedBotId];
+        this._releasePersistentBotSeat(botInfo);
         if (this.qpFallbackBot?.userId === normalizedBotId) this.qpFallbackBot = null;
 
         this.playerMode = this.playerOrder.count;
         this.state = this.playerMode >= 3 ? "Ready to Start" : "Waiting for Players";
         return true;
+    }
+
+    _releasePersistentBotSeat(player) {
+        const userId = Number(player?.userId);
+        if (!player?.isBot || !Number.isInteger(userId) || userId <= 0 || !this.botSeatLease) {
+            return false;
+        }
+        return this.botSeatLease.release(userId);
     }
 
     removeBot() {
@@ -305,7 +376,10 @@ class GameEngine {
         }
         else if (terminalStates.includes(this.state)) {
             delete this.players[userId];
-            if (playerInfo.isBot) delete this.bots[userId];
+            if (playerInfo.isBot) {
+                delete this.bots[userId];
+                this._releasePersistentBotSeat(playerInfo);
+            }
             this.playerOrder.remove(userId);
         }
         else if (this.gameId) {
@@ -313,7 +387,10 @@ class GameEngine {
         }
         else if (safeLeaveStates.includes(this.state) || playerInfo.isSpectator) {
             delete this.players[userId];
-            if (playerInfo.isBot) delete this.bots[userId];
+            if (playerInfo.isBot) {
+                delete this.bots[userId];
+                this._releasePersistentBotSeat(playerInfo);
+            }
             this.playerOrder.remove(userId);
         }
     }
@@ -327,7 +404,10 @@ class GameEngine {
             player.socketId = null;
         } else if (!this.gameStarted || player.isSpectator) {
             delete this.players[userId];
-            if (player.isBot) delete this.bots[userId];
+            if (player.isBot) {
+                delete this.bots[userId];
+                this._releasePersistentBotSeat(player);
+            }
             this.playerOrder.remove(userId);
         } else {
             console.log(`[${this.tableId}] Player ${player.playerName} has disconnected.`);
@@ -431,7 +511,15 @@ class GameEngine {
             type: 'START_GAME_TRANSACTIONS',
             payload: { 
                 table: { tableId: this.tableId, theme: this.theme, playerMode: this.playerMode },
-                playerIds: startRoster.filter(player => !player.isBot).map(player => player.userId),
+                // Positive ids are persistent principals, including production
+                // bots. Negative ids are the intentionally unfunded legacy/test
+                // bot fallback used when no persistent roster is supplied.
+                playerIds: startRoster
+                    .filter(player => Number.isInteger(player.userId) && player.userId > 0)
+                    .map(player => player.userId),
+                botPlayerIds: startRoster
+                    .filter(player => player.isBot && Number.isInteger(player.userId) && player.userId > 0)
+                    .map(player => player.userId),
             },
             onSuccess: (gameId, updatedTokens) => {
                 this.gameStartPending = false;
@@ -467,8 +555,15 @@ class GameEngine {
                 // preserved only while commit was possible; after rollback it
                 // must not remain as a countable/chargeable ghost seat.
                 for (const userId of playersToRemove) {
-                    delete this.players[userId];
-                    this.playerOrder.remove(userId);
+                    const player = this.players[userId];
+                    if (player?.isBot) {
+                        // removeBotPlayer clears players, playerOrder, scores,
+                        // bots, and any fallback marker as one operation.
+                        this.removeBotPlayer(userId);
+                    } else {
+                        delete this.players[userId];
+                        this.playerOrder.remove(userId);
+                    }
                 }
                 // A failed fallback start must not strand a bot in the reserved
                 // fourth seat. Remove exactly the generation-bound fallback;
@@ -618,6 +713,7 @@ class GameEngine {
                 this.playerOrder.remove(parseInt(userId, 10));
                 if (this.players[userId].isBot) {
                     delete this.bots[userId];
+                    this._releasePersistentBotSeat(this.players[userId]);
                 }
                 delete this.players[userId];
             }

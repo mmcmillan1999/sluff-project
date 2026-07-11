@@ -2,6 +2,7 @@ const CURRENT_USER_QUERY = `
     SELECT id, username, is_admin
     FROM users
     WHERE id = $1
+      AND COALESCE(is_bot, FALSE) = FALSE
 `;
 
 async function loadCurrentUserByTokenId(pool, tokenUser) {

@@ -2,6 +2,9 @@ const path = require('path');
 
 const suites = [
     { name: 'BotPlayer', file: './bot.test.js' },
+    { name: 'persistent bot accounts', file: './botAccounts.test.js' },
+    { name: 'funded bot accounting', file: './fundedBots.test.js' },
+    { name: 'bot credential isolation', file: './botAuthentication.test.js' },
     { name: 'game logic', file: './gameLogic.unit.test.js' },
     { name: 'legal moves', file: './legalMoves.test.js' },
     { name: 'mercy tokens', file: './mercyToken.test.js', exportName: 'runMercyTokenTests' },
@@ -10,9 +13,11 @@ const suites = [
     { name: 'quick play', file: './quickPlay.test.js' },
     { name: 'four-player mode', file: './fourPlayer.test.js' },
     { name: 'leaderboard privacy', file: './leaderboard.test.js' },
+    { name: 'token ledger', file: './tokenLedger.test.js' },
     { name: 'inactive-user maintenance', file: './pruneInactiveUsers.test.js' },
     { name: 'database backup snapshot', file: './backupDatabase.test.js' },
     { name: 'abandoned-game crash recovery', file: './abandonedGameRecovery.test.js' },
+    { name: 'token accounting audit', file: './tokenAccountingAudit.test.js' },
     { name: 'viewer-safe game state', file: './gameStateSerializer.test.js' },
     { name: 'backend integrity', file: './backendIntegrity.test.js' },
     { name: 'atomic game settlement', file: './gameSettlementIntegrity.test.js' },

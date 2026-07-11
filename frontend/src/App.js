@@ -6,6 +6,8 @@ import AuthContainer from "./components/AuthContainer.js";
 import LobbyView from "./components/LobbyView.js";
 import GameTableView from "./components/GameTableView.js";
 import LeaderboardView from "./components/LeaderboardView.js";
+import TokenLedgerView from "./components/TokenLedgerView.js";
+import BulletinView from "./components/BulletinView.js";
 import MercyWindow from "./components/MercyWindow.js";
 import AdminView from "./components/AdminView.js";
 import FeedbackModal from "./components/FeedbackModal.js";
@@ -563,11 +565,15 @@ function App() {
                 {(() => {
                     switch (view) {
                         case 'lobby':
-                            return <LobbyView user={user} lobbyThemes={lobbyThemes} serverVersion={serverVersion} handleJoinTable={handleJoinTable} handleQuickPlay={handleQuickPlay} handleJoinTableAsSpectator={handleJoinTableAsSpectator} handleLogout={handleLogout} handleRequestFreeToken={handleRequestFreeToken} handleShowLeaderboard={() => setView('leaderboard')} handleShowAdmin={handleShowAdmin} handleShowFeedback={() => setView('feedback')} handleShowHowToPlay={handleShowHowToPlay} handleResetTutorial={handleResetTutorial} errorMessage={errorMessage} emitEvent={emitEvent} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} soundSettings={soundSettings} />;
+                            return <LobbyView user={user} lobbyThemes={lobbyThemes} serverVersion={serverVersion} handleJoinTable={handleJoinTable} handleQuickPlay={handleQuickPlay} handleJoinTableAsSpectator={handleJoinTableAsSpectator} handleLogout={handleLogout} handleRequestFreeToken={handleRequestFreeToken} handleShowLeaderboard={() => setView('leaderboard')} handleShowTokenLedger={() => setView('tokenLedger')} handleShowBulletin={() => setView('bulletin')} handleShowAdmin={handleShowAdmin} handleShowFeedback={() => setView('feedback')} handleShowHowToPlay={handleShowHowToPlay} handleResetTutorial={handleResetTutorial} errorMessage={errorMessage} emitEvent={emitEvent} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} soundSettings={soundSettings} />;
                         case 'gameTable':
                             return currentTableState ? <GameTableView user={user} playerId={user.id} currentTableState={currentTableState} handleLeaveTable={handleLeaveTable} handleLogout={handleLogout} handleShowHowToPlay={handleShowHowToPlay} errorMessage={errorMessage} emitEvent={emitEvent} playSound={playSound} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} soundSettings={soundSettings} tutorialState={{ tutorialVersion: Number(user.tutorial_version) || 0, activeVersion: Number(user.tutorial_active_version) || 0, gamesPlayed: Number(user.games_played) || 0 }} onTutorialAction={handleTutorialAction} /> : <div>Loading table...</div>;
                         case 'leaderboard':
                             return <LeaderboardView user={user} onReturnToLobby={handleReturnToLobby} handleResetAllTokens={handleResetAllTokens} handleShowAdmin={handleShowAdmin} />;
+                        case 'tokenLedger':
+                            return <TokenLedgerView onReturnToLobby={handleReturnToLobby} />;
+                        case 'bulletin':
+                            return <BulletinView onReturnToLobby={handleReturnToLobby} />;
                         case 'feedback':
                             return <FeedbackView user={user} onReturnToLobby={handleReturnToLobby} />;
                         case 'admin':

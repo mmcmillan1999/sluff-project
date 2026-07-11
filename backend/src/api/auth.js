@@ -1,7 +1,6 @@
 // backend/src/api/auth.js
 
 const express = require('express');
-const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { sendEmail } = require('../services/emailService');
 const requireAuth = require('../middleware/requireAuth');
@@ -9,6 +8,10 @@ const {
     applyTutorialAction,
     playerProgressFields,
 } = require('../services/tutorialProgress');
+const {
+    parseLedgerPageOptions,
+    readTokenLedgerPage,
+} = require('../data/tokenLedger');
 
 const PROFILE_COLUMNS = `
     id, username, email, created_at, wins, losses, washes,
@@ -37,6 +40,7 @@ function publicUserProfile(user, tokens) {
 }
 
 module.exports = function(pool, bcrypt, jwt, io) {
+    const router = express.Router();
     const checkAuth = requireAuth(pool, jwt);
 
     // REGISTRATION ROUTE
@@ -127,6 +131,7 @@ module.exports = function(pool, bcrypt, jwt, io) {
                        wins, losses, washes, tutorial_version, tutorial_active_version
                 FROM users
                 WHERE email = $1
+                  AND COALESCE(is_bot, FALSE) = FALSE
             `;
             const userResult = await pool.query(userQuery, [email]);
 
@@ -197,6 +202,24 @@ module.exports = function(pool, bcrypt, jwt, io) {
         }
     });
 
+    // Account owners can inspect the exact entries used to calculate their
+    // token balance. User ids from the request are intentionally ignored: the
+    // freshly hydrated authenticated account is the only ledger in scope.
+    router.get('/token-ledger', checkAuth, async (req, res) => {
+        try {
+            const options = parseLedgerPageOptions(req.query);
+            const page = await readTokenLedgerPage(pool, Number(req.user.id), options);
+            res.set('Cache-Control', 'private, no-store');
+            return res.json(page);
+        } catch (error) {
+            if (error.statusCode === 400) {
+                return res.status(400).json({ message: error.message });
+            }
+            console.error('Token-ledger load error:', error);
+            return res.status(500).json({ message: 'Unable to load token history.' });
+        }
+    });
+
     for (const action of ['start', 'complete', 'skip', 'reset']) {
         router.post(`/tutorial/${action}`, checkAuth, async (req, res) => {
             try {
@@ -221,7 +244,11 @@ module.exports = function(pool, bcrypt, jwt, io) {
         try {
             await client.query('BEGIN');
             
-            const findUserQuery = 'SELECT * FROM users WHERE verification_token = $1';
+            const findUserQuery = `
+                SELECT * FROM users
+                WHERE verification_token = $1
+                  AND COALESCE(is_bot, FALSE) = FALSE
+            `;
             const userResult = await client.query(findUserQuery, [token]);
 
             if (userResult.rows.length === 0) {
@@ -263,7 +290,12 @@ module.exports = function(pool, bcrypt, jwt, io) {
         
         const client = await pool.connect();
         try {
-            const userResult = await client.query('SELECT * FROM users WHERE email = $1', [email]);
+            const userResult = await client.query(
+                `SELECT * FROM users
+                 WHERE email = $1
+                   AND COALESCE(is_bot, FALSE) = FALSE`,
+                [email],
+            );
 
             if (userResult.rows.length > 0) {
                 const user = userResult.rows[0];
@@ -314,7 +346,12 @@ module.exports = function(pool, bcrypt, jwt, io) {
         try {
             await client.query('BEGIN');
             
-            const userResult = await client.query('SELECT * FROM users WHERE password_reset_token = $1', [token]);
+            const userResult = await client.query(
+                `SELECT * FROM users
+                 WHERE password_reset_token = $1
+                   AND COALESCE(is_bot, FALSE) = FALSE`,
+                [token],
+            );
             
             if (userResult.rows.length === 0) {
                 return res.status(400).json({ message: "Invalid or expired password reset token." });
@@ -362,7 +399,12 @@ module.exports = function(pool, bcrypt, jwt, io) {
 
         const client = await pool.connect();
         try {
-            const userResult = await client.query('SELECT * FROM users WHERE email = $1', [email]);
+            const userResult = await client.query(
+                `SELECT * FROM users
+                 WHERE email = $1
+                   AND COALESCE(is_bot, FALSE) = FALSE`,
+                [email],
+            );
 
             if (userResult.rows.length > 0) {
                 const user = userResult.rows[0];

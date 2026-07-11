@@ -30,9 +30,17 @@
     );
 
     class GameService {
-        constructor(io, pool) {
+        constructor(io, pool, { botAccounts = [] } = {}) {
             this.io = io;
             this.pool = pool;
+            this.botAccounts = Array.isArray(botAccounts) ? botAccounts : [];
+            // Process-local seat ownership prevents one persistent bot account
+            // from acting at multiple tables in this server instance. Database
+            // row locks still protect its balance, but a rolling deploy with
+            // overlapping processes can temporarily have one lease per process;
+            // cross-process leasing is intentionally outside this safeguard.
+            this.botSeatLeases = new Map();
+            this.botSeatLeaseEpoch = 0;
             this.engines = {};
             this.qpGenerationCounter = 0;
             this.terminalCleanupTimers = {};
@@ -52,6 +60,13 @@
         }
 
         _initializeEngines() {
+            // Every full engine generation gets fresh opaque owners. Stale
+            // callbacks from discarded engines therefore cannot release a
+            // lease acquired by the replacement generation.
+            if (!(this.botSeatLeases instanceof Map)) this.botSeatLeases = new Map();
+            if (!Number.isSafeInteger(this.botSeatLeaseEpoch)) this.botSeatLeaseEpoch = 0;
+            this.botSeatLeases.clear();
+            this.botSeatLeaseEpoch += 1;
             let tableCounter = 1;
             THEMES.forEach(theme => {
                 for (let i = 0; i < theme.count; i++) {
@@ -59,7 +74,15 @@
                     const tableNumber = i + 1;
                     const tableName = `${theme.name} #${tableNumber}`;
                     const processTimerEffects = (effects = []) => this._executeEffects(tableId, effects);
-                    this.engines[tableId] = new GameEngine(tableId, theme.id, tableName, processTimerEffects, 'private');
+                    this.engines[tableId] = new GameEngine(
+                        tableId,
+                        theme.id,
+                        tableName,
+                        processTimerEffects,
+                        'private',
+                        this.botAccounts,
+                        this._createBotSeatLeaseController(tableId),
+                    );
                     tableCounter++;
                 }
             });
@@ -71,12 +94,42 @@
                     const tableId = `qp-${theme.id}-${i}`;
                     const tableName = `${theme.name} Quick Play`;
                     const processTimerEffects = (effects = []) => this._executeEffects(tableId, effects);
-                    this.engines[tableId] = new GameEngine(tableId, theme.id, tableName, processTimerEffects, 'quickplay');
+                    this.engines[tableId] = new GameEngine(
+                        tableId,
+                        theme.id,
+                        tableName,
+                        processTimerEffects,
+                        'quickplay',
+                        this.botAccounts,
+                        this._createBotSeatLeaseController(tableId),
+                    );
                     this.engines[tableId].qpGeneration = ++this.qpGenerationCounter;
                 }
             });
             this.qpTimers = {};
             console.log(`${Object.keys(this.engines).length} in-memory game engines initialized (${tableCounter - 1} private + quick-play pool).`);
+        }
+
+        _createBotSeatLeaseController(tableId) {
+            const owner = Object.freeze({
+                tableId,
+                epoch: this.botSeatLeaseEpoch,
+                nonce: Symbol(`bot-seat:${tableId}`),
+            });
+            return Object.freeze({
+                acquire: (botUserId) => {
+                    if (!Number.isInteger(botUserId) || botUserId <= 0) return false;
+                    const currentOwner = this.botSeatLeases.get(botUserId);
+                    if (currentOwner && currentOwner !== owner) return false;
+                    this.botSeatLeases.set(botUserId, owner);
+                    return true;
+                },
+                release: (botUserId) => {
+                    if (this.botSeatLeases.get(botUserId) !== owner) return false;
+                    this.botSeatLeases.delete(botUserId);
+                    return true;
+                },
+            });
         }
 
         getEngineById(tableId) {
@@ -1076,6 +1129,16 @@
                     case 'START_GAME_TRANSACTIONS': {
                         let startResult;
                         try {
+                            // Mercy is its own durable ledger event. Grant it
+                            // before the buy-in transaction so an underfunded
+                            // bot still receives its hourly +1 even when the
+                            // selected table remains too expensive to enter.
+                            for (const botUserId of effect.payload.botPlayerIds || []) {
+                                await transactionManager.handleAutomaticBotMercyToken(
+                                    this.pool,
+                                    botUserId,
+                                );
+                            }
                             startResult = await transactionManager.startGameTransaction(
                                 this.pool,
                                 effect.payload.table,

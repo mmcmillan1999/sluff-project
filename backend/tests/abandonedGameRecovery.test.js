@@ -48,6 +48,7 @@ function createRecoveryPool({
             startTime: new Date(game.startTime || new Date(now).getTime() - (12 * HOUR)),
             lastActivityAt: new Date(game.lastActivityAt || game.startTime || new Date(now).getTime() - (12 * HOUR)),
             heartbeatOwnerId: game.heartbeatOwnerId || null,
+            recoveryEligible: game.recoveryEligible !== false && game.recoveryEligible !== null,
             endTime: game.endTime || null,
             outcome: game.outcome || 'In Progress',
             reconciliationStatus: game.reconciliationStatus || null,
@@ -116,6 +117,7 @@ function createRecoveryPool({
                 const rows = [...state.games.values()]
                     .filter(game => (
                         game.outcome === 'In Progress'
+                        && game.recoveryEligible === true
                         && stale(game, graceMs)
                         && !excludedIds.has(game.gameId)
                         && !lockedGames.has(game.gameId)
@@ -199,6 +201,7 @@ function createRecoveryPool({
                                 end_time: game.endTime,
                                 player_count: game.playerCount,
                                 heartbeat_owner_id: game.heartbeatOwnerId,
+                                recovery_eligible: game.recoveryEligible,
                                 reconciliation_status: game.reconciliationStatus,
                                 reconciled_at: game.reconciledAt,
                                 is_stale: stale(game, params[1]),
@@ -380,7 +383,7 @@ async function testConcurrentExactlyOnceLedgerRefunds() {
     ]);
 
     const refunds = pool.state.transactions.filter(transaction => transaction.type === 'abandoned_refund');
-    assert.equal(refunds.length, 2, 'one aggregated refund is written per funded human');
+    assert.equal(refunds.length, 2, 'one aggregated refund is written per funded player');
     assert.deepEqual(
         refunds.map(refund => [refund.userId, refund.amount]).sort((a, b) => a[0] - b[0]),
         [[1, 0.4], [2, 0.4]],
@@ -532,6 +535,30 @@ async function testRecentTerminalAndSuspiciousLedgersAreSafe() {
     assert.equal(missingUser.reason, 'funded_user_missing');
 }
 
+async function testLegacyGamesAreQuarantinedWithoutRefunds() {
+    const pool = createRecoveryPool({
+        games: [oldGame(26, { recoveryEligible: null })],
+        users: [1],
+        transactions: [buyIn(26, 1, -20)],
+    });
+
+    const dryRun = await reconcileAbandonedGames(pool, {
+        execute: false,
+        graceMs: DEFAULT_GRACE_MS,
+    });
+    assert.deepEqual(dryRun.candidates, [], 'legacy rows never enter automatic recovery batches');
+
+    const directAttempt = await reconcileAbandonedGame(pool, 26, { graceMs: DEFAULT_GRACE_MS });
+    assert.equal(directAttempt.status, 'legacy_quarantined');
+    assert.equal(directAttempt.reason, 'pre_hardened_lifecycle');
+    assert.equal(pool.state.games.get(26).outcome, 'In Progress');
+    assert.equal(
+        pool.state.transactions.some(row => row.gameId === 26 && row.type === 'abandoned_refund'),
+        false,
+        'an ambiguous historical loss is never converted into a refund',
+    );
+}
+
 async function testRollbackAndLostCommitResponseAreIdempotent() {
     const failingPool = createRecoveryPool({
         games: [oldGame(30)],
@@ -661,11 +688,22 @@ async function testSchemaUpgradeAndCliSafety() {
     const activityDefaultIndex = queries.indexOf(
         'ALTER TABLE game_history ALTER COLUMN last_activity_at SET DEFAULT CURRENT_TIMESTAMP',
     );
+    const recoveryEligibilityAddIndex = queries.indexOf(
+        'ALTER TABLE game_history ADD COLUMN IF NOT EXISTS recovery_eligible BOOLEAN',
+    );
+    const recoveryEligibilityDefaultIndex = queries.indexOf(
+        'ALTER TABLE game_history ALTER COLUMN recovery_eligible SET DEFAULT TRUE',
+    );
     const activityBackfillIndex = queries.indexOf(
         'UPDATE game_history SET last_activity_at = clock_timestamp() WHERE last_activity_at IS NULL',
     );
     assert.ok(queries.some(query => query.includes('last_activity_at TIMESTAMP WITH TIME ZONE')));
     assert.ok(queries.some(query => query.includes('heartbeat_owner_id VARCHAR(128)')));
+    assert.ok(recoveryEligibilityAddIndex >= 0, 'legacy recovery eligibility starts nullable');
+    assert.ok(
+        recoveryEligibilityDefaultIndex > recoveryEligibilityAddIndex,
+        'only games created after the migration inherit recovery eligibility',
+    );
     assert.ok(queries.some(query => query.includes('reconciliation_status VARCHAR(50)')));
     assert.ok(queries.some(query => query.includes('idempotency_key TEXT')));
     assert.ok(queries.some(query => query.includes('idx_transactions_idempotency_key')));
@@ -822,6 +860,7 @@ async function runAbandonedGameRecoveryTests() {
     await testConcurrentExactlyOnceLedgerRefunds();
     await testLockedRowsDoNotBlockStartupRecovery();
     await testRecentTerminalAndSuspiciousLedgersAreSafe();
+    await testLegacyGamesAreQuarantinedWithoutRefunds();
     await testRollbackAndLostCommitResponseAreIdempotent();
     await testMonitorHeartbeatsBeforeRecoveryAndHandlesBotsOnly();
     testMonitorRejectsUnsafeRecoveryTiming();

@@ -35,8 +35,9 @@ function createJwtStub(payloads) {
 
 function createHttpPool() {
     const users = new Map([
-        [1, { id: 1, username: 'CurrentName', is_admin: false }],
-        [2, { id: 2, username: 'CurrentAdmin', is_admin: true }],
+        [1, { id: 1, username: 'CurrentName', is_admin: false, is_bot: false }],
+        [2, { id: 2, username: 'CurrentAdmin', is_admin: true, is_bot: false }],
+        [3, { id: 3, username: 'Mike Knight', is_admin: false, is_bot: true }],
     ]);
     const state = {
         users,
@@ -54,6 +55,9 @@ function createHttpPool() {
 
             if (/SELECT\s+id,\s*username,\s*is_admin\s+FROM\s+users\s+WHERE\s+id\s*=\s*\$1/i.test(sql)) {
                 const user = users.get(Number(params[0]));
+                if (user?.is_bot && /COALESCE\(is_bot, FALSE\)\s*=\s*FALSE/i.test(sql)) {
+                    return { rows: [] };
+                }
                 return { rows: user ? [{ ...user }] : [] };
             }
             if (/FROM\s+users\s+u/i.test(sql)) {
@@ -97,6 +101,7 @@ async function testHttpAuthenticationHydration() {
         'deleted-token': { id: 999, username: 'DeletedName', is_admin: true },
         'stale-user-token': { id: 1, username: 'TokenName', is_admin: true },
         'stale-non-admin-token': { id: 2, username: 'OldAdminName', is_admin: false },
+        'bot-token': { id: 3, username: 'Mike Knight', is_admin: false },
     });
     const io = { emit() {} };
     const app = express();
@@ -117,6 +122,12 @@ async function testHttpAuthenticationHydration() {
         });
         assert.equal(deletedResponse.status, 401, 'a valid token cannot outlive its deleted account');
         assert.equal(state.leaderboardReads, 0, 'deleted accounts are rejected before protected data is read');
+
+        const botResponse = await fetch(`${baseUrl}/leaderboard`, {
+            headers: { Authorization: 'Bearer bot-token' },
+        });
+        assert.equal(botResponse.status, 401, 'server-owned bot identities cannot authenticate on user routes');
+        assert.equal(state.leaderboardReads, 0, 'bot principals are rejected before protected data is read');
 
         const chatResponse = await fetch(`${baseUrl}/chat`, {
             method: 'POST',

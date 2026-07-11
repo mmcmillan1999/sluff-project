@@ -54,7 +54,7 @@ Options:
   --help, -h          Show this help.
 
 Without --execute this command is a dry run. Refunds are derived only from
-persisted negative human buy-in ledger rows. Games with unexpected ledger
+persisted negative funded-player buy-in ledger rows. Games with unexpected ledger
 activity are quarantined for manual review instead of being overpaid.`);
 }
 
@@ -62,7 +62,7 @@ function printCandidate(candidate, output = console) {
     const total = candidate.refundTotal.toFixed(2);
     output.log(
         `  game #${candidate.gameId} table=${candidate.tableId || 'unknown'} `
-        + `last_activity=${candidate.lastActivityAt} funded_humans=${candidate.fundedHumanCount} `
+        + `last_activity=${candidate.lastActivityAt} funded_players=${candidate.fundedPlayerCount ?? candidate.fundedHumanCount} `
         + `refund_total=${total}`,
     );
 }

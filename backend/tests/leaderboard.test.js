@@ -35,6 +35,7 @@ async function runLeaderboardTests() {
                     losses: 3,
                     washes: 1,
                     is_admin: true,
+                    is_bot: true,
                     tokens: '12.50',
                 }],
             };
@@ -91,6 +92,7 @@ async function runLeaderboardTests() {
             wins: 8,
             losses: 3,
             washes: 1,
+            isBot: true,
             tokens: '12.50',
         }]);
 
@@ -105,6 +107,7 @@ async function runLeaderboardTests() {
         assert(/u\.wins/i.test(selectClause));
         assert(/u\.losses/i.test(selectClause));
         assert(/u\.washes/i.test(selectClause));
+        assert(/u\.is_bot/i.test(selectClause));
         assert(/\btokens\b/i.test(selectClause));
 
         assert.deepStrictEqual(verifyCalls, [

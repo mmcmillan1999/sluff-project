@@ -9,6 +9,7 @@ const transactionManager = require('../data/transactionManager');
 
 const getSuit = (cardStr) => (cardStr ? cardStr.slice(-1) : null);
 const getRank = (cardStr) => (cardStr ? cardStr.slice(0, -1) : null);
+const isFundedPlayer = player => Number.isInteger(player?.userId) && player.userId > 0;
 
 const calculateCardPoints = (cardsArray) => {
     if (!cardsArray || cardsArray.length === 0) return 0;
@@ -43,16 +44,16 @@ function calculateForfeitPayout(table, forfeitingPlayerName) {
     const forfeitingPlayer = Object.values(table.players).find(p => p.playerName === forfeitingPlayerName);
     const remainingPlayers = Object.values(table.players).filter(p => 
         !p.isSpectator && 
-        !p.isBot &&
+        isFundedPlayer(p) &&
         p.playerName !== forfeitingPlayerName
     );
 
     if (remainingPlayers.length === 0) return {};
 
     const tableBuyIn = TABLE_COSTS[table.theme] || 0;
-    // Bots do not fund a buy-in, so a bot forfeit can only return the human
-    // players' own stakes; it cannot mint an extra buy-in.
-    const forfeitedPot = forfeitingPlayer?.isBot ? 0 : tableBuyIn;
+    // Negative-id fallback bots are unfunded. Persistent positive-id bots own
+    // the same stake as every other account.
+    const forfeitedPot = isFundedPlayer(forfeitingPlayer) ? tableBuyIn : 0;
     const totalScoreOfRemaining = remainingPlayers.reduce((sum, player) => sum + (table.scores[player.playerName] || 0), 0);
     
     const payoutDetails = {};
@@ -85,7 +86,7 @@ function calculateForfeitPayout(table, forfeitingPlayerName) {
 function calculateDrawSplitPayout(table) {
     const tableBuyIn = TABLE_COSTS[table.theme] || 0;
     const playersInOrder = Object.values(table.players)
-        .filter(p => !p.isSpectator && !p.isBot)
+        .filter(p => !p.isSpectator && isFundedPlayer(p))
         .map(p => ({ name: p.playerName, score: table.scores[p.playerName] || 0, userId: p.userId }))
         .sort((a, b) => a.score - b.score);
 
@@ -226,7 +227,7 @@ async function handleGameOver(table, transactionFn, statUpdateFn) {
 
         const finalPlayerScores = playerOrderActive
             .map(id => players[id])
-            .filter(p => p && !p.isBot)
+            .filter(isFundedPlayer)
             .map(p => ({ name: p.playerName, score: scores[p.playerName], userId: p.userId }))
             .sort((a, b) => b.score - a.score);
         
@@ -283,13 +284,13 @@ async function handleDrawGameOver(table, outcome, transactionFn, statUpdateFn) {
         finalScores: table.scores,
     };
 
-    const humanPlayers = Object.values(table.players).filter(p => !p.isBot && !p.isSpectator);
+    const fundedPlayers = Object.values(table.players).filter(p => !p.isSpectator && isFundedPlayer(p));
     const statPromises = [];
     const transactionPromises = [];
 
     if (outcome === 'wash') {
         summaryData.message = "The game has ended in a wash. All buy-ins have been returned.";
-        for (const player of humanPlayers) {
+        for (const player of fundedPlayers) {
             summaryData.payouts[player.playerName] = { totalReturn: tableCost };
             transactionPromises.push(transactionFn({ userId: player.userId, gameId, type: 'wash_payout', amount: tableCost, description: `Draw (Wash) - Buy-in returned` }));
             statPromises.push(statUpdateFn("UPDATE users SET washes = washes + 1 WHERE id = $1", [player.userId]));

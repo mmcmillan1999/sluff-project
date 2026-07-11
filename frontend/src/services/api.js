@@ -189,6 +189,22 @@ export const getLeaderboard = async () => {
     return data;
 };
 
+// --- Token ledger calls ---
+
+export const getTokenLedger = async ({ limit = 25, cursor = null, category = 'all' } = {}) => {
+    const params = new URLSearchParams();
+    params.set('limit', String(limit));
+    if (cursor) params.set('cursor', cursor);
+    if (category && category !== 'all') params.set('category', category);
+
+    const response = await configuredFetch(`/api/auth/token-ledger?${params.toString()}`, 'GET');
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.message || 'Failed to fetch token activity.');
+    }
+    return data;
+};
+
 // --- First-game tutorial calls ---
 
 const TUTORIAL_ACTIONS = new Set(['start', 'complete', 'skip', 'reset']);

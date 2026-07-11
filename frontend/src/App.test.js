@@ -44,6 +44,12 @@ describe('App Component and Game Flow', () => {
         });
 
         api.getLobbyChatHistory.mockResolvedValue([]);
+        api.getTokenLedger.mockResolvedValue({
+            currentBalanceCents: 800,
+            entries: [],
+            nextCursor: null,
+            hasMore: false,
+        });
         api.updateTutorialStatus.mockResolvedValue({
             tutorial_version: 0,
             tutorial_active_version: 1,
@@ -61,6 +67,51 @@ describe('App Component and Game Flow', () => {
     test('renders LobbyView component when a token is present', async () => {
         render(<App />);
         expect(await screen.findByText('Quick Play')).toBeInTheDocument();
+    });
+
+    test('opens the token ledger from the player menu and returns to the lobby', async () => {
+        const user = userEvent.setup();
+        render(<App />);
+
+        await user.click(await screen.findByRole('button', { name: 'Open player menu' }));
+        const playerMenu = screen.getByRole('group', { name: 'Player menu' });
+        await user.click(within(playerMenu).getByRole('button', { name: 'Token Ledger' }));
+
+        expect(await screen.findByRole('heading', { name: 'Token Ledger' })).toBeInTheDocument();
+        expect(api.getTokenLedger).toHaveBeenCalledWith({ limit: 25, cursor: null, category: 'all' });
+
+        await user.click(screen.getByRole('button', { name: 'Lobby' }));
+        expect(await screen.findByText('Quick Play')).toBeInTheDocument();
+        expect(mockSocket.emit).toHaveBeenCalledWith('requestUserSync');
+    });
+
+    test('opens the bulletin from the lobby ticker and returns to Quick Play', async () => {
+        const user = userEvent.setup();
+        render(<App />);
+
+        await user.click(await screen.findByRole('button', {
+            name: 'Open Sluff Bulletin: Alpha Season 1 honors and development news',
+        }));
+
+        expect(screen.getByRole('heading', { name: /first Sluff season/i })).toBeInTheDocument();
+        expect(screen.getByText('McSaddle')).toBeInTheDocument();
+
+        await user.click(screen.getByRole('button', { name: 'Lobby' }));
+        expect(await screen.findByText('Quick Play')).toBeInTheDocument();
+        expect(mockSocket.emit).toHaveBeenCalledWith('requestUserSync');
+    });
+
+    test('opens the bulletin from the player menu', async () => {
+        const user = userEvent.setup();
+        render(<App />);
+
+        await user.click(await screen.findByRole('button', { name: 'Open player menu' }));
+        const playerMenu = screen.getByRole('group', { name: 'Player menu' });
+        await user.click(within(playerMenu).getByRole('button', { name: 'Sluff Bulletin' }));
+
+        const pageHeading = screen.getByRole('heading', { name: /first Sluff season/i });
+        expect(pageHeading).toHaveFocus();
+        expect(screen.queryByRole('group', { name: 'Player menu' })).not.toBeInTheDocument();
     });
 
     test('hydrates before offering the tutorial and persists start before Academy matchmaking', async () => {
