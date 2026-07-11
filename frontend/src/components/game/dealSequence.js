@@ -1,10 +1,10 @@
 export const CARDS_PER_PLAYER = 11;
 export const WIDOW_CARD_COUNT = 3;
 
-// Each card begins shortly after the previous one while still having enough
-// flight time for the clockwise dealing motion to read clearly.
-export const DEAL_CARD_STAGGER_MS = 82;
-export const DEAL_CARD_FLIGHT_MS = 220;
+// The cards overlap like a practiced physical deal, but each individual card
+// keeps the slower, weighted travel of the trick-collection magnet.
+export const DEAL_CARD_STAGGER_MS = 115;
+export const DEAL_CARD_FLIGHT_MS = 800;
 
 const asNonNegativeInteger = (value) => {
     const number = Number(value);

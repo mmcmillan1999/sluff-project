@@ -24,27 +24,62 @@
     transform-origin: center;
     will-change: transform, opacity;
     filter: drop-shadow(0 0.45vh 0.75vh rgba(0, 0, 0, 0.48));
-    animation: deal-card-flight var(--deal-flight-duration) cubic-bezier(0.22, 0.7, 0.28, 1) forwards;
+    /* Positions are sampled from the trick magnet's
+       cubic-bezier(0.45, 0.05, 0.4, 1) timing in JavaScript. Linear
+       interpolation between those samples preserves one continuous pull
+       instead of restarting the easing at every bend in the path. */
+    animation: deal-card-flight var(--deal-flight-duration) linear forwards;
 }
 
 @keyframes deal-card-flight {
     0% {
         opacity: 0.98;
         transform:
-            translate3d(var(--deal-start-x), var(--deal-start-y), 0)
-            rotate(var(--deal-start-rotation));
+            translate3d(var(--deal-p0-x), var(--deal-p0-y), 0)
+            rotate(var(--deal-r0))
+            scale(var(--deal-s0));
     }
-    52% {
+    16% {
         opacity: 1;
         transform:
-            translate3d(var(--deal-mid-x), var(--deal-mid-y), 0)
-            rotate(var(--deal-mid-rotation));
+            translate3d(var(--deal-p1-x), var(--deal-p1-y), 0)
+            rotate(var(--deal-r1))
+            scale(var(--deal-s1));
+    }
+    32% {
+        opacity: 1;
+        transform:
+            translate3d(var(--deal-p2-x), var(--deal-p2-y), 0)
+            rotate(var(--deal-r2))
+            scale(var(--deal-s2));
+    }
+    50% {
+        opacity: 1;
+        transform:
+            translate3d(var(--deal-p3-x), var(--deal-p3-y), 0)
+            rotate(var(--deal-r3))
+            scale(var(--deal-s3));
+    }
+    68% {
+        opacity: 1;
+        transform:
+            translate3d(var(--deal-p4-x), var(--deal-p4-y), 0)
+            rotate(var(--deal-r4))
+            scale(var(--deal-s4));
+    }
+    84% {
+        opacity: 0.98;
+        transform:
+            translate3d(var(--deal-p5-x), var(--deal-p5-y), 0)
+            rotate(var(--deal-r5))
+            scale(var(--deal-s5));
     }
     100% {
         opacity: 0.92;
         transform:
-            translate3d(var(--deal-end-x), var(--deal-end-y), 0)
-            rotate(var(--deal-end-rotation));
+            translate3d(var(--deal-p6-x), var(--deal-p6-y), 0)
+            rotate(var(--deal-r6))
+            scale(var(--deal-s6));
     }
 }
 

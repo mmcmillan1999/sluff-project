@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { act, cleanup, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import DealAnimation from './DealAnimation';
+import DealAnimation, { buildDealFlightGeometry } from './DealAnimation';
 import {
     buildDealSequence,
     DEAL_CARD_FLIGHT_MS,
@@ -108,6 +108,41 @@ describe('DealAnimation', () => {
             .toHaveAttribute('data-deal-destination', 'widow');
     });
 
+    test('builds a smooth one-sided banana path with restrained physical rotation', () => {
+        const source = { x: 120, y: 150 };
+        const target = { x: 400, y: 860 };
+        const geometry = buildDealFlightGeometry(source, target, 0, 'local-hand');
+        const nextGeometry = buildDealFlightGeometry(source, target, 1, 'local-hand');
+        const dx = target.x - source.x;
+        const dy = target.y - source.y;
+        const distance = Math.hypot(dx, dy);
+        const sideOfRoute = (point) => (
+            (dx * (point.y - source.y)) - (dy * (point.x - source.x))
+        );
+        const routeProgress = (point) => (
+            (((point.x - source.x) * dx) + ((point.y - source.y) * dy))
+            / (distance * distance)
+        );
+        const interiorPoints = geometry.path.samples.slice(1, -1).map(sample => sample.point);
+        const routeSides = interiorPoints.map(sideOfRoute);
+        const projectedProgress = interiorPoints.map(routeProgress);
+
+        expect(new Set(routeSides.map(Math.sign))).toEqual(new Set([1]));
+        expect(Math.max(...routeSides.map(value => Math.abs(value) / distance)))
+            .toBeGreaterThan(35);
+        expect(projectedProgress).toEqual([...projectedProgress].sort((a, b) => a - b));
+        expect(geometry.path.samples.at(-1).point).toEqual(target);
+        expect(geometry.style['--deal-flight-duration']).toBe(`${DEAL_CARD_FLIGHT_MS}ms`);
+
+        expect(Math.abs(geometry.rotation.peak - geometry.rotation.start))
+            .toBeGreaterThanOrEqual(22);
+        expect(Math.abs(geometry.rotation.peak - geometry.rotation.start))
+            .toBeLessThanOrEqual(28);
+        expect(Math.abs(geometry.rotation.end)).toBeLessThanOrEqual(4);
+        expect(Math.sign(geometry.rotation.peak - geometry.rotation.start))
+            .toBe(-Math.sign(nextGeometry.rotation.peak - nextGeometry.rotation.start));
+    });
+
     test('renders only anonymous face-down cards', () => {
         const renderCard = vi.fn(() => <div data-testid="flight-card-back" />);
         render(<Harness animationProps={baseProps({ renderCard })} />);
@@ -137,8 +172,20 @@ describe('DealAnimation', () => {
             total,
         );
 
+        act(() => vi.advanceTimersByTime(DEAL_CARD_STAGGER_MS - 1));
+        expect(props.onCardLaunch).toHaveBeenCalledTimes(1);
+        act(() => vi.advanceTimersByTime(1));
+        expect(props.onCardLaunch).toHaveBeenCalledTimes(2);
+
+        act(() => vi.advanceTimersByTime(
+            DEAL_CARD_FLIGHT_MS - DEAL_CARD_STAGGER_MS - 1,
+        ));
+        expect(props.onCardArrive).not.toHaveBeenCalled();
+        act(() => vi.advanceTimersByTime(1));
+        expect(props.onCardArrive).toHaveBeenCalledTimes(1);
+
         const lastLaunchAt = (total - 1) * DEAL_CARD_STAGGER_MS;
-        act(() => vi.advanceTimersByTime(lastLaunchAt));
+        act(() => vi.advanceTimersByTime(lastLaunchAt - DEAL_CARD_FLIGHT_MS));
         expect(props.onCardLaunch).toHaveBeenCalledTimes(total);
         expect(props.onComplete).not.toHaveBeenCalled();
 
@@ -175,6 +222,23 @@ describe('DealAnimation', () => {
         expect(props.onCardLaunch).toHaveBeenCalledTimes(total);
         expect(props.onCardArrive).toHaveBeenCalledTimes(total);
         expect(props.onComplete).toHaveBeenCalledTimes(1);
+    });
+
+    test('cancels outstanding flights without completing when presentation becomes inactive', () => {
+        const props = baseProps();
+        const { rerender } = render(<Harness animationProps={props} />);
+
+        act(() => vi.advanceTimersByTime(DEAL_CARD_STAGGER_MS * 2));
+        const launchesBeforeCancel = props.onCardLaunch.mock.calls.length;
+        expect(launchesBeforeCancel).toBeGreaterThan(0);
+
+        rerender(<Harness animationProps={{ ...props, active: false }} />);
+        act(() => vi.runAllTimers());
+
+        expect(props.onCardLaunch).toHaveBeenCalledTimes(launchesBeforeCancel);
+        expect(props.onCardArrive).not.toHaveBeenCalled();
+        expect(props.onComplete).not.toHaveBeenCalled();
+        expect(document.querySelector('.deal-animation-overlay')).not.toBeInTheDocument();
     });
 
     test('cleans pending launch and arrival timers without completing after unmount', () => {

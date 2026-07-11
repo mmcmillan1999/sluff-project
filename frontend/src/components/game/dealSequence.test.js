@@ -72,11 +72,15 @@ describe('buildDealSequence', () => {
 
     test('contains destination metadata only and exports usable timing defaults', () => {
         const sequence = buildDealSequence(['Alice', 'Bob', 'Cara']);
+        const totalDuration = ((sequence.length - 1) * DEAL_CARD_STAGGER_MS)
+            + DEAL_CARD_FLIGHT_MS;
 
         expect(CARDS_PER_PLAYER).toBe(11);
         expect(WIDOW_CARD_COUNT).toBe(3);
-        expect(DEAL_CARD_STAGGER_MS).toBeGreaterThan(0);
-        expect(DEAL_CARD_FLIGHT_MS).toBeGreaterThan(DEAL_CARD_STAGGER_MS);
+        expect(DEAL_CARD_STAGGER_MS).toBe(115);
+        expect(DEAL_CARD_FLIGHT_MS).toBe(800);
+        expect(totalDuration).toBe(4825);
+        expect(Math.ceil(DEAL_CARD_FLIGHT_MS / DEAL_CARD_STAGGER_MS)).toBe(7);
         sequence.forEach(event => {
             expect(event).not.toHaveProperty('card');
             expect(event).not.toHaveProperty('cards');

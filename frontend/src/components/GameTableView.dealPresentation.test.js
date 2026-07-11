@@ -255,6 +255,8 @@ describe('GameTableView deal presentation', () => {
         expect(screen.queryByTestId('deal-animation')).not.toBeInTheDocument();
         expect(screen.getByTestId('visible-hand-count')).toHaveTextContent('11');
         expect(screen.getByTestId('table-widow-count')).toHaveTextContent('3');
+        expect(screen.getByTestId('deal-controls-suppressed')).toHaveTextContent('false');
+        expect(screen.getByTestId('tutorial-table-state')).toHaveTextContent('Bidding Phase');
     });
 
     test('cancels the presentation if authoritative play advances beyond bidding', () => {
