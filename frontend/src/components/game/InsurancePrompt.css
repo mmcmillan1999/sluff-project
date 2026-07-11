@@ -23,6 +23,10 @@
     border: 1px solid rgba(255, 255, 255, 0.1);
     color: white;
     position: relative;
+    max-height: 92vh;
+    max-height: 92dvh;
+    overflow-y: auto;
+    box-sizing: border-box;
 }
 
 .insurance-prompt-title {
@@ -32,6 +36,21 @@
     margin: 0 0 24px 0;
     color: #f9fafb;
     font-family: 'Oswald', sans-serif;
+}
+
+.insurance-explainer {
+    margin: -10px 0 18px;
+    padding: 12px 14px;
+    border-left: 4px solid #3b82f6;
+    border-radius: 8px;
+    background: rgba(59, 130, 246, 0.12);
+    color: #dbeafe;
+    font-size: 0.9em;
+    line-height: 1.5;
+}
+
+.insurance-explainer strong {
+    color: #fff;
 }
 
 /* Current Value Display */
@@ -70,6 +89,18 @@
     color: #d1d5db;
     font-weight: 500;
     line-height: 1.4;
+}
+
+.insurance-gap-preview {
+    margin-top: 10px;
+    color: #fbbf24;
+    font-size: 0.85em;
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.insurance-gap-preview.is-ready {
+    color: #4ade80;
 }
 
 /* Slider Styles */
@@ -365,5 +396,18 @@
         min-width: auto;
         padding: 8px 4px;
         font-size: 0.8em;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .current-value,
+    .insurance-slider,
+    .insurance-slider::-webkit-slider-thumb,
+    .insurance-slider::-moz-range-thumb,
+    .quick-jump-button,
+    .submit-button,
+    .pass-button {
+        animation: none !important;
+        transition: none !important;
     }
 }

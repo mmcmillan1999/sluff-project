@@ -2,7 +2,6 @@ import { render, screen, act } from '@testing-library/react';
 import App from './App';
 import * as api from './services/api';
 import { getMockGameState } from './__mocks__/mockGameState';
-import { io } from 'socket.io-client';
 
 // Mock socket.io-client with a hoisted factory so App.js's module-level
 // io(...) call receives the mock socket (a plain auto-mock plus
@@ -19,7 +18,7 @@ const { mockSocket } = vi.hoisted(() => ({
     },
 }));
 vi.mock('socket.io-client', () => ({
-    io: vi.fn(() => mockSocket),
+    default: vi.fn(() => mockSocket),
 }));
 
 // Mock the entire api service
@@ -29,6 +28,7 @@ vi.mock('./services/api');
 describe('App Component and Game Flow', () => {
 
     let socketEventHandlers = {};
+    const mockToken = `header.${btoa(JSON.stringify({ id: 42, username: 'Test Player' }))}.signature`;
     
     beforeEach(() => {
         // Reset mocks before each test
@@ -41,7 +41,7 @@ describe('App Component and Game Flow', () => {
         });
 
         api.getLobbyChatHistory.mockResolvedValue([]);
-        Storage.prototype.getItem = vi.fn(() => 'mock.token.payload');
+        Storage.prototype.getItem = vi.fn(() => mockToken);
     });
 
     test('renders Login component on initial load without a token', () => {
@@ -50,9 +50,9 @@ describe('App Component and Game Flow', () => {
         expect(screen.getByRole('button', { name: /Login/i })).toBeInTheDocument();
     });
     
-    test('renders LobbyView component when a token is present', () => {
+    test('renders LobbyView component when a token is present', async () => {
         render(<App />);
-        expect(screen.getByText('Lobby')).toBeInTheDocument();
+        expect(await screen.findByText('Quick Play')).toBeInTheDocument();
     });
 
     test('renders widow reveal correctly when all players pass', async () => {
@@ -74,9 +74,9 @@ describe('App Component and Game Flow', () => {
         });
 
         expect(screen.getByText('All players passed. Revealing the widow...')).toBeInTheDocument();
-        expect(screen.getByText('A')).toBeInTheDocument();
-        expect(screen.getByText('K')).toBeInTheDocument();
-        expect(screen.getByText('Q')).toBeInTheDocument();
-        expect(screen.getAllByText('♠').length).toBe(3);
+        expect(screen.getAllByText('A')).toHaveLength(2);
+        expect(screen.getAllByText('K')).toHaveLength(2);
+        expect(screen.getAllByText('Q')).toHaveLength(2);
+        expect(screen.getAllByText('♠')).toHaveLength(6);
     });
 });

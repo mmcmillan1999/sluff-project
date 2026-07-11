@@ -62,8 +62,9 @@ const PlayerHand = ({
     const dragStateRef = useRef(dragState);
     dragStateRef.current = dragState;
 
-    const { state, hands, bidWinnerInfo, trickTurnPlayerName, currentTrickCards, leadSuitCurrentTrick, trumpSuit, trumpBroken, players } = currentTableState;
-    const myHand = useMemo(() => hands[selfPlayerName] || [], [hands, selfPlayerName]);
+    const { state, hands = {}, bidWinnerInfo, trickTurnPlayerName, currentTrickCards = [], leadSuitCurrentTrick, trumpSuit, trumpBroken, players } = currentTableState;
+    // Viewer-specific server state only includes the current player's hand.
+    const myHand = useMemo(() => hands?.[selfPlayerName] || [], [hands, selfPlayerName]);
     
     // Determine if player is bidder or defender
     const isBidder = bidWinnerInfo?.playerName === selfPlayerName;

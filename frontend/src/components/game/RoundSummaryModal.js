@@ -25,7 +25,9 @@ const RoundSummaryModal = ({
 
     const {
         isGameOver,
-        // gameWinner, // <-- THIS LINE IS REMOVED
+        gameWinner,
+        message,
+        forfeit,
         dealerOfRoundId,
         widowForReveal,
         insuranceHindsight,
@@ -41,6 +43,71 @@ const RoundSummaryModal = ({
         insuranceDealWasMade,
         finalScores
     } = summaryData;
+
+    const myPayoutMessage = isGameOver && payoutDetails ? payoutDetails[playerId] : null;
+
+    if (isGameOver && forfeit) {
+        const forfeitingPlayerName = forfeit.forfeitingPlayerName || 'A player';
+        const reasonLabels = {
+            'voluntary forfeit': 'Voluntary forfeit',
+            'disconnect timeout': 'Disconnect timer expired'
+        };
+        const reasonLabel = reasonLabels[forfeit.reason] || forfeit.reason;
+        const finalScoreEntries = Object.entries(finalScores || {})
+            .filter(([name]) => name !== PLACEHOLDER_ID_CLIENT)
+            .sort(([, leftScore], [, rightScore]) => Number(rightScore) - Number(leftScore));
+        const standardMessage = `${forfeitingPlayerName} forfeited the game.`;
+
+        return (
+            <div className="modal-overlay">
+                <div className="summary-modal-content">
+                    <div className="summary-main-area">
+                        <h2>Game Ended by Forfeit</h2>
+                        {myPayoutMessage && (
+                            <div className="payout-details-banner">
+                                <p>{myPayoutMessage}</p>
+                            </div>
+                        )}
+
+                        <div className="forfeit-summary-panel">
+                            <h3 className="forfeit-player"><strong>{forfeitingPlayerName}</strong> forfeited the game.</h3>
+                            {reasonLabel && <p className="forfeit-reason">Reason: {reasonLabel}</p>}
+                            {message && message !== standardMessage && <p className="forfeit-settlement-note">{message}</p>}
+                            {gameWinner && gameWinner !== 'N/A' && gameWinner !== 'Forfeit' && (
+                                <p className="forfeit-winner" aria-label={`Game winner: ${gameWinner}`}>Game winner: <strong>{gameWinner}</strong></p>
+                            )}
+                        </div>
+
+                        <div className="forfeit-scores-panel">
+                            <h4>Final Scores</h4>
+                            {finalScoreEntries.length > 0 ? (
+                                <table className="summary-totals-table forfeit-scores-table">
+                                    <thead>
+                                        <tr><th>Player</th><th>Score</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        {finalScoreEntries.map(([name, score]) => (
+                                            <tr key={name}><td><strong>{name}</strong></td><td>{score}</td></tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            ) : (
+                                <p>Final scores are unavailable.</p>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="summary-action-area">
+                        <div className="game-over-actions">
+                            <button onClick={() => emitEvent("resetGame")} className="game-button">Play Again</button>
+                            <button onClick={handleLeaveTable} className="game-button" style={{backgroundColor: '#17a2b8'}}>Back to Lobby</button>
+                            <button onClick={handleLogout} className="game-button" style={{backgroundColor: '#6c757d'}}>Logout</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
     
     const bidderName = bidWinnerInfo?.playerName || 'Bidder';
     const defenderNames = playerOrderActive?.filter(name => name !== bidderName) || ['Defenders'];
@@ -57,10 +124,15 @@ const RoundSummaryModal = ({
     const bidMultiplier = BID_MULTIPLIERS[bidType] || 1;
     const exchangeValue = rawDifference * bidMultiplier;
 
-    const myPayoutMessage = isGameOver && payoutDetails ? payoutDetails[playerId] : null;
-
     const renderTotalsTable = (changes, totals) => {
-        const sortedPlayerNames = [bidderName, ...defenderNames];
+        // In four-player rounds the dealer sits out and therefore is absent from
+        // playerOrderActive, but still has a score/change entry worth showing.
+        const sortedPlayerNames = [...new Set([
+            bidderName,
+            ...defenderNames,
+            ...Object.keys(changes || {}),
+            ...Object.keys(totals || {})
+        ])];
         return (
             <div className="summary-totals-panel">
                 <table className="summary-totals-table">
@@ -75,7 +147,7 @@ const RoundSummaryModal = ({
                         {sortedPlayerNames
                             .filter(name => name !== PLACEHOLDER_ID_CLIENT)
                             .map(name => {
-                                const change = changes[name] || 0;
+                                const change = changes?.[name] || 0;
                                 const isBidder = name === bidderName;
                                 return (
                                     <tr key={name}>
@@ -83,7 +155,7 @@ const RoundSummaryModal = ({
                                         <td className={change > 0 ? 'positive' : (change < 0 ? 'negative' : '')}>
                                             {change > 0 ? `+${change}` : change}
                                         </td>
-                                        <td>{totals[name]}</td>
+                                        <td>{totals?.[name] ?? '—'}</td>
                                     </tr>
                                 );
                         })}
@@ -130,7 +202,7 @@ const RoundSummaryModal = ({
             <div className={panelClasses.join(' ')}>
                 <h4>{insuranceDealWasMade ? "Insurance Deal Executed" : "Insurance Recap (No Deal)"}</h4>
                 <div className="insurance-narrative">
-                    {Object.entries(insuranceHindsight).map(([pName, data]) => {
+                    {Object.entries(insuranceHindsight || {}).map(([pName, data]) => {
                         const isBidder = pName === bidderName;
                         const actionText = isBidder ? `required ${insurance.bidderRequirement}` : `offered ${insurance.defenderOffers[pName]}`;
                         const outcomeValue = data.hindsightValue >= 0 ? data.hindsightValue : Math.abs(data.hindsightValue);
@@ -156,7 +228,7 @@ const RoundSummaryModal = ({
             <div className="trick-detail-row widow-row">
                 <span className="trick-number">Widow:</span>
                 <div className="trick-cards">
-                    {widowForReveal.map((card, i) => renderCard(card, { key: `widow-${i}`, small: true }))}
+                    {(widowForReveal || []).map((card, i) => renderCard(card, { key: `widow-${i}`, small: true }))}
                 </div>
                 <span className="trick-points">({widowPointsValue} pts)</span>
             </div>

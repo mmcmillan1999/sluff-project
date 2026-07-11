@@ -7,12 +7,14 @@ const playHandler = require('./handlers/playHandler');
 const scoringHandler = require('./handlers/scoringHandler');
 const PlayerList = require('./PlayerList');
 const biddingHandler = require('./handlers/biddingHandler');
+const { serializeGameState } = require('../serialization/gameStateSerializer');
+const { createSettlementSnapshot } = require('../settlement/gameSettlement');
 
 const BOT_NAMES = ["Mike Knight", "Grandma Joe", "Grampa Blane", "Kimba", "Courtney Sr.", "Cliff"];
 
 class GameEngine {
     constructor(tableId, theme, tableName, emitLobbyUpdateCallback, tableType = 'private') {
-        this.emitLobbyUpdateCallback = emitLobbyUpdateCallback;
+        this.emitLobbyUpdateCallback = emitLobbyUpdateCallback || (() => {});
 
         this.tableId = tableId;
         this.tableName = tableName;
@@ -29,6 +31,8 @@ class GameEngine {
         this.playerOrder = new PlayerList();
         this.scores = {};
         this.gameStarted = false;
+        this.gameStartPending = false;
+        this.settlement = this._newSettlementState();
         this.gameId = null;
         this.playerMode = null;
         this.dealer = null;
@@ -40,24 +44,69 @@ class GameEngine {
     }
 
     _effects(a = []) { return { effects: a }; }
+
+    _newSettlementState() {
+        return { status: 'idle', kind: null, attempts: 0, lastErrorCode: null };
+    }
+
+    beginSettlement(kind) {
+        this.settlement = { status: 'pending', kind, attempts: 0, lastErrorCode: null };
+    }
+
+    completeSettlement() {
+        if (!this.settlement) this.settlement = this._newSettlementState();
+        this.settlement.status = 'complete';
+        this.settlement.lastErrorCode = null;
+    }
+
+    failSettlement(errorCode = 'SETTLEMENT_ERROR') {
+        if (!this.settlement) this.settlement = this._newSettlementState();
+        this.settlement.status = 'failed';
+        this.settlement.lastErrorCode = errorCode;
+    }
+
+    _createSettlementSnapshot(extra = {}) {
+        const players = Object.fromEntries(Object.entries(this.players).map(([id, player]) => [id, {
+            userId: player.userId,
+            playerName: player.playerName,
+            isBot: player.isBot === true,
+            isSpectator: player.isSpectator === true,
+        }]));
+        return createSettlementSnapshot({
+            gameId: this.gameId,
+            theme: this.theme,
+            players,
+            scores: { ...this.scores },
+            seatingOrderIds: [...this.playerOrder.allIds],
+            ...extra,
+        });
+    }
     
     // =================================================================
     // PUBLIC METHODS
     // =================================================================
     
     startForfeitTimer(requestingUserId, targetPlayerName) {
-        if (!this.players[requestingUserId] || this.internalTimers.forfeit) return;
+        const requester = this.players[requestingUserId];
+        if (!this.gameStarted || !requester || requester.isSpectator || this.internalTimers.forfeit
+            || ['Game Over', 'DrawComplete', 'Draw Resolving'].includes(this.state)) return this._effects();
         const targetPlayer = Object.values(this.players).find(p => p.playerName === targetPlayerName);
-        if (!targetPlayer || !targetPlayer.disconnected) { return; }
+        if (!targetPlayer || targetPlayer.isSpectator || targetPlayer.isBot || !targetPlayer.disconnected || targetPlayer.userId === requestingUserId) {
+            return this._effects();
+        }
         console.log(`[${this.tableId}] Forfeit timer started for ${targetPlayerName} by ${this.players[requestingUserId].playerName}.`);
         this.forfeiture.targetPlayerName = targetPlayerName;
         this.forfeiture.timeLeft = 120;
+        return this._effects([
+            { type: 'BROADCAST_STATE' },
+            { type: 'START_FORFEIT_TIMER', payload: { targetPlayerName } },
+        ]);
     }
 
     forfeitGame(userId) {
-        const playerName = this.players[userId]?.playerName;
-        if (!playerName || !this.gameStarted) return;
-        this._resolveForfeit(playerName, "voluntary forfeit");
+        const player = this.players[userId];
+        if (!player || player.isSpectator || !this.gameStarted) return this._effects();
+        return this._effects(this._resolveForfeit(player.playerName, "voluntary forfeit"));
     }
     
     joinTable(user, socketId, tokens = null, forceSpectator = false) {
@@ -75,7 +124,10 @@ class GameEngine {
             if (tokens !== null) this.players[id].tokens = tokens;
             
             // Force spectator mode - handle both conversion cases
-            if (forceSpectator) {
+            // The funded roster is immutable once its start transaction has
+            // been scheduled. Reconnects may adopt a socket, but they cannot
+            // change an active seat into a spectator before the commit lands.
+            if (forceSpectator && !this.gameStartPending && !this.gameStarted) {
                 if (!this.players[id].isSpectator) {
                     this.players[id].isSpectator = true;
                     this.playerOrder.remove(id);
@@ -90,7 +142,9 @@ class GameEngine {
             const activePlayersCount = this.playerOrder.count;
             const playerBase = { userId: id, playerName: username, socketId, tokens };
 
-            if (forceSpectator || this.gameStarted || activePlayersCount >= 4) {
+            // A late arrival while buy-ins are committing may observe, but
+            // must not enter the captured/charged active roster.
+            if (forceSpectator || this.gameStarted || this.gameStartPending || activePlayersCount >= 4) {
                 this.players[id] = { ...playerBase, isSpectator: true, disconnected: false };
             } else {
                 this.players[id] = { ...playerBase, isSpectator: false, disconnected: false };
@@ -112,7 +166,7 @@ class GameEngine {
     }
 
     addBotPlayer() {
-        if (this.playerOrder.count >= 4) return;
+        if (this.gameStarted || this.gameStartPending || this.playerOrder.count >= 4) return;
         const currentBotNames = new Set(Object.values(this.players).filter(p => p.isBot).map(p => p.playerName));
         const availableNames = BOT_NAMES.filter(name => !currentBotNames.has(name));
         if (availableNames.length === 0) return;
@@ -130,7 +184,7 @@ class GameEngine {
     }
 
     removeBot() {
-        if (this.gameStarted) return; 
+        if (this.gameStarted || this.gameStartPending) return;
 
         const botIds = Object.keys(this.players).filter(id => this.players[id].isBot).map(id => parseInt(id, 10));
         if (botIds.length === 0) return; 
@@ -161,7 +215,17 @@ class GameEngine {
         // otherwise every reconnect re-seats the player into the finished game.
         const terminalStates = ["DrawComplete", "Game Over"];
 
-        if (terminalStates.includes(this.state)) {
+        // Once the start effect exists, every active seat is part of an
+        // immutable funded roster. An explicit leave becomes a disconnect so
+        // the eventual commit can still transition into the exact game that
+        // was charged. Spectators are outside that roster and remain removable.
+        if (this.gameStartPending && !playerInfo.isSpectator) {
+            if (!playerInfo.isBot) {
+                playerInfo.disconnected = true;
+                playerInfo.socketId = null;
+            }
+        }
+        else if (terminalStates.includes(this.state)) {
             delete this.players[userId];
             if (playerInfo.isBot) delete this.bots[userId];
             this.playerOrder.remove(userId);
@@ -179,13 +243,22 @@ class GameEngine {
     disconnectPlayer(userId) {
         const player = this.players[userId];
         if (!player) return;
-        if (!this.gameStarted || player.isSpectator) {
+        if (this.gameStartPending && !player.isSpectator && !player.isBot) {
+            console.log(`[${this.tableId}] Player ${player.playerName} disconnected while the game start was committing.`);
+            player.disconnected = true;
+            player.socketId = null;
+        } else if (!this.gameStarted || player.isSpectator) {
             delete this.players[userId];
             if (player.isBot) delete this.bots[userId];
             this.playerOrder.remove(userId);
         } else {
             console.log(`[${this.tableId}] Player ${player.playerName} has disconnected.`);
             player.disconnected = true;
+            // Personalized delivery targets socketId directly rather than only
+            // the room. Detach an explicit leaver immediately so later state
+            // cannot bounce their lobby back to the table. reconnectPlayer()
+            // adopts a new socket while preserving the reserved seat.
+            player.socketId = null;
         }
     }
     
@@ -210,7 +283,7 @@ class GameEngine {
     }
 
     startGame(requestingUserId) {
-        if (this.gameStarted) return this._effects();
+        if (this.gameStarted || this.gameStartPending) return this._effects();
         if (!this.players[requestingUserId] || this.players[requestingUserId].isSpectator) return this._effects();
         const activePlayerIds = this.playerOrder.allIds;
         if (activePlayerIds.length < 3) {
@@ -218,37 +291,62 @@ class GameEngine {
         }
         
         this.playerMode = activePlayerIds.length;
+        const startRoster = Object.freeze(activePlayerIds.map(id => {
+            const player = this.players[id];
+            return Object.freeze({
+                userId: id,
+                playerName: player.playerName,
+                isBot: player.isBot === true,
+            });
+        }));
+        const startRosterIds = Object.freeze(startRoster.map(player => player.userId));
+        // Set synchronously before returning the database effect. Socket events
+        // can arrive again while that effect awaits PostgreSQL; only this first
+        // invocation is allowed to schedule a funded start.
+        this.gameStartPending = true;
         
         const effects = [{
             type: 'START_GAME_TRANSACTIONS',
             payload: { 
                 table: { tableId: this.tableId, theme: this.theme, playerMode: this.playerMode },
-                playerIds: activePlayerIds.filter(id => !this.players[id].isBot) 
+                playerIds: startRoster.filter(player => !player.isBot).map(player => player.userId),
             },
             onSuccess: (gameId, updatedTokens) => {
+                this.gameStartPending = false;
                 console.log(`[GAME-ENGINE] Setting gameId to: ${gameId}`);
                 this.gameId = gameId;
                 this.gameStarted = true;
-                activePlayerIds.forEach(id => { 
-                    if (this.scores[this.players[id].playerName] === undefined) this.scores[this.players[id].playerName] = 120;
-                    if(updatedTokens && updatedTokens[id] !== undefined) {
-                        this.players[id].tokens = updatedTokens[id];
+                startRoster.forEach(({ userId, playerName }) => {
+                    if (this.scores[playerName] === undefined) this.scores[playerName] = 120;
+                    const livePlayer = this.players[userId];
+                    if (livePlayer && updatedTokens && updatedTokens[userId] !== undefined) {
+                        livePlayer.tokens = updatedTokens[userId];
                     }
                 });
                 if (this.playerMode === 3 && this.scores[PLACEHOLDER_ID] === undefined) { this.scores[PLACEHOLDER_ID] = 120; }
-                const shuffledPlayerIds = shuffle([...activePlayerIds]);
+                const shuffledPlayerIds = shuffle([...startRosterIds]);
                 this.dealer = shuffledPlayerIds[0];
                 this.playerOrder.setTurnOrder(this.dealer, this.playerMode === 4);
                 this._initializeNewRoundState();
                 this.state = "Dealing Pending";
             },
             onFailure: (error, brokePlayerName) => {
+                this.gameStartPending = false;
+                const playersToRemove = new Set(
+                    Object.values(this.players)
+                        .filter(player => !player.isBot && !player.isSpectator && player.disconnected)
+                        .map(player => player.userId),
+                );
                 if (brokePlayerName) {
                     const brokePlayer = Object.values(this.players).find(p => p.playerName === brokePlayerName);
-                    if (brokePlayer) {
-                        delete this.players[brokePlayer.userId];
-                        this.playerOrder.remove(brokePlayer.userId);
-                    }
+                    if (brokePlayer) playersToRemove.add(brokePlayer.userId);
+                }
+                // A pregame disconnect is normally removed immediately. It was
+                // preserved only while commit was possible; after rollback it
+                // must not remain as a countable/chargeable ghost seat.
+                for (const userId of playersToRemove) {
+                    delete this.players[userId];
+                    this.playerOrder.remove(userId);
                 }
                 this.gameStarted = false;
                 this.gameId = null; 
@@ -304,17 +402,20 @@ class GameEngine {
             console.warn(`[${this.tableId}] submitFrogDiscards REJECTED: User ${userId} is not bidder ${this.bidWinnerInfo?.userId}`);
             return this._effects();
         }
-        if (!Array.isArray(discards) || discards.length !== 3) {
+        if (!Array.isArray(discards) || discards.length !== 3 || new Set(discards).size !== 3) {
             console.warn(`[${this.tableId}] submitFrogDiscards REJECTED: Invalid payload ${JSON.stringify(discards)}`);
             return this._effects();
         }
         const currentHand = this.hands[player.playerName] || [];
-        if (!discards.every(card => currentHand.includes(card))) {
+        if (currentHand.length !== 14 || !discards.every(card => currentHand.includes(card))) {
             console.warn(`[${this.tableId}] submitFrogDiscards REJECTED: One or more cards not in hand of ${player.playerName}. Hand=[${currentHand.join(',')}], discards=[${discards.join(',')}]`);
             return this._effects();
         }
-        this.widowDiscardsForFrogBidder = discards;
-        this.hands[player.playerName] = currentHand.filter(card => !discards.includes(card));
+        const discardedCards = new Set(discards);
+        const resultingHand = currentHand.filter(card => !discardedCards.has(card));
+        if (resultingHand.length !== 11) return this._effects();
+        this.widowDiscardsForFrogBidder = [...discards];
+        this.hands[player.playerName] = resultingHand;
         const fanfareTimer = this._transitionToPlayingPhase();
         return this._effects([{ type: 'BROADCAST_STATE' }, fanfareTimer]);
     }
@@ -332,8 +433,14 @@ class GameEngine {
     }
 
     reset() {
+        if (this.settlement && !['idle', 'complete'].includes(this.settlement.status)) {
+            console.warn(`[${this.tableId}] Reset blocked while ${this.settlement.kind || 'game'} settlement is ${this.settlement.status}.`);
+            return this._effects();
+        }
         console.log(`[${this.tableId}] Game is being reset by 'Play Again' button.`);
         this.gameStarted = false;
+        this.gameStartPending = false;
+        this.settlement = this._newSettlementState();
         this.gameId = null;
         this.playerMode = null;
         // Re-arm the terminal-state watchdogs (GameService) for the next game.
@@ -374,10 +481,12 @@ class GameEngine {
     
     updateInsuranceSetting(userId, settingType, value) {
         const player = this.players[userId];
-        if (!player || !this.insurance.isActive || this.insurance.dealExecuted) return;
+        const insuranceStates = ['Bid Announcement', 'Playing Phase', 'TrickCompleteLinger'];
+        if (!player || player.isSpectator || !insuranceStates.includes(this.state)
+            || this.drawRequest.isActive || !this.insurance.isActive || this.insurance.dealExecuted) return this._effects();
         const multiplier = this.insurance.bidMultiplier;
         const parsedValue = parseInt(value, 10);
-        if (isNaN(parsedValue)) return;
+        if (isNaN(parsedValue)) return this._effects();
         if (settingType === 'bidderRequirement' && player.playerName === this.insurance.bidderPlayerName) {
             const minReq = -120 * multiplier;
             const maxReq = 120 * multiplier;
@@ -390,7 +499,7 @@ class GameEngine {
             if (parsedValue >= minOffer && parsedValue <= maxOffer) {
                 this.insurance.defenderOffers[player.playerName] = parsedValue;
             }
-        } else { return; }
+        } else { return this._effects(); }
         const sumOfOffers = Object.values(this.insurance.defenderOffers || {}).reduce((sum, offer) => sum + (offer || 0), 0);
         if (this.insurance.bidderRequirement <= sumOfOffers) {
             this.insurance.dealExecuted = true;
@@ -398,15 +507,20 @@ class GameEngine {
                 agreement: {
                     bidderPlayerName: this.insurance.bidderPlayerName,
                     bidderRequirement: this.insurance.bidderRequirement,
+                    // The defenders' actual offers are binding.  If they
+                    // overshoot the bidder's ask, crediting this exact total
+                    // keeps the agreement zero-sum without rewriting an offer.
+                    bidderSettlement: sumOfOffers,
                     defenderOffers: { ...this.insurance.defenderOffers }
                 }
             };
         }
+        return this._effects([{ type: 'BROADCAST_STATE' }]);
     }
 
     requestDraw(userId) {
         const player = this.players[userId];
-        if (!player || this.drawRequest.isActive || this.state !== 'Playing Phase') return this._effects();
+        if (!player || player.isSpectator || this.drawRequest.isActive || this.state !== 'Playing Phase') return this._effects();
         
         console.log(`[${this.tableId}] Draw requested by ${player.playerName}.`);
         this.drawRequest.isActive = true;
@@ -428,6 +542,8 @@ class GameEngine {
                     clearInterval(this.internalTimers.drawTimer);
                     delete this.internalTimers.drawTimer;
                     this.drawRequest.isActive = false;
+                    this.drawRequest.timer = 0;
+                    this.state = 'Playing Phase';
                 }
                 this.emitLobbyUpdateCallback([{ type: 'BROADCAST_STATE' }]);
             } else {
@@ -466,6 +582,7 @@ class GameEngine {
                 { type: 'START_TIMER', payload: {
                     duration: 3000,
                     onTimeout: (engineRef) => {
+                        if (engineRef.state !== "DrawDeclined") return [];
                         engineRef.state = "Playing Phase";
                         return [{ type: 'BROADCAST_STATE' }];
                     }
@@ -480,12 +597,16 @@ class GameEngine {
         
         clearDrawTimer();
         this.drawRequest.isActive = false;
+        // Settlement is asynchronous.  Leave Playing Phase immediately so a
+        // card or second draw transition cannot race the database operation.
+        this.state = 'Draw Resolving';
         const outcome = allVotes.includes('split') ? 'split' : 'wash';
+        this.beginSettlement('draw');
         console.log(`[${this.tableId}] Draw accepted with outcome: ${outcome}.`);
 
         return this._effects([{
             type: 'HANDLE_DRAW_OUTCOME',
-            payload: { outcome, gameId: this.gameId, theme: this.theme, players: this.players, scores: this.scores },
+            payload: this._createSettlementSnapshot({ outcome }),
             onComplete: (summary) => {
                 this.roundSummary = summary;
                 this.state = "DrawComplete";
@@ -519,8 +640,39 @@ class GameEngine {
     }
 
     _resolveForfeit(forfeitingPlayerName, reason) {
-        console.log(`[${this.tableId}] Forfeit by ${forfeitingPlayerName}`);
+        const forfeitingPlayer = Object.values(this.players).find(p => p.playerName === forfeitingPlayerName);
+        if (!this.gameStarted || !forfeitingPlayer || forfeitingPlayer.isSpectator || ['Game Over', 'DrawComplete', 'Draw Resolving'].includes(this.state)) {
+            return [];
+        }
+        console.log(`[${this.tableId}] Forfeit by ${forfeitingPlayerName} (${reason})`);
+        this._clearForfeitTimer();
+        if (this.internalTimers.drawTimer) {
+            clearInterval(this.internalTimers.drawTimer);
+            delete this.internalTimers.drawTimer;
+        }
+        this.drawRequest.isActive = false;
         this.state = "Game Over";
+        this.beginSettlement('forfeit');
+        this.roundSummary = {
+            message: `${forfeitingPlayerName} forfeited the game.`,
+            finalScores: { ...this.scores },
+            isGameOver: true,
+            gameWinner: null,
+            payoutDetails: {},
+            forfeit: { forfeitingPlayerName, reason },
+        };
+        return [
+            {
+                type: 'HANDLE_FORFEIT',
+                payload: this._createSettlementSnapshot({
+                    forfeitingPlayerName,
+                    reason,
+                }),
+            },
+            { type: 'SYNC_PLAYER_TOKENS', payload: { playerIds: Object.keys(this.players) } },
+            { type: 'BROADCAST_STATE' },
+            { type: 'UPDATE_LOBBY' },
+        ];
     }
     
     // Enter the "Bid Announcement" window: everything about the round is set up
@@ -585,7 +737,7 @@ class GameEngine {
         this.state = "Dealing Pending";
     }
 
-    getStateForClient() {
+    _getRawStateForClient() {
         const activeTurnOrder = this.gameStarted ? this.playerOrder.turnOrder : this.playerOrder.allIds;
         const state = {
             tableId: this.tableId, tableName: this.tableName, theme: this.theme, state: this.state, players: this.players,
@@ -598,10 +750,18 @@ class GameEngine {
             dealer: this.dealer, hands: this.hands, widow: this.widow, originalDealtWidow: this.originalDealtWidow, scores: this.scores, currentHighestBidDetails: this.currentHighestBidDetails, bidWinnerInfo: this.bidWinnerInfo, gameStarted: this.gameStarted, trumpSuit: this.trumpSuit, currentTrickCards: this.currentTrickCards, tricksPlayedCount: this.tricksPlayedCount, leadSuitCurrentTrick: this.leadSuitCurrentTrick, trumpBroken: this.trumpBroken, capturedTricks: this.capturedTricks, roundSummary: this.roundSummary, lastCompletedTrick: this.lastCompletedTrick, playersWhoPassedThisRound: this.playersWhoPassedThisRound.map(id => this.players[id]?.playerName), playerMode: this.playerMode, serverVersion: this.serverVersion, insurance: this.insurance, forfeiture: this.forfeiture, drawRequest: this.drawRequest, originalFrogBidderId: this.originalFrogBidderId, soloBidMadeAfterFrog: this.soloBidMadeAfterFrog, revealedWidowForFrog: this.revealedWidowForFrog, widowDiscardsForFrogBidder: this.widowDiscardsForFrogBidder,
             bidderCardPoints: this.bidderCardPoints, defenderCardPoints: this.defenderCardPoints,
             drawCountdown: this.drawCountdown,
+            settlement: this.settlement,
         };
         state.biddingTurnPlayerName = this.players[this.biddingTurnPlayerId]?.playerName;
         state.trickTurnPlayerName = this.players[this.trickTurnPlayerId]?.playerName;
         return state;
+    }
+
+    // Fail closed for legacy callers: without an authenticated viewer context,
+    // no private hand or widow is serialized.  Socket delivery passes a
+    // server-derived context so each player receives their own allowed view.
+    getStateForClient(viewerContext = {}) {
+        return serializeGameState(this, viewerContext);
     }
 }
 

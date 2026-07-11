@@ -10,7 +10,7 @@ import { getLobbyChatHistory } from '../services/api';
 import { BUILD_ID } from '../utils/clientVersion';
 import { useViewport } from '../hooks/useViewport';
 
-const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQuickPlay, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowAdmin, handleShowFeedback, errorMessage, emitEvent, socket, handleOpenFeedbackModal, soundSettings }) => {
+const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQuickPlay, handleJoinTableAsSpectator, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowAdmin, handleShowFeedback, handleShowHowToPlay, emitEvent, socket, handleOpenFeedbackModal, soundSettings }) => {
 
     const [activeTab, setActiveTab] = useState('');
     const [showMenu, setShowMenu] = useState(false);
@@ -150,6 +150,9 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
                 <div className="sidebar-section">
                     <h3>Quick Actions</h3>
                     <div className="quick-actions">
+                        <button onClick={handleShowHowToPlay} className="quick-action-btn">
+                            How to Play
+                        </button>
                         <button onClick={handleShowLeaderboard} className="quick-action-btn">
                             Leaderboard
                             <span className="keyboard-shortcut">L</span>
@@ -187,6 +190,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
     
     const LobbyMenu = () => (
         <div className="lobby-menu-popup">
+            <button onClick={() => { handleShowHowToPlay(); setShowMenu(false); }} className="lobby-menu-button">How to Play</button>
             <button onClick={() => { handleShowLeaderboard(); setShowMenu(false); }} className="lobby-menu-button">Leaderboard</button>
             <button onClick={() => { handleShowFeedback(); setShowMenu(false); }} className="lobby-menu-button">Feedback Repository</button>
             <button onClick={() => { handleOpenFeedbackModal(); setShowMenu(false); }} className="lobby-menu-button">Submit Feedback</button>
@@ -243,8 +247,6 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
                 </div>
             </header>
             
-            {errorMessage && <p className="error-message">{errorMessage}</p>}
-
             <main className="lobby-main">
                 {/* Desktop sidebar - only shown on desktop */}
                 <DesktopSidebar />
@@ -321,7 +323,9 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
                                         key={table.tableId}
                                         table={table}
                                         canAfford={user.tokens >= activeTheme.cost}
+                                        buyIn={activeTheme.cost}
                                         onJoin={handleJoinTable}
+                                        onJoinAsSpectator={handleJoinTableAsSpectator}
                                         user={user}
                                     />
                                 )) : <p className="loading-text">Loading tables...</p>}

@@ -27,10 +27,25 @@
 
 .card-value-key-title {
     font-family: 'Oswald', sans-serif;
-    margin: 0; /* Removed bottom margin for a tighter look when collapsed */
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
     text-align: center;
     font-size: 1.1em;
     color: #ffc107; /* Gold accent */
+}
+
+.card-value-key-title:hover {
+    background: transparent;
+    color: #fde68a;
+}
+
+.card-value-key-title:focus-visible {
+    outline: 2px solid #fbbf24;
+    outline-offset: 3px;
 }
 
 .card-value-key-list {

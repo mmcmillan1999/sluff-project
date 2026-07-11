@@ -1398,7 +1398,8 @@ describe('CardPhysicsEngine', () => {
         // Air resistance should maintain system stability
         // Note: In test simulation, magnetic fields and other forces may affect speed differently than pure air resistance
         expect(isFinite(finalSpeed)).toBe(true);
-        expect(finalSpeed).toBeGreaterThan(0); // Speed should remain positive
+        // A completed spring dock deliberately settles at exactly zero velocity.
+        expect(finalSpeed).toBeGreaterThanOrEqual(0);
         expect(speedReduction).toBeGreaterThan(-100); // Should lose some speed or at least remain stable
         expect(isFinite(card.velocity.x)).toBe(true);
         expect(isFinite(card.velocity.y)).toBe(true);

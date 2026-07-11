@@ -27,7 +27,7 @@ const InitialInsurancePrompt = ({ show, insuranceState, selfPlayerName, emitEven
             const quickJumpValues = [20, 30, 40, 60, 80].map(v => v * (bidMultiplier || 1));
             
             return {
-                title: "Set Your Initial Requirement",
+                title: "Choose Your Insurance Ask",
                 settingType: 'bidderRequirement',
                 minValue,
                 maxValue,
@@ -39,7 +39,7 @@ const InitialInsurancePrompt = ({ show, insuranceState, selfPlayerName, emitEven
             const quickJumpValues = [-60, -10, -5, 0, 5, 10, 15, 20].map(v => v * (bidMultiplier || 1));
             
             return {
-                title: "Make Your Initial Offer",
+                title: "Choose Your Insurance Offer",
                 settingType: 'defenderOffer',
                 minValue,
                 maxValue,
@@ -58,8 +58,13 @@ const InitialInsurancePrompt = ({ show, insuranceState, selfPlayerName, emitEven
     useEffect(() => {
         if (!show || !config || isInitialized) return;
         
+        const savedValue = isBidder
+            ? Number(insuranceState?.bidderRequirement)
+            : Number(insuranceState?.defenderOffers?.[selfPlayerName]);
         let defaultValue;
-        if (isBidder) {
+        if (Number.isFinite(savedValue) && savedValue >= config.minValue && savedValue <= config.maxValue) {
+            defaultValue = savedValue;
+        } else if (isBidder) {
             // Start bidders at a moderate requirement (second quick jump value)
             defaultValue = config.quickJumpValues[1] || (config.minValue + config.maxValue) / 2;
         } else {
@@ -71,7 +76,7 @@ const InitialInsurancePrompt = ({ show, insuranceState, selfPlayerName, emitEven
         setActualValue(defaultValue);
         setSelectedButton(defaultValue);
         setIsInitialized(true);
-    }, [show, config, isBidder, isInitialized]);
+    }, [show, config, isBidder, isInitialized, insuranceState, selfPlayerName]);
 
     // Reset initialization state when modal closes
     useEffect(() => {
@@ -120,22 +125,32 @@ const InitialInsurancePrompt = ({ show, insuranceState, selfPlayerName, emitEven
 
     const getValueDescription = () => {
         if (isBidder) {
-            return `You will GET ${actualValue} points if insurance is claimed`;
+            return `Ask defenders to offer at least ${actualValue} points in total`;
         } else {
             if (actualValue > 0) {
-                return `You will GIVE ${actualValue} points to the bidder`;
+                return `Your offer would pay ${actualValue} points to the bidder`;
             } else if (actualValue < 0) {
-                return `You will GET ${Math.abs(actualValue)} points from the bidder`;
+                return `Your offer asks the bidder to pay you ${Math.abs(actualValue)} points`;
             } else {
-                return `No points exchanged`;
+                return `Your offer adds no points to either side`;
             }
         }
     };
 
+    const defenderOffers = insuranceState?.defenderOffers || {};
+    const currentOffer = Number(defenderOffers[selfPlayerName]) || 0;
+    const currentOfferTotal = Object.values(defenderOffers).reduce((sum, offer) => sum + (Number(offer) || 0), 0);
+    const previewOfferTotal = isBidder ? currentOfferTotal : currentOfferTotal - currentOffer + actualValue;
+    const previewAsk = isBidder ? actualValue : (Number(insuranceState?.bidderRequirement) || 0);
+    const previewGap = previewAsk - previewOfferTotal;
+
     return (
         <div className="insurance-prompt-modal">
-            <div className="insurance-prompt-content">
-                <h4 className="insurance-prompt-title">{config.title}</h4>
+            <div className="insurance-prompt-content" role="dialog" aria-modal="true" aria-labelledby="insurance-prompt-title" aria-describedby="insurance-explainer">
+                <h4 className="insurance-prompt-title" id="insurance-prompt-title">{config.title}</h4>
+                <div className="insurance-explainer" id="insurance-explainer">
+                    <strong>Why insure?</strong> Lock a known point exchange instead of waiting for the trick result. A deal locks when the defenders' combined offers meet the bidder's ask.
+                </div>
                 
                 {/* Value Display */}
                 <div className="current-value-display">
@@ -147,6 +162,11 @@ const InitialInsurancePrompt = ({ show, insuranceState, selfPlayerName, emitEven
                     </span>
                     <div className="value-description">
                         {getValueDescription()}
+                    </div>
+                    <div className={`insurance-gap-preview ${previewGap <= 0 ? 'is-ready' : ''}`}>
+                        {previewGap <= 0
+                            ? 'This setting reaches the deal threshold and would lock the agreement.'
+                            : `Deal gap: ${previewGap} more point${previewGap === 1 ? '' : 's'} needed.`}
                     </div>
                 </div>
 
@@ -161,6 +181,7 @@ const InitialInsurancePrompt = ({ show, insuranceState, selfPlayerName, emitEven
                             value={sliderValue}
                             onChange={handleSliderChange}
                             className="insurance-slider"
+                            aria-label={isBidder ? 'Insurance ask' : 'Insurance offer'}
                         />
                         <div className="slider-markers">
                             <span className="marker-label">{config.minValue}</span>
@@ -182,6 +203,7 @@ const InitialInsurancePrompt = ({ show, insuranceState, selfPlayerName, emitEven
                                     borderColor: getValueColor(value)
                                 }}
                                 onClick={() => handleQuickJump(value)}
+                                aria-label={`Set ${isBidder ? 'ask' : 'offer'} to ${value}`}
                             >
                                 {value}
                             </button>
@@ -196,21 +218,21 @@ const InitialInsurancePrompt = ({ show, insuranceState, selfPlayerName, emitEven
                         onClick={handleSubmit}
                         style={{ backgroundColor: getValueColor(actualValue) }}
                     >
-                        Confirm Selection
+                        Save {isBidder ? 'Ask' : 'Offer'}
                     </button>
                     <button
                         className="pass-button"
                         onClick={handlePass}
                     >
-                        Pass (Use Default)
+                        Keep Current Setting
                     </button>
                 </div>
 
                 {/* Helper Text */}
                 {!isBidder && (
                     <div className="helper-text">
-                        <span style={{ color: buttonColors.get }}>Green values</span> = points you GET • 
-                        <span style={{ color: buttonColors.give }}>Red values</span> = points you GIVE
+                        <span style={{ color: buttonColors.get }}>Green/negative</span> = ask the bidder to pay you ·
+                        <span style={{ color: buttonColors.give }}>Red/positive</span> = offer points to the bidder
                     </div>
                 )}
                 

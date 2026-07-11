@@ -149,6 +149,13 @@
     transform: translateY(-0.6vh); 
 }
 
+.trick-pile-base:focus-visible,
+.trick-pile-container[role="button"]:focus-visible {
+    outline: 0.35vh solid #fbbf24;
+    outline-offset: 0.45vh;
+    border-radius: 1vh;
+}
+
 /* Fixed trick pile positions - 4 containers total */
 
 /* Bottom positions */
@@ -932,6 +939,12 @@ button.card-display:disabled {
     transform: translateY(-50%);
 }
 
+.dealer-deck-top {
+    top: 12%;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
 .dealer-deck-label {
     color: #ffd700;
     font-family: 'Oswald', sans-serif;
@@ -1049,6 +1062,23 @@ button.card-display:disabled {
     position: relative !important;
     transform: none !important;
     margin: 0 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .trick-pile-container,
+    .trick-pile-base,
+    .trick-card-fly,
+    .widow-celebration-card,
+    .widow-flip,
+    .trump-broken-announcement,
+    .trump-broken-lightning,
+    .dealer-deck-label,
+    .card-drop-zone-visual,
+    .quickplay-waiting-copy,
+    .quickplay-starting-copy {
+        animation: none !important;
+        transition: none !important;
+    }
 }
 /* ============ Quick Play filling state + private share button ============ */
 

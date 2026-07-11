@@ -57,8 +57,12 @@ function handleNormalBid(engine, userId, bid) {
     }
     
     const soloIsHighest = engine.currentHighestBidDetails?.bid === "Solo";
-    const frogBidderIsOnlyRemainingPlayer = activeBidders.length === 1 && activeBidders[0] === engine.originalFrogBidderId;
-    if (soloIsHighest && frogBidderIsOnlyRemainingPlayer) {
+    const frogBidderCanRespond = activeBidders.includes(engine.originalFrogBidderId)
+        && activeBidders.every(id => (
+            id === engine.originalFrogBidderId
+            || id === engine.currentHighestBidDetails?.userId
+        ));
+    if (soloIsHighest && frogBidderCanRespond) {
         engine.state = "Awaiting Frog Upgrade Decision";
         engine.biddingTurnPlayerId = engine.originalFrogBidderId;
         return [{ type: 'BROADCAST_STATE' }];

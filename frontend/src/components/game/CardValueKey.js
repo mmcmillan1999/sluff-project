@@ -2,22 +2,21 @@ import React, { useState } from 'react';
 import { CARD_POINT_VALUES } from '../../constants';
 import './KeyAndModal.css';
 
-/**
- * A static UI component to display the point values of cards.
- */
-const CardValueKey = () => {
-    const [expanded, setExpanded] = useState(false);
-    // Sort the cards by point value for a logical display
+/** Display the canonical card-point values from the shared rules constants. */
+const CardValueKey = ({ defaultExpanded = false, embedded = false }) => {
+    const [expanded, setExpanded] = useState(defaultExpanded);
     const sortedCards = Object.entries(CARD_POINT_VALUES).sort(([, a], [, b]) => b - a);
 
     return (
-        <div
-            className="card-value-key-container"
-            onClick={() => setExpanded(!expanded)}
-        >
-            <h4 className="card-value-key-title">
-                Card Points {expanded ? '▲' : '▼'}
-            </h4>
+        <div className={`card-value-key-container ${embedded ? 'is-embedded' : ''}`}>
+            <button
+                type="button"
+                className="card-value-key-title"
+                onClick={() => setExpanded(value => !value)}
+                aria-expanded={expanded}
+            >
+                Card Points <span aria-hidden="true">{expanded ? '▲' : '▼'}</span>
+            </button>
             {expanded && (
                 <div className="card-value-key-list">
                     {sortedCards.map(([rank, value]) => (

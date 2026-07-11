@@ -124,3 +124,13 @@
 .bid-splash-overlay.flying .bid-splash-name.defender {
     transition-delay: 0.35s;
 }
+
+@media (prefers-reduced-motion: reduce) {
+    .bid-splash-overlay,
+    .bid-splash-vs,
+    .bid-splash-name,
+    .bid-splash-overlay.flying .bid-splash-name {
+        animation: none !important;
+        transition: none !important;
+    }
+}

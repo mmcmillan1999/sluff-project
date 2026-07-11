@@ -48,6 +48,38 @@
     flex-grow: 1;
 }
 
+.table-economics {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px 10px;
+    margin: -2px 0 8px;
+    padding: 7px 9px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.18);
+    color: #cbd5e1;
+    font-size: 0.72em;
+    line-height: 1.25;
+}
+
+.table-buy-in {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: #fbbf24;
+    font-weight: 600;
+}
+
+.table-buy-in img {
+    width: 14px;
+    height: 14px;
+}
+
+.table-payout {
+    color: #cbd5e1;
+}
+
 .player-list {
     display: flex;
     justify-content: space-between;
@@ -165,6 +197,12 @@
         font-size: 1.2em; /* Readable but not overwhelming */
         min-height: 50px;
         color: #e0e0e0; /* Better contrast */
+    }
+
+    .table-economics {
+        margin-bottom: 14px;
+        padding: 10px 12px;
+        font-size: 0.86em;
     }
     
     .player-names {

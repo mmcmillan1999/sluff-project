@@ -2,13 +2,14 @@
 // Run with: node tests/quickPlay.test.js
 const assert = require('assert');
 const GameService = require('../src/services/GameService');
+const { createGameServiceWithoutHeartbeat } = require('./test-helpers');
 
 const mockIo = { to: () => ({ emit: () => {} }), emit: () => {}, sockets: { sockets: new Map() } };
 const mockPool = { query: () => Promise.resolve({ rows: [], rowCount: 0 }) };
 
-(async () => {
+async function runQuickPlayTests() {
     const timers = [];
-    const gameService = new GameService(mockIo, mockPool);
+    const gameService = createGameServiceWithoutHeartbeat(GameService, mockIo, mockPool);
     gameService.timerOverride = (cb, duration) => { timers.push({ cb, duration }); };
     const fireNext = async () => { const t = timers.shift(); await t.cb(); return t; };
 
@@ -108,5 +109,13 @@ const mockPool = { query: () => Promise.resolve({ rows: [], rowCount: 0 }) };
     assert.strictEqual(allListedIds.length, 40, 'all 40 private tables listed');
 
     console.log('QUICK PLAY MATCHMAKER TEST PASSED');
-    process.exit(0);
-})().catch(err => { console.error(err); process.exit(1); });
+}
+
+if (require.main === module) {
+    runQuickPlayTests().catch(err => {
+        console.error(err);
+        process.exitCode = 1;
+    });
+}
+
+module.exports = runQuickPlayTests;

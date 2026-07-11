@@ -1,24 +1,10 @@
 // backend/src/api/feedback.js
 
 const express = require('express');
-
-const checkAuth = (jwt) => (req, res, next) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).send('Authentication required.');
-    }
-    const token = authHeader.split(' ')[1];
-    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-        if (err) {
-            return res.status(403).send('Invalid or expired token.');
-        }
-        req.user = user;
-        next();
-    });
-};
+const requireAuth = require('../middleware/requireAuth');
 
 const isAdmin = (req, res, next) => {
-    if (req.user && req.user.is_admin) {
+    if (req.user?.is_admin === true) {
         return next();
     }
     res.status(403).send('Access Forbidden: Requires admin privileges.');
@@ -26,9 +12,10 @@ const isAdmin = (req, res, next) => {
 
 const createFeedbackRoutes = (pool, jwt) => {
     const router = express.Router();
+    const checkAuth = requireAuth(pool, jwt);
     
     // POST /api/feedback - Submit new feedback (existing functionality)
-    router.post('/', checkAuth(jwt), async (req, res) => {
+    router.post('/', checkAuth, async (req, res) => {
         const { id: userId, username } = req.user;
         const { feedback_text, game_state_json } = req.body;
 
@@ -53,9 +40,9 @@ const createFeedbackRoutes = (pool, jwt) => {
     });
 
     // --- NEW: GET /api/feedback - Fetch the feedback repository ---
-    router.get('/', checkAuth(jwt), async (req, res) => {
+    router.get('/', checkAuth, async (req, res) => {
         try {
-            const userIsAdmin = req.user.is_admin;
+            const userIsAdmin = req.user.is_admin === true;
             let query;
             
             if (userIsAdmin) {
@@ -86,7 +73,7 @@ const createFeedbackRoutes = (pool, jwt) => {
     });
 
     // --- NEW: PUT /api/feedback/:id - Update a feedback item (Admins only) ---
-    router.put('/:id', checkAuth(jwt), isAdmin, async (req, res) => {
+    router.put('/:id', checkAuth, isAdmin, async (req, res) => {
         const { id } = req.params;
         const { status, admin_response, admin_notes } = req.body;
 

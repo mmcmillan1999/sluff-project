@@ -5,9 +5,10 @@ const { SUITS } = require('../constants');
 const scoringHandler = require('./scoringHandler');
 
 function playCard(engine, userId, card) {
-    // The trick leader is already assigned during Bid Announcement, but play
-    // is held until the round-start splash window ends.
-    if (engine.state === "Bid Announcement") return [];
+    // Playing Phase is the only state in which a card may leave a hand.  This
+    // also protects the completed-trick linger and an active draw vote from a
+    // late or replayed socket action.
+    if (engine.state !== "Playing Phase" || engine.drawRequest?.isActive) return [];
     if (userId !== engine.trickTurnPlayerId) return [];
     const player = engine.players[userId];
     if (!player) return [];

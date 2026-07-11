@@ -14,7 +14,7 @@
     gap: 0.8vh; /* Reduced gap */
     border: 0.12vh solid rgba(255, 255, 255, 0.15);
     min-height: 5vh; /* Slightly smaller height */
-    max-width: 35vh; /* Limit maximum width */
+    max-width: min(72vw, 44vh);
     -webkit-backdrop-filter: blur(4px);
     backdrop-filter: blur(4px);
     box-shadow: 0 0.5vh 1.5vh rgba(0, 0, 0, 0.3);
@@ -47,6 +47,16 @@
     font-family: 'Oswald', sans-serif;
 }
 
+.insurance-purpose-label {
+    color: #cbd5e1;
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(0.55rem, 1.05vh, 0.7rem);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    line-height: 1.05;
+    white-space: normal;
+}
+
 .value-display {
     font-size: 2.2vh; /* Reduced font size */
     font-weight: bold;
@@ -55,6 +65,26 @@
     text-align: center;
     line-height: 1;
     cursor: pointer; /* tap opens the full insurance prompt */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.15vh;
+}
+
+.insurance-value-label {
+    color: #cbd5e1;
+    font-size: clamp(0.5rem, 0.9vh, 0.62rem);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    line-height: 1;
+}
+
+.value-display:focus-visible,
+.adjust-button:focus-visible {
+    outline: 0.3vh solid #fbbf24;
+    outline-offset: 0.3vh;
+    border-radius: 0.5vh;
 }
 
 .value-display.player-value-get {
@@ -187,5 +217,10 @@
     border-color: #7f1d1d;
 }
 
-/* NO MEDIA QUERIES - Everything scales consistently with vh units */
-/* All elements maintain their proportions across all devices */
+/* Preserve the compact footer in short landscape viewports. */
+
+@media (max-height: 500px) {
+    .insurance-purpose-label {
+        display: none;
+    }
+}

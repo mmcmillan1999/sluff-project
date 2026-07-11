@@ -2,21 +2,151 @@
 
 const jwt = require("jsonwebtoken");
 const transactionManager = require('../data/transactionManager');
+const { authorizeTableAction, isPlainObject, validators } = require('./socketActionGuard');
+const { loadCurrentUserByTokenId } = require('../middleware/requireAuth');
 
-const registerGameHandlers = (io, gameService) => {
+const DEFAULT_SOCKET_AUTH_REFRESH_INTERVAL_MS = 60_000;
+
+function revokeTrustedAdminObserver(socket) {
+    socket.data = socket.data || {};
+    socket.data.trustedAdminObserver = false;
+}
+
+async function refreshSocketUserFromDatabase(socket, pool) {
+    const currentUser = await loadCurrentUserByTokenId(pool, { id: socket.user?.id });
+    if (!currentUser) {
+        revokeTrustedAdminObserver(socket);
+        return null;
+    }
+
+    socket.user = currentUser;
+    if (currentUser.is_admin !== true) revokeTrustedAdminObserver(socket);
+    return currentUser;
+}
+
+function emitRedactedStateForSocket(socket, gameService) {
+    const engine = Object.values(gameService.getAllEngines()).find(candidate => {
+        const player = candidate.players?.[socket.user?.id];
+        return player?.socketId === socket.id;
+    });
+    if (!engine || typeof gameService.getStateForSocket !== 'function') return;
+
+    const redactedState = gameService.getStateForSocket(engine, socket);
+    if (redactedState) socket.emit('gameState', redactedState);
+}
+
+async function requireFreshSocketAdmin(
+    socket,
+    pool,
+    denialMessage = 'Admin privileges required.',
+    onPrivilegeRevoked,
+) {
+    const hadTrustedObserverAccess = socket.data?.trustedAdminObserver === true;
+    const notifyRevocation = () => {
+        if (hadTrustedObserverAccess && typeof onPrivilegeRevoked === 'function') onPrivilegeRevoked();
+    };
+
+    try {
+        const currentUser = await refreshSocketUserFromDatabase(socket, pool);
+        if (!currentUser) {
+            notifyRevocation();
+            socket.emit('error', { message: 'Authentication required.' });
+            return false;
+        }
+        if (currentUser.is_admin !== true) {
+            notifyRevocation();
+            socket.emit('error', { message: denialMessage });
+            return false;
+        }
+        return true;
+    } catch (error) {
+        revokeTrustedAdminObserver(socket);
+        if (socket.user) socket.user = { ...socket.user, is_admin: false };
+        notifyRevocation();
+        console.error(`[SECURITY] Failed to refresh admin status for user ${socket.user?.id}:`, error);
+        socket.emit('error', { message: 'Admin privileges could not be verified.' });
+        return false;
+    }
+}
+
+const registerGameHandlers = (io, gameService, options = {}) => {
+    const configuredRefreshInterval = Number(options.socketAuthRefreshIntervalMs);
+    const socketAuthRefreshIntervalMs = Number.isFinite(configuredRefreshInterval)
+        && configuredRefreshInterval > 0
+        ? configuredRefreshInterval
+        : DEFAULT_SOCKET_AUTH_REFRESH_INTERVAL_MS;
+    const scheduleInterval = options.setIntervalFn || setInterval;
+    const cancelInterval = options.clearIntervalFn || clearInterval;
 
     io.use((socket, next) => {
-        const token = socket.handshake.auth.token;
+        const token = socket.handshake?.auth?.token;
         if (!token) return next(new Error("Authentication error: No token provided."));
-        jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+        jwt.verify(token, process.env.JWT_SECRET, async (err, tokenUser) => {
             if (err) return next(new Error("Authentication error: Invalid token."));
-            socket.user = user;
-            next();
+            try {
+                const currentUser = await loadCurrentUserByTokenId(gameService.pool, tokenUser);
+                if (!currentUser) {
+                    return next(new Error("Authentication error: Account no longer exists."));
+                }
+                socket.user = currentUser;
+                return next();
+            } catch (databaseError) {
+                console.error('Socket authentication database lookup failed:', databaseError);
+                return next(new Error("Authentication error: Unable to verify account."));
+            }
         });
     });
 
     io.on("connection", (socket) => {
+        socket.data = socket.data || {};
         console.log(`Socket connected: ${socket.user.username} (ID: ${socket.user.id}, Socket: ${socket.id})`);
+
+        const emitRedactedState = () => emitRedactedStateForSocket(socket, gameService);
+        const requireFreshAdmin = denialMessage => requireFreshSocketAdmin(
+            socket,
+            gameService.pool,
+            denialMessage,
+            emitRedactedState,
+        );
+        let socketIdentityRefreshStopped = false;
+        let socketIdentityRefreshInFlight = false;
+
+        const refreshConnectedSocketIdentity = async () => {
+            if (socketIdentityRefreshStopped || socketIdentityRefreshInFlight) return;
+            socketIdentityRefreshInFlight = true;
+            const hadTrustedObserverAccess = socket.data.trustedAdminObserver === true;
+
+            try {
+                const currentUser = await refreshSocketUserFromDatabase(socket, gameService.pool);
+                if (socketIdentityRefreshStopped) return;
+
+                if (!currentUser) {
+                    if (hadTrustedObserverAccess) emitRedactedState();
+                    socket.emit('error', { message: 'Authentication required.' });
+                    if (typeof socket.disconnect === 'function') socket.disconnect(true);
+                    return;
+                }
+
+                if (hadTrustedObserverAccess && currentUser.is_admin !== true) emitRedactedState();
+            } catch (error) {
+                if (socketIdentityRefreshStopped) return;
+                revokeTrustedAdminObserver(socket);
+                if (socket.user) socket.user = { ...socket.user, is_admin: false };
+                if (hadTrustedObserverAccess) emitRedactedState();
+                console.error(`[SECURITY] Periodic identity refresh failed for user ${socket.user?.id}:`, error);
+            } finally {
+                socketIdentityRefreshInFlight = false;
+            }
+        };
+
+        // Bound the lifetime of cached socket identity without adding a database
+        // query to every gameplay event. Production revocation latency is at most
+        // one refresh interval (60 seconds by default).
+        const socketIdentityRefreshTimer = scheduleInterval(
+            refreshConnectedSocketIdentity,
+            socketAuthRefreshIntervalMs,
+        );
+        socketIdentityRefreshTimer?.unref?.();
 
         // Reconnection: if this user still holds a seat at any table, put them back
         // on it deterministically. This runs on every (re)connect — full reload or a
@@ -27,7 +157,10 @@ const registerGameHandlers = (io, gameService) => {
         if (engine) {
             socket.join(engine.tableId);                       // (1) so broadcasts reach this socket
             engine.reconnectPlayer(socket.user.id, socket);    // (2) adopt new socket id, clear forfeit
-            gameService.io.to(engine.tableId).emit('gameState', engine.getStateForClient()); // (3) push state now
+            socket.data.trustedAdminObserver = socket.user.is_admin === true
+                && engine.players[socket.user.id]?.isSpectator === true
+                && engine.players[socket.user.id]?.wasExplicitSpectator === true;
+            gameService.emitGameState(engine.tableId);         // (3) push personalized state now
 
             // Best-effort token-balance refresh — never gates the rejoin above.
             gameService.pool.query("SELECT SUM(amount) AS tokens FROM transactions WHERE user_id = $1", [socket.user.id])
@@ -35,33 +168,57 @@ const registerGameHandlers = (io, gameService) => {
                     const player = engine.players[socket.user.id];
                     if (!player) return;
                     player.tokens = parseFloat(tokenResult.rows[0].tokens || 0).toFixed(2);
-                    gameService.io.to(engine.tableId).emit('gameState', engine.getStateForClient());
+                    gameService.emitGameState(engine.tableId);
                 })
                 .catch(err => console.error("Error refreshing tokens on reconnect:", err));
         }
         
         socket.emit("lobbyState", gameService.getLobbyState());
 
-        socket.on("hardResetServer", async () => {
-            if (socket.user.is_admin) {
-                console.log(`[ADMIN] Hard reset initiated by ${socket.user.username}.`);
+        const onTableAction = (eventName, options, handler) => {
+            socket.on(eventName, async (payload) => {
+                if (options.adminOnly && !(await requireFreshAdmin())) return;
+                const context = authorizeTableAction(socket, gameService, payload, options);
+                if (!context) return;
                 try {
-                    const pool = gameService.pool;
-                    const query = `INSERT INTO lobby_chat_messages (user_id, username, message) VALUES ($1, $2, $3)`;
-                    await pool.query(query, [socket.user.id, 'System', 'The server is being reset by an administrator.']);
-                    io.emit('new_lobby_message', { id: Date.now(), username: 'System', message: 'The server is being reset by an administrator.' });
+                    await handler(context);
                 } catch (error) {
-                    console.error("Failed to post server reset message to chat:", error);
+                    console.error(`[SOCKET] ${eventName} failed for user ${socket.user.id}:`, error);
+                    socket.emit('error', { message: 'The action could not be completed.' });
                 }
-                gameService.resetAllEngines();
-                socket.emit("notification", { message: "Server reset successfully initiated." });
-                setTimeout(() => {
-                    io.emit('forceDisconnectAndReset', 'The server has been reset. Please log in again.');
-                    io.disconnectSockets(true);
-                }, 500);
-            } else {
-                console.warn(`[SECURITY] FAILED hard reset attempt by non-admin user: ${socket.user.username}`);
-                return socket.emit("error", { message: "Admin privileges required." });
+            });
+        };
+
+        socket.on("hardResetServer", async () => {
+            if (!(await requireFreshAdmin())) {
+                console.warn(`[SECURITY] FAILED hard reset attempt by non-admin user: ${socket.user?.username}`);
+                return;
+            }
+
+            const rejectWhileGameIsActive = () => {
+                if (!gameService.hasActiveOrPendingGame()) return false;
+                socket.emit('error', {
+                    message: 'A game start or settlement is still committing, or a game is still active. Wait for its normal table reset before resetting the server.',
+                });
+                return true;
+            };
+            if (rejectWhileGameIsActive()) return;
+
+            console.log(`[ADMIN] Hard reset initiated by ${socket.user.username}.`);
+            // Keep this second check immediately adjacent to the reset. No
+            // asynchronous work may open a new commit window between them.
+            if (rejectWhileGameIsActive()) return;
+            gameService.resetAllEngines();
+            io.emit('forceDisconnectAndReset', 'The server has been reset. Please log in again.');
+            io.disconnectSockets(true);
+
+            try {
+                const pool = gameService.pool;
+                const query = `INSERT INTO lobby_chat_messages (user_id, username, message) VALUES ($1, $2, $3)`;
+                await pool.query(query, [socket.user.id, 'System', 'The server is being reset by an administrator.']);
+                io.emit('new_lobby_message', { id: Date.now(), username: 'System', message: 'The server is being reset by an administrator.' });
+            } catch (error) {
+                console.error("Failed to post server reset message to chat:", error);
             }
         });
 
@@ -69,26 +226,76 @@ const registerGameHandlers = (io, gameService) => {
         // any previous table, join the room, seat the player, broadcast.
         const seatUserAtTable = async (engineToJoin, asSpectator = false) => {
             const tableId = engineToJoin.tableId;
+            const existingPlayer = engineToJoin.players[socket.user.id];
+            const activeSeatIsLocked = (engine, player) => (
+                !!engine
+                && !!player
+                && !player.isSpectator
+                && (engine.gameStarted || engine.gameStartPending)
+                && !['Game Over', 'DrawComplete'].includes(engine.state)
+            );
+            if (asSpectator && activeSeatIsLocked(engineToJoin, existingPlayer)) {
+                throw new Error('An active player cannot switch to spectator mode during a game.');
+            }
+            const findOtherSeatEngines = () => Object.values(gameService.getAllEngines())
+                .filter(candidate => candidate.players[socket.user.id] && candidate.tableId !== tableId);
+            const previousEngines = findOtherSeatEngines();
+            if (previousEngines.some(engine => activeSeatIsLocked(engine, engine.players[socket.user.id]))) {
+                throw new Error('You cannot join another table while your current game is active.');
+            }
             const tokenResult = await gameService.pool.query("SELECT SUM(amount) AS tokens FROM transactions WHERE user_id = $1", [socket.user.id]);
             const tokens = parseFloat(tokenResult.rows[0].tokens || 0).toFixed(2);
 
-            const previousEngine = Object.values(gameService.getAllEngines()).find(e => e.players[socket.user.id] && e.tableId !== tableId);
-            if (previousEngine) {
+            // Observer mode is an admin capability. Refresh it after the balance
+            // read so no stale JWT claim survives into the seating mutation.
+            if (asSpectator && !(await requireFreshAdmin(
+                'Only administrators can request observer mode.',
+            ))) return false;
+
+            // The balance read yields to PostgreSQL. Re-check both seats after
+            // it returns because another socket may have requested a start in
+            // that window, freezing the roster we are about to mutate.
+            const currentExistingPlayer = engineToJoin.players[socket.user.id];
+            if (asSpectator && activeSeatIsLocked(engineToJoin, currentExistingPlayer)) {
+                throw new Error('An active player cannot switch to spectator mode during a game.');
+            }
+            // Search globally again instead of trusting the pre-await pointer.
+            // Concurrent joins can both begin with no previous seat; the first
+            // continuation to resume must become visible to the second one.
+            const currentPreviousEngines = findOtherSeatEngines();
+            if (currentPreviousEngines.some(engine => activeSeatIsLocked(engine, engine.players[socket.user.id]))) {
+                throw new Error('You cannot join another table while your current game is active.');
+            }
+
+            for (const previousEngine of currentPreviousEngines) {
                 previousEngine.leaveTable(socket.user.id);
                 socket.leave(previousEngine.tableId);
-                gameService.io.to(previousEngine.tableId).emit('gameState', previousEngine.getStateForClient());
+                gameService.emitGameState(previousEngine.tableId);
                 if (previousEngine.tableType === 'quickplay') gameService.evaluateQuickPlayTable(previousEngine.tableId);
             }
             socket.join(tableId);
 
             engineToJoin.joinTable(socket.user, socket.id, tokens, asSpectator);
 
-            socket.emit('joinedTable', { gameState: engineToJoin.getStateForClient() });
-            gameService.io.to(tableId).emit('gameState', engineToJoin.getStateForClient());
+            const joinedPlayer = engineToJoin.players[socket.user.id];
+            if (asSpectator && socket.user.is_admin === true && joinedPlayer?.isSpectator) {
+                joinedPlayer.wasExplicitSpectator = true;
+                socket.data.trustedAdminObserver = true;
+            } else {
+                socket.data.trustedAdminObserver = false;
+            }
+
+            socket.emit('joinedTable', { gameState: gameService.getStateForSocket(engineToJoin, socket) });
+            gameService.emitGameState(tableId);
             gameService.io.emit('lobbyState', gameService.getLobbyState());
+            return true;
         };
 
-        socket.on("joinTable", async ({ tableId, asSpectator = false }) => {
+        socket.on("joinTable", async (payload) => {
+            if (!isPlainObject(payload) || typeof payload.tableId !== 'string' || (payload.asSpectator !== undefined && typeof payload.asSpectator !== 'boolean')) {
+                return socket.emit('error', { message: 'Invalid join request.' });
+            }
+            const { tableId, asSpectator = false } = payload;
             if (asSpectator) {
                 console.log(`[ADMIN] User ${socket.user.username} joining table ${tableId} as spectator`);
             }
@@ -97,7 +304,8 @@ const registerGameHandlers = (io, gameService) => {
             if (!engineToJoin) return socket.emit("error", { message: "Table not found." });
 
             try {
-                await seatUserAtTable(engineToJoin, asSpectator);
+                const joined = await seatUserAtTable(engineToJoin, asSpectator);
+                if (!joined) return;
 
                 if (asSpectator) {
                     const finalPlayer = engineToJoin.players[socket.user.id];
@@ -108,13 +316,20 @@ const registerGameHandlers = (io, gameService) => {
 
             } catch(err) {
                  console.error(`Error fetching tokens for user ${socket.user.id} on join:`, err);
-                 socket.emit("error", { message: "Could not retrieve your token balance." });
+                 const message = err.message?.includes('cannot switch to spectator') || err.message?.includes('cannot join another table')
+                    ? err.message
+                    : "Could not retrieve your token balance.";
+                 socket.emit("error", { message });
             }
         });
 
         // Quick Play: pick (or open) a matchmaking table for the theme and
         // seat the player; the GameService matchmaker handles the rest.
-        socket.on("quickPlay", async ({ theme }) => {
+        socket.on("quickPlay", async (payload) => {
+            if (!isPlainObject(payload) || typeof payload.theme !== 'string') {
+                return socket.emit('error', { message: 'Invalid quick play request.' });
+            }
+            const { theme } = payload;
             const engineToJoin = gameService.findQuickPlayTable(theme);
             if (!engineToJoin) {
                 return socket.emit("error", { message: "All quick play tables are busy — try again in a moment." });
@@ -129,30 +344,24 @@ const registerGameHandlers = (io, gameService) => {
             }
         });
 
-        socket.on("leaveTable", ({ tableId }) => {
-            const engineToLeave = gameService.getEngineById(tableId);
-            if (engineToLeave) {
-                engineToLeave.leaveTable(socket.user.id);
-                gameService.io.to(tableId).emit('gameState', engineToLeave.getStateForClient());
-                gameService.io.emit('lobbyState', gameService.getLobbyState());
-                if (engineToLeave.tableType === 'quickplay') gameService.evaluateQuickPlayTable(tableId);
-            }
+        onTableAction("leaveTable", { allowSpectator: true }, async ({ engine: engineToLeave, payload: { tableId } }) => {
+            engineToLeave.leaveTable(socket.user.id);
+            gameService.emitGameState(tableId);
+            gameService.io.emit('lobbyState', gameService.getLobbyState());
+            if (engineToLeave.tableType === 'quickplay') gameService.evaluateQuickPlayTable(tableId);
             socket.leave(tableId);
+            socket.data.trustedAdminObserver = false;
             socket.emit("lobbyState", gameService.getLobbyState());
         });
 
-        socket.on("moveToSpectator", ({ tableId }) => {
+        onTableAction("moveToSpectator", {
+            adminOnly: true,
+            allowSpectator: true,
+            validate: (_payload, { engine }) => (engine.gameStarted || engine.gameStartPending)
+                ? 'Observer mode cannot be changed after a game start is requested.'
+                : null,
+        }, async ({ engine, payload: { tableId } }) => {
             console.log(`[ADMIN] ${socket.user.username} requesting move to spectator on table ${tableId}`);
-
-            // Only allow admins to use this feature
-            if (!socket.user.is_admin) {
-                return socket.emit("error", { message: "Only admins can move to spectator mode." });
-            }
-
-            const engine = gameService.getEngineById(tableId);
-            if (!engine) {
-                return socket.emit("error", { message: "Table not found." });
-            }
 
             const existingPlayer = engine.players[socket.user.id];
             if (!existingPlayer) {
@@ -173,6 +382,7 @@ const registerGameHandlers = (io, gameService) => {
             // Convert player to spectator
             engine.players[socket.user.id].isSpectator = true;
             engine.players[socket.user.id].wasExplicitSpectator = true; // Mark as explicitly chosen spectator
+            socket.data.trustedAdminObserver = true;
             console.log(`[ADMIN] Set isSpectator to true for ${socket.user.username}`);
             
             // Remove from player order
@@ -200,7 +410,7 @@ const registerGameHandlers = (io, gameService) => {
             console.log(`[ADMIN]   - playerOrder.count: ${engine.playerOrder.count}`);
 
             // Get the state that will be sent to clients
-            const stateForClient = engine.getStateForClient();
+            const stateForClient = gameService.getStateForSocket(engine, socket);
             console.log(`[ADMIN] State being sent to clients:`);
             console.log(`[ADMIN]   - playerOrderActive: [${stateForClient.playerOrderActive.join(', ')}]`);
             console.log(`[ADMIN]   - players[${socket.user.id}].isSpectator: ${stateForClient.players[socket.user.id]?.isSpectator}`);
@@ -209,7 +419,7 @@ const registerGameHandlers = (io, gameService) => {
             console.log(`[ADMIN] Successfully converted ${socket.user.username} to spectator. Active players: ${engine.playerOrder.count}`);
 
             // Emit updated state
-            gameService.io.to(tableId).emit('gameState', stateForClient);
+            gameService.emitGameState(tableId);
             gameService.io.emit('lobbyState', gameService.getLobbyState());
             
             socket.emit("notification", { message: "You are now a spectator." });
@@ -217,77 +427,51 @@ const registerGameHandlers = (io, gameService) => {
 
         // Bots are quick-play-only for regular players (the matchmaker seats
         // them). Manual bot management remains as an admin testing tool.
-        socket.on("addBot", ({ tableId, name }) => {
-            if (!socket.user.is_admin) {
-                return socket.emit("error", { message: "Bots join Quick Play games automatically." });
-            }
-            const engine = gameService.getEngineById(tableId);
-            if (engine) {
-                engine.addBotPlayer(name || 'Lee');
-                gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
-                gameService.io.emit('lobbyState', gameService.getLobbyState());
-            }
+        onTableAction("addBot", {
+            adminOnly: true,
+            allowSpectator: true,
+            validate: (_payload, { engine }) => engine.gameStarted ? 'Bots cannot be added during a game.' : null,
+        }, async ({ engine, payload }) => {
+            engine.addBotPlayer(payload.name || 'Lee');
+            gameService.emitGameState(engine.tableId);
+            gameService.io.emit('lobbyState', gameService.getLobbyState());
         });
         
-        socket.on("startGame", ({tableId}) => gameService.startGame(tableId, socket.user.id));
-        socket.on("playCard", ({tableId, card}) => gameService.playCard(tableId, socket.user.id, card));
-        socket.on("dealCards", ({tableId}) => gameService.dealCards(tableId, socket.user.id));
-        socket.on("placeBid", ({tableId, bid}) => gameService.placeBid(tableId, socket.user.id, bid));
-        socket.on("chooseTrump", ({tableId, suit}) => gameService.chooseTrump(tableId, socket.user.id, suit));
-        socket.on("submitFrogDiscards", ({tableId, discards}) => {
-            try {
-                const engine = gameService.getEngineById(tableId);
-                const state = engine?.state;
-                const bidderId = engine?.bidWinnerInfo?.userId;
-                console.log(`[EVENT] submitFrogDiscards from user ${socket.user.id} on ${tableId} (state=${state}, bidder=${bidderId}) :: discards=${Array.isArray(discards) ? discards.join(',') : discards}`);
-                if (!engine) {
-                    return socket.emit('error', { message: 'Table not found.' });
-                }
-                if (state !== 'Frog Widow Exchange') {
-                    return socket.emit('error', { message: `Not accepting discards in state '${state}'.` });
-                }
-                if (bidderId !== socket.user.id) {
-                    return socket.emit('error', { message: 'Only the bidder can submit discards.' });
-                }
-            } catch (e) {
-                console.warn(`[EVENT] submitFrogDiscards logging failed:`, e);
-            }
-            gameService.submitFrogDiscards(tableId, socket.user.id, discards);
+        onTableAction("startGame", {}, ({ payload: { tableId } }) => gameService.startGame(tableId, socket.user.id));
+        onTableAction("playCard", { validate: validators.card }, ({ payload: { tableId, card } }) => gameService.playCard(tableId, socket.user.id, card));
+        onTableAction("dealCards", {}, ({ payload: { tableId } }) => gameService.dealCards(tableId, socket.user.id));
+        onTableAction("placeBid", { validate: validators.bid }, ({ payload: { tableId, bid } }) => gameService.placeBid(tableId, socket.user.id, bid));
+        onTableAction("chooseTrump", { validate: validators.trump }, ({ payload: { tableId, suit } }) => gameService.chooseTrump(tableId, socket.user.id, suit));
+        onTableAction("submitFrogDiscards", { validate: validators.frogDiscards }, ({ payload: { tableId, discards } }) => (
+            gameService.submitFrogDiscards(tableId, socket.user.id, discards)
+        ));
+        onTableAction("requestNextRound", {}, ({ payload: { tableId } }) => gameService.requestNextRound(tableId, socket.user.id));
+        onTableAction("submitDrawVote", { validate: validators.drawVote }, ({ payload: { tableId, vote } }) => (
+            gameService.submitDrawVote(tableId, socket.user.id, vote)
+        ));
+        onTableAction("forfeitGame", {}, ({ payload: { tableId } }) => gameService.forfeitGame(tableId, socket.user.id));
+        onTableAction("updateInsuranceSetting", { validate: validators.insurance }, ({ payload: { tableId, settingType, value } }) => (
+            gameService.updateInsuranceSetting(tableId, socket.user.id, settingType, value)
+        ));
+        onTableAction("startTimeoutClock", { validate: validators.targetPlayer }, ({ payload: { tableId, targetPlayerName } }) => (
+            gameService.startForfeitTimer(tableId, socket.user.id, targetPlayerName)
+        ));
+        onTableAction("requestDraw", {}, ({ payload: { tableId } }) => gameService.requestDraw(tableId, socket.user.id));
+        onTableAction("resetGame", {
+            validate: validators.terminalReset,
+        }, ({ payload: { tableId } }) => gameService.resetGame(tableId));
+        onTableAction("removeBot", { adminOnly: true, allowSpectator: true }, async ({ engine }) => {
+            engine.removeBot();
+            gameService.emitGameState(engine.tableId);
+            gameService.io.emit('lobbyState', gameService.getLobbyState());
         });
-        socket.on("requestNextRound", ({tableId}) => gameService.requestNextRound(tableId, socket.user.id));
-        socket.on("submitDrawVote", ({tableId, vote}) => gameService.submitDrawVote(tableId, socket.user.id, vote)); // THE FIX
-
-        // Non-effect handlers can still call the engine directly for simple synchronous changes.
-        const createDirectHandler = (methodName) => (payload) => {
-            const { tableId, ...args } = payload;
-            const engine = gameService.getEngineById(tableId);
-            if (engine && typeof engine[methodName] === 'function') {
-                const methodArgs = Object.keys(args).length > 0 ? [socket.user.id, args] : [socket.user.id];
-                engine[methodName](...methodArgs);
-                gameService.io.to(tableId).emit('gameState', engine.getStateForClient());
-                gameService.io.emit('lobbyState', gameService.getLobbyState());
-            }
-        };
-        socket.on("removeBot", (payload) => {
-            if (!socket.user.is_admin) return socket.emit("error", { message: "Admin privileges required." });
-            createDirectHandler('removeBot')(payload);
-        });
-        socket.on("forfeitGame", createDirectHandler('forfeitGame'));
-        socket.on("resetGame", createDirectHandler('reset'));
-        socket.on("updateInsuranceSetting", createDirectHandler('updateInsuranceSetting'));
-        socket.on("startTimeoutClock", createDirectHandler('startTimeoutClock'));
-        socket.on("requestDraw", createDirectHandler('requestDraw'));
         
         // Admin spectator start game handler
-        socket.on("startGameAsBot", ({ tableId, botPlayerId }) => {
-            const engine = gameService.getEngineById(tableId);
-            if (!engine) return socket.emit("error", { message: "Table not found." });
-            
-            // Verify admin status
-            if (!socket.user.is_admin) {
-                return socket.emit("error", { message: "Only admins can start bot games." });
-            }
-            
+        onTableAction("startGameAsBot", {
+            adminOnly: true,
+            allowSpectator: true,
+            validate: payload => Number.isInteger(Number(payload.botPlayerId)) ? null : 'Invalid bot player.',
+        }, ({ engine, payload: { tableId, botPlayerId } }) => {
             // Verify the bot exists and is a player
             const botPlayer = engine.players[botPlayerId];
             if (!botPlayer || !botPlayer.isBot || botPlayer.isSpectator) {
@@ -295,10 +479,11 @@ const registerGameHandlers = (io, gameService) => {
             }
             
             console.log(`[ADMIN] Starting game via bot ${botPlayer.playerName} (ID: ${botPlayerId})`);
-            gameService.startGame(tableId, botPlayerId);
+            return gameService.startGame(tableId, botPlayerId);
         });
 
         socket.on("requestUserSync", async () => {
+            const hadTrustedObserverAccess = socket.data.trustedAdminObserver === true;
             try {
                 const pool = gameService.pool;
                 const userQuery = "SELECT id, username, email, created_at, wins, losses, washes, is_admin, is_vip FROM users WHERE id = $1";
@@ -309,13 +494,29 @@ const registerGameHandlers = (io, gameService) => {
                     const tokenResult = await pool.query(tokenQuery, [socket.user.id]);
                     updatedUser.tokens = parseFloat(tokenResult.rows[0]?.current_tokens || 0).toFixed(2);
                     
-                    // CRITICAL FIX: Update the socket.user object with fresh admin status
-                    socket.user.is_admin = updatedUser.is_admin;
+                    // Keep the live socket identity canonical and revoke observer
+                    // trust immediately if this refresh observes an admin demotion.
+                    socket.user = {
+                        id: updatedUser.id,
+                        username: updatedUser.username,
+                        is_admin: updatedUser.is_admin === true,
+                    };
+                    if (socket.user.is_admin !== true) {
+                        revokeTrustedAdminObserver(socket);
+                        if (hadTrustedObserverAccess) emitRedactedState();
+                    }
                     console.log(`[DEBUG] User sync - ${updatedUser.username} admin status: ${updatedUser.is_admin}`);
                     
                     socket.emit("updateUser", updatedUser);
+                } else {
+                    revokeTrustedAdminObserver(socket);
+                    if (hadTrustedObserverAccess) emitRedactedState();
+                    socket.emit('error', { message: 'Authentication required.' });
                 }
             } catch(err) {
+                revokeTrustedAdminObserver(socket);
+                if (socket.user) socket.user = { ...socket.user, is_admin: false };
+                if (hadTrustedObserverAccess) emitRedactedState();
                 console.error(`Error during user sync for user ${socket.user.id}:`, err);
             }
         });
@@ -364,13 +565,18 @@ const registerGameHandlers = (io, gameService) => {
             }
         });
 
-        socket.on("startBotGame", async ({ botCount = 3 }) => {
-            console.log(`[ADMIN] startBotGame event received from ${socket.user.username}`);
-            
-            // Only admins can start bot-only games
-            if (!socket.user.is_admin) {
-                return socket.emit("error", { message: "Only admins can start bot-only games." });
+        socket.on("startBotGame", async (payload = {}) => {
+            if (!isPlainObject(payload)) {
+                return socket.emit('error', { message: 'Invalid bot game request.' });
             }
+            const { botCount = 3 } = payload;
+            if (!Number.isInteger(Number(botCount)) || Number(botCount) < 1 || Number(botCount) > 3) {
+                return socket.emit('error', { message: 'Invalid bot count.' });
+            }
+            if (!(await requireFreshAdmin(
+                'Only admins can start bot-only games.',
+            ))) return;
+            console.log(`[ADMIN] startBotGame event received from ${socket.user.username}`);
 
             try {
                 // Find the table the admin is currently on
@@ -387,6 +593,9 @@ const registerGameHandlers = (io, gameService) => {
                 // First, check if admin is already at the table as a player
                 const existingPlayer = Object.values(botEngine.players).find(p => p.userId === socket.user.id);
                 console.log(`[ADMIN] Existing player check:`, existingPlayer ? `Found as ${existingPlayer.playerName}` : 'Not found');
+                if (existingPlayer && existingPlayer.socketId !== socket.id) {
+                    return socket.emit("error", { message: "This connection no longer controls that table seat." });
+                }
                 
                 // If admin is already a spectator, we just need to ensure we have 3 bots
                 if (existingPlayer && existingPlayer.isSpectator) {
@@ -445,7 +654,7 @@ const registerGameHandlers = (io, gameService) => {
                 }
 
                 // Always emit updated state
-                gameService.io.to(botEngine.tableId).emit('gameState', botEngine.getStateForClient());
+                gameService.emitGameState(botEngine.tableId);
                 gameService.io.emit('lobbyState', gameService.getLobbyState());
 
                 console.log(`[ADMIN] Bot game setup complete`);
@@ -456,6 +665,8 @@ const registerGameHandlers = (io, gameService) => {
         });
 
         socket.on("disconnect", async () => {
+            socketIdentityRefreshStopped = true;
+            cancelInterval(socketIdentityRefreshTimer);
             console.log(`Socket disconnected: ${socket.user.username} (ID: ${socket.user.id}, Socket: ${socket.id})`);
             const enginePlayerIsOn = Object.values(gameService.getAllEngines()).find(e => e.players[socket.user.id]);
             if (enginePlayerIsOn) {
@@ -467,7 +678,7 @@ const registerGameHandlers = (io, gameService) => {
                 // returned player offline again (the core intermittency bug).
                 if (player && player.socketId === socket.id) {
                     enginePlayerIsOn.disconnectPlayer(socket.user.id);
-                    gameService.io.to(enginePlayerIsOn.tableId).emit('gameState', enginePlayerIsOn.getStateForClient());
+                    gameService.emitGameState(enginePlayerIsOn.tableId);
                     if (enginePlayerIsOn.tableType === 'quickplay') {
                         gameService.evaluateQuickPlayTable(enginePlayerIsOn.tableId);
                     }
@@ -487,3 +698,7 @@ const registerGameHandlers = (io, gameService) => {
 };
 
 module.exports = registerGameHandlers;
+module.exports.DEFAULT_SOCKET_AUTH_REFRESH_INTERVAL_MS = DEFAULT_SOCKET_AUTH_REFRESH_INTERVAL_MS;
+module.exports.emitRedactedStateForSocket = emitRedactedStateForSocket;
+module.exports.refreshSocketUserFromDatabase = refreshSocketUserFromDatabase;
+module.exports.requireFreshSocketAdmin = requireFreshSocketAdmin;

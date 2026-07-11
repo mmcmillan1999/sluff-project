@@ -1,16 +1,16 @@
 const assert = require('assert');
-const fetch = require('node-fetch');
-const io = require('socket.io-client');
 require('dotenv').config();
-
-const SERVER_URL = 'http://localhost:3000';
-const TEST_USER_EMAIL = 'matthewgmcmillan@icloud.com';
-const TEST_USER_PASSWORD = 'Ew**2012';
+const {
+    loadRequiredEnvironment,
+    remoteTargetsAreAllowed,
+    withoutTrailingSlash,
+} = require('./e2e-test-config');
 
 // Helper function to create a delay
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-async function runLifecycleTests() {
+async function runLifecycleTests({ serverUrl, userEmail, userPassword }) {
+    const io = require('socket.io-client');
     console.log('Running lifecycle.js tests...');
     let testCounter = 1;
     const pass = (testName) => console.log(`  \u2713 Test ${testCounter++}: ${testName}`);
@@ -21,10 +21,10 @@ async function runLifecycleTests() {
 
     // --- Login and Socket Connection ---
     try {
-        const loginRes = await fetch(`${SERVER_URL}/api/auth/login`, {
+        const loginRes = await fetch(`${serverUrl}/api/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: TEST_USER_EMAIL, password: TEST_USER_PASSWORD }),
+            body: JSON.stringify({ email: userEmail, password: userPassword }),
         });
         const loginData = await loginRes.json();
         token = loginData.token;
@@ -39,7 +39,7 @@ async function runLifecycleTests() {
     console.log('  Running Test 1: Login Chat Announcement...');
     try {
         const chatPromise = new Promise((resolve, reject) => {
-            socket = io(SERVER_URL, { auth: { token }, transports: ['websocket'] });
+            socket = io(serverUrl, { auth: { token }, transports: ['websocket'] });
             socket.on('new_lobby_message', (msg) => {
                 if (msg.message.includes(`${user.username} has logged on`)) {
                     resolve(msg);
@@ -89,8 +89,20 @@ async function runLifecycleTests() {
 }
 
 
-runLifecycleTests().catch(err => {
-    // This block catches the assertion failures and allows the script to finish gracefully.
-    console.error(`\nTest Suite Failed: ${err.message}`);
-    process.exit(1);
-});
+const config = loadRequiredEnvironment('lifecycle E2E test', [
+    'SLUFF_E2E_SERVER_URL',
+    'SLUFF_E2E_USER_EMAIL',
+    'SLUFF_E2E_USER_PASSWORD',
+]);
+
+if (config && remoteTargetsAreAllowed('lifecycle E2E test', [config.SLUFF_E2E_SERVER_URL])) {
+    runLifecycleTests({
+        serverUrl: withoutTrailingSlash(config.SLUFF_E2E_SERVER_URL),
+        userEmail: config.SLUFF_E2E_USER_EMAIL,
+        userPassword: config.SLUFF_E2E_USER_PASSWORD,
+    }).catch(err => {
+        // This block catches the assertion failures and allows the script to finish gracefully.
+        console.error(`\nTest Suite Failed: ${err.message}`);
+        process.exit(1);
+    });
+}

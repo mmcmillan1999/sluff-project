@@ -1,28 +1,22 @@
 const assert = require('assert');
 const { Pool } = require('pg');
-require('dotenv').config(); // To load the DATABASE_URL from your .env file
+require('dotenv').config();
+const {
+    loadRequiredEnvironment,
+    remoteTargetsAreAllowed,
+    withoutTrailingSlash,
+} = require('./e2e-test-config');
 
-// User credentials for the test
-const TEST_USER_EMAIL = 'matthewgmcmillan@icloud.com';
-const TEST_USER_PASSWORD = 'Ew**2012';
-const SERVER_URL = 'https://sluff-backend.onrender.com';
-
-// Setup database connection
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
-});
-
-async function testChatHistoryIsMostRecent() {
+async function testChatHistoryIsMostRecent({ pool, serverUrl, userEmail, userPassword }) {
     console.log('Running Test: API should return the most recent chat messages...');
     
     // Step 1: Login to get a JWT token
     let token;
     try {
-        const loginRes = await fetch(`${SERVER_URL}/api/auth/login`, {
+        const loginRes = await fetch(`${serverUrl}/api/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: TEST_USER_EMAIL, password: TEST_USER_PASSWORD }),
+            body: JSON.stringify({ email: userEmail, password: userPassword }),
         });
         const loginData = await loginRes.json();
         token = loginData.token;
@@ -33,7 +27,7 @@ async function testChatHistoryIsMostRecent() {
     // Step 2: Fetch chat history from the API
     let apiChatData;
     try {
-        const chatRes = await fetch(`${SERVER_URL}/api/chat`, {
+        const chatRes = await fetch(`${serverUrl}/api/chat`, {
             headers: { 'Authorization': `Bearer ${token}` },
         });
         apiChatData = await chatRes.json();
@@ -86,8 +80,34 @@ async function testChatHistoryIsMostRecent() {
 }
 
 async function run() {
+    const config = loadRequiredEnvironment('chat API/database E2E test', [
+        'SLUFF_E2E_SERVER_URL',
+        'SLUFF_E2E_DATABASE_URL',
+        'SLUFF_E2E_USER_EMAIL',
+        'SLUFF_E2E_USER_PASSWORD',
+    ]);
+
+    if (!config) return;
+
+    if (!remoteTargetsAreAllowed('chat API/database E2E test', [
+        config.SLUFF_E2E_SERVER_URL,
+        config.SLUFF_E2E_DATABASE_URL,
+    ])) return;
+
+    const pool = new Pool({
+        connectionString: config.SLUFF_E2E_DATABASE_URL,
+        ssl: process.env.SLUFF_E2E_DATABASE_SSL === 'true'
+            ? { rejectUnauthorized: false }
+            : false,
+    });
+
     try {
-        await testChatHistoryIsMostRecent();
+        await testChatHistoryIsMostRecent({
+            pool,
+            serverUrl: withoutTrailingSlash(config.SLUFF_E2E_SERVER_URL),
+            userEmail: config.SLUFF_E2E_USER_EMAIL,
+            userPassword: config.SLUFF_E2E_USER_PASSWORD,
+        });
         console.log('\n\u2713 All API tests passed! The chat history bug has been fixed.');
     } catch (error) {
         // The detailed error is already printed inside the test function.
