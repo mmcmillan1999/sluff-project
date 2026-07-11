@@ -1,5 +1,5 @@
 // frontend/src/components/GameTableView.js
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import './GameTableView.css';
 import DrawVoteModal from './game/DrawVoteModal';
@@ -25,6 +25,8 @@ import { SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS } from '../constants';
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
 import { useBidWinnerSplash } from '../hooks/useBidWinnerSplash';
 import TutorialCoach, { FIRST_GAME_TUTORIAL_VERSION } from './game/TutorialCoach';
+import DealAnimation from './game/DealAnimation';
+import { CARDS_PER_PLAYER, WIDOW_CARD_COUNT } from './game/dealSequence';
 import {
     TUTORIAL_FORFEIT_RECAP_HINT,
     TUTORIAL_RECAP_HINT,
@@ -85,7 +87,17 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const [shareNotice, setShareNotice] = useState(null);
     const [quickPlayDecisionRejectionNonce, setQuickPlayDecisionRejectionNonce] = useState(0);
     const [roundPresentationPhase, setRoundPresentationPhase] = useState('idle');
+    const [dealPresentation, setDealPresentation] = useState({
+        active: false,
+        animationKey: 0,
+        playerOrder: [],
+        localPlayerName: null,
+        revealedSelfCards: 0,
+        revealedWidowCards: 0,
+        cardsRemaining: 0,
+    });
     const [, setPresentationClockTick] = useState(0);
+    const gameViewRef = useRef(null);
     const shareNoticeTimerRef = useRef(null);
     const turnPlayerRef = useRef(null);
     const trickWinnerRef = useRef(null);
@@ -100,6 +112,10 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const roundAdvanceTimerRef = useRef(null);
     const errorTimerRef = useRef(null);
     const dropZoneRef = useRef(null);
+    const dealTransitionRef = useRef({
+        tableId: currentTableState?.tableId ?? null,
+        state: currentTableState?.state ?? null,
+    });
     const prefersReducedMotion = usePrefersReducedMotion();
     const { bidSplashInfo, dismissBidSplash } = useBidWinnerSplash(
         currentTableState,
@@ -109,6 +125,116 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const selfPlayerInTable = currentTableState ? currentTableState.players[playerId] : null;
     const isSpectator = selfPlayerInTable?.isSpectator;
     const selfPlayerName = selfPlayerInTable?.playerName;
+    const dealLocalPlayerName = isObserverMode
+        ? currentTableState?.players?.[observedPlayerId]?.playerName
+        : (!isSpectator ? selfPlayerName : null);
+    const currentDealTableId = currentTableState?.tableId ?? null;
+    const currentDealState = currentTableState?.state ?? null;
+    const currentDealOrder = currentTableState?.playerOrderActive;
+
+    useLayoutEffect(() => {
+        const previous = dealTransitionRef.current;
+        const sameTable = previous.tableId === currentDealTableId;
+        const observedDealTransition = sameTable
+            && previous.state === 'Dealing Pending'
+            && currentDealState === 'Bidding Phase';
+
+        dealTransitionRef.current = {
+            tableId: currentDealTableId,
+            state: currentDealState,
+        };
+
+        if (observedDealTransition && !prefersReducedMotion) {
+            const playerOrder = Array.isArray(currentDealOrder)
+                ? [...currentDealOrder]
+                : [];
+
+            // A normal Sluff round always deals to exactly three active players.
+            // If a malformed/incomplete snapshot arrives, fail open to the real
+            // server state instead of holding the UI behind a decorative sequence.
+            if (playerOrder.length === 3) {
+                setDealPresentation(previousPresentation => ({
+                    active: true,
+                    animationKey: previousPresentation.animationKey + 1,
+                    playerOrder,
+                    localPlayerName: dealLocalPlayerName || null,
+                    revealedSelfCards: 0,
+                    revealedWidowCards: 0,
+                    cardsRemaining: (playerOrder.length * CARDS_PER_PLAYER) + WIDOW_CARD_COUNT,
+                }));
+                return;
+            }
+        }
+
+        if (prefersReducedMotion || !sameTable || currentDealState !== 'Bidding Phase') {
+            setDealPresentation(previousPresentation => (
+                previousPresentation.active
+                    ? { ...previousPresentation, active: false }
+                    : previousPresentation
+            ));
+        }
+    }, [
+        currentDealOrder,
+        currentDealState,
+        currentDealTableId,
+        dealLocalPlayerName,
+        prefersReducedMotion,
+    ]);
+
+    const handleDealCardLaunch = useCallback((_step, index, total) => {
+        setDealPresentation(previousPresentation => (
+            previousPresentation.active
+                ? {
+                    ...previousPresentation,
+                    cardsRemaining: Math.max(0, total - index - 1),
+                }
+                : previousPresentation
+        ));
+    }, []);
+
+    const handleDealCardArrival = useCallback((step) => {
+        setDealPresentation(previousPresentation => {
+            if (!previousPresentation.active) return previousPresentation;
+
+            if (step.type === 'widow') {
+                return {
+                    ...previousPresentation,
+                    revealedWidowCards: Math.min(
+                        WIDOW_CARD_COUNT,
+                        previousPresentation.revealedWidowCards + 1,
+                    ),
+                };
+            }
+
+            if (step.type === 'player'
+                && step.playerName === previousPresentation.localPlayerName) {
+                return {
+                    ...previousPresentation,
+                    revealedSelfCards: Math.min(
+                        CARDS_PER_PLAYER,
+                        previousPresentation.revealedSelfCards + 1,
+                    ),
+                };
+            }
+
+            return previousPresentation;
+        });
+    }, []);
+
+    const handleDealAnimationComplete = useCallback(() => {
+        setDealPresentation(previousPresentation => (
+            previousPresentation.active
+                ? {
+                    ...previousPresentation,
+                    active: false,
+                    cardsRemaining: 0,
+                    revealedSelfCards: CARDS_PER_PLAYER,
+                    revealedWidowCards: WIDOW_CARD_COUNT,
+                }
+                : previousPresentation
+        ));
+    }, []);
+
     const tutorialCoachActive = Boolean(
         tutorialState?.activeVersion === FIRST_GAME_TUTORIAL_VERSION
         && currentTableState?.theme === TUTORIAL_THEME_ID
@@ -177,6 +303,45 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             ? { ...currentTableState, scores: previousRoundScores }
             : currentTableState
     ), [currentTableState, previousRoundScores, shouldHoldTableScores]);
+    const tableStateForDealPresentation = useMemo(() => (
+        dealPresentation.active
+            ? {
+                ...tableStateForPresentation,
+                widow: [],
+                originalDealtWidow: [],
+                widowCount: dealPresentation.revealedWidowCards,
+            }
+            : tableStateForPresentation
+    ), [
+        dealPresentation.active,
+        dealPresentation.revealedWidowCards,
+        tableStateForPresentation,
+    ]);
+    const handStateForDealPresentation = useMemo(() => {
+        if (!dealPresentation.active || !dealPresentation.localPlayerName) {
+            return currentTableState;
+        }
+
+        const localPlayerName = dealPresentation.localPlayerName;
+        const fullLocalHand = currentTableState?.hands?.[localPlayerName] || [];
+        return {
+            ...currentTableState,
+            hands: {
+                ...(currentTableState?.hands || {}),
+                [localPlayerName]: fullLocalHand.slice(0, dealPresentation.revealedSelfCards),
+            },
+        };
+    }, [
+        currentTableState,
+        dealPresentation.active,
+        dealPresentation.localPlayerName,
+        dealPresentation.revealedSelfCards,
+    ]);
+    const tutorialStateForDealPresentation = useMemo(() => (
+        dealPresentation.active
+            ? { ...currentTableState, state: 'Dealing Pending' }
+            : currentTableState
+    ), [currentTableState, dealPresentation.active]);
     const hasRoundScoreChanges = Object.values(roundSummary?.pointChanges || {})
         .some(value => Number.isFinite(Number(value)) && Number(value) !== 0);
     const selfRoundPointChange = Number(roundSummary?.pointChanges?.[selfPlayerName]);
@@ -892,7 +1057,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     );
 
     return (
-        <div className="game-view">
+        <div className="game-view" ref={gameViewRef}>
             {shareNotice && <div className="share-invite-notice">{shareNotice}</div>}
             {/* Card position debug overlay */}
             {false && window.cardDebugPositions && window.cardDebugPositions.length > 0 && (
@@ -1067,7 +1232,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             />
             
             <TableLayout 
-                currentTableState={tableStateForPresentation}
+                currentTableState={tableStateForDealPresentation}
                 seatAssignments={seatAssignments}
                 isSpectator={isSpectator}
                 renderCard={renderCard}
@@ -1087,12 +1252,15 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 roundPresentationComplete={roundPresentationPhase === 'settled'
                     && sharedPresentationReady
                     && serverRoundPresentationReady}
+                dealPresentationActive={dealPresentation.active}
+                dealCardsRemaining={dealPresentation.cardsRemaining}
+                suppressActionControls={dealPresentation.active}
             />
 
             <TutorialCoach
                 key={`${playerId}:${FIRST_GAME_TUTORIAL_VERSION}`}
                 active={tutorialCoachActive}
-                currentTableState={currentTableState}
+                currentTableState={tutorialStateForDealPresentation}
                 playerId={playerId}
                 selfPlayerName={selfPlayerName}
                 roundPresentationPhase={roundPresentationPhase}
@@ -1101,12 +1269,17 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             />
             
             <footer className="game-footer">
+                <div
+                    className="deal-local-hand-target"
+                    data-deal-target="local-hand"
+                    aria-hidden="true"
+                />
                 <PlayerHand
                     currentTableState={{
-                        ...currentTableState,
+                        ...handStateForDealPresentation,
                         // Override the player data with the observed player's data if in observer mode
                         players: {
-                            ...currentTableState.players,
+                            ...handStateForDealPresentation.players,
                             [playerId]: isObserverMode ? perspectivePlayer : selfPlayerInTable
                         }
                     }}
@@ -1165,6 +1338,18 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 </div>
                 {showGameMenu && !roundPresentationControlsLocked && <GameMenu />}
             </footer>
+
+            <DealAnimation
+                active={dealPresentation.active}
+                animationKey={dealPresentation.animationKey}
+                playerOrder={dealPresentation.playerOrder}
+                localPlayerName={dealPresentation.localPlayerName}
+                scopeRef={gameViewRef}
+                renderCard={renderCard}
+                onCardLaunch={handleDealCardLaunch}
+                onCardArrive={handleDealCardArrival}
+                onComplete={handleDealAnimationComplete}
+            />
             
             {chatOpen && !roundPresentationControlsLocked && (
                 <div 

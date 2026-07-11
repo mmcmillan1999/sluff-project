@@ -47,7 +47,10 @@ const TableLayout = ({
     isAdmin = false,
     showDebugAnchors = false,
     quickPlayDecisionRejectionNonce = 0,
-    roundPresentationComplete = false
+    roundPresentationComplete = false,
+    dealPresentationActive = false,
+    dealCardsRemaining = 36,
+    suppressActionControls = false
 }) => {
     const [lastTrickVisible, setLastTrickVisible] = useState(false);
     const [lastTrickPosition, setLastTrickPosition] = useState(null);
@@ -676,16 +679,37 @@ const TableLayout = ({
     const renderDealerDeck = () => {
         const { state, dealer, players } = currentTableState;
         
-        // Only show deck during "Dealing Pending" state
-        if (state !== 'Dealing Pending' || !dealer || !players) {
+        // Keep the source deck mounted while the local dealing presentation
+        // catches up with the authoritative Bidding Phase state.
+        if ((state !== 'Dealing Pending' && !dealPresentationActive)
+            || dealer === null
+            || dealer === undefined
+            || !players) {
             return null;
         }
 
+        const requestedCardCount = Number(dealCardsRemaining);
+        const visibleCardCount = dealPresentationActive
+            ? Math.min(
+                FULL_DECK.length,
+                Math.max(0, Number.isFinite(requestedCardCount)
+                    ? Math.trunc(requestedCardCount)
+                    : FULL_DECK.length),
+            )
+            : FULL_DECK.length;
+
         // Find the dealer's name and position
-        const dealerPlayer = Object.values(players).find(p => p.userId === dealer);
+        const dealerPlayer = Object.values(players).find(
+            p => String(p.userId) === String(dealer),
+        );
         if (!dealerPlayer) return null;
 
         const dealerName = dealerPlayer.playerName;
+        const canDeal = state === 'Dealing Pending'
+            && !dealPresentationActive
+            && !suppressActionControls
+            && !isSpectator
+            && String(playerId) === String(dealer);
         let deckPosition = '';
         
         // Determine dealer position based on seat assignments
@@ -703,12 +727,9 @@ const TableLayout = ({
 
         return (
             <div className={`dealer-deck-container dealer-deck-${deckPosition}`}>
-                <div className="dealer-deck-label">
-                    {dealerName} is dealing...
-                </div>
-                <div className="dealer-deck-pile">
+                <div className="dealer-deck-pile" data-deal-source="deck">
                     {/* Stack of 36 face-down cards */}
-                    {FULL_DECK.map((_, index) => (
+                    {FULL_DECK.slice(0, visibleCardCount).map((_, index) => (
                         <div 
                             key={index} 
                             className="dealer-deck-card-wrapper" 
@@ -721,6 +742,17 @@ const TableLayout = ({
                         </div>
                     ))}
                 </div>
+                {canDeal && (
+                    <button
+                        type="button"
+                        className="dealer-deck-action"
+                        onClick={() => emitEvent('dealCards')}
+                        aria-label="Deal cards"
+                    >
+                        <span className="dealer-deck-action__card" aria-hidden="true" />
+                        <span>Deal</span>
+                    </button>
+                )}
             </div>
         );
     };
@@ -782,7 +814,7 @@ const TableLayout = ({
                 aria-label={dealerCanPeek ? 'Widow pile. Reveal if you are the sitting dealer' : 'Widow pile'}
                 style={dealerCanPeek ? { cursor: 'pointer', pointerEvents: 'auto' } : undefined}
             >
-                <div className="trick-pile-base widow-base">
+                <div className="trick-pile-base widow-base" data-deal-target="widow">
                     <div className="trick-pile">
                         <div className="trick-pile-content-wrapper">
                             <div className="trick-pile-cards">
@@ -903,18 +935,20 @@ const TableLayout = ({
                 
                 {/* Pucks are now rendered as "ears" on PlayerSeat components */}
                 
-                <ActionControls
-                    currentTableState={currentTableState}
-                    playerId={playerId}
-                    selfPlayerName={selfPlayerName}
-                    isSpectator={isSpectator}
-                    emitEvent={emitEvent}
-                    handleLeaveTable={handleLeaveTable}
-                    renderCard={renderCard}
-                    isAdmin={isAdmin}
-                    quickPlayDecisionRejectionNonce={quickPlayDecisionRejectionNonce}
-                    roundPresentationComplete={roundPresentationComplete}
-                />
+                {!suppressActionControls && (
+                    <ActionControls
+                        currentTableState={currentTableState}
+                        playerId={playerId}
+                        selfPlayerName={selfPlayerName}
+                        isSpectator={isSpectator}
+                        emitEvent={emitEvent}
+                        handleLeaveTable={handleLeaveTable}
+                        renderCard={renderCard}
+                        isAdmin={isAdmin}
+                        quickPlayDecisionRejectionNonce={quickPlayDecisionRejectionNonce}
+                        roundPresentationComplete={roundPresentationComplete}
+                    />
+                )}
             </div>
         </main>
     );

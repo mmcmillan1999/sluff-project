@@ -1,0 +1,56 @@
+.deal-animation-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    overflow: hidden;
+    pointer-events: none;
+    contain: layout style paint;
+}
+
+/* Mirrors the normal PlayerHand's 13vh footprint without intercepting input. */
+.deal-local-hand-target {
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    height: 13vh;
+    pointer-events: none;
+}
+
+.deal-animation-card {
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform-origin: center;
+    will-change: transform, opacity;
+    filter: drop-shadow(0 0.45vh 0.75vh rgba(0, 0, 0, 0.48));
+    animation: deal-card-flight var(--deal-flight-duration) cubic-bezier(0.22, 0.7, 0.28, 1) forwards;
+}
+
+@keyframes deal-card-flight {
+    0% {
+        opacity: 0.98;
+        transform:
+            translate3d(var(--deal-start-x), var(--deal-start-y), 0)
+            rotate(var(--deal-start-rotation));
+    }
+    52% {
+        opacity: 1;
+        transform:
+            translate3d(var(--deal-mid-x), var(--deal-mid-y), 0)
+            rotate(var(--deal-mid-rotation));
+    }
+    100% {
+        opacity: 0.92;
+        transform:
+            translate3d(var(--deal-end-x), var(--deal-end-y), 0)
+            rotate(var(--deal-end-rotation));
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .deal-animation-card {
+        animation: none !important;
+        transition: none !important;
+    }
+}

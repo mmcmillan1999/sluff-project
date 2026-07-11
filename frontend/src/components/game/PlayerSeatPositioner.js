@@ -108,6 +108,7 @@ const PlayerSeatPositioner = ({
         <div 
             className={`player-seat-positioner player-seat-${seatPosition} ${isWideMode ? 'wide-mode' : ''}`}
             style={getWrapperStyle()}
+            data-deal-player={playerName}
             data-anchor-x={effectiveAnchorX}
             data-anchor-y={effectiveAnchorY}
             data-rotation={effectiveRotation}

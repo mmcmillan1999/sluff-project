@@ -956,31 +956,6 @@ button.card-display:disabled {
     transform: translateX(-50%);
 }
 
-.dealer-deck-label {
-    color: #ffd700;
-    font-family: 'Oswald', sans-serif;
-    font-weight: bold;
-    font-size: 1.8vh;
-    text-shadow: 0.25vh 0.25vh 0.5vh rgba(0, 0, 0, 0.8);
-    margin-bottom: 1vh;
-    background: rgba(0, 0, 0, 0.6);
-    padding: 0.7vh 1.5vh;
-    border-radius: 1vh;
-    border: 0.25vh solid #ffd700;
-    box-shadow: 0 0 1.2vh rgba(255, 215, 0, 0.3);
-    white-space: nowrap;
-    animation: dealer-glow 2s ease-in-out infinite alternate;
-}
-
-@keyframes dealer-glow {
-    0% {
-        box-shadow: 0 0 1.2vh rgba(255, 215, 0, 0.3);
-    }
-    100% {
-        box-shadow: 0 0 2.5vh rgba(255, 215, 0, 0.6), 0 0 3.5vh rgba(255, 215, 0, 0.3);
-    }
-}
-
 .dealer-deck-pile {
     position: relative;
     height: 8vh;
@@ -988,6 +963,91 @@ button.card-display:disabled {
     display: flex;
     justify-content: center;
     align-items: center;
+}
+
+/* The dealer acts directly beside the deck instead of through a centered
+   table prompt. Absolute positioning keeps the deck's animation source fixed
+   when the button disappears. */
+.dealer-deck-action {
+    position: absolute;
+    top: 50%;
+    left: calc(100% + 0.9vh);
+    z-index: 2;
+    min-width: 4.6rem;
+    min-height: 2.75rem;
+    padding: 0.42rem 0.72rem;
+    border: 1px solid rgba(242, 206, 119, 0.88);
+    border-radius: 999px;
+    background:
+        linear-gradient(180deg, rgba(47, 112, 82, 0.98), rgba(15, 58, 42, 0.98));
+    box-shadow:
+        0 0.32rem 0.75rem rgba(0, 0, 0, 0.42),
+        inset 0 1px rgba(255, 255, 255, 0.2),
+        inset 0 -1px rgba(0, 0, 0, 0.32);
+    color: #ffe8ad;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.48rem;
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(0.72rem, 1.55vh, 0.88rem);
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    line-height: 1;
+    pointer-events: auto;
+    text-transform: uppercase;
+    touch-action: manipulation;
+    transform: translateY(-50%);
+    transition: transform 150ms ease, filter 150ms ease, box-shadow 150ms ease;
+    animation: dealer-deck-action-glow 1.8s ease-in-out infinite alternate;
+}
+
+/* Keep the action on the table-facing side of a right-seat dealer. */
+.dealer-deck-right .dealer-deck-action {
+    right: calc(100% + 0.9vh);
+    left: auto;
+}
+
+.dealer-deck-action:hover {
+    filter: brightness(1.1);
+    transform: translateY(-50%) scale(1.035);
+}
+
+.dealer-deck-action:active {
+    filter: brightness(0.96);
+    transform: translateY(-50%) scale(0.97);
+}
+
+.dealer-deck-action:focus-visible {
+    outline: 2px solid #fff2bd;
+    outline-offset: 3px;
+}
+
+.dealer-deck-action__card {
+    position: relative;
+    width: 0.72rem;
+    height: 0.96rem;
+    border: 1px solid rgba(255, 238, 190, 0.92);
+    border-radius: 0.14rem;
+    background: linear-gradient(145deg, #214b3d, #0d2e24);
+    box-shadow: 0.14rem 0.08rem 0 rgba(255, 232, 173, 0.58);
+    transform: rotate(-8deg);
+}
+
+@keyframes dealer-deck-action-glow {
+    from {
+        box-shadow:
+            0 0.32rem 0.75rem rgba(0, 0, 0, 0.42),
+            0 0 0 rgba(238, 202, 118, 0),
+            inset 0 1px rgba(255, 255, 255, 0.2);
+    }
+    to {
+        box-shadow:
+            0 0.36rem 0.9rem rgba(0, 0, 0, 0.45),
+            0 0 0.8rem rgba(238, 202, 118, 0.28),
+            inset 0 1px rgba(255, 255, 255, 0.24);
+    }
 }
 
 .dealer-deck-card-wrapper {
@@ -1083,7 +1143,7 @@ button.card-display:disabled {
     .widow-flip,
     .trump-broken-announcement,
     .trump-broken-lightning,
-    .dealer-deck-label,
+    .dealer-deck-action,
     .card-drop-zone-visual,
     .quickplay-waiting-copy,
     .quickplay-starting-copy {

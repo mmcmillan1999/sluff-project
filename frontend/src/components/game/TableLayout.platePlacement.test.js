@@ -3,10 +3,6 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import TableLayout from './TableLayout';
 
-vi.mock('./PlayerSeatPositioner', () => ({
-    default: () => null,
-}));
-
 vi.mock('./ScoreProgressBar', () => ({
     default: () => null,
 }));
@@ -60,12 +56,7 @@ const makeState = (overrides = {}) => ({
     ...overrides,
 });
 
-const StubActionControls = ({ currentTableState, playerId }) => (
-    currentTableState.state === 'Dealing Pending'
-        && String(currentTableState.dealer) === String(playerId)
-        ? <button type="button">Deal Cards</button>
-        : null
-);
+const StubActionControls = () => null;
 
 const renderCard = (_card, options = {}) => (
     <div
@@ -76,7 +67,7 @@ const renderCard = (_card, options = {}) => (
     />
 );
 
-const layout = (state, seatAssignments = seats3, playerId = 1) => (
+const layout = (state, seatAssignments = seats3, playerId = 1, presentationProps = {}) => (
     <TableLayout
         currentTableState={state}
         seatAssignments={seatAssignments}
@@ -90,6 +81,7 @@ const layout = (state, seatAssignments = seats3, playerId = 1) => (
         handleLeaveTable={vi.fn()}
         playSound={vi.fn()}
         dropZoneRef={React.createRef()}
+        {...presentationProps}
     />
 );
 
@@ -98,16 +90,102 @@ const plateContainer = (container, baseClass) => (
 );
 
 describe('TableLayout plate lifecycle and placement', () => {
-    test('shows the empty three-player widow plate with Deal Cards at top-left', () => {
+    test('exposes semantic anchors for the deck, widow, and seated players', () => {
         const { container } = render(layout(makeState()));
 
-        expect(screen.getByRole('button', { name: 'Deal Cards' })).toBeInTheDocument();
+        expect(container.querySelector('[data-deal-source="deck"]')).toHaveClass('dealer-deck-pile');
+        expect(container.querySelector('[data-deal-target="widow"]')).toHaveClass('widow-base');
+        expect([...container.querySelectorAll('[data-deal-player]')].map(node => node.dataset.dealPlayer))
+            .toEqual(['Left', 'Right', 'Bottom']);
+    });
+
+    test('retains and shrinks the dealer deck during a Bidding Phase presentation', () => {
+        const bidding = makeState({ state: 'Bidding Phase', widowCount: 3 });
+        const { container, rerender } = render(layout(
+            bidding,
+            seats3,
+            1,
+            { dealPresentationActive: true, dealCardsRemaining: 17 },
+        ));
+
+        expect(container.querySelector('[data-deal-source="deck"]')).toBeInTheDocument();
+        expect(container.querySelectorAll('.dealer-deck-card-wrapper')).toHaveLength(17);
+        expect(screen.queryByRole('button', { name: /deal cards/i })).not.toBeInTheDocument();
+
+        rerender(layout(
+            bidding,
+            seats3,
+            1,
+            { dealPresentationActive: true, dealCardsRemaining: 0 },
+        ));
+        expect(container.querySelector('[data-deal-source="deck"]')).toBeInTheDocument();
+        expect(container.querySelectorAll('.dealer-deck-card-wrapper')).toHaveLength(0);
+
+        rerender(layout(bidding));
+        expect(container.querySelector('[data-deal-source="deck"]')).not.toBeInTheDocument();
+    });
+
+    test('suppresses action controls while the dealing presentation is active', () => {
+        render(layout(
+            makeState(),
+            seats3,
+            1,
+            { dealPresentationActive: true, suppressActionControls: true },
+        ));
+
+        expect(screen.queryByRole('button', { name: /deal cards/i })).not.toBeInTheDocument();
+    });
+
+    test('shows the empty three-player widow plate with the deck-local Deal action', () => {
+        const { container } = render(layout(makeState()));
+
+        const dealButton = screen.getByRole('button', { name: /deal cards/i });
+        expect(dealButton).toHaveClass('dealer-deck-action');
+        expect(dealButton.closest('.dealer-deck-container')).not.toBeNull();
+        expect(container.querySelector('.dealer-deck-label')).not.toBeInTheDocument();
+        expect(screen.queryByText(/is dealing/i)).not.toBeInTheDocument();
         const widow = plateContainer(container, 'widow-base');
         expect(widow).toHaveClass('pile-top-left');
         expect(container.querySelector('.bidder-base')).not.toBeInTheDocument();
         expect(container.querySelector('.defender-base')).not.toBeInTheDocument();
         expect(within(widow).getAllByTestId('plate-card')).toHaveLength(1);
         expect(within(widow).getByTestId('plate-card')).toHaveAttribute('data-opacity', '0.3');
+    });
+
+    test.each([
+        ['numeric dealer with serialized viewer id', 1, '1'],
+        ['serialized dealer with numeric viewer id', '1', 1],
+    ])('emits dealCards from the deck for a %s', async (_description, dealer, viewerId) => {
+        const user = userEvent.setup();
+        const emitEvent = vi.fn();
+        render(layout(
+            makeState({ dealer }),
+            seats3,
+            viewerId,
+            { emitEvent },
+        ));
+
+        await user.click(screen.getByRole('button', { name: /deal cards/i }));
+
+        expect(emitEvent).toHaveBeenCalledTimes(1);
+        expect(emitEvent).toHaveBeenCalledWith('dealCards');
+    });
+
+    test.each([
+        ['nondealer', 2, false],
+        ['spectator', 1, true],
+    ])('shows only the waiting deck for a %s', (_description, viewerId, isSpectator) => {
+        const { container } = render(layout(
+            makeState(),
+            seats3,
+            viewerId,
+            { isSpectator },
+        ));
+
+        expect(container.querySelector('[data-deal-source="deck"]')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /deal cards/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole('status')).not.toBeInTheDocument();
+        expect(screen.queryByText(/is dealing/i)).not.toBeInTheDocument();
     });
 
     test('keeps the pre-bid plate in place and visibly receives the public widow count', () => {

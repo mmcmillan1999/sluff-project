@@ -44,11 +44,6 @@ afterEach(() => {
 describe('ActionControls portrait prompt presentation', () => {
     const passiveCases = [
         {
-            name: 'dealer wait',
-            state: makeState({ state: 'Dealing Pending' }),
-            expected: /Bartholomew-With-An-Exceptionally-Long-Name.*deal/i
-        },
-        {
             name: 'bid wait',
             state: makeState({ state: 'Bidding Phase', biddingTurnPlayerName: 'Bartholomew-With-An-Exceptionally-Long-Name' }),
             expected: /Bartholomew-With-An-Exceptionally-Long-Name.*bidding/i
@@ -73,6 +68,18 @@ describe('ActionControls portrait prompt presentation', () => {
         expect(container.querySelector('.action-prompt__player-name')).toBeInTheDocument();
         expect(container.querySelector('.action-prompt__player-name')).toHaveAttribute('title');
         expect(screen.queryByText(state.state)).not.toBeInTheDocument();
+    });
+
+    test.each([
+        ['dealer', { playerId: 2, selfPlayerName: 'Bartholomew-With-An-Exceptionally-Long-Name' }],
+        ['nondealer', { playerId: 1, selfPlayerName: 'Alice' }],
+        ['spectator', { playerId: 1, selfPlayerName: 'Alice', isSpectator: true }],
+    ])('leaves the center of the table empty while waiting to deal for the %s', (_viewer, props) => {
+        const { container } = renderControls(makeState({ state: 'Dealing Pending' }), props);
+
+        expect(container).toBeEmptyDOMElement();
+        expect(screen.queryByRole('status')).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /deal/i })).not.toBeInTheDocument();
     });
 
     test('lays the four active bids out in an accessible 2 by 2 choice grid', () => {

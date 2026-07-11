@@ -88,12 +88,6 @@ const ActionControls = ({
     const isActiveHuman = !isSpectator && !selfPlayer?.isBot;
     const isQuickPlay = currentTableState.tableType === 'quickplay';
 
-    const getPlayerNameByUserId = (targetPlayerId) => {
-        if (!targetPlayerId) return null;
-        const player = players.find(candidate => candidate.userId === targetPlayerId);
-        return player?.playerName || String(targetPlayerId);
-    };
-
     const handleShareLink = async () => {
         const result = await shareInvite(currentTableState.tableId, currentTableState.tableName);
         if (result === 'copied') {
@@ -263,18 +257,9 @@ const ActionControls = ({
         }
 
         case 'Dealing Pending':
-            if (!isSpectator && playerId === currentTableState.dealer) {
-                return (
-                    <PromptShell variant="choice" label="Deal cards">
-                        <button type="button" onClick={() => emitEvent('dealCards')} className="game-button action-prompt__button action-prompt__button--primary">Deal Cards</button>
-                    </PromptShell>
-                );
-            }
-            return (
-                <StatusPrompt label="Waiting for the dealer">
-                    Waiting for <PlayerName>{getPlayerNameByUserId(currentTableState.dealer)}</PlayerName> to deal…
-                </StatusPrompt>
-            );
+            // The deck's location already communicates whose deal it is. The
+            // dealer-only action now lives beside that deck in TableLayout.
+            return null;
 
         case 'Bidding Phase':
             if (!isSpectator && currentTableState.biddingTurnPlayerName === selfPlayerName) {
