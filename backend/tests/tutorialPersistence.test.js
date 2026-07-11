@@ -87,12 +87,15 @@ function createPool() {
             }
             if (/UPDATE\s+users/i.test(sql) && /tutorial_active_version/i.test(sql)) {
                 const userId = Number(params[0]);
-                const version = Number(params[1]);
+                const version = params[1] === undefined ? null : Number(params[1]);
                 const user = users.get(userId);
                 state.tutorialWrites.push({ userId, version, sql });
                 if (!user) return { rows: [] };
 
-                if (!/SET\s+tutorial_version/i.test(sql)) {
+                if (/SET\s+tutorial_version\s*=\s*0/i.test(sql)) {
+                    user.tutorial_version = 0;
+                    user.tutorial_active_version = 0;
+                } else if (!/SET\s+tutorial_version/i.test(sql)) {
                     user.tutorial_active_version = version;
                 } else {
                     user.tutorial_version = Math.max(user.tutorial_version, version);
@@ -152,7 +155,7 @@ async function testProgressHelpers() {
     });
 
     await assert.rejects(
-        applyTutorialAction({ query() {} }, 1, 'reset'),
+        applyTutorialAction({ query() {} }, 1, 'erase'),
         /Unsupported tutorial action/,
     );
     await assert.rejects(
@@ -199,6 +202,10 @@ async function testAuthenticatedTutorialRoutesAndProfiles() {
     try {
         const unauthenticated = await tutorialRequest(`${baseUrl}/tutorial/start`, null, { userId: 2 });
         assert.equal(unauthenticated.status, 401);
+        assert.equal(state.tutorialWrites.length, 0);
+
+        const unauthenticatedReset = await tutorialRequest(`${baseUrl}/tutorial/reset`, null, { userId: 1 });
+        assert.equal(unauthenticatedReset.status, 401);
         assert.equal(state.tutorialWrites.length, 0);
 
         const profileResponse = await fetch(`${baseUrl}/profile?userId=2`, {
@@ -286,6 +293,45 @@ async function testAuthenticatedTutorialRoutesAndProfiles() {
             tutorial_version: 1,
             tutorial_active_version: 1,
         }, 'login preserves aggregate stats and an explicitly restarted guided game');
+
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+            const reset = await tutorialRequest(
+                `${baseUrl}/tutorial/reset`,
+                'one-token',
+                { userId: 2, tutorial_version: 99, tutorial_active_version: 99 },
+            );
+            assert.equal(reset.status, 200);
+            assert.deepEqual(await reset.json(), {
+                tutorial_version: 0,
+                tutorial_active_version: 0,
+            });
+        }
+        assert.deepEqual({
+            tutorial_version: state.users.get(1).tutorial_version,
+            tutorial_active_version: state.users.get(1).tutorial_active_version,
+        }, {
+            tutorial_version: 0,
+            tutorial_active_version: 0,
+        }, 'reset clears the authenticated player training flag and active lesson');
+        assert.deepEqual({
+            tutorial_version: state.users.get(2).tutorial_version,
+            tutorial_active_version: state.users.get(2).tutorial_active_version,
+        }, {
+            tutorial_version: 1,
+            tutorial_active_version: 0,
+        }, 'reset ignores a caller-supplied user id and cannot clear another account');
+
+        const resetWrites = state.tutorialWrites.filter(write => /tutorial_version\s*=\s*0/i.test(write.sql));
+        assert.equal(resetWrites.length, 2, 'reset is idempotent');
+        assert.ok(resetWrites.every(write => write.userId === 1 && write.version === null));
+
+        const resetProfileResponse = await fetch(`${baseUrl}/profile`, {
+            headers: { Authorization: 'Bearer one-token' },
+        });
+        assert.equal(resetProfileResponse.status, 200);
+        const resetProfile = (await resetProfileResponse.json()).user;
+        assert.equal(resetProfile.tutorial_version, 0);
+        assert.equal(resetProfile.tutorial_active_version, 0);
     } finally {
         await close(server);
     }

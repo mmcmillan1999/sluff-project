@@ -237,21 +237,36 @@
     text-align: center;
 }
 
+.game-menu-layer {
+    position: fixed;
+    inset: 0;
+    font-family: "Merriweather", serif;
+}
+
+.game-menu-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.18);
+}
+
 .game-menu-popup {
     position: absolute;
-    bottom: calc(100% + 1.2vh);
+    bottom: calc(20vh + 1.2vh);
     right: 1.2vh;
     background-color: #212121;
     border: 0.12vh solid #555;
     border-radius: 1vh;
     padding: 1.8vh;
-    z-index: 1010;
+    z-index: 1;
     box-shadow: 0 -0.5vh 1.5vh rgba(0,0,0,0.5);
     color: white;
     width: 30vh; 
     display: flex;
     flex-direction: column;
     gap: 1.2vh;
+    box-sizing: border-box;
+    max-height: calc(100dvh - 24vh);
+    overflow-y: auto;
 }
 
 .game-menu-popup h3 {

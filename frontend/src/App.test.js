@@ -1,4 +1,4 @@
-import { render, screen, act, waitFor } from '@testing-library/react';
+import { render, screen, act, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from './App';
 import * as api from './services/api';
@@ -35,6 +35,8 @@ describe('App Component and Game Flow', () => {
         // Reset mocks before each test
         vi.clearAllMocks();
         socketEventHandlers = {};
+        mockSocket.connected = false;
+        window.history.replaceState({}, '', '/');
 
         // Redefine the .on implementation for each test to capture handlers
         mockSocket.on.mockImplementation((event, handler) => {
@@ -47,6 +49,7 @@ describe('App Component and Game Flow', () => {
             tutorial_active_version: 1,
         });
         Storage.prototype.getItem = vi.fn(() => mockToken);
+        Storage.prototype.removeItem = vi.fn();
     });
 
     test('renders Login component on initial load without a token', () => {
@@ -68,13 +71,13 @@ describe('App Component and Game Flow', () => {
         }));
         render(<App />);
 
-        expect(screen.queryByRole('dialog', { name: 'Welcome to Sluff' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('dialog', { name: 'Learn Sluff at the Academy' })).not.toBeInTheDocument();
         await act(async () => {
             socketEventHandlers.updateUser({
                 id: 42,
                 username: 'Test Player',
                 tokens: '8.00',
-                games_played: 0,
+                games_played: 86,
                 tutorial_version: 0,
                 tutorial_active_version: 0,
             });
@@ -92,14 +95,14 @@ describe('App Component and Game Flow', () => {
         });
     });
 
-    test('cancels the welcome delay when a reconnect restores a table', async () => {
+    test('defers an experienced player\'s offer while seated and restores it on return to the lobby', async () => {
         render(<App />);
         await act(async () => {
             socketEventHandlers.updateUser({
                 id: 42,
                 username: 'Test Player',
                 tokens: '8.00',
-                games_played: 0,
+                games_played: 86,
                 tutorial_version: 0,
                 tutorial_active_version: 1,
             });
@@ -111,6 +114,126 @@ describe('App Component and Game Flow', () => {
             await new Promise(resolve => setTimeout(resolve, 500));
         });
         expect(screen.queryByRole('dialog', { name: /learning Sluff/i })).not.toBeInTheDocument();
+
+        await act(async () => {
+            socketEventHandlers.forceLobbyReturn();
+        });
+        expect(await screen.findByRole(
+            'dialog',
+            { name: 'Continue learning Sluff' },
+            { timeout: 1500 }
+        )).toBeInTheDocument();
+    });
+
+    test('releases tutorial deferral when an invite join fails in the lobby', async () => {
+        mockSocket.connected = true;
+        window.history.replaceState({}, '', '/join/missing-table');
+        render(<App />);
+
+        await act(async () => {
+            socketEventHandlers.updateUser({
+                id: 42,
+                username: 'Test Player',
+                tokens: '8.00',
+                games_played: 30,
+                tutorial_version: 0,
+                tutorial_active_version: 0,
+            });
+            socketEventHandlers.lobbyState({ themes: [], serverVersion: 'test' });
+        });
+
+        expect(mockSocket.emit).toHaveBeenCalledWith('joinTable', { tableId: 'missing-table' });
+        await act(async () => {
+            await new Promise(resolve => setTimeout(resolve, 500));
+        });
+        expect(screen.queryByRole('dialog', { name: 'Learn Sluff at the Academy' })).not.toBeInTheDocument();
+
+        await act(async () => {
+            socketEventHandlers.error({ message: 'That table is no longer available.' });
+        });
+        expect(await screen.findByRole(
+            'dialog',
+            { name: 'Learn Sluff at the Academy' },
+            { timeout: 1500 }
+        )).toBeInTheDocument();
+    });
+
+    test('resets tutorial training from the pre-table player menu and clears seen lessons', async () => {
+        const user = userEvent.setup();
+        api.updateTutorialStatus.mockResolvedValueOnce({
+            tutorial_version: 0,
+            tutorial_active_version: 0,
+        });
+        render(<App />);
+
+        await act(async () => {
+            socketEventHandlers.updateUser({
+                id: 42,
+                username: 'Test Player',
+                tokens: '8.00',
+                games_played: 86,
+                tutorial_version: 1,
+                tutorial_active_version: 0,
+            });
+            socketEventHandlers.lobbyState({ themes: [], serverVersion: 'test' });
+        });
+
+        expect(screen.queryByRole('dialog', { name: /Academy/i })).not.toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Open player menu' }));
+        const playerMenu = screen.getByRole('group', { name: 'Player menu' });
+        await user.click(within(playerMenu).getByRole('button', { name: 'Reset Tutorial Training' }));
+
+        expect(api.updateTutorialStatus).toHaveBeenCalledWith('reset');
+        expect(localStorage.removeItem).toHaveBeenCalledWith('sluff:tutorial:1:lessons:42');
+        expect(await screen.findByRole(
+            'dialog',
+            { name: 'Learn Sluff at the Academy' },
+            { timeout: 1500 }
+        )).toBeInTheDocument();
+    });
+
+    test('keeps the tutorial reset available when persistence fails so it can be retried', async () => {
+        const user = userEvent.setup();
+        let rejectReset;
+        api.updateTutorialStatus
+            .mockImplementationOnce(() => new Promise((_resolve, reject) => {
+                rejectReset = reject;
+            }))
+            .mockResolvedValueOnce({ tutorial_version: 0, tutorial_active_version: 0 });
+        render(<App />);
+
+        await act(async () => {
+            socketEventHandlers.updateUser({
+                id: 42,
+                username: 'Test Player',
+                tokens: '8.00',
+                games_played: 12,
+                tutorial_version: 1,
+                tutorial_active_version: 0,
+            });
+            socketEventHandlers.lobbyState({ themes: [], serverVersion: 'test' });
+        });
+
+        await user.click(screen.getByRole('button', { name: 'Open player menu' }));
+        const playerMenu = screen.getByRole('group', { name: 'Player menu' });
+        const resetButton = within(playerMenu).getByRole('button', { name: 'Reset Tutorial Training' });
+        await user.click(resetButton);
+
+        expect(within(screen.getByRole('group', { name: 'Player menu' }))
+            .getByRole('button', { name: 'Resetting Tutorial…' })).toBeDisabled();
+        await act(async () => {
+            rejectReset(new Error('Reset could not be saved.'));
+        });
+
+        expect(await screen.findByRole('alert')).toHaveTextContent('Reset could not be saved.');
+        const retryButton = within(screen.getByRole('group', { name: 'Player menu' }))
+            .getByRole('button', { name: 'Reset Tutorial Training' });
+        expect(retryButton).toBeEnabled();
+        expect(localStorage.removeItem).not.toHaveBeenCalled();
+
+        await user.click(retryButton);
+        await waitFor(() => expect(api.updateTutorialStatus).toHaveBeenCalledTimes(2));
+        expect(localStorage.removeItem).toHaveBeenCalledWith('sluff:tutorial:1:lessons:42');
     });
 
     test('renders widow reveal correctly when all players pass', async () => {

@@ -19,7 +19,7 @@ const eligibleInput = {
 };
 
 describe('first-game welcome eligibility', () => {
-    test('requires a fully hydrated zero-game user in an ordinary lobby session', () => {
+    test('requires a fully hydrated user in an ordinary lobby session', () => {
         expect(shouldShowFirstGameWelcome(eligibleInput)).toBe(true);
         expect(shouldShowFirstGameWelcome({
             ...eligibleInput,
@@ -27,12 +27,18 @@ describe('first-game welcome eligibility', () => {
         })).toBe(false);
     });
 
+    test('offers Academy guidance regardless of the player\'s game history', () => {
+        expect(shouldShowFirstGameWelcome({
+            ...eligibleInput,
+            user: { ...eligibleInput.user, games_played: 247 },
+        })).toBe(true);
+    });
+
     test.each([
         ['table view', { isLobby: false }],
         ['restored table', { hasCurrentTable: true }],
         ['invite navigation', { hasPendingInvite: true }],
         ['unresolved socket session', { socketSessionReady: false }],
-        ['an experienced player', { user: { ...eligibleInput.user, games_played: 1 } }],
         ['a finished tutorial', { user: { ...eligibleInput.user, tutorial_version: TUTORIAL_VERSION } }],
     ])('stays hidden during %s', (_label, override) => {
         expect(shouldShowFirstGameWelcome({ ...eligibleInput, ...override })).toBe(false);
@@ -48,7 +54,8 @@ describe('FirstGameWelcome', () => {
             />
         );
 
-        expect(screen.getByRole('dialog', { name: 'Welcome to Sluff' })).toHaveAttribute('aria-modal', 'true');
+        expect(screen.getByRole('dialog', { name: 'Learn Sluff at the Academy' })).toHaveAttribute('aria-modal', 'true');
+        expect(screen.getByText('Guided Academy game')).toBeInTheDocument();
         expect(screen.getByText("Miss Paul's Academy")).toBeInTheDocument();
         expect(screen.getByText(/0\.10 coin buy-in/i)).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Play Guided Game' })).toHaveFocus();

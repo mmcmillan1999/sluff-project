@@ -315,7 +315,7 @@ button,
         width: 90vw;
         max-width: 300px;
         right: 5vw;
-        bottom: calc(100% + 5px);
+        bottom: calc(20vh + 5px);
         font-size: 0.9em;
     }
     

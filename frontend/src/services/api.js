@@ -191,7 +191,7 @@ export const getLeaderboard = async () => {
 
 // --- First-game tutorial calls ---
 
-const TUTORIAL_ACTIONS = new Set(['start', 'complete', 'skip']);
+const TUTORIAL_ACTIONS = new Set(['start', 'complete', 'skip', 'reset']);
 
 export const updateTutorialStatus = async (action) => {
     if (!TUTORIAL_ACTIONS.has(action)) {

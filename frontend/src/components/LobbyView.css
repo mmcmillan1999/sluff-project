@@ -422,6 +422,24 @@
   transform: translateX(0.5vh) scale(0.98);
 }
 
+.lobby-menu-button:disabled,
+.quick-action-btn:disabled {
+  cursor: wait;
+  opacity: 0.65;
+  transform: none;
+}
+
+.tutorial-reset-error {
+  margin: 0;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid rgba(255, 128, 128, 0.45);
+  border-radius: calc(var(--base-radius) * 0.5);
+  background: rgba(130, 24, 24, 0.35);
+  color: #ffd2d2;
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
 .lobby-menu-button.admin {
   background-color: #a02c2c;
   border-color: #c82333;

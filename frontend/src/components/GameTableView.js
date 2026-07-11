@@ -1,5 +1,6 @@
 // frontend/src/components/GameTableView.js
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import './GameTableView.css';
 import DrawVoteModal from './game/DrawVoteModal';
 import PlayerHand from './game/PlayerHand';
@@ -281,12 +282,20 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     }, [showGameMenu]);
 
 
-    // Keyboard accessibility: allow ESC to close chat when open and debug toggles
+    // Keyboard accessibility: close the top-most utility first and support debug toggles.
     useEffect(() => {
         const onKeyDown = (e) => {
-            if (e.key === 'Escape' && chatOpen) {
-                e.stopPropagation();
-                setChatOpen(false);
+            if (e.key === 'Escape') {
+                if (showGameMenu) {
+                    e.stopPropagation();
+                    setShowGameMenu(false);
+                    return;
+                }
+                if (chatOpen) {
+                    e.stopPropagation();
+                    setChatOpen(false);
+                    return;
+                }
             }
             // Toggle debug overlay with Shift+D
             if (e.key.toLowerCase() === 'd' && e.shiftKey) {
@@ -296,7 +305,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         };
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [chatOpen]);
+    }, [chatOpen, showGameMenu]);
     
     const getPlayerNameByUserId = useCallback((targetPlayerId) => {
         if (!currentTableState?.players || !targetPlayerId) return String(targetPlayerId);
@@ -833,47 +842,61 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const perspectivePlayerId = isObserverMode ? observedPlayerId : playerId;
     const perspectivePlayer = currentTableState ? currentTableState.players[perspectivePlayerId] : null;
     
-    const GameMenu = () => (
-        <div className="game-menu-popup">
-            <h3>{currentTableState.tableName}</h3>
-            <div className="game-menu-info">
-                <p><strong>State:</strong> {currentTableState?.state || "N/A"}</p>
-                <p><strong>Bid:</strong> {currentTableState?.bidWinnerInfo?.bid || "N/A"} {currentTableState?.bidWinnerInfo?.playerName && ` by ${currentTableState.bidWinnerInfo.playerName}`}</p>
-            </div>
-            <div className="game-menu-sound">
-                <SoundControls soundSettings={soundSettings} />
-            </div>
-            <div className="game-menu-actions">
-                <button onClick={() => { handleShowHowToPlay(); setShowGameMenu(false); }} className="game-menu-button">How to Play</button>
-                <button onClick={handleShareInvite} className="game-menu-button invite">📨 Invite Friends</button>
-                <button onClick={handleLeaveTable} className="game-menu-button secondary">Back to Lobby</button>
-                <button 
-                    onClick={() => {
-                        handleOpenFeedbackModal(currentTableState);
-                        setShowGameMenu(false);
-                    }}
-                    className="game-menu-button feedback"
-                >
-                    Submit Feedback
-                </button>
-                {user?.is_admin && (
+    const GameMenu = () => createPortal(
+        <div className="game-menu-layer" style={{ zIndex: 2147483000 }}>
+            <div
+                className="game-menu-backdrop"
+                aria-hidden="true"
+                onClick={() => setShowGameMenu(false)}
+            />
+            <div
+                id="game-menu-dialog"
+                className="game-menu-popup"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Game menu"
+            >
+                <h3>{currentTableState.tableName}</h3>
+                <div className="game-menu-info">
+                    <p><strong>State:</strong> {currentTableState?.state || "N/A"}</p>
+                    <p><strong>Bid:</strong> {currentTableState?.bidWinnerInfo?.bid || "N/A"} {currentTableState?.bidWinnerInfo?.playerName && ` by ${currentTableState.bidWinnerInfo.playerName}`}</p>
+                </div>
+                <div className="game-menu-sound">
+                    <SoundControls soundSettings={soundSettings} />
+                </div>
+                <div className="game-menu-actions">
+                    <button onClick={() => { handleShowHowToPlay(); setShowGameMenu(false); }} className="game-menu-button">How to Play</button>
+                    <button onClick={handleShareInvite} className="game-menu-button invite">📨 Invite Friends</button>
+                    <button onClick={handleLeaveTable} className="game-menu-button secondary">Back to Lobby</button>
                     <button
-                        onClick={() => { setShowLayoutDev(true); setShowGameMenu(false); }}
-                        className="game-menu-button"
+                        onClick={() => {
+                            handleOpenFeedbackModal(currentTableState);
+                            setShowGameMenu(false);
+                        }}
+                        className="game-menu-button feedback"
                     >
-                        🎨 Layout Dev
+                        Submit Feedback
                     </button>
-                )}
-                <button 
-                    onClick={() => { emitEvent("requestDraw"); setShowGameMenu(false); }}
-                    className="game-menu-button primary"
-                    disabled={currentTableState.state !== 'Playing Phase'}
-                >
-                    Request Draw
-                </button>
-                <button onClick={handleForfeit} className="game-menu-button danger">Forfeit Game</button>
+                    {user?.is_admin && (
+                        <button
+                            onClick={() => { setShowLayoutDev(true); setShowGameMenu(false); }}
+                            className="game-menu-button"
+                        >
+                            🎨 Layout Dev
+                        </button>
+                    )}
+                    <button
+                        onClick={() => { emitEvent("requestDraw"); setShowGameMenu(false); }}
+                        className="game-menu-button primary"
+                        disabled={currentTableState.state !== 'Playing Phase'}
+                    >
+                        Request Draw
+                    </button>
+                    <button onClick={handleForfeit} className="game-menu-button danger">Forfeit Game</button>
+                </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 
     return (
@@ -1137,7 +1160,15 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                     />
                     {!roundPresentationControlsLocked && (
                         <div className="button-panel">
-                            <button className="game-menu-btn" onClick={() => setShowGameMenu(prev => !prev)}>
+                            <button
+                                className="game-menu-btn"
+                                type="button"
+                                aria-label="Open game menu"
+                                aria-haspopup="dialog"
+                                aria-expanded={showGameMenu}
+                                aria-controls="game-menu-dialog"
+                                onClick={() => setShowGameMenu(prev => !prev)}
+                            >
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <line x1="3" y1="12" x2="21" y2="12"></line>
                                     <line x1="3" y1="6" x2="21" y2="6"></line>

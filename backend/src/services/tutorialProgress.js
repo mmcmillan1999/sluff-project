@@ -1,7 +1,7 @@
 'use strict';
 
 const CURRENT_TUTORIAL_VERSION = 1;
-const TUTORIAL_ACTIONS = new Set(['start', 'complete', 'skip']);
+const TUTORIAL_ACTIONS = new Set(['start', 'complete', 'skip', 'reset']);
 
 function nonNegativeInteger(value) {
     const number = Number(value);
@@ -33,18 +33,31 @@ async function applyTutorialAction(pool, userId, action) {
         throw new TypeError(`Unsupported tutorial action: ${action}`);
     }
 
-    const query = action === 'start'
-        ? `UPDATE users
-           SET tutorial_active_version = $2
-           WHERE id = $1
-           RETURNING tutorial_version, tutorial_active_version`
-        : `UPDATE users
-           SET tutorial_version = GREATEST(tutorial_version, $2),
-               tutorial_active_version = 0
-           WHERE id = $1
-           RETURNING tutorial_version, tutorial_active_version`;
+    let query;
+    let params;
+    if (action === 'start') {
+        query = `UPDATE users
+                 SET tutorial_active_version = $2
+                 WHERE id = $1
+                 RETURNING tutorial_version, tutorial_active_version`;
+        params = [normalizedUserId, CURRENT_TUTORIAL_VERSION];
+    } else if (action === 'reset') {
+        query = `UPDATE users
+                 SET tutorial_version = 0,
+                     tutorial_active_version = 0
+                 WHERE id = $1
+                 RETURNING tutorial_version, tutorial_active_version`;
+        params = [normalizedUserId];
+    } else {
+        query = `UPDATE users
+                 SET tutorial_version = GREATEST(tutorial_version, $2),
+                     tutorial_active_version = 0
+                 WHERE id = $1
+                 RETURNING tutorial_version, tutorial_active_version`;
+        params = [normalizedUserId, CURRENT_TUTORIAL_VERSION];
+    }
 
-    const result = await pool.query(query, [normalizedUserId, CURRENT_TUTORIAL_VERSION]);
+    const result = await pool.query(query, params);
     if (!result.rows?.length) return null;
 
     const progress = playerProgressFields(result.rows[0]);

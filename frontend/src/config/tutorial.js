@@ -2,6 +2,10 @@ export const TUTORIAL_VERSION = 1;
 export const TUTORIAL_THEME_ID = 'miss-pauls-academy';
 export const TUTORIAL_BUY_IN_LABEL = '0.10';
 
+export const tutorialLessonStorageKey = (userId, version = TUTORIAL_VERSION) => (
+    `sluff:tutorial:${version}:lessons:${String(userId ?? 'anonymous')}`
+);
+
 export const TUTORIAL_RECAP_HINT = Object.freeze({
     eyebrow: 'Round recap',
     title: 'See where every point came from',

@@ -118,7 +118,12 @@ const renderGame = (currentTableState, overrides = {}) => {
         playSound: vi.fn(),
         socket,
         handleOpenFeedbackModal: vi.fn(),
-        soundSettings: {},
+        soundSettings: {
+            muted: false,
+            volume: 0.5,
+            toggleMute: vi.fn(),
+            setVolume: vi.fn()
+        },
         ...overrides
     };
     return {
@@ -136,6 +141,57 @@ afterEach(() => {
 });
 
 describe('GameTableView round presentation sequence', () => {
+    test('portals the open game menu into the top-level overlay layer', async () => {
+        const user = userEvent.setup();
+        renderGame(makeState({ state: 'Playing Phase' }));
+
+        const menuButton = screen.getByRole('button', { name: 'Open game menu' });
+        await user.click(menuButton);
+
+        const menu = screen.getByRole('dialog', { name: 'Game menu' });
+        const menuLayer = menu.closest('.game-menu-layer');
+        expect(menuLayer).not.toBeNull();
+        expect(menuLayer.parentElement).toBe(document.body);
+        expect(menu.closest('.game-view')).toBeNull();
+        expect(menuButton).toHaveAttribute('aria-expanded', 'true');
+        expect(getComputedStyle(menuLayer).zIndex).toBe('2147483000');
+
+        await user.click(menuLayer.querySelector('.game-menu-backdrop'));
+        expect(screen.queryByRole('dialog', { name: 'Game menu' })).not.toBeInTheDocument();
+        expect(menuButton).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    test('closes the portaled game menu with Escape', async () => {
+        const user = userEvent.setup();
+        renderGame(makeState({ state: 'Playing Phase' }));
+
+        await user.click(screen.getByRole('button', { name: 'Open game menu' }));
+        expect(screen.getByRole('dialog', { name: 'Game menu' })).toBeInTheDocument();
+
+        await user.keyboard('{Escape}');
+        expect(screen.queryByRole('dialog', { name: 'Game menu' })).not.toBeInTheDocument();
+    });
+
+    test('removes an open game menu when round presentation locks the controls', async () => {
+        const user = userEvent.setup();
+        const playingState = makeState({ state: 'Playing Phase' });
+        const { rerender, props } = renderGame(playingState);
+
+        await user.click(screen.getByRole('button', { name: 'Open game menu' }));
+        expect(screen.getByRole('dialog', { name: 'Game menu' })).toBeInTheDocument();
+
+        rerender(
+            <React.StrictMode>
+                <GameTableView {...props} currentTableState={makeState()} />
+            </React.StrictMode>
+        );
+
+        await waitFor(() => {
+            expect(screen.queryByRole('dialog', { name: 'Game menu' })).not.toBeInTheDocument();
+            expect(screen.queryByRole('button', { name: 'Open game menu' })).not.toBeInTheDocument();
+        });
+    });
+
     test('keeps the delayed recap timer alive across the Strict Mode effect probe', () => {
         vi.useFakeTimers();
         motionPreference.reduced = false;

@@ -9,6 +9,7 @@ import SoundControls from './game/SoundControls';
 import { getLobbyChatHistory } from '../services/api';
 import { BUILD_ID } from '../utils/clientVersion';
 import { useViewport } from '../hooks/useViewport';
+import { TUTORIAL_VERSION } from '../config/tutorial';
 
 export const deriveLobbyPlayerStats = (user = {}) => {
     const numericStat = value => {
@@ -30,7 +31,7 @@ export const deriveLobbyPlayerStats = (user = {}) => {
     };
 };
 
-const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQuickPlay, handleJoinTableAsSpectator, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowAdmin, handleShowFeedback, handleShowHowToPlay, emitEvent, socket, handleOpenFeedbackModal, soundSettings }) => {
+const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQuickPlay, handleJoinTableAsSpectator, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowAdmin, handleShowFeedback, handleShowHowToPlay, handleResetTutorial, emitEvent, socket, handleOpenFeedbackModal, soundSettings }) => {
 
     const [activeTab, setActiveTab] = useState('');
     const [showMenu, setShowMenu] = useState(false);
@@ -41,6 +42,8 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
     const [bulletinCollapsed, setBulletinCollapsed] = useState(false);
     const [chatMessages, setChatMessages] = useState([]);
     const [chatMinimized, setChatMinimized] = useState(false);
+    const [tutorialResetPending, setTutorialResetPending] = useState(false);
+    const [tutorialResetError, setTutorialResetError] = useState('');
     
     // Get viewport information for responsive behavior
     const viewport = useViewport();
@@ -71,10 +74,10 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
     }, [socket]);
 
     useEffect(() => {
-        if (!showMenu) return;
+        if (!showMenu || tutorialResetPending || tutorialResetError) return;
         const timer = setTimeout(() => setShowMenu(false), 3000);
         return () => clearTimeout(timer);
-    }, [showMenu]);
+    }, [showMenu, tutorialResetPending, tutorialResetError]);
 
     useEffect(() => {
         if (lobbyThemes && lobbyThemes.length > 0 && !activeTab) {
@@ -133,9 +136,24 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
         handleShowAdmin, handleLogout, emitEvent]);
 
     const activeTheme = lobbyThemes.find(theme => theme.id === activeTab);
+    const hasTutorialTraining = Number(user?.tutorial_version) >= TUTORIAL_VERSION;
+
+    const resetTutorialTraining = async () => {
+        if (!handleResetTutorial || tutorialResetPending) return;
+        setTutorialResetPending(true);
+        setTutorialResetError('');
+        try {
+            await handleResetTutorial();
+            setShowMenu(false);
+        } catch (error) {
+            setTutorialResetError(error?.message || 'Could not reset the tutorial. Please try again.');
+        } finally {
+            setTutorialResetPending(false);
+        }
+    };
 
     // Desktop sidebar component
-    const DesktopSidebar = () => {
+    const renderDesktopSidebar = () => {
         if (!isDesktop || !user) return null;
         
         const { gamesPlayed, gamesWon, winRate, coinBalance } = deriveLobbyPlayerStats(user);
@@ -170,6 +188,19 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
                         <button onClick={handleShowHowToPlay} className="quick-action-btn">
                             How to Play
                         </button>
+                        {hasTutorialTraining && (
+                            <button
+                                type="button"
+                                onClick={resetTutorialTraining}
+                                className="quick-action-btn"
+                                disabled={tutorialResetPending}
+                            >
+                                {tutorialResetPending ? 'Resetting Tutorial…' : 'Reset Tutorial Training'}
+                            </button>
+                        )}
+                        {tutorialResetError && !showMenu && (
+                            <p className="tutorial-reset-error" role="alert">{tutorialResetError}</p>
+                        )}
                         <button onClick={handleShowLeaderboard} className="quick-action-btn">
                             Leaderboard
                             <span className="keyboard-shortcut">L</span>
@@ -205,9 +236,22 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
         );
     };
     
-    const LobbyMenu = () => (
-        <div className="lobby-menu-popup">
+    const renderLobbyMenu = () => (
+        <div className="lobby-menu-popup" role="group" aria-label="Player menu">
             <button onClick={() => { handleShowHowToPlay(); setShowMenu(false); }} className="lobby-menu-button">How to Play</button>
+            {hasTutorialTraining && (
+                <button
+                    type="button"
+                    onClick={resetTutorialTraining}
+                    className="lobby-menu-button"
+                    disabled={tutorialResetPending}
+                >
+                    {tutorialResetPending ? 'Resetting Tutorial…' : 'Reset Tutorial Training'}
+                </button>
+            )}
+            {tutorialResetError && (
+                <p className="tutorial-reset-error" role="alert">{tutorialResetError}</p>
+            )}
             <button onClick={() => { handleShowLeaderboard(); setShowMenu(false); }} className="lobby-menu-button">Leaderboard</button>
             <button onClick={() => { handleShowFeedback(); setShowMenu(false); }} className="lobby-menu-button">Feedback Repository</button>
             <button onClick={() => { handleOpenFeedbackModal(); setShowMenu(false); }} className="lobby-menu-button">Submit Feedback</button>
@@ -256,17 +300,26 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
                         );
                     })()}
                     <div className="hamburger-menu-container">
-                        <button className="hamburger-btn" onClick={() => setShowMenu(prev => !prev)}>
+                        <button
+                            type="button"
+                            className="hamburger-btn"
+                            onClick={() => {
+                                setTutorialResetError('');
+                                setShowMenu(prev => !prev);
+                            }}
+                            aria-label={showMenu ? 'Close player menu' : 'Open player menu'}
+                            aria-expanded={showMenu}
+                        >
                              <svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M12,16A2,2 0 0,1 14,18A2,2 0 0,1 12,20A2,2 0 0,1 10,18A2,2 0 0,1 12,16M12,10A2,2 0 0,1 14,12A2,2 0 0,1 12,14A2,2 0 0,1 10,12A2,2 0 0,1 12,10M12,4A2,2 0 0,1 14,6A2,2 0 0,1 12,8A2,2 0 0,1 10,6A2,2 0 0,1 12,4Z" /></svg>
                         </button>
-                        {showMenu && <LobbyMenu />}
+                        {showMenu && renderLobbyMenu()}
                     </div>
                 </div>
             </header>
             
             <main className="lobby-main">
                 {/* Desktop sidebar - only shown on desktop */}
-                <DesktopSidebar />
+                {renderDesktopSidebar()}
 
                 {/* ============ QUICK PLAY — the primary way in ============ */}
                 <div className="quickplay-section">

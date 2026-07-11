@@ -18,7 +18,6 @@ export const shouldShowFirstGameWelcome = ({
     hasPendingInvite,
     socketSessionReady,
 }) => {
-    const gamesPlayed = numericField(user?.games_played);
     const tutorialVersion = numericField(user?.tutorial_version);
     const activeVersion = numericField(user?.tutorial_active_version);
 
@@ -28,7 +27,6 @@ export const shouldShowFirstGameWelcome = ({
         && !hasCurrentTable
         && !hasPendingInvite
         && socketSessionReady
-        && gamesPlayed === 0
         && tutorialVersion !== null
         && tutorialVersion < TUTORIAL_VERSION
         && activeVersion !== null
@@ -66,9 +64,9 @@ const FirstGameWelcome = ({ activeVersion = 0, onStartGuided, onSkip }) => {
                 aria-busy={pendingAction ? 'true' : 'false'}
                 tabIndex={-1}
             >
-                <div className="first-game-welcome__eyebrow">Your first hand</div>
+                <div className="first-game-welcome__eyebrow">Guided Academy game</div>
                 <h1 id="first-game-welcome-title">
-                    {isContinuing ? 'Continue learning Sluff' : 'Welcome to Sluff'}
+                    {isContinuing ? 'Continue learning Sluff' : 'Learn Sluff at the Academy'}
                 </h1>
                 <p id="first-game-welcome-description" className="first-game-welcome__intro">
                     {isContinuing

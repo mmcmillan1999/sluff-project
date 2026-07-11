@@ -197,7 +197,7 @@ module.exports = function(pool, bcrypt, jwt, io) {
         }
     });
 
-    for (const action of ['start', 'complete', 'skip']) {
+    for (const action of ['start', 'complete', 'skip', 'reset']) {
         router.post(`/tutorial/${action}`, checkAuth, async (req, res) => {
             try {
                 const progress = await applyTutorialAction(pool, req.user.id, action);

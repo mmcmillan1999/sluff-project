@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { TUTORIAL_VERSION } from '../../config/tutorial';
+import { TUTORIAL_VERSION, tutorialLessonStorageKey } from '../../config/tutorial';
 import './TutorialCoach.css';
 
 export const FIRST_GAME_TUTORIAL_VERSION = TUTORIAL_VERSION;
@@ -10,10 +10,6 @@ const PRESENTATION_COMPLETE_PHASES = new Set([
     'settled',
     'podium'
 ]);
-
-const storageKeyFor = (userId, version) => (
-    `sluff:tutorial:${version}:lessons:${String(userId ?? 'anonymous')}`
-);
 
 const readSeenLessons = (storageKey) => {
     try {
@@ -139,7 +135,7 @@ const TutorialCoach = ({
     onAction,
     tutorialVersion = FIRST_GAME_TUTORIAL_VERSION
 }) => {
-    const storageKey = storageKeyFor(playerId, tutorialVersion);
+    const storageKey = tutorialLessonStorageKey(playerId, tutorialVersion);
     const [seenLessons, setSeenLessons] = useState(() => readSeenLessons(storageKey));
     const [visibleLessonId, setVisibleLessonId] = useState(null);
     const [sessionEnded, setSessionEnded] = useState(false);

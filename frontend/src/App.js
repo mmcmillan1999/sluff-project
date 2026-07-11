@@ -21,7 +21,11 @@ import "./components/AdminView.css";
 import "./styles/no-scroll-fix.css"; // Prevent all scrolling in game view
 // Mobile optimizations removed - using vh-based scaling instead
 import { useSounds } from "./hooks/useSounds.js";
-import { TUTORIAL_THEME_ID } from "./config/tutorial.js";
+import {
+    TUTORIAL_THEME_ID,
+    TUTORIAL_VERSION,
+    tutorialLessonStorageKey,
+} from "./config/tutorial.js";
 
 const SERVER_URL = getServerUrl();
 console.log(`[Socket.IO] Connecting to: ${SERVER_URL}`);
@@ -221,6 +225,10 @@ function App() {
             const onError = (error) => {
                 const msg = error?.message || error || 'Something went wrong.';
                 setErrorMessage(String(msg));
+                // An invite join failure leaves the player in the lobby. Release
+                // the navigation guard so ordinary lobby actions (including the
+                // tutorial offer) are not suppressed for the rest of the session.
+                setInviteJoinInFlight(false);
                 if (errorMessageTimerRef.current) clearTimeout(errorMessageTimerRef.current);
                 errorMessageTimerRef.current = setTimeout(() => setErrorMessage(''), 5000);
             };
@@ -392,7 +400,7 @@ function App() {
     };
 
     const handleTutorialAction = useCallback(async (action) => {
-        if (!['start', 'complete', 'skip'].includes(action)) {
+        if (!['start', 'complete', 'skip', 'reset'].includes(action)) {
             throw new Error('Invalid tutorial action.');
         }
 
@@ -418,6 +426,17 @@ function App() {
         await handleTutorialAction('start');
         handleQuickPlay(TUTORIAL_THEME_ID);
     };
+
+    const handleResetTutorial = useCallback(async () => {
+        const tutorialUpdate = await handleTutorialAction('reset');
+        try {
+            localStorage.removeItem(tutorialLessonStorageKey(user?.id, TUTORIAL_VERSION));
+        } catch {
+            // A locked-down webview may deny local storage. The server reset is
+            // still authoritative, so the welcome should remain available.
+        }
+        return tutorialUpdate;
+    }, [handleTutorialAction, user?.id]);
 
     const handleJoinTableAsSpectator = (tableId) => {
         enableSound();
@@ -544,7 +563,7 @@ function App() {
                 {(() => {
                     switch (view) {
                         case 'lobby':
-                            return <LobbyView user={user} lobbyThemes={lobbyThemes} serverVersion={serverVersion} handleJoinTable={handleJoinTable} handleQuickPlay={handleQuickPlay} handleJoinTableAsSpectator={handleJoinTableAsSpectator} handleLogout={handleLogout} handleRequestFreeToken={handleRequestFreeToken} handleShowLeaderboard={() => setView('leaderboard')} handleShowAdmin={handleShowAdmin} handleShowFeedback={() => setView('feedback')} handleShowHowToPlay={handleShowHowToPlay} errorMessage={errorMessage} emitEvent={emitEvent} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} soundSettings={soundSettings} />;
+                            return <LobbyView user={user} lobbyThemes={lobbyThemes} serverVersion={serverVersion} handleJoinTable={handleJoinTable} handleQuickPlay={handleQuickPlay} handleJoinTableAsSpectator={handleJoinTableAsSpectator} handleLogout={handleLogout} handleRequestFreeToken={handleRequestFreeToken} handleShowLeaderboard={() => setView('leaderboard')} handleShowAdmin={handleShowAdmin} handleShowFeedback={() => setView('feedback')} handleShowHowToPlay={handleShowHowToPlay} handleResetTutorial={handleResetTutorial} errorMessage={errorMessage} emitEvent={emitEvent} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} soundSettings={soundSettings} />;
                         case 'gameTable':
                             return currentTableState ? <GameTableView user={user} playerId={user.id} currentTableState={currentTableState} handleLeaveTable={handleLeaveTable} handleLogout={handleLogout} handleShowHowToPlay={handleShowHowToPlay} errorMessage={errorMessage} emitEvent={emitEvent} playSound={playSound} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} soundSettings={soundSettings} tutorialState={{ tutorialVersion: Number(user.tutorial_version) || 0, activeVersion: Number(user.tutorial_active_version) || 0, gamesPlayed: Number(user.games_played) || 0 }} onTutorialAction={handleTutorialAction} /> : <div>Loading table...</div>;
                         case 'leaderboard':
