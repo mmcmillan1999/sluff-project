@@ -45,7 +45,8 @@ const TableLayout = ({
     dropZoneRef,
     isAdmin = false,
     showDebugAnchors = false,
-    quickPlayDecisionRejectionNonce = 0
+    quickPlayDecisionRejectionNonce = 0,
+    roundPresentationComplete = false
 }) => {
     const [lastTrickVisible, setLastTrickVisible] = useState(false);
     const [lastTrickPosition, setLastTrickPosition] = useState(null);
@@ -95,6 +96,7 @@ const TableLayout = ({
                 clearTimeout(laggedTrickTimerRef.current);
             }
             clearEndRoundTimers();
+            endRoundKeyRef.current = null;
         };
     }, []);
 
@@ -209,12 +211,18 @@ const TableLayout = ({
     //   3) widow cards fly from the widow pile to center
     //   4) hold in center
     //   5) widow cards fly to the awarded team's pile
-    // Keyed on state only so the long sequence isn't cancelled by re-renders.
+    // Keyed on state plus terminal settlement status so reconnects do not start
+    // the finale from provisional Game Over data while settlement is pending.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useLayoutEffect(() => {
         const { state, roundSummary, lastCompletedTrick, bidWinnerInfo } = currentTableState;
+        const terminalSettlementPending = state === 'Game Over'
+            && roundSummary?.isGameOver
+            && currentTableState.settlement?.status === 'pending';
         const isRoundEnd = (state === 'Awaiting Next Round Trigger' || state === 'Game Over')
-            && roundSummary && lastCompletedTrick && bidWinnerInfo && !isSpectator && !prefersReducedMotion;
+            && roundSummary && !roundSummary.forfeit
+            && !terminalSettlementPending
+            && lastCompletedTrick && bidWinnerInfo && !isSpectator && !prefersReducedMotion;
 
         if (!isRoundEnd) {
             // Reset once we've moved on to the next round / away from the recap.
@@ -227,9 +235,11 @@ const TableLayout = ({
             return;
         }
 
-        // Run the sequence once per round-end (roundSummary is a fresh object each round).
-        if (endRoundKeyRef.current === roundSummary) return;
-        endRoundKeyRef.current = roundSummary;
+        // Run once per terminal visit. Socket broadcasts deserialize a fresh
+        // roundSummary object each time, so object identity would replay the
+        // whole widow sequence after settlement or token-sync broadcasts.
+        if (endRoundKeyRef.current) return;
+        endRoundKeyRef.current = true;
         clearEndRoundTimers();
         setWidowFlipped(false);
 
@@ -261,7 +271,7 @@ const TableLayout = ({
             setWidowFlipped(true);
             if (playSound) playSound('roundEnd');
         }, WIDOW_FLIP_START_MS));
-    }, [currentTableState.state, prefersReducedMotion]);
+    }, [currentTableState.state, currentTableState.settlement?.status, prefersReducedMotion]);
 
     // Drives the widow overlay: measured FLIP from the widow pile -> center
     // (held) -> the awarded team's pile. Runs when the overlay mounts.
@@ -983,6 +993,7 @@ const TableLayout = ({
                     renderCard={renderCard}
                     isAdmin={isAdmin}
                     quickPlayDecisionRejectionNonce={quickPlayDecisionRejectionNonce}
+                    roundPresentationComplete={roundPresentationComplete}
                 />
             </div>
         </main>

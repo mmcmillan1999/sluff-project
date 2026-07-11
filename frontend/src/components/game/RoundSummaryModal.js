@@ -1,8 +1,9 @@
 // frontend/src/components/game/RoundSummaryModal.js
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import './RoundSummaryModal.css';
 import { CARD_POINT_VALUES, BID_MULTIPLIERS, PLACEHOLDER_ID_CLIENT } from '../../constants';
 import PointsBreakdownBar from './PointsBreakdownBar';
+import { useModalFocus } from '../../hooks/useModalFocus';
 
 const RoundSummaryModal = ({
     summaryData,
@@ -15,9 +16,23 @@ const RoundSummaryModal = ({
     bidWinnerInfo,
     playerOrderActive,
     handleLeaveTable,
-    handleLogout
+    handleLogout,
+    showScoreTotals = true,
+    title,
+    continueLabel = 'Continue',
+    onContinue
 }) => {
     const [detailsVisible, setDetailsVisible] = useState(false);
+    const dialogRef = useModalFocus(
+        showModal,
+        '.summary-continue-button, .summary-action-area button:not(:disabled)'
+    );
+
+    useEffect(() => {
+        if (!showModal) {
+            setDetailsVisible(false);
+        }
+    }, [showModal]);
 
     if (!showModal || !summaryData) {
         return null;
@@ -45,6 +60,7 @@ const RoundSummaryModal = ({
     } = summaryData;
 
     const myPayoutMessage = isGameOver && payoutDetails ? payoutDetails[playerId] : null;
+    const modalTitle = title || (isGameOver ? 'Game Over' : 'Round Over');
 
     if (isGameOver && forfeit) {
         const forfeitingPlayerName = forfeit.forfeitingPlayerName || 'A player';
@@ -60,9 +76,9 @@ const RoundSummaryModal = ({
 
         return (
             <div className="modal-overlay">
-                <div className="summary-modal-content">
+                <div ref={dialogRef} className="summary-modal-content" role="dialog" aria-modal="true" aria-label={title || 'Game ended by forfeit'} tabIndex={-1}>
                     <div className="summary-main-area">
-                        <h2>Game Ended by Forfeit</h2>
+                        <h2>{title || 'Game Ended by Forfeit'}</h2>
                         {myPayoutMessage && (
                             <div className="payout-details-banner">
                                 <p>{myPayoutMessage}</p>
@@ -78,31 +94,39 @@ const RoundSummaryModal = ({
                             )}
                         </div>
 
-                        <div className="forfeit-scores-panel">
-                            <h4>Final Scores</h4>
-                            {finalScoreEntries.length > 0 ? (
-                                <table className="summary-totals-table forfeit-scores-table">
-                                    <thead>
-                                        <tr><th>Player</th><th>Score</th></tr>
-                                    </thead>
-                                    <tbody>
-                                        {finalScoreEntries.map(([name, score]) => (
-                                            <tr key={name}><td><strong>{name}</strong></td><td>{score}</td></tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            ) : (
-                                <p>Final scores are unavailable.</p>
-                            )}
-                        </div>
+                        {showScoreTotals && (
+                            <div className="forfeit-scores-panel">
+                                <h4>Final Scores</h4>
+                                {finalScoreEntries.length > 0 ? (
+                                    <table className="summary-totals-table forfeit-scores-table">
+                                        <thead>
+                                            <tr><th>Player</th><th>Score</th></tr>
+                                        </thead>
+                                        <tbody>
+                                            {finalScoreEntries.map(([name, score]) => (
+                                                <tr key={name}><td><strong>{name}</strong></td><td>{score}</td></tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                ) : (
+                                    <p>Final scores are unavailable.</p>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     <div className="summary-action-area">
-                        <div className="game-over-actions">
-                            <button onClick={() => emitEvent("resetGame")} className="game-button">Play Again</button>
-                            <button onClick={handleLeaveTable} className="game-button" style={{backgroundColor: '#17a2b8'}}>Back to Lobby</button>
-                            <button onClick={handleLogout} className="game-button" style={{backgroundColor: '#6c757d'}}>Logout</button>
-                        </div>
+                        {onContinue ? (
+                            <button type="button" onClick={onContinue} className="game-button summary-continue-button">
+                                {continueLabel}
+                            </button>
+                        ) : (
+                            <div className="game-over-actions">
+                                <button onClick={() => emitEvent("resetGame")} className="game-button">Play Again</button>
+                                <button onClick={handleLeaveTable} className="game-button" style={{backgroundColor: '#17a2b8'}}>Back to Lobby</button>
+                                <button onClick={handleLogout} className="game-button" style={{backgroundColor: '#6c757d'}}>Logout</button>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -182,7 +206,7 @@ const RoundSummaryModal = ({
                 <div className="point-calculation-recap">
                     Δ60: {rawDifference} pts × {bidMultiplier}x ({bidType}) = {exchangeValue} pts
                 </div>
-                {!insuranceDealWasMade && renderTotalsTable(pointChanges, finalScores)}
+                {!insuranceDealWasMade && showScoreTotals && renderTotalsTable(pointChanges, finalScores)}
             </div>
         );
     };
@@ -216,7 +240,7 @@ const RoundSummaryModal = ({
                         );
                     })}
                 </div>
-                {insuranceDealWasMade && renderTotalsTable(pointChanges, finalScores)}
+                {insuranceDealWasMade && showScoreTotals && renderTotalsTable(pointChanges, finalScores)}
             </div>
         );
     };
@@ -262,12 +286,17 @@ const RoundSummaryModal = ({
     
     return (
         <div className="modal-overlay">
-            <div className="summary-modal-content">
+            <div ref={dialogRef} className="summary-modal-content" role="dialog" aria-modal="true" aria-label={modalTitle} tabIndex={-1}>
                 <div className="summary-main-area">
-                    <h2>{isGameOver ? "Game Over" : "Round Over"}</h2>
+                    <h2>{modalTitle}</h2>
                     {myPayoutMessage && (
                         <div className="payout-details-banner">
                             <p>{myPayoutMessage}</p>
+                        </div>
+                    )}
+                    {isGameOver && message && message !== 'Game Over!' && (
+                        <div className="settlement-status-banner" role="status">
+                            {message}
                         </div>
                     )}
                     
@@ -292,26 +321,34 @@ const RoundSummaryModal = ({
                 )}
                 
                 <div className="summary-action-area">
-                    {!isGameOver && playerId === dealerOfRoundId && (
-                        <button onClick={() => emitEvent("requestNextRound")} className="game-button">
-                            Start Next Round
+                    {onContinue ? (
+                        <button type="button" onClick={onContinue} className="game-button summary-continue-button">
+                            {continueLabel}
                         </button>
-                    )}
-                    {!isGameOver && playerId !== dealerOfRoundId && (
-                        <p>Waiting for {getPlayerNameByUserId(dealerOfRoundId)} to start the next round...</p>
-                    )}
-                    {isGameOver && (
-                        <div className="game-over-actions">
-                             <button onClick={() => emitEvent("resetGame")} className="game-button">
-                                Play Again
-                            </button>
-                            <button onClick={handleLeaveTable} className="game-button" style={{backgroundColor: '#17a2b8'}}>
-                                Back to Lobby
-                            </button>
-                             <button onClick={handleLogout} className="game-button" style={{backgroundColor: '#6c757d'}}>
-                                Logout
-                            </button>
-                        </div>
+                    ) : (
+                        <>
+                            {!isGameOver && playerId === dealerOfRoundId && (
+                                <button onClick={() => emitEvent("requestNextRound")} className="game-button">
+                                    Start Next Round
+                                </button>
+                            )}
+                            {!isGameOver && playerId !== dealerOfRoundId && (
+                                <p>Waiting for {getPlayerNameByUserId(dealerOfRoundId)} to start the next round...</p>
+                            )}
+                            {isGameOver && (
+                                <div className="game-over-actions">
+                                    <button onClick={() => emitEvent("resetGame")} className="game-button">
+                                        Play Again
+                                    </button>
+                                    <button onClick={handleLeaveTable} className="game-button" style={{backgroundColor: '#17a2b8'}}>
+                                        Back to Lobby
+                                    </button>
+                                    <button onClick={handleLogout} className="game-button" style={{backgroundColor: '#6c757d'}}>
+                                        Logout
+                                    </button>
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             </div>

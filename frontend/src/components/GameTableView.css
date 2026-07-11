@@ -210,6 +210,22 @@
     z-index: 1000;
 }
 
+.round-score-ceremony-overlay {
+    box-sizing: border-box;
+    padding:
+        max(0.75rem, env(safe-area-inset-top, 0px))
+        max(0.65rem, env(safe-area-inset-right, 0px))
+        max(0.75rem, env(safe-area-inset-bottom, 0px))
+        max(0.65rem, env(safe-area-inset-left, 0px));
+    overflow-y: auto;
+    align-items: flex-start;
+    align-items: safe center;
+    background:
+        radial-gradient(circle at 50% 22%, rgba(197, 151, 57, 0.14), transparent 42%),
+        rgba(3, 7, 6, 0.82);
+    backdrop-filter: blur(3px);
+}
+
 .initial-prompt-modal {
     background-color: #fefcbf;
     border: 0.2vh solid #f59e0b;

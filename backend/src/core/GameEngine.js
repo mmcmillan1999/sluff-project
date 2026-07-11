@@ -1,6 +1,14 @@
 // backend/src/core/GameEngine.js
 
-const { SERVER_VERSION, BID_HIERARCHY, PLACEHOLDER_ID, deck, SUITS, BID_MULTIPLIERS } = require('./constants');
+const {
+    SERVER_VERSION,
+    BID_HIERARCHY,
+    PLACEHOLDER_ID,
+    deck,
+    SUITS,
+    BID_MULTIPLIERS,
+    ROUND_PRESENTATION_ACK_GRACE_MS,
+} = require('./constants');
 const BotPlayer = require('./BotPlayer');
 const { shuffle } = require('../utils/shuffle');
 const playHandler = require('./handlers/playHandler');
@@ -28,8 +36,12 @@ class GameEngine {
         this.qpPhase = tableType === 'quickplay' ? 'filling' : null;
         this.qpGeneration = 0;
         // Epoch-ms deadline while the table is explicitly seeking a fourth
-        // human. It is null during the three-player decision phase.
+        // human. This stays server-private; clients only receive the phase.
         this.qpWindowEndsAt = null;
+        // Only the dedicated Quick Play fallback path may mark a bot for seat
+        // four. The generation binding prevents generic/admin bot actions or a
+        // stale matchmaking callback from authorizing a funded 4P start.
+        this.qpFallbackBot = null;
         this.serverVersion = SERVER_VERSION;
         this.state = "Waiting for Players";
         this.players = {};
@@ -124,6 +136,7 @@ class GameEngine {
         const isPlayerAlreadyInGame = !!this.players[id];
         
         if (isPlayerAlreadyInGame) {
+            this.invalidateRoundPresentationAcknowledgement(id);
             this.players[id].disconnected = false;
             this.players[id].socketId = socketId;
             if (tokens !== null) this.players[id].tokens = tokens;
@@ -159,7 +172,11 @@ class GameEngine {
             }
         }
         
-        if (!this.scores[username]) this.scores[username] = 120;
+        if (!this.players[id].isSpectator && this.scores[username] === undefined) {
+            this.scores[username] = 120;
+        } else if (this.players[id].isSpectator) {
+            delete this.scores[username];
+        }
         const activePlayersAfterJoin = this.playerOrder.count;
         if (!this.gameStarted) {
             this.state = (activePlayersAfterJoin >= 3) ? "Ready to Start" : "Waiting for Players";
@@ -170,11 +187,12 @@ class GameEngine {
         }
     }
 
-    addBotPlayer() {
+    _addBotPlayer({ allowQuickPlayFourth = false } = {}) {
         if (this.gameStarted || this.gameStartPending || this.playerOrder.count >= 4) return;
         // Quick Play's fourth seat is reserved for a human after the table has
-        // explicitly entered its fourth-player search.
-        if (this.tableType === 'quickplay' && this.playerOrder.count >= 3) return;
+        // explicitly entered its fourth-player search. Only the server-owned,
+        // generation-checked fallback method below may cross this boundary.
+        if (this.tableType === 'quickplay' && this.playerOrder.count >= 3 && !allowQuickPlayFourth) return;
         const currentBotNames = new Set(Object.values(this.players).filter(p => p.isBot).map(p => p.playerName));
         const availableNames = BOT_NAMES.filter(name => !currentBotNames.has(name));
         if (availableNames.length === 0) return;
@@ -189,6 +207,70 @@ class GameEngine {
             this.playerOrder.add(botId);
         }
         if (this.playerOrder.count >= 3 && !this.gameStarted) this.state = 'Ready to Start';
+        return this.players[botId];
+    }
+
+    addBotPlayer() {
+        return this._addBotPlayer();
+    }
+
+    addQuickPlayFallbackBot({ generation, deadline, now } = {}) {
+        if (this.tableType !== 'quickplay'
+            || this.gameStarted || this.gameStartPending
+            || this.qpPhase !== 'seeking_fourth'
+            || this.qpGeneration !== generation
+            || !Number.isFinite(deadline)
+            || !Number.isFinite(now)
+            || now < deadline
+            || this.qpWindowEndsAt !== deadline
+            || this.playerOrder.count !== 3
+            || !Object.values(this.players).some(player => !player.isBot && !player.isSpectator)
+            || this.qpFallbackBot !== null) return null;
+
+        const bot = this._addBotPlayer({ allowQuickPlayFourth: true });
+        if (!bot || this.playerOrder.allIds[3] !== bot.userId) {
+            if (bot) this.removeBotPlayer(bot.userId);
+            return null;
+        }
+        this.qpFallbackBot = {
+            userId: bot.userId,
+            searchGeneration: generation,
+            startGeneration: null,
+        };
+        return bot;
+    }
+
+    bindQuickPlayFallbackStart(botId, searchGeneration, startGeneration) {
+        const marker = this.qpFallbackBot;
+        const fourthPlayerId = this.playerOrder.allIds[3];
+        if (this.tableType !== 'quickplay'
+            || this.qpPhase !== 'starting_4'
+            || this.qpGeneration !== startGeneration
+            || !marker
+            || marker.userId !== botId
+            || marker.searchGeneration !== searchGeneration
+            || fourthPlayerId !== botId
+            || this.players[botId]?.isBot !== true) return false;
+        marker.startGeneration = startGeneration;
+        return true;
+    }
+
+    removeBotPlayer(botId) {
+        if (this.gameStarted || this.gameStartPending) return false;
+        const normalizedBotId = Number(botId);
+        const botInfo = this.players[normalizedBotId];
+        if (!botInfo?.isBot) return false;
+
+        console.log(`[${this.tableId}] Removing bot: ${botInfo.playerName}`);
+        this.playerOrder.remove(normalizedBotId);
+        delete this.scores[botInfo.playerName];
+        delete this.bots[normalizedBotId];
+        delete this.players[normalizedBotId];
+        if (this.qpFallbackBot?.userId === normalizedBotId) this.qpFallbackBot = null;
+
+        this.playerMode = this.playerOrder.count;
+        this.state = this.playerMode >= 3 ? "Ready to Start" : "Waiting for Players";
+        return true;
     }
 
     removeBot() {
@@ -198,19 +280,7 @@ class GameEngine {
         if (botIds.length === 0) return; 
 
         const botIdToRemove = Math.max(...botIds);
-        const botInfo = this.players[botIdToRemove];
-
-        if (botInfo) {
-            console.log(`[${this.tableId}] Removing bot: ${botInfo.playerName}`);
-            
-            this.playerOrder.remove(botIdToRemove);
-            delete this.scores[botInfo.playerName];
-            delete this.bots[botIdToRemove];
-            delete this.players[botIdToRemove];
-        }
-
-        this.playerMode = this.playerOrder.count;
-        this.state = this.playerMode >= 3 ? "Ready to Start" : "Waiting for Players";
+        this.removeBotPlayer(botIdToRemove);
     }
 
     leaveTable(userId) {
@@ -278,6 +348,9 @@ class GameEngine {
     reconnectPlayer(userId, socket, tokens = null) {
         const player = this.players[userId];
         if (!player) return false;
+        // A new socket must prove that it displayed the current presentation;
+        // an acknowledgement from the connection it replaces is not reusable.
+        this.invalidateRoundPresentationAcknowledgement(userId);
         if (player.disconnected) {
             console.log(`[${this.tableId}] Reconnecting user ${player.playerName}.`);
         }
@@ -294,6 +367,7 @@ class GameEngine {
         if (this.gameStarted || this.gameStartPending) return this._effects();
         if (!this.players[requestingUserId] || this.players[requestingUserId].isSpectator) return this._effects();
         const activePlayerIds = this.playerOrder.allIds;
+        let quickPlayFallbackStartGeneration = null;
 
         if (this.tableType === 'quickplay') {
             const authorization = options.quickPlayStart;
@@ -303,6 +377,15 @@ class GameEngine {
             const fourthPlayer = activePlayerIds.length === 4
                 ? this.players[activePlayerIds[3]]
                 : null;
+            const fallbackMarker = this.qpFallbackBot;
+            const authorizedFallbackFourth = expectedMode === 4
+                && fourthPlayer?.isBot === true
+                && authorization?.fallbackBotId === fourthPlayer.userId
+                && fallbackMarker?.userId === fourthPlayer.userId
+                && fallbackMarker?.startGeneration === authorization?.generation;
+            if (authorizedFallbackFourth) {
+                quickPlayFallbackStartGeneration = authorization.generation;
+            }
             const authorized = authorization
                 && authorization.generation === this.qpGeneration
                 && authorization.playerMode === expectedMode
@@ -310,8 +393,8 @@ class GameEngine {
                 && this.players[requestingUserId].isBot !== true
                 && (expectedMode !== 4 || (
                     fourthPlayer
-                    && fourthPlayer.isBot !== true
                     && fourthPlayer.isSpectator !== true
+                    && (fourthPlayer.isBot !== true || authorizedFallbackFourth)
                 ));
 
             if (!authorized) {
@@ -387,6 +470,14 @@ class GameEngine {
                     delete this.players[userId];
                     this.playerOrder.remove(userId);
                 }
+                // A failed fallback start must not strand a bot in the reserved
+                // fourth seat. Remove exactly the generation-bound fallback;
+                // the ordinary matchmaking bots in seats two/three remain.
+                const fallbackBotId = quickPlayFallbackStartGeneration !== null
+                    && this.qpFallbackBot?.startGeneration === quickPlayFallbackStartGeneration
+                    ? this.qpFallbackBot.userId
+                    : null;
+                if (fallbackBotId !== null) this.removeBotPlayer(fallbackBotId);
                 this.gameStarted = false;
                 this.gameId = null; 
                 this.playerMode = this.playerOrder.count;
@@ -465,10 +556,38 @@ class GameEngine {
     }
 
     requestNextRound(requestingUserId) {
-        if (this.state === "Awaiting Next Round Trigger" && requestingUserId === this.roundSummary?.dealerOfRoundId) {
+        if (this.state === "Awaiting Next Round Trigger"
+            && requestingUserId === this.roundSummary?.dealerOfRoundId
+            && this.isRoundPresentationAdvanceReady()) {
             this._advanceRound();
         }
         return this._effects([{ type: 'BROADCAST_STATE' }]);
+    }
+
+    startRoundPresentationWindow(lockDurationMs, now = Date.now()) {
+        if (!this.roundSummary || !Number.isFinite(lockDurationMs) || lockDurationMs < 0) return null;
+        const presentationReadyAt = now + lockDurationMs;
+        this.roundPresentationAcknowledgements.clear();
+        this.roundSummary.presentationReadyAt = presentationReadyAt;
+        this.roundSummary.presentationForceReadyAt = presentationReadyAt + ROUND_PRESENTATION_ACK_GRACE_MS;
+        this.roundSummary.allConnectedHumansPresented = false;
+        return presentationReadyAt;
+    }
+
+    invalidateRoundPresentationAcknowledgement(userId) {
+        this.roundPresentationAcknowledgements?.delete(String(userId));
+    }
+
+    isRoundPresentationAdvanceReady(now = Date.now()) {
+        const presentationReadyAt = this.roundSummary?.presentationReadyAt;
+        // DrawComplete and old/legacy summaries intentionally have no shared
+        // presentation fields and retain their previous immediate behavior.
+        if (!Number.isFinite(presentationReadyAt)) return true;
+        if (now < presentationReadyAt) return false;
+
+        const presentationForceReadyAt = this.roundSummary?.presentationForceReadyAt;
+        return this.roundSummary.allConnectedHumansPresented === true
+            || (Number.isFinite(presentationForceReadyAt) && now >= presentationForceReadyAt);
     }
 
     reset() {
@@ -482,9 +601,11 @@ class GameEngine {
         this.settlement = this._newSettlementState();
         this.gameId = null;
         this.playerMode = null;
-        // Re-arm the terminal-state watchdogs (GameService) for the next game.
-        this.gameOverHandled = false;
-        this.drawCompleteHandled = false;
+        // A fallback bot belongs only to the completed/failed match that
+        // authorized it. It never carries into a rematch decision.
+        if (this.tableType === 'quickplay' && this.qpFallbackBot) {
+            this.removeBotPlayer(this.qpFallbackBot.userId);
+        }
         if (this.tableType === 'quickplay') {
             this.qpPhase = 'filling';
             this.qpGeneration += 1;
@@ -507,13 +628,16 @@ class GameEngine {
         
         for (const userId in this.players) {
             const player = this.players[userId];
-            // For normal resets, convert all players back to active players
-            // But preserve explicit spectator status for admins who chose to spectate
-            if (!player.wasExplicitSpectator) {
+            // A spectator never becomes a funded seat merely because somebody
+            // else requested a rematch. They must leave/rejoin or use an
+            // explicit seating flow before a later game can charge them.
+            if (!player.isSpectator && !player.wasExplicitSpectator) {
                 player.isSpectator = false;
                 this.playerOrder.add(parseInt(userId, 10));
+                this.scores[player.playerName] = 120;
+            } else {
+                player.isSpectator = true;
             }
-            this.scores[player.playerName] = 120;
         }
         this.playerMode = this.playerOrder.count;
         this.state = this.playerMode >= 3 ? "Ready to Start" : "Waiting for Players";
@@ -658,6 +782,7 @@ class GameEngine {
     }
 
     _initializeNewRoundState() {
+        this.roundPresentationAcknowledgements = new Set();
         this.hands = {}; this.widow = []; this.originalDealtWidow = [];
         this.biddingTurnPlayerId = null; this.currentHighestBidDetails = null; this.playersWhoPassedThisRound = [];
         this.bidWinnerInfo = null; this.trumpSuit = null; this.trumpBroken = false; this.originalFrogBidderId = null; this.soloBidMadeAfterFrog = false; this.revealedWidowForFrog = []; this.widowDiscardsForFrogBidder = [];
@@ -703,6 +828,11 @@ class GameEngine {
             gameWinner: null,
             payoutDetails: {},
             forfeit: { forfeitingPlayerName, reason },
+            // GameService stamps this after asynchronous settlement, immediately
+            // before the first result broadcast reaches clients.
+            presentationReadyAt: null,
+            presentationForceReadyAt: null,
+            allConnectedHumansPresented: false,
         };
         return [
             {
@@ -784,8 +914,11 @@ class GameEngine {
         const activeTurnOrder = this.gameStarted ? this.playerOrder.turnOrder : this.playerOrder.allIds;
         const state = {
             tableId: this.tableId, tableName: this.tableName, theme: this.theme, state: this.state, players: this.players,
+            serverTime: Date.now(),
             tableType: this.tableType, qpPhase: this.qpPhase, qpGeneration: this.qpGeneration,
-            qpWindowEndsAt: this.qpWindowEndsAt,
+            // The randomized fallback deadline is deliberately not disclosed;
+            // clients render a neutral searching state until a seat is filled.
+            qpWindowEndsAt: null,
             playerOrderActive: activeTurnOrder.map(id => this.players[id]?.playerName).filter(Boolean),
             // Full seating roster in join order (includes the sitting-out dealer
             // in 4-player). Clients derive fixed seats from this, not from

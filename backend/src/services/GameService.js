@@ -2,10 +2,19 @@
 
     const GameEngine = require('../core/GameEngine');
     const transactionManager = require('../data/transactionManager');
-    const { THEMES, TABLE_COSTS, SERVER_VERSION } = require('../core/constants');
+    const { THEMES, TABLE_COSTS, SERVER_VERSION, ROUND_PRESENTATION_LOCK_MS } = require('../core/constants');
     const AdaptiveInsuranceStrategy = require('../core/bot-strategies/AdaptiveInsuranceStrategy');
 
     const MAX_SETTLEMENT_ATTEMPTS = 3;
+    // Settled tables remain available while a human is connected so players can
+    // read the recap and explicitly choose a rematch or leave. Truly empty
+    // tables recycle quickly; disconnected human seats get a mobile-friendly
+    // reconnect grace before the table is reclaimed.
+    const TERMINAL_EMPTY_CLEANUP_DELAY_MS = 5_000;
+    const TERMINAL_DISCONNECTED_CLEANUP_DELAY_MS = 120_000;
+    const TERMINAL_QUICKPLAY_DISCONNECTED_CLEANUP_DELAY_MS = 60_000;
+    const QUICKPLAY_FOURTH_FALLBACK_MIN_DELAY_MS = 8_000;
+    const QUICKPLAY_FOURTH_FALLBACK_MAX_DELAY_MS = 15_000;
     const TRANSIENT_SETTLEMENT_CODES = new Set([
         '40001', // serialization failure
         '40P01', // deadlock detected
@@ -26,6 +35,7 @@
             this.pool = pool;
             this.engines = {};
             this.qpGenerationCounter = 0;
+            this.terminalCleanupTimers = {};
             this.adaptiveInsurance = new AdaptiveInsuranceStrategy(pool, io);
             this._initializeEngines();
 
@@ -90,16 +100,33 @@
 
             const userId = socket.user?.id
                 ?? Object.values(engine.players).find(player => player.socketId === socket.id)?.userId;
-            return engine.getStateForClient({
+            const state = engine.getStateForClient({
                 userId,
                 isAdmin: socket.user?.is_admin === true,
                 trustedAdminObserver: socket.data?.trustedAdminObserver === true,
             });
+            // This is deliberately added after viewer-safe serialization. The
+            // acknowledgement Set remains server-only, while each recipient
+            // learns only whether their own current presentation was recorded.
+            state.viewerRoundPresentationAcknowledged = Boolean(
+                Number.isFinite(engine.roundSummary?.presentationReadyAt)
+                && userId !== undefined
+                && userId !== null
+                && engine.roundPresentationAcknowledgements instanceof Set
+                && engine.roundPresentationAcknowledgements.has(String(userId))
+            );
+            return state;
         }
 
         emitGameState(tableId) {
             const engine = this.getEngineById(tableId);
             if (!engine) return;
+
+            // Connection and roster changes all converge here. Recompute the
+            // acknowledgement quorum before any client receives authoritative
+            // state so disconnects stop blocking immediately and reconnects
+            // become blocking again until the replacement socket acknowledges.
+            this.recomputeRoundPresentationReadiness(tableId);
 
             // Emit a separately serialized object to each authenticated seat.
             // A room-wide payload can never safely contain a player's hand.
@@ -109,6 +136,89 @@
                 if (!recipient) continue;
                 recipient.emit('gameState', this.getStateForSocket(engine, recipient));
             }
+        }
+
+        _activeConnectedPresentationHumans(engine) {
+            const activeIds = new Set((engine?.playerOrder?.allIds || []).map(String));
+            return Object.values(engine?.players || {}).filter(player => (
+                !player.isBot
+                && !player.isSpectator
+                && activeIds.has(String(player.userId))
+                && this._isTerminalHumanConnected(player)
+            ));
+        }
+
+        recomputeRoundPresentationReadiness(tableId) {
+            const engine = this.getEngineById(tableId);
+            const summary = engine?.roundSummary;
+            const presentationReadyAt = summary?.presentationReadyAt;
+            if (!engine || !Number.isFinite(presentationReadyAt)) {
+                return { active: false, changed: false, allConnectedHumansPresented: null };
+            }
+
+            if (!(engine.roundPresentationAcknowledgements instanceof Set)) {
+                engine.roundPresentationAcknowledgements = new Set();
+            }
+            const connectedHumans = this._activeConnectedPresentationHumans(engine);
+            const allConnectedHumansPresented = connectedHumans.every(player => (
+                engine.roundPresentationAcknowledgements.has(String(player.userId))
+            ));
+            const changed = summary.allConnectedHumansPresented !== allConnectedHumansPresented;
+            summary.allConnectedHumansPresented = allConnectedHumansPresented;
+            return {
+                active: true,
+                changed,
+                connectedHumanCount: connectedHumans.length,
+                acknowledgedHumanCount: connectedHumans.filter(player => (
+                    engine.roundPresentationAcknowledgements.has(String(player.userId))
+                )).length,
+                allConnectedHumansPresented,
+            };
+        }
+
+        ackRoundPresentation(tableId, userId, presentationReadyAt, socketId) {
+            const engine = this.getEngineById(tableId);
+            const summary = engine?.roundSummary;
+            if (!engine || !summary || !Number.isFinite(summary.presentationReadyAt)
+                || presentationReadyAt !== summary.presentationReadyAt) {
+                return { accepted: false, reason: 'stale_presentation' };
+            }
+
+            const normalRoundCanAck = engine.state === 'Awaiting Next Round Trigger'
+                && engine.settlement?.status === 'idle';
+            const terminalCanAck = engine.state === 'Game Over'
+                && engine.settlement?.status === 'complete';
+            if (!normalRoundCanAck && !terminalCanAck) {
+                return { accepted: false, reason: 'presentation_not_acknowledgeable' };
+            }
+
+            const player = engine.players?.[userId];
+            if (!player || player.isBot || player.isSpectator
+                || !engine.playerOrder.includes(userId)
+                || player.disconnected || !socketId || player.socketId !== socketId
+                || !this._isTerminalHumanConnected(player)) {
+                return { accepted: false, reason: 'ineligible_player' };
+            }
+
+            const acknowledgementKey = String(userId);
+            const alreadyAcknowledged = engine.roundPresentationAcknowledgements.has(acknowledgementKey);
+            if (!alreadyAcknowledged) {
+                engine.roundPresentationAcknowledgements.add(acknowledgementKey);
+            }
+            const readiness = this.recomputeRoundPresentationReadiness(tableId);
+            // Duplicate delivery is expected on unreliable mobile links. Keep
+            // it idempotent and do not turn retries into table-wide broadcast
+            // amplification. A real acknowledgement or quorum change still
+            // publishes authoritative state immediately.
+            if (!alreadyAcknowledged || readiness.changed) {
+                this.emitGameState(tableId);
+            }
+            return {
+                accepted: true,
+                alreadyAcknowledged,
+                presentationReadyAt: summary.presentationReadyAt,
+                allConnectedHumansPresented: readiness.allConnectedHumansPresented,
+            };
         }
 
         getLobbyState() {
@@ -132,9 +242,9 @@
 
         // ===================== QUICK PLAY MATCHMAKER =====================
         // Fill to three, stop for an explicit table-wide decision, then either
-        // freeze/start that roster or seek one human fourth for 20 seconds. A
-        // search timeout returns to the decision; it never silently starts 3P.
-        // Bots can fill seats two/three, but can never occupy seat four.
+        // freeze/start that roster or seek one human fourth. If no human claims
+        // the seat before a private randomized 8-15s deadline, a narrowly
+        // authorized fallback bot takes seat four and the 4P game starts.
 
         _humanCount(engine) {
             return Object.values(engine.players).filter(p => !p.isBot && !p.isSpectator).length;
@@ -142,6 +252,22 @@
 
         _quickPlayNow() {
             return typeof this.nowOverride === 'function' ? this.nowOverride() : Date.now();
+        }
+
+        _quickPlayFourthFallbackDelay() {
+            const randomFn = typeof this.quickPlayRandomOverride === 'function'
+                ? this.quickPlayRandomOverride
+                : Math.random;
+            const sample = Number(randomFn());
+            // Math.random() is [0, 1). Reject malformed test/runtime sources
+            // rather than allowing an out-of-range matchmaking deadline.
+            const unit = Number.isFinite(sample) && sample >= 0 && sample < 1
+                ? sample
+                : Math.random();
+            const inclusiveRange = QUICKPLAY_FOURTH_FALLBACK_MAX_DELAY_MS
+                - QUICKPLAY_FOURTH_FALLBACK_MIN_DELAY_MS + 1;
+            return QUICKPLAY_FOURTH_FALLBACK_MIN_DELAY_MS
+                + Math.floor(unit * inclusiveRange);
         }
 
         _clearQuickPlayTimer(tableId, kind) {
@@ -341,20 +467,31 @@
             }
 
             if (choice === 'seek4' && seated === 3) {
-                const deadline = this._quickPlayNow() + 20000;
+                const fallbackDelay = this._quickPlayFourthFallbackDelay();
+                const deadline = this._quickPlayNow() + fallbackDelay;
                 const searchGeneration = this._advanceQuickPlayPhase(engine, 'seeking_fourth', deadline);
                 const timers = this.qpTimers[tableId] || (this.qpTimers[tableId] = {});
                 const timerFn = this.timerOverride || setTimeout;
                 const expectedHumans = this._humanCount(engine);
-                const record = { generation: searchGeneration, deadline, handle: null };
+                const expectedRoster = [...engine.playerOrder.allIds];
+                const record = {
+                    engine,
+                    generation: searchGeneration,
+                    deadline,
+                    fallbackDelay,
+                    expectedRoster,
+                    handle: null,
+                };
                 timers.window = record;
                 const expireSearch = () => {
                     const current = this.engines[tableId];
                     if (timers.window !== record
-                        || !current || current.gameStarted || current.gameStartPending
+                        || !current || current !== record.engine
+                        || current.gameStarted || current.gameStartPending
                         || current.qpPhase !== 'seeking_fourth'
                         || current.qpGeneration !== searchGeneration
                         || current.playerOrder.count !== 3
+                        || current.playerOrder.allIds.some((id, index) => id !== expectedRoster[index])
                         || this._humanCount(current) !== expectedHumans
                         || current.qpWindowEndsAt !== deadline
                     ) return;
@@ -363,11 +500,36 @@
                         record.handle = timerFn(expireSearch, remaining);
                         return;
                     }
-                    timers.window = null;
-                    this._advanceQuickPlayPhase(current, 'decision_pending');
+                    let fallbackBot = null;
+                    try {
+                        fallbackBot = current.addQuickPlayFallbackBot({
+                            generation: searchGeneration,
+                            deadline,
+                            now: this._quickPlayNow(),
+                        });
+                    } catch (error) {
+                        console.error(`[QUICKPLAY] Could not create a fourth-seat fallback on ${tableId}.`, error);
+                    }
+                    if (!fallbackBot) {
+                        this._advanceQuickPlayPhase(current, 'decision_pending');
+                        this.emitGameState(tableId);
+                        return;
+                    }
+                    const startGeneration = this._advanceQuickPlayPhase(current, 'starting_4');
+                    if (!current.bindQuickPlayFallbackStart(
+                        fallbackBot.userId,
+                        searchGeneration,
+                        startGeneration,
+                    )) {
+                        current.removeBotPlayer(fallbackBot.userId);
+                        this._advanceQuickPlayPhase(current, 'decision_pending');
+                        this.emitGameState(tableId);
+                        return;
+                    }
                     this.emitGameState(tableId);
+                    void this._startQuickPlayGame(tableId, startGeneration, 4, fallbackBot.userId);
                 };
-                record.handle = timerFn(expireSearch, 20000);
+                record.handle = timerFn(expireSearch, fallbackDelay);
                 this.emitGameState(tableId);
                 return { accepted: true, choice, generation: searchGeneration };
             }
@@ -375,20 +537,66 @@
             return { accepted: false, reason: 'invalid_choice' };
         }
 
-        async _startQuickPlayGame(tableId, generation, playerMode) {
+        _recoverQuickPlayFallbackStart(tableId, engine, generation, expectedPhase, fallbackBotId) {
+            const current = this.engines[tableId];
+            // Recover only the exact unchanged fallback generation. Never
+            // mutate a newer table or a transaction still marked pending.
+            if (fallbackBotId === null
+                || current !== engine
+                || current.gameStarted
+                || current.gameStartPending
+                || current.qpPhase !== expectedPhase
+                || current.qpGeneration !== generation
+                || current.qpFallbackBot?.userId !== fallbackBotId
+                || current.qpFallbackBot?.startGeneration !== generation) return false;
+            current.removeBotPlayer(fallbackBotId);
+            this._advanceQuickPlayPhase(current, 'decision_pending');
+            this.emitGameState(tableId);
+            return true;
+        }
+
+        async _startQuickPlayGame(tableId, generation, playerMode, fallbackBotId = null) {
             const engine = this.engines[tableId];
             const expectedPhase = playerMode === 3 ? 'starting_3' : 'starting_4';
             if (!engine || engine.gameStarted || engine.gameStartPending
                 || engine.qpPhase !== expectedPhase
                 || engine.qpGeneration !== generation
                 || engine.playerOrder.count !== playerMode) return;
+            const fourthPlayerId = playerMode === 4 ? engine.playerOrder.allIds[3] : null;
+            if (fallbackBotId !== null && (
+                fourthPlayerId !== fallbackBotId
+                || engine.players[fallbackBotId]?.isBot !== true
+                || engine.qpFallbackBot?.userId !== fallbackBotId
+                || engine.qpFallbackBot?.startGeneration !== generation
+            )) return;
             const firstHuman = Object.values(engine.players).find(p => !p.isBot && !p.isSpectator);
             if (!firstHuman) { this.evaluateQuickPlayTable(tableId); return; }
             engine.qpWindowEndsAt = null;
-            await this.startGame(tableId, firstHuman.userId, {
-                quickPlayStart: { generation, playerMode },
-            });
-            if (!engine.gameStarted) this.evaluateQuickPlayTable(tableId);
+            try {
+                await this.startGame(tableId, firstHuman.userId, {
+                    quickPlayStart: { generation, playerMode, fallbackBotId },
+                });
+            } catch (error) {
+                console.error(`[QUICKPLAY] Start rejected for ${tableId}.`, error);
+                this._recoverQuickPlayFallbackStart(
+                    tableId,
+                    engine,
+                    generation,
+                    expectedPhase,
+                    fallbackBotId,
+                );
+                return;
+            }
+            if (!engine.gameStarted) {
+                if (this._recoverQuickPlayFallbackStart(
+                    tableId,
+                    engine,
+                    generation,
+                    expectedPhase,
+                    fallbackBotId,
+                )) return;
+                this.evaluateQuickPlayTable(tableId);
+            }
         }
         // =================================================================
 
@@ -449,10 +657,22 @@
         }
 
         async resetGame(tableId) {
+            const engine = this.getEngineById(tableId);
+            const isTerminal = engine
+                && (engine.state === 'Game Over' || engine.state === 'DrawComplete');
+            const terminalSettlementBlocked = isTerminal
+                && engine.settlement
+                && engine.settlement.status !== 'complete';
+            if (!engine || terminalSettlementBlocked
+                || (isTerminal && !engine.isRoundPresentationAdvanceReady())) {
+                return false;
+            }
             await this._performAction(tableId, (engine) => engine.reset());
             if (this.engines[tableId]?.tableType === 'quickplay') {
                 this.evaluateQuickPlayTable(tableId);
             }
+            this.evaluateTerminalCleanup(tableId);
+            return true;
         }
         
         async handleGameOver(payload) {
@@ -507,6 +727,7 @@
         resetAllEngines() {
             console.log("[ADMIN] Resetting all game engines to initial state.");
             this._clearQuickPlayTimers();
+            this._clearTerminalCleanupTimers();
             this.engines = {};
             this._initializeEngines();
             this.io.emit('lobbyState', this.getLobbyState());
@@ -524,6 +745,155 @@
                 if (windowHandle !== undefined && windowHandle !== null) clearTimeout(windowHandle);
             }
             this.qpTimers = {};
+        }
+
+        _terminalHumanPlayers(engine) {
+            return Object.values(engine?.players || {})
+                .filter(player => !player.isBot && !player.isSpectator);
+        }
+
+        _isTerminalHumanConnected(player) {
+            if (!player || player.isBot || player.disconnected || !player.socketId) return false;
+            const connectedSockets = this.io?.sockets?.sockets;
+            if (!connectedSockets || typeof connectedSockets.get !== 'function') return true;
+            const socket = connectedSockets.get(player.socketId);
+            return !!socket && socket.connected !== false;
+        }
+
+        _terminalConnectivity(engine) {
+            const humans = this._terminalHumanPlayers(engine);
+            return {
+                humans,
+                connectedHumans: humans.filter(player => this._isTerminalHumanConnected(player)),
+            };
+        }
+
+        _clearTerminalCleanupTimer(tableId) {
+            const timers = this.terminalCleanupTimers || (this.terminalCleanupTimers = {});
+            const record = timers[tableId];
+            if (!record) return;
+            if (record.handle !== undefined && record.handle !== null) clearTimeout(record.handle);
+            delete timers[tableId];
+        }
+
+        _clearTerminalCleanupTimers() {
+            for (const tableId of Object.keys(this.terminalCleanupTimers || {})) {
+                this._clearTerminalCleanupTimer(tableId);
+            }
+            this.terminalCleanupTimers = {};
+        }
+
+        _resetAbandonedTerminalTable(tableId, engine, terminalState, terminalGameId) {
+            // Socket bookkeeping is authoritative for terminal retention. If a
+            // disconnect event was lost, reconcile the stale player flag before
+            // reset so GameEngine removes the abandoned human seat.
+            for (const player of this._terminalHumanPlayers(engine)) {
+                if (!this._isTerminalHumanConnected(player)) {
+                    player.disconnected = true;
+                    player.socketId = null;
+                }
+            }
+
+            console.log(`[CLEANUP] Reclaiming abandoned ${terminalState} table ${tableId}.`);
+            engine.reset();
+            if (engine.state === terminalState && engine.gameId === terminalGameId) return;
+
+            this.emitGameState(tableId);
+            this.io.emit('lobbyState', this.getLobbyState());
+
+            if (engine.tableType === 'quickplay') {
+                this.evaluateQuickPlayTable(tableId);
+                return;
+            }
+
+            // Preserve the admin bot-table testing loop, but revalidate that no
+            // human joined during the delay before starting another bot game.
+            const activePlayers = Object.values(engine.players).filter(player => !player.isSpectator);
+            const allBots = activePlayers.length >= 3 && activePlayers.every(player => player.isBot);
+            if (allBots) {
+                setTimeout(() => {
+                    const current = this.getEngineById(tableId);
+                    const currentActivePlayers = Object.values(current?.players || {})
+                        .filter(player => !player.isSpectator);
+                    if (current === engine
+                        && current.state === 'Ready to Start'
+                        && currentActivePlayers.length >= 3
+                        && currentActivePlayers.every(player => player.isBot)) {
+                        console.log(`[BOT] Starting new bot-only game on table ${tableId}`);
+                        const firstBot = currentActivePlayers[0];
+                        this._performAction(tableId, eng => eng.startGame(firstBot.userId));
+                    }
+                }, 3000);
+            }
+        }
+
+        evaluateTerminalCleanup(tableId) {
+            const engine = this.getEngineById(tableId);
+            const terminalState = engine?.state;
+            const isTerminal = terminalState === 'Game Over' || terminalState === 'DrawComplete';
+            if (!engine || !isTerminal || engine.settlement?.status !== 'complete') {
+                this._clearTerminalCleanupTimer(tableId);
+                return { status: 'inactive' };
+            }
+
+            const { humans, connectedHumans } = this._terminalConnectivity(engine);
+            if (connectedHumans.length > 0) {
+                this._clearTerminalCleanupTimer(tableId);
+                return { status: 'held', connectedHumans: connectedHumans.length };
+            }
+
+            const kind = humans.length === 0 ? 'empty' : 'disconnected';
+            const delay = kind === 'empty'
+                ? TERMINAL_EMPTY_CLEANUP_DELAY_MS
+                : (engine.tableType === 'quickplay'
+                    ? TERMINAL_QUICKPLAY_DISCONNECTED_CLEANUP_DELAY_MS
+                    : TERMINAL_DISCONNECTED_CLEANUP_DELAY_MS);
+            const terminalGameId = engine.gameId;
+            const timers = this.terminalCleanupTimers || (this.terminalCleanupTimers = {});
+            const existing = timers[tableId];
+            if (existing
+                && existing.engine === engine
+                && existing.terminalState === terminalState
+                && existing.terminalGameId === terminalGameId
+                && existing.kind === kind) {
+                return { status: 'scheduled', kind, delay };
+            }
+
+            this._clearTerminalCleanupTimer(tableId);
+            const record = {
+                engine,
+                terminalState,
+                terminalGameId,
+                kind,
+                delay,
+                handle: null,
+            };
+            timers[tableId] = record;
+            const timerFn = this.terminalCleanupTimerOverride || setTimeout;
+            record.handle = timerFn(() => {
+                const currentTimers = this.terminalCleanupTimers || {};
+                if (currentTimers[tableId] !== record) return;
+                delete currentTimers[tableId];
+
+                const current = this.getEngineById(tableId);
+                if (current !== engine
+                    || current.state !== terminalState
+                    || current.gameId !== terminalGameId
+                    || current.settlement?.status !== 'complete') return;
+
+                const currentConnectivity = this._terminalConnectivity(current);
+                if (currentConnectivity.connectedHumans.length > 0) return;
+                const currentKind = currentConnectivity.humans.length === 0 ? 'empty' : 'disconnected';
+                if (currentKind !== kind) {
+                    this.evaluateTerminalCleanup(tableId);
+                    return;
+                }
+
+                this._resetAbandonedTerminalTable(tableId, current, terminalState, terminalGameId);
+            }, delay);
+            record.handle?.unref?.();
+            console.log(`[CLEANUP] ${terminalState} table ${tableId} is ${kind}; cleanup scheduled in ${delay}ms.`);
+            return { status: 'scheduled', kind, delay };
         }
 
         async _performAction(tableId, actionFn) {
@@ -617,7 +987,13 @@
                             console.error(`[SERVICE] Normal settlement failed for game ${effect.payload.gameId}:`, settlement.error);
                             engine.roundSummary.message = 'Game settlement needs administrator review. No partial payout was committed.';
                         }
+                        if (engine.roundSummary) {
+                            // Start the shared presentation clock after the
+                            // settlement await, just before clients first see it.
+                            engine.startRoundPresentationWindow(ROUND_PRESENTATION_LOCK_MS);
+                        }
                         this.emitGameState(tableId);
+                        this.evaluateTerminalCleanup(tableId);
                         break;
                     }
                     case 'HANDLE_DRAW_OUTCOME': {
@@ -630,8 +1006,15 @@
                             if (effect.onComplete) effect.onComplete(settlement.result);
                         } else {
                             console.error(`[SERVICE] Draw settlement failed for game ${effect.payload.gameId}:`, settlement.error);
+                            // Draw Resolving is only an in-flight state. Even a
+                            // failed settlement must reach a stable terminal UI
+                            // so players can read the failure and leave; the
+                            // failed settlement itself continues to block reset
+                            // and automated terminal cleanup.
+                            engine.state = 'DrawComplete';
                             engine.roundSummary = {
                                 isGameOver: true,
+                                settlementFailed: true,
                                 drawOutcome: 'Settlement Failed',
                                 message: 'Draw settlement needs administrator review. No partial payout was committed.',
                                 payouts: {},
@@ -639,6 +1022,7 @@
                             };
                         }
                         this.emitGameState(tableId);
+                        this.evaluateTerminalCleanup(tableId);
                         break;
                     }
                     case 'HANDLE_FORFEIT': {
@@ -654,7 +1038,13 @@
                             console.error(`[SERVICE] Forfeit settlement failed for game ${effect.payload.gameId}:`, settlement.error);
                             engine.roundSummary.message = 'Forfeit settlement needs administrator review. No partial payout was committed.';
                         }
+                        if (engine.roundSummary) {
+                            // No final trick/widow animation on a forfeit; this
+                            // brief window only protects delivery of its reason.
+                            engine.startRoundPresentationWindow(1_000);
+                        }
                         this.emitGameState(tableId);
+                        this.evaluateTerminalCleanup(tableId);
                         break;
                     }
                     case 'START_FORFEIT_TIMER': {
@@ -747,48 +1137,7 @@
             // path at all: the table sat in DrawComplete forever and re-seated
             // its players into the finished game on every reconnect.)
             if (engine.state === 'Game Over' || engine.state === 'DrawComplete') {
-                if (engine.settlement?.status !== 'complete') return;
-                const handledFlag = engine.state === 'Game Over' ? 'gameOverHandled' : 'drawCompleteHandled';
-                if (!engine[handledFlag]) {
-                    engine[handledFlag] = true;
-                    const terminalState = engine.state;
-                    const terminalGameId = engine.gameId;
-                    console.log(`[CLEANUP] ${terminalState} detected on table ${tableId}. Resetting in 16 seconds...`);
-                    setTimeout(() => {
-                        const currentEngine = this.getEngineById(tableId);
-                        if (currentEngine
-                            && currentEngine.state === terminalState
-                            && currentEngine.gameId === terminalGameId
-                            && currentEngine.settlement?.status === 'complete') {
-                            console.log(`[CLEANUP] Resetting table ${tableId} after ${terminalState}`);
-                            currentEngine.reset();
-                            this.emitGameState(tableId);
-                            this.io.emit('lobbyState', this.getLobbyState());
-
-                            // Quick-play tables re-enter matchmaking after a game
-                            // (rematch window for whoever stayed seated).
-                            if (currentEngine.tableType === 'quickplay') {
-                                this.evaluateQuickPlayTable(tableId);
-                            }
-
-                            // If all players are bots, start a new game automatically
-                            // (private tables only — quick-play sweeps abandoned bots)
-                            const allBots = Object.values(currentEngine.players).every(p => p.isBot && !p.isSpectator);
-                            if (allBots && currentEngine.playerOrder.count >= 3 && currentEngine.tableType !== 'quickplay') {
-                                setTimeout(() => {
-                                    const engine = this.getEngineById(tableId);
-                                    if (engine && engine.state === 'Ready to Start') {
-                                        console.log(`[BOT] Starting new bot-only game on table ${tableId}`);
-                                        const firstBot = Object.values(engine.players).find(p => p.isBot && !p.isSpectator);
-                                        if (firstBot) {
-                                            this._performAction(tableId, (eng) => eng.startGame(firstBot.userId));
-                                        }
-                                    }
-                                }, 3000);
-                            }
-                        }
-                    }, 16000); // delay before reset — leave time for the end-of-round celebration + modal
-                }
+                this.evaluateTerminalCleanup(tableId);
                 return; // finished table — no bot turns to take
             }
 
@@ -800,10 +1149,11 @@
                 const isCourtney = bot.playerName === "Courtney Sr.";
                 const standardDelay = isCourtney ? 2000 : 1000;
                 const playDelay = isCourtney ? 2400 : 1200;
-                // Must exceed the client end-of-round celebration (~9.2s, see
-                // frontend endRoundTiming.js) plus modal-viewing time, or a bot
-                // dealer ends the round before the player sees the recap + widow reveal.
-                const roundEndDelay = isCourtney ? 20000 : 14000;
+                const presentationReadyAt = Number(engine.roundSummary?.presentationReadyAt);
+                const legacyRoundEndDelay = isCourtney ? 20000 : 14000;
+                const roundEndDelay = Number.isFinite(presentationReadyAt)
+                    ? Math.max(500, presentationReadyAt - Date.now() + (isCourtney ? 1500 : 750))
+                    : legacyRoundEndDelay;
         
                 if (engine.state === 'Dealing Pending' && engine.dealer == botUserId) {
                     scheduleTurnAction(this.dealCards, standardDelay, botUserId);
@@ -892,3 +1242,8 @@
     }
 
     module.exports = GameService;
+    module.exports.TERMINAL_EMPTY_CLEANUP_DELAY_MS = TERMINAL_EMPTY_CLEANUP_DELAY_MS;
+    module.exports.TERMINAL_DISCONNECTED_CLEANUP_DELAY_MS = TERMINAL_DISCONNECTED_CLEANUP_DELAY_MS;
+    module.exports.TERMINAL_QUICKPLAY_DISCONNECTED_CLEANUP_DELAY_MS = TERMINAL_QUICKPLAY_DISCONNECTED_CLEANUP_DELAY_MS;
+    module.exports.QUICKPLAY_FOURTH_FALLBACK_MIN_DELAY_MS = QUICKPLAY_FOURTH_FALLBACK_MIN_DELAY_MS;
+    module.exports.QUICKPLAY_FOURTH_FALLBACK_MAX_DELAY_MS = QUICKPLAY_FOURTH_FALLBACK_MAX_DELAY_MS;

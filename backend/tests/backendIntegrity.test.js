@@ -308,6 +308,7 @@ async function testSocketSeatingAndResetRaces() {
         getStateForSocket: (engine, socket) => engine.getStateForClient({ userId: socket.user.id }),
         emitGameState() {},
         evaluateQuickPlayTable() {},
+        evaluateTerminalCleanup() {},
         hasActiveOrPendingGame: () => false,
     };
     const joinHarness = makeSocketServerHarness(joinService);
@@ -345,12 +346,15 @@ async function testSocketSeatingAndResetRaces() {
     const timerService = Object.create(GameService.prototype);
     const fillTimer = { id: 'fill' };
     const windowTimer = { id: 'window' };
+    const terminalTimer = { id: 'terminal-cleanup' };
     timerService.qpTimers = { 'qp-reset': { fill: fillTimer, window: windowTimer } };
+    timerService.terminalCleanupTimers = { 'terminal-reset': { handle: terminalTimer } };
     timerService.engines = { old: gateEngine };
     timerService.io = { emit() {} };
     let initializeSawClearedTimers = false;
     timerService._initializeEngines = function initializeFreshEngines() {
-        initializeSawClearedTimers = Object.keys(this.qpTimers).length === 0;
+        initializeSawClearedTimers = Object.keys(this.qpTimers).length === 0
+            && Object.keys(this.terminalCleanupTimers).length === 0;
         this.engines = { fresh: {} };
         this.qpTimers = {};
     };
@@ -362,7 +366,8 @@ async function testSocketSeatingAndResetRaces() {
     } finally {
         global.clearTimeout = originalClearTimeout;
     }
-    assert.deepEqual(clearedTimers, [fillTimer, windowTimer], 'hard reset cancels both quick-play timer kinds');
+    assert.deepEqual(clearedTimers, [fillTimer, windowTimer, terminalTimer],
+        'hard reset cancels Quick Play and terminal lifecycle timers');
     assert.equal(initializeSawClearedTimers, true, 'old timers are cleared before fresh engines replace the generation');
 
     const makeResetHarness = pendingSequence => {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ActionControls from './ActionControls';
 
@@ -205,9 +205,7 @@ describe('ActionControls Quick Play decisions', () => {
         expect(screen.getByRole('button', { name: 'Look for a 4th' })).toBeEnabled();
     });
 
-    test('shows a finite fourth-player countdown and promises to return to the decision', () => {
-        vi.useFakeTimers();
-        vi.setSystemTime(new Date('2026-07-10T18:00:00Z'));
+    test('keeps the fourth-player search timing and fallback private', () => {
         const deadline = Date.now() + 5200;
         renderControls(makeState({
             tableType: 'quickplay',
@@ -217,13 +215,10 @@ describe('ActionControls Quick Play decisions', () => {
             qpWindowEndsAt: deadline
         }));
 
-        expect(screen.getByRole('heading', { name: 'Looking for a 4th · 6s' })).toBeInTheDocument();
-        expect(screen.getByText('If no one joins, the table will choose again.')).toBeInTheDocument();
-
-        act(() => {
-            vi.advanceTimersByTime(1100);
-        });
-        expect(screen.getByRole('heading', { name: 'Looking for a 4th · 5s' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Finding a fourth player' })).toBeInTheDocument();
+        expect(screen.getByText('Searching for one more player.')).toBeInTheDocument();
+        expect(screen.queryByText(/\d+s/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/bot|fallback|choose again/i)).not.toBeInTheDocument();
     });
 
     test.each([
@@ -273,6 +268,64 @@ describe('ActionControls dedicated-state suppression', () => {
 
     test('never falls back to exposing an unknown internal state name', () => {
         const { container } = renderControls(makeState({ state: 'Internal Transition Sentinel' }));
+        expect(container).toBeEmptyDOMElement();
+    });
+
+    test('offers only the round dealer a compact next-round action after score settlement', async () => {
+        const user = userEvent.setup();
+        const emitEvent = vi.fn();
+        renderControls(makeState({
+            state: 'Awaiting Next Round Trigger',
+            roundSummary: { dealerOfRoundId: 1 }
+        }), { emitEvent, roundPresentationComplete: true });
+
+        const button = screen.getByRole('button', { name: 'Start Next Round' });
+        expect(screen.getByRole('region', { name: 'Start the next round' })).toBeInTheDocument();
+        await user.click(button);
+        expect(emitEvent).toHaveBeenCalledWith('requestNextRound');
+        expect(button).toBeDisabled();
+    });
+
+    test('releases a rejected next-round submission after authoritative readiness changes', async () => {
+        const user = userEvent.setup();
+        const emitEvent = vi.fn();
+        const state = makeState({
+            state: 'Awaiting Next Round Trigger',
+            roundSummary: { dealerOfRoundId: 1 }
+        });
+        const { rerender } = renderControls(state, { emitEvent, roundPresentationComplete: true });
+
+        await user.click(screen.getByRole('button', { name: 'Start Next Round' }));
+        expect(emitEvent).toHaveBeenCalledTimes(1);
+
+        rerender(
+            <ActionControls
+                {...defaultProps}
+                emitEvent={emitEvent}
+                currentTableState={state}
+                roundPresentationComplete={false}
+            />
+        );
+        expect(screen.queryByRole('button', { name: 'Start Next Round' })).not.toBeInTheDocument();
+
+        rerender(
+            <ActionControls
+                {...defaultProps}
+                emitEvent={emitEvent}
+                currentTableState={state}
+                roundPresentationComplete
+            />
+        );
+        await user.click(screen.getByRole('button', { name: 'Start Next Round' }));
+        expect(emitEvent).toHaveBeenCalledTimes(2);
+    });
+
+    test('keeps the settled table unobstructed for players who are not the round dealer', () => {
+        const { container } = renderControls(makeState({
+            state: 'Awaiting Next Round Trigger',
+            roundSummary: { dealerOfRoundId: 2 }
+        }), { roundPresentationComplete: true });
+
         expect(container).toBeEmptyDOMElement();
     });
 });

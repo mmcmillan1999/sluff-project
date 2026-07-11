@@ -137,6 +137,7 @@ async function runFourPlayerTests() {
         dealersSeen.push(await playRound(r));
         IDS.forEach(id => { engine.scores[NAMES[id]] = 120; });
         if (engine.state === 'Game Over') engine.state = 'Awaiting Next Round Trigger';
+        engine.roundSummary.presentationReadyAt = Date.now() - 1;
         await gameService.requestNextRound('table-2', engine.roundSummary.dealerOfRoundId);
     }
     assert.strictEqual(new Set(dealersSeen).size, 4, 'all 4 players dealt once across 4 rounds');

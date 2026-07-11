@@ -1,0 +1,338 @@
+.game-over-podium {
+    position: fixed;
+    inset: 0;
+    z-index: 2500;
+    box-sizing: border-box;
+    display: grid;
+    place-items: center;
+    padding:
+        max(0.75rem, env(safe-area-inset-top, 0px))
+        max(0.65rem, env(safe-area-inset-right, 0px))
+        max(0.75rem, env(safe-area-inset-bottom, 0px))
+        max(0.65rem, env(safe-area-inset-left, 0px));
+    overflow: hidden;
+    color: #f7f2e7;
+    background:
+        radial-gradient(circle at 50% 26%, rgba(35, 89, 142, 0.28), transparent 42%),
+        linear-gradient(165deg, rgba(10, 13, 17, 0.97), rgba(20, 20, 19, 0.985));
+    font-family: 'Merriweather', serif;
+}
+
+.game-over-podium__panel {
+    position: relative;
+    z-index: 2;
+    box-sizing: border-box;
+    width: min(94vw, 34rem);
+    max-height: calc(100vh - 1.5rem);
+    max-height: calc(100dvh - 1.5rem);
+    padding: clamp(1rem, 2.7vh, 1.6rem) clamp(0.7rem, 3vw, 1.35rem) 1rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    text-align: center;
+    border: 1px solid rgba(226, 184, 84, 0.48);
+    border-radius: 1.15rem;
+    background:
+        linear-gradient(145deg, rgba(37, 36, 33, 0.97), rgba(11, 15, 20, 0.98));
+    box-shadow:
+        0 1.4rem 4rem rgba(0, 0, 0, 0.64),
+        inset 0 1px rgba(255, 255, 255, 0.08),
+        0 0 2.5rem rgba(53, 112, 175, 0.16);
+}
+
+.game-over-podium__header {
+    position: relative;
+    z-index: 1;
+    min-width: 0;
+}
+
+.game-over-podium__eyebrow {
+    margin: 0 0 0.25rem;
+    color: #78a9e6;
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(0.72rem, 1.55vh, 0.86rem);
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+}
+
+.game-over-podium__header h1 {
+    max-width: 100%;
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: #f1c963;
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(1.65rem, 4.3vh, 2.55rem);
+    font-weight: 600;
+    letter-spacing: 0.025em;
+    line-height: 1.05;
+    text-shadow: 0 0.3rem 1.1rem rgba(217, 165, 54, 0.25);
+}
+
+.game-over-podium__outcome {
+    max-width: 30rem;
+    margin: 0.45rem auto 0;
+    overflow-wrap: anywhere;
+    color: #cdd8e7;
+    font-size: clamp(0.76rem, 1.75vh, 0.95rem);
+    line-height: 1.35;
+}
+
+.game-over-podium__status {
+    margin: 0.7rem auto 0;
+    padding: 0.55rem 0.7rem;
+    color: #ffe7a6;
+    font-size: clamp(0.72rem, 1.7vh, 0.9rem);
+    line-height: 1.35;
+    border: 1px solid rgba(225, 175, 70, 0.42);
+    border-radius: 0.55rem;
+    background: rgba(117, 78, 18, 0.24);
+}
+
+.game-over-podium__stage {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(var(--podium-count), minmax(0, 1fr));
+    align-items: end;
+    gap: clamp(0.22rem, 1.35vw, 0.55rem);
+    min-height: clamp(12rem, 37vh, 20rem);
+    margin: clamp(0.9rem, 2.3vh, 1.3rem) auto 0;
+    padding: 0 0.1rem;
+}
+
+.game-over-podium__contestant {
+    order: var(--podium-order);
+    min-width: 0;
+}
+
+.game-over-podium__player {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.1rem;
+    margin-bottom: 0.35rem;
+    padding: 0 0.12rem;
+}
+
+.game-over-podium__crown {
+    height: 1.1em;
+    color: transparent;
+    font-size: clamp(0.85rem, 2.1vh, 1.2rem);
+    line-height: 1;
+}
+
+.game-over-podium__contestant--winner .game-over-podium__crown {
+    color: #f1c963;
+    filter: drop-shadow(0 0 0.35rem rgba(241, 201, 99, 0.52));
+}
+
+.game-over-podium__name {
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    color: #eef3f9;
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(0.68rem, 1.75vh, 0.98rem);
+    font-weight: 600;
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.game-over-podium__contestant--winner .game-over-podium__name {
+    color: #f8dc92;
+}
+
+.game-over-podium__score {
+    color: #9cb7d8;
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(0.67rem, 1.55vh, 0.86rem);
+    font-variant-numeric: tabular-nums;
+}
+
+.game-over-podium__score-unit {
+    font-size: 0.78em;
+    opacity: 0.78;
+}
+
+.game-over-podium__step {
+    position: relative;
+    display: grid;
+    place-items: start center;
+    box-sizing: border-box;
+    min-height: 2.6rem;
+    padding-top: clamp(0.55rem, 1.35vh, 0.75rem);
+    border: 1px solid rgba(138, 170, 207, 0.34);
+    border-bottom: 0;
+    border-radius: 0.58rem 0.58rem 0 0;
+    background:
+        linear-gradient(150deg, rgba(52, 76, 104, 0.94), rgba(18, 29, 41, 0.98));
+    box-shadow:
+        inset 0 1px rgba(255, 255, 255, 0.08),
+        0 -0.35rem 1rem rgba(0, 0, 0, 0.2);
+}
+
+.game-over-podium__contestant--winner .game-over-podium__step {
+    border-color: rgba(232, 189, 88, 0.7);
+    background:
+        linear-gradient(155deg, rgba(128, 93, 30, 0.98), rgba(45, 35, 20, 0.99));
+    box-shadow:
+        inset 0 1px rgba(255, 244, 201, 0.18),
+        0 -0.45rem 1.4rem rgba(218, 165, 53, 0.18);
+}
+
+.game-over-podium__step--rank-1 { height: clamp(7rem, 17vh, 9.2rem); }
+.game-over-podium__step--rank-2 { height: clamp(5.5rem, 13vh, 7.25rem); }
+.game-over-podium__step--rank-3 { height: clamp(4.2rem, 9.5vh, 5.5rem); }
+.game-over-podium__step--rank-4 { height: clamp(3rem, 6.5vh, 4rem); }
+
+.game-over-podium__rank {
+    color: #dbe6f2;
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(1rem, 2.7vh, 1.45rem);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.game-over-podium__contestant--winner .game-over-podium__rank {
+    color: #f6d477;
+}
+
+.game-over-podium__unavailable {
+    margin: clamp(2rem, 10vh, 5rem) 0;
+    color: #cdd8e7;
+}
+
+.game-over-podium__actions {
+    position: relative;
+    z-index: 3;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem;
+    margin-top: 0.95rem;
+}
+
+.game-over-podium__button {
+    min-width: 0;
+    min-height: 48px;
+    padding: 0.72rem 0.7rem;
+    border: 1px solid transparent;
+    border-radius: 0.62rem;
+    color: #f8fafc;
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(0.86rem, 1.9vh, 1rem);
+    font-weight: 600;
+    letter-spacing: 0.025em;
+    line-height: 1.15;
+    cursor: pointer;
+    transition: transform 140ms ease, filter 140ms ease, box-shadow 140ms ease;
+}
+
+.game-over-podium__button--primary {
+    border-color: #9d7225;
+    background: linear-gradient(180deg, #c89435, #8b611f);
+    box-shadow: 0 0.45rem 1.1rem rgba(185, 130, 39, 0.22);
+}
+
+.game-over-podium__button--secondary {
+    border-color: #345f91;
+    background: linear-gradient(180deg, #3f78b7, #285783);
+    box-shadow: 0 0.45rem 1.1rem rgba(42, 101, 159, 0.2);
+}
+
+.game-over-podium__button:hover:not(:disabled) {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+}
+
+.game-over-podium__button:active:not(:disabled) {
+    transform: translateY(1px);
+}
+
+.game-over-podium__button:focus-visible {
+    outline: 3px solid #f7e1a0;
+    outline-offset: 3px;
+}
+
+.game-over-podium__button:disabled {
+    cursor: not-allowed;
+    filter: grayscale(0.45);
+    opacity: 0.55;
+}
+
+.game-over-podium__confetti {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.game-over-podium__confetti-piece {
+    position: absolute;
+    top: -10vh;
+    left: var(--confetti-x);
+    width: clamp(0.28rem, 1.4vw, 0.5rem);
+    height: clamp(0.65rem, 2.2vh, 1rem);
+    border-radius: 0.08rem;
+    background: var(--confetti-color);
+    opacity: 0.86;
+    animation: game-over-podium-confetti-fall var(--confetti-duration) linear var(--confetti-delay) infinite;
+    will-change: transform;
+}
+
+@keyframes game-over-podium-confetti-fall {
+    from { transform: translate3d(0, -12vh, 0) rotate(0deg); }
+    to { transform: translate3d(var(--confetti-drift), 122vh, 0) rotate(var(--confetti-spin)); }
+}
+
+@media (max-width: 360px) and (orientation: portrait) {
+    .game-over-podium__panel {
+        width: 96vw;
+        padding-inline: 0.48rem;
+    }
+
+    .game-over-podium__stage {
+        gap: 0.16rem;
+        padding-inline: 0;
+    }
+
+    .game-over-podium__name {
+        font-size: clamp(0.62rem, 1.65vh, 0.78rem);
+    }
+
+    .game-over-podium__step {
+        border-radius: 0.42rem 0.42rem 0 0;
+    }
+}
+
+@media (orientation: landscape) and (max-height: 540px) {
+    .game-over-podium__panel {
+        width: min(88vw, 42rem);
+        padding-block: 0.7rem;
+    }
+
+    .game-over-podium__stage {
+        min-height: 10rem;
+        margin-top: 0.55rem;
+    }
+
+    .game-over-podium__step--rank-1 { height: 5.4rem; }
+    .game-over-podium__step--rank-2 { height: 4.4rem; }
+    .game-over-podium__step--rank-3 { height: 3.6rem; }
+    .game-over-podium__step--rank-4 { height: 2.9rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .game-over-podium__confetti-piece {
+        top: var(--confetti-static-y);
+        animation: none;
+        opacity: 0.42;
+        transform: rotate(24deg);
+        will-change: auto;
+    }
+
+    .game-over-podium__button {
+        transition: none;
+    }
+}

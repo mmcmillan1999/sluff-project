@@ -43,6 +43,28 @@
     margin-bottom: 20px;
 }
 
+.draw-vote-main-area--review {
+    background: #fff8e6;
+}
+
+.draw-vote-main-area .draw-vote-review-heading {
+    color: #8a3b12;
+}
+
+.draw-vote-review-message {
+    color: #5c321d;
+    font-style: normal;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.draw-vote-review-note {
+    color: #6c4b36;
+    margin: 0;
+    font-size: 0.92rem;
+    line-height: 1.45;
+}
+
 .draw-vote-timer {
     font-size: 2.5em;
     font-weight: bold;

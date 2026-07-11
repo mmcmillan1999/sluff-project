@@ -1,6 +1,7 @@
 // backend/src/core/handlers/scoringHandler.js
 
 const gameLogic = require('../logic');
+const { ROUND_PRESENTATION_LOCK_MS } = require('../constants');
 
 function calculateRoundScores(engine) {
     const effects = [];
@@ -74,8 +75,9 @@ function calculateRoundScores(engine) {
         pointChanges: roundData.pointChanges,
         widowPointsValue: roundData.widowPointsValue,
         bidType: roundData.bidType,
-        lastCompletedTrick: engine.lastCompletedTrick 
+        lastCompletedTrick: engine.lastCompletedTrick,
     };
+    engine.startRoundPresentationWindow(ROUND_PRESENTATION_LOCK_MS);
 
     effects.push({ type: 'SYNC_PLAYER_TOKENS', payload: { playerIds: Object.keys(engine.players) } });
     effects.push({ type: 'BROADCAST_STATE' });

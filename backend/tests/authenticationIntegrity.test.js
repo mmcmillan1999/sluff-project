@@ -301,6 +301,7 @@ async function testSocketAuthenticationAndAdminRevocation() {
         }),
         emitGameState() {},
         evaluateQuickPlayTable() {},
+        evaluateTerminalCleanup() {},
         hasActiveOrPendingGame: () => false,
         resetAllEngines() { counters.reset += 1; },
         startGame() { counters.startGame += 1; },

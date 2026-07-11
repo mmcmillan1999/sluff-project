@@ -169,6 +169,7 @@ const registerGameHandlers = (io, gameService, options = {}) => {
                 && engine.players[socket.user.id]?.isSpectator === true
                 && engine.players[socket.user.id]?.wasExplicitSpectator === true;
             gameService.emitGameState(engine.tableId);         // (3) push personalized state now
+            gameService.evaluateTerminalCleanup(engine.tableId);
 
             // Best-effort token-balance refresh — never gates the rejoin above.
             gameService.pool.query("SELECT SUM(amount) AS tokens FROM transactions WHERE user_id = $1", [socket.user.id])
@@ -300,6 +301,7 @@ const registerGameHandlers = (io, gameService, options = {}) => {
                 socket.leave(previousEngine.tableId);
                 gameService.emitGameState(previousEngine.tableId);
                 if (previousEngine.tableType === 'quickplay') gameService.evaluateQuickPlayTable(previousEngine.tableId);
+                gameService.evaluateTerminalCleanup(previousEngine.tableId);
             }
             socket.join(tableId);
 
@@ -323,6 +325,7 @@ const registerGameHandlers = (io, gameService, options = {}) => {
 
             socket.emit('joinedTable', { gameState: gameService.getStateForSocket(engineToJoin, socket) });
             gameService.emitGameState(tableId);
+            gameService.evaluateTerminalCleanup(tableId);
             gameService.io.emit('lobbyState', gameService.getLobbyState());
             return true;
         };
@@ -402,12 +405,14 @@ const registerGameHandlers = (io, gameService, options = {}) => {
                     if (previousEngine.tableType === 'quickplay') {
                         gameService.evaluateQuickPlayTable(previousEngine.tableId);
                     }
+                    gameService.evaluateTerminalCleanup(previousEngine.tableId);
                 }
 
                 socket.join(engineToJoin.tableId);
                 socket.data.trustedAdminObserver = false;
                 socket.emit('joinedTable', { gameState: gameService.getStateForSocket(engineToJoin, socket) });
                 gameService.emitGameState(engineToJoin.tableId);
+                gameService.evaluateTerminalCleanup(engineToJoin.tableId);
                 gameService.io.emit('lobbyState', gameService.getLobbyState());
             } catch(err) {
                 console.error(`Error in quickPlay for user ${socket.user.id}:`, err);
@@ -423,6 +428,7 @@ const registerGameHandlers = (io, gameService, options = {}) => {
             gameService.emitGameState(tableId);
             gameService.io.emit('lobbyState', gameService.getLobbyState());
             if (engineToLeave.tableType === 'quickplay') gameService.evaluateQuickPlayTable(tableId);
+            gameService.evaluateTerminalCleanup(tableId);
             socket.leave(tableId);
             socket.data.trustedAdminObserver = false;
             socket.emit("lobbyState", gameService.getLobbyState());
@@ -456,6 +462,7 @@ const registerGameHandlers = (io, gameService, options = {}) => {
             // Convert player to spectator
             engine.players[socket.user.id].isSpectator = true;
             engine.players[socket.user.id].wasExplicitSpectator = true; // Mark as explicitly chosen spectator
+            delete engine.scores[existingPlayer.playerName];
             socket.data.trustedAdminObserver = true;
             console.log(`[ADMIN] Set isSpectator to true for ${socket.user.username}`);
             
@@ -542,7 +549,27 @@ const registerGameHandlers = (io, gameService, options = {}) => {
         onTableAction("submitFrogDiscards", { validate: validators.frogDiscards }, ({ payload: { tableId, discards } }) => (
             gameService.submitFrogDiscards(tableId, socket.user.id, discards)
         ));
-        onTableAction("requestNextRound", {}, ({ payload: { tableId } }) => gameService.requestNextRound(tableId, socket.user.id));
+        onTableAction("ackRoundPresentation", {
+            validate: validators.presentationAck,
+        }, ({ engine, payload: { tableId, presentationReadyAt } }) => {
+            const result = gameService.ackRoundPresentation(
+                tableId,
+                socket.user.id,
+                presentationReadyAt,
+                socket.id,
+            );
+            if (result.accepted) {
+                socket.emit('roundPresentationAcknowledged', result);
+                return;
+            }
+            socket.emit('roundPresentationAckRejected', {
+                reason: result.reason,
+                presentationReadyAt: engine.roundSummary?.presentationReadyAt ?? null,
+            });
+        });
+        onTableAction("requestNextRound", {
+            validate: validators.roundAdvance,
+        }, ({ payload: { tableId } }) => gameService.requestNextRound(tableId, socket.user.id));
         onTableAction("submitDrawVote", { validate: validators.drawVote }, ({ payload: { tableId, vote } }) => (
             gameService.submitDrawVote(tableId, socket.user.id, vote)
         ));
@@ -766,6 +793,7 @@ const registerGameHandlers = (io, gameService, options = {}) => {
             socketIdentityRefreshStopped = true;
             cancelInterval(socketIdentityRefreshTimer);
             const socketUserKey = String(socket.user.id);
+            let promotedFallbackSocket = null;
             if (latestSocketIdByUser.get(socketUserKey) === socket.id) {
                 // A user may still have an older tab/connection alive. Promote
                 // the newest remaining local socket so the safety guard recovers
@@ -778,6 +806,7 @@ const registerGameHandlers = (io, gameService, options = {}) => {
                             && candidate.connected !== false
                             && String(candidate.user?.id) === socketUserKey) {
                             fallbackSocketId = candidate.id;
+                            promotedFallbackSocket = candidate;
                         }
                     }
                 }
@@ -794,11 +823,27 @@ const registerGameHandlers = (io, gameService, options = {}) => {
                 // 'disconnect' must be ignored, or it would mark the freshly
                 // returned player offline again (the core intermittency bug).
                 if (player && player.socketId === socket.id) {
-                    enginePlayerIsOn.disconnectPlayer(socket.user.id);
+                    if (promotedFallbackSocket) {
+                        // The newest remaining authenticated connection becomes
+                        // the live seat controller as well as the matchmaking
+                        // controller. This keeps terminal recaps and active-game
+                        // reconnect semantics aligned with the socket registry.
+                        promotedFallbackSocket.join?.(enginePlayerIsOn.tableId);
+                        enginePlayerIsOn.reconnectPlayer(socket.user.id, promotedFallbackSocket);
+                        promotedFallbackSocket.data = promotedFallbackSocket.data || {};
+                        promotedFallbackSocket.data.trustedAdminObserver = (
+                            promotedFallbackSocket.user?.is_admin === true
+                            && player.isSpectator === true
+                            && player.wasExplicitSpectator === true
+                        );
+                    } else {
+                        enginePlayerIsOn.disconnectPlayer(socket.user.id);
+                    }
                     gameService.emitGameState(enginePlayerIsOn.tableId);
                     if (enginePlayerIsOn.tableType === 'quickplay') {
                         gameService.evaluateQuickPlayTable(enginePlayerIsOn.tableId);
                     }
+                    gameService.evaluateTerminalCleanup(enginePlayerIsOn.tableId);
                 }
             }
             try {

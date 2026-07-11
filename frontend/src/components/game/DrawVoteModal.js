@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import './DrawVoteModal.css';
 
 const DrawVoteModal = ({ show, currentTableState, onVote, handleLeaveTable }) => {
-    const { state, drawRequest, roundSummary, players, playerId } = currentTableState;
+    const { state, drawRequest, roundSummary, players, playerId, settlement } = currentTableState;
     const [declineCountdown, setDeclineCountdown] = useState(3);
     const selfPlayerName = players[playerId]?.playerName;
 
@@ -101,6 +101,24 @@ const DrawVoteModal = ({ show, currentTableState, onVote, handleLeaveTable }) =>
             </div>
         </>
     );
+
+    const renderFailedContent = () => (
+        <>
+            <div className="draw-vote-main-area draw-vote-main-area--review">
+                <h2 className="draw-vote-review-heading">Draw Settlement Needs Review</h2>
+                <p className="draw-vote-message draw-vote-review-message">
+                    {roundSummary?.message
+                        || 'The draw could not be settled automatically. No payout was committed.'}
+                </p>
+                <p className="draw-vote-review-note">
+                    The game is closed while an administrator reviews the settlement.
+                </p>
+            </div>
+            <div className="draw-vote-action-area">
+                <button className="game-button" onClick={handleLeaveTable}>Exit to Lobby</button>
+            </div>
+        </>
+    );
     
     let content;
     const myVote = drawRequest?.votes?.[selfPlayerName];
@@ -108,7 +126,9 @@ const DrawVoteModal = ({ show, currentTableState, onVote, handleLeaveTable }) =>
     if (state === 'DrawDeclined') {
         content = renderDeclinedContent();
     } else if (state === 'DrawComplete') {
-        content = renderCompleteContent();
+        content = (settlement?.status === 'failed' || roundSummary?.settlementFailed === true)
+            ? renderFailedContent()
+            : renderCompleteContent();
     } else if (drawRequest?.isActive) {
         if (myVote === null) {
             content = renderVotingInterface();

@@ -1,0 +1,419 @@
+import React from 'react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import GameTableView from './GameTableView';
+import { END_ROUND_TOTAL_MS } from '../config/endRoundTiming';
+
+vi.mock('../services/api', () => ({
+    getLobbyChatHistory: vi.fn(() => new Promise(() => {}))
+}));
+
+const { motionPreference } = vi.hoisted(() => ({
+    motionPreference: { reduced: true }
+}));
+
+vi.mock('../hooks/usePrefersReducedMotion', () => ({
+    usePrefersReducedMotion: () => motionPreference.reduced
+}));
+
+vi.mock('../hooks/useBidWinnerSplash', () => ({
+    useBidWinnerSplash: () => ({ bidSplashInfo: null, dismissBidSplash: vi.fn() })
+}));
+
+vi.mock('./game/RoundSummaryModal', () => ({
+    default: ({ showModal, continueLabel, onContinue }) => showModal ? (
+        <button type="button" onClick={onContinue}>{continueLabel}</button>
+    ) : null
+}));
+
+vi.mock('./game/RoundScoreCeremony', () => ({
+    ROUND_SCORE_CEREMONY_TIMING: { MAX_TOTAL_MS: 100 },
+    default: ({ onComplete }) => (
+        <button type="button" onClick={() => onComplete({ skipped: false, rows: [] })}>
+            Finish Score Ceremony
+        </button>
+    )
+}));
+
+vi.mock('./game/GameOverPodium', () => ({
+    default: ({ show, onRematch, onLobby, actionsDisabled }) => show ? (
+        <div role="dialog" aria-label="Winner podium">
+            <button type="button" onClick={onRematch} disabled={actionsDisabled || !onRematch}>Rematch</button>
+            <button type="button" onClick={onLobby}>Lobby</button>
+        </div>
+    ) : null
+}));
+
+vi.mock('./game/TableLayout', () => ({
+    default: ({ currentTableState, roundPresentationComplete }) => (
+        <div>
+            <span data-testid="alice-table-score">{currentTableState.scores.Alice}</span>
+            <span data-testid="round-presentation-complete">{String(roundPresentationComplete)}</span>
+        </div>
+    )
+}));
+
+vi.mock('./game/DrawVoteModal', () => ({ default: () => null }));
+vi.mock('./game/PlayerHand', () => ({ default: () => null }));
+vi.mock('./game/InsuranceControls', () => ({ default: () => null }));
+vi.mock('./game/InsurancePrompt', () => ({ default: () => null }));
+vi.mock('./game/BidWinnerSplash', () => ({ default: () => null }));
+vi.mock('./game/IosPwaPrompt', () => ({ default: () => null }));
+
+const socket = {
+    id: 'socket-1',
+    on: vi.fn(),
+    off: vi.fn()
+};
+
+const makeState = ({
+    state = 'Awaiting Next Round Trigger',
+    isGameOver = false,
+    forfeit,
+    presentationReadyAt,
+    presentationForceReadyAt,
+    allConnectedHumansPresented = true,
+    settlementStatus = 'complete',
+    serverTime,
+    viewerRoundPresentationAcknowledged
+} = {}) => ({
+    tableId: 'table-1',
+    tableName: 'Presentation table',
+    state,
+    serverTime,
+    viewerRoundPresentationAcknowledged,
+    gameStarted: true,
+    settlement: { status: settlementStatus },
+    scores: { Alice: 132, Bob: 114, Cara: 114 },
+    players: {
+        1: { userId: 1, playerName: 'Alice', isSpectator: false, disconnected: false },
+        2: { userId: 2, playerName: 'Bob', isSpectator: false, disconnected: false },
+        3: { userId: 3, playerName: 'Cara', isSpectator: false, disconnected: false }
+    },
+    seatingOrder: ['Alice', 'Bob', 'Cara'],
+    playerOrderActive: ['Alice', 'Bob', 'Cara'],
+    insurance: {},
+    roundSummary: {
+        isGameOver,
+        forfeit,
+        dealerOfRoundId: 1,
+        gameWinner: isGameOver ? 'Alice' : null,
+        finalScores: { Alice: 132, Bob: 114, Cara: 114 },
+        pointChanges: forfeit ? undefined : { Alice: 12, Bob: -6, Cara: -6 },
+        presentationReadyAt,
+        presentationForceReadyAt,
+        allConnectedHumansPresented
+    }
+});
+
+const renderGame = (currentTableState, overrides = {}) => {
+    const props = {
+        user: { id: 1, username: 'Alice', is_admin: false },
+        playerId: 1,
+        currentTableState,
+        handleLeaveTable: vi.fn(),
+        handleLogout: vi.fn(),
+        handleShowHowToPlay: vi.fn(),
+        emitEvent: vi.fn(),
+        playSound: vi.fn(),
+        socket,
+        handleOpenFeedbackModal: vi.fn(),
+        soundSettings: {},
+        ...overrides
+    };
+    return {
+        ...render(<React.StrictMode><GameTableView {...props} /></React.StrictMode>),
+        props
+    };
+};
+
+afterEach(() => {
+    cleanup();
+    motionPreference.reduced = true;
+    socket.id = 'socket-1';
+    vi.useRealTimers();
+    vi.clearAllMocks();
+});
+
+describe('GameTableView round presentation sequence', () => {
+    test('keeps the delayed recap timer alive across the Strict Mode effect probe', () => {
+        vi.useFakeTimers();
+        motionPreference.reduced = false;
+        renderGame(makeState());
+
+        expect(screen.queryByRole('button', { name: 'Count the Score' })).not.toBeInTheDocument();
+        act(() => vi.advanceTimersByTime(END_ROUND_TOTAL_MS - 1));
+        expect(screen.queryByRole('button', { name: 'Count the Score' })).not.toBeInTheDocument();
+        act(() => vi.advanceTimersByTime(1));
+        expect(screen.getByRole('button', { name: 'Count the Score' })).toBeInTheDocument();
+    });
+
+    test('uses serverTime to honor the shared clock when the client clock is badly skewed', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-07-11T07:00:00Z'));
+        const serverTime = 10_000;
+        renderGame(makeState({
+            serverTime,
+            presentationReadyAt: serverTime + 1000
+        }));
+
+        fireEvent.click(screen.getByRole('button', { name: 'Count the Score' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Finish Score Ceremony' }));
+        act(() => vi.advanceTimersByTime(100));
+
+        expect(screen.getByTestId('alice-table-score')).toHaveTextContent('132');
+        expect(screen.getByTestId('round-presentation-complete')).toHaveTextContent('false');
+        act(() => vi.advanceTimersByTime(925));
+        expect(screen.getByTestId('round-presentation-complete')).toHaveTextContent('true');
+    });
+
+    test('defers a reconnecting terminal client only while settlement is pending', async () => {
+        const emitEvent = vi.fn();
+        const pendingState = makeState({
+            state: 'Game Over',
+            isGameOver: true,
+            settlementStatus: 'pending',
+            presentationReadyAt: Date.now() - 1
+        });
+        const { rerender, props } = renderGame(pendingState, { emitEvent });
+
+        expect(screen.queryByRole('button', { name: 'Count the Score' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('dialog', { name: 'Winner podium' })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Chat' })).toBeEnabled();
+        expect(emitEvent).not.toHaveBeenCalledWith('ackRoundPresentation', expect.anything());
+
+        const failedState = makeState({
+            state: 'Game Over',
+            isGameOver: true,
+            settlementStatus: 'failed',
+            presentationReadyAt: Date.now() - 1
+        });
+        rerender(
+            <React.StrictMode>
+                <GameTableView {...props} currentTableState={failedState} />
+            </React.StrictMode>
+        );
+
+        expect(await screen.findByRole('dialog', { name: 'Winner podium' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Rematch' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Lobby' })).toBeEnabled();
+        expect(emitEvent).not.toHaveBeenCalledWith('ackRoundPresentation', expect.anything());
+    });
+
+    test('re-acknowledges when the server invalidates the same viewer and presentation', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-07-11T07:00:00Z'));
+        const presentationReadyAt = Date.now() + 1000;
+        const emitEvent = vi.fn();
+        const state = makeState({
+            presentationReadyAt,
+            viewerRoundPresentationAcknowledged: false
+        });
+        const { rerender, props } = renderGame(state, { emitEvent });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Count the Score' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Finish Score Ceremony' }));
+        act(() => vi.advanceTimersByTime(100));
+
+        expect(emitEvent).toHaveBeenCalledTimes(1);
+        expect(emitEvent).toHaveBeenLastCalledWith('ackRoundPresentation', { presentationReadyAt });
+
+        rerender(
+            <React.StrictMode>
+                <GameTableView
+                    {...props}
+                    currentTableState={{
+                        ...state,
+                        viewerRoundPresentationAcknowledged: true
+                    }}
+                />
+            </React.StrictMode>
+        );
+        expect(emitEvent).toHaveBeenCalledTimes(1);
+
+        rerender(
+            <React.StrictMode>
+                <GameTableView
+                    {...props}
+                    currentTableState={{
+                        ...state,
+                        viewerRoundPresentationAcknowledged: false
+                    }}
+                />
+            </React.StrictMode>
+        );
+        expect(emitEvent).toHaveBeenCalledTimes(2);
+        expect(emitEvent).toHaveBeenLastCalledWith('ackRoundPresentation', { presentationReadyAt });
+
+        rerender(
+            <React.StrictMode>
+                <GameTableView
+                    {...props}
+                    currentTableState={{
+                        ...state,
+                        viewerRoundPresentationAcknowledged: false,
+                        players: {
+                            ...state.players,
+                            1: { ...state.players[1] }
+                        }
+                    }}
+                />
+            </React.StrictMode>
+        );
+        expect(emitEvent).toHaveBeenCalledTimes(2);
+
+        socket.id = 'socket-2';
+        rerender(
+            <React.StrictMode>
+                <GameTableView {...props} currentTableState={{ ...state, serverTime: Date.now() }} />
+            </React.StrictMode>
+        );
+        expect(emitEvent).toHaveBeenCalledTimes(3);
+        expect(emitEvent).toHaveBeenLastCalledWith('ackRoundPresentation', { presentationReadyAt });
+    });
+
+    test('waits for server quorum, then uses its server-time force deadline as an anti-stall fallback', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-07-11T07:00:00Z'));
+        const serverTime = 50_000;
+        renderGame(makeState({
+            serverTime,
+            presentationReadyAt: serverTime - 1,
+            presentationForceReadyAt: serverTime + 1000,
+            allConnectedHumansPresented: false
+        }));
+
+        expect(screen.getByTestId('round-presentation-complete')).toHaveTextContent('false');
+        act(() => vi.advanceTimersByTime(1025));
+        expect(screen.getByTestId('round-presentation-complete')).toHaveTextContent('true');
+    });
+
+    test('keeps legacy states without quorum fields playable after the base clock', () => {
+        const state = makeState({ presentationReadyAt: Date.now() - 1 });
+        delete state.roundSummary.allConnectedHumansPresented;
+        delete state.roundSummary.presentationForceReadyAt;
+
+        renderGame(state);
+        expect(screen.getByTestId('round-presentation-complete')).toHaveTextContent('true');
+    });
+
+    test('restores an already-presented terminal game directly to its persistent podium', async () => {
+        renderGame(makeState({
+            state: 'Game Over',
+            isGameOver: true,
+            presentationReadyAt: Date.now() - 1
+        }));
+
+        expect(screen.getByTestId('alice-table-score')).toHaveTextContent('132');
+        expect(screen.queryByRole('button', { name: 'Count the Score' })).not.toBeInTheDocument();
+        expect(await screen.findByRole('dialog', { name: 'Winner podium' })).toBeInTheDocument();
+    });
+
+    test('opens a forfeit recap promptly instead of waiting for a nonexistent final-trick finale', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-07-11T07:00:00Z'));
+        motionPreference.reduced = false;
+        renderGame(makeState({
+            state: 'Game Over',
+            isGameOver: true,
+            forfeit: { forfeitingPlayerName: 'Bob', reason: 'voluntary forfeit' },
+            presentationReadyAt: Date.now() + 1000
+        }));
+
+        act(() => vi.advanceTimersByTime(0));
+        expect(screen.getByRole('button', { name: 'View Final Standings' })).toBeInTheDocument();
+    });
+
+    test('never offers the table-mutating Rematch action to a spectator', async () => {
+        const emitEvent = vi.fn();
+        const state = makeState({
+            state: 'Game Over',
+            isGameOver: true,
+            presentationReadyAt: Date.now() - 1
+        });
+        state.players[1].isSpectator = true;
+        renderGame(state, { emitEvent });
+
+        expect(await screen.findByRole('button', { name: 'Rematch' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Lobby' })).toBeEnabled();
+        expect(emitEvent).not.toHaveBeenCalledWith('ackRoundPresentation', expect.anything());
+    });
+
+    test('keeps Rematch disabled until server quorum is ready while leaving Lobby available', async () => {
+        const state = makeState({
+            state: 'Game Over',
+            isGameOver: true,
+            presentationReadyAt: Date.now() - 1,
+            presentationForceReadyAt: Date.now() + 30_000,
+            allConnectedHumansPresented: false
+        });
+        const { rerender, props } = renderGame(state);
+
+        expect(await screen.findByRole('button', { name: 'Rematch' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Lobby' })).toBeEnabled();
+
+        rerender(
+            <React.StrictMode>
+                <GameTableView
+                    {...props}
+                    currentTableState={{
+                        ...state,
+                        roundSummary: {
+                            ...state.roundSummary,
+                            allConnectedHumansPresented: true
+                        }
+                    }}
+                />
+            </React.StrictMode>
+        );
+        expect(screen.getByRole('button', { name: 'Rematch' })).toBeEnabled();
+    });
+
+    test('holds pre-round totals through recap and ceremony, then reveals final totals and dealer control', () => {
+        vi.useFakeTimers();
+        renderGame(makeState());
+
+        expect(screen.getByTestId('alice-table-score')).toHaveTextContent('120');
+        expect(screen.queryByRole('button', { name: 'Chat' })).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Count the Score' }));
+
+        expect(screen.getByTestId('alice-table-score')).toHaveTextContent('120');
+        expect(screen.getByTestId('round-presentation-complete')).toHaveTextContent('false');
+        fireEvent.click(screen.getByRole('button', { name: 'Finish Score Ceremony' }));
+
+        expect(screen.getByTestId('alice-table-score')).toHaveTextContent('132');
+        expect(screen.getByTestId('round-presentation-complete')).toHaveTextContent('false');
+        act(() => vi.advanceTimersByTime(100));
+        expect(screen.getByTestId('round-presentation-complete')).toHaveTextContent('true');
+        expect(screen.getByRole('button', { name: 'Chat' })).toBeEnabled();
+    });
+
+    test('routes the final round from score settlement into the persistent podium actions', async () => {
+        const user = userEvent.setup();
+        const emitEvent = vi.fn();
+        const handleLeaveTable = vi.fn();
+        renderGame(makeState({ state: 'Game Over', isGameOver: true }), { emitEvent, handleLeaveTable });
+
+        await user.click(await screen.findByRole('button', { name: 'Count the Score' }));
+        await user.click(screen.getByRole('button', { name: 'Finish Score Ceremony' }));
+
+        await waitFor(() => expect(screen.getByRole('dialog', { name: 'Winner podium' })).toBeInTheDocument());
+        await user.click(screen.getByRole('button', { name: 'Rematch' }));
+        await user.click(screen.getByRole('button', { name: 'Lobby' }));
+        expect(emitEvent).toHaveBeenCalledWith('resetGame');
+        expect(handleLeaveTable).toHaveBeenCalledTimes(1);
+    });
+
+    test('skips a meaningless zero-change ceremony for a forfeit and opens final standings', async () => {
+        const user = userEvent.setup();
+        renderGame(makeState({
+            state: 'Game Over',
+            isGameOver: true,
+            forfeit: { forfeitingPlayerName: 'Bob', reason: 'voluntary forfeit' }
+        }));
+
+        await user.click(await screen.findByRole('button', { name: 'View Final Standings' }));
+        expect(screen.queryByRole('button', { name: 'Finish Score Ceremony' })).not.toBeInTheDocument();
+        expect(screen.getByRole('dialog', { name: 'Winner podium' })).toBeInTheDocument();
+    });
+});

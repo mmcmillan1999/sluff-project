@@ -70,12 +70,24 @@ const validators = {
         && payload.targetPlayerName.length > 0
         && payload.targetPlayerName.length <= 64
     ) ? null : 'Invalid target player.',
+    presentationAck: payload => (
+        typeof payload.presentationReadyAt === 'number'
+        && Number.isSafeInteger(payload.presentationReadyAt)
+        && payload.presentationReadyAt > 0
+    ) ? null : 'Invalid round presentation acknowledgement.',
+    roundAdvance: (_payload, { engine }) => (
+        engine.state === 'Awaiting Next Round Trigger'
+        && !engine.isRoundPresentationAdvanceReady()
+    ) ? 'The round presentation is still finishing.' : null,
     terminalReset: (_payload, { engine }) => {
         if (!['Game Over', 'DrawComplete'].includes(engine.state)) {
             return 'The table can only be reset after the game ends.';
         }
         if (engine.settlement && engine.settlement.status !== 'complete') {
             return 'The table cannot reset until settlement commits.';
+        }
+        if (!engine.isRoundPresentationAdvanceReady()) {
+            return 'The final results presentation is still finishing.';
         }
         return null;
     },

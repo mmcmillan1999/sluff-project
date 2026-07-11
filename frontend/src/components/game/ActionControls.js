@@ -1,5 +1,5 @@
 // frontend/src/components/game/ActionControls.js
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { BID_HIERARCHY, BID_MULTIPLIERS } from '../../constants';
 import { shareInvite, getInviteUrl } from '../../utils/tableInvites';
 import './ActionControls.css';
@@ -60,28 +60,25 @@ const ActionControls = ({
     handleLeaveTable,
     renderCard,
     isAdmin,
-    quickPlayDecisionRejectionNonce = 0
+    quickPlayDecisionRejectionNonce = 0,
+    roundPresentationComplete = false
 }) => {
     const [inviteCopied, setInviteCopied] = useState(false);
     const [quickPlayDecisionSubmitted, setQuickPlayDecisionSubmitted] = useState(false);
+    const [roundAdvanceSubmitted, setRoundAdvanceSubmitted] = useState(false);
     const qpPhase = currentTableState.qpPhase;
     const qpGeneration = currentTableState.qpGeneration;
-    const qpDeadlineMs = useMemo(
-        () => deadlineToMs(currentTableState.qpWindowEndsAt),
-        [currentTableState.qpWindowEndsAt]
-    );
-    const [nowTs, setNowTs] = useState(Date.now());
+    const hasQpDeadline = deadlineToMs(currentTableState.qpWindowEndsAt) !== null;
 
     useEffect(() => {
         setQuickPlayDecisionSubmitted(false);
     }, [qpPhase, qpGeneration, quickPlayDecisionRejectionNonce]);
 
     useEffect(() => {
-        if (!qpDeadlineMs) return undefined;
-        setNowTs(Date.now());
-        const interval = setInterval(() => setNowTs(Date.now()), 500);
-        return () => clearInterval(interval);
-    }, [qpDeadlineMs]);
+        if (currentTableState.state !== 'Awaiting Next Round Trigger' || !roundPresentationComplete) {
+            setRoundAdvanceSubmitted(false);
+        }
+    }, [currentTableState.state, roundPresentationComplete]);
 
     const players = Object.values(currentTableState.players || {});
     const activePlayers = players.filter(player => !player.isSpectator && !player.disconnected);
@@ -118,7 +115,7 @@ const ActionControls = ({
     const renderQuickPlayPregame = () => {
         // Keep one release-compatible fallback while old tables drain during a
         // rolling deployment. New servers always provide qpPhase.
-        const phase = qpPhase || (qpDeadlineMs ? 'seeking_fourth' : 'filling');
+        const phase = qpPhase || (hasQpDeadline ? 'seeking_fourth' : 'filling');
 
         if (phase === 'decision_pending') {
             const isFourPlayerDecision = activePlayers.length === 4;
@@ -176,11 +173,12 @@ const ActionControls = ({
         }
 
         if (phase === 'seeking_fourth') {
-            const secondsLeft = Math.max(0, Math.ceil(((qpDeadlineMs || nowTs) - nowTs) / 1000));
             return (
                 <PromptShell variant="pregame" label="Looking for a fourth player">
-                    <h2 className="action-prompt__heading">Looking for a 4th · {secondsLeft}s</h2>
-                    <p className="action-prompt__copy">If no one joins, the table will choose again.</p>
+                    <h2 className="action-prompt__heading">
+                        Finding a fourth player<span className="qp-ellipsis" aria-hidden="true" />
+                    </h2>
+                    <p className="action-prompt__copy">Searching for one more player.</p>
                     {!isSpectator && (
                         <button
                             type="button"
@@ -390,6 +388,32 @@ const ActionControls = ({
                 </PromptShell>
             );
         }
+
+        case 'Awaiting Next Round Trigger':
+            if (
+                !roundPresentationComplete
+                || isSpectator
+                || playerId !== currentTableState.roundSummary?.dealerOfRoundId
+            ) {
+                return null;
+            }
+            return (
+                <PromptShell variant="choice" label="Start the next round">
+                    <button
+                        type="button"
+                        autoFocus
+                        disabled={roundAdvanceSubmitted}
+                        onClick={() => {
+                            if (roundAdvanceSubmitted) return;
+                            setRoundAdvanceSubmitted(true);
+                            emitEvent('requestNextRound');
+                        }}
+                        className="game-button action-prompt__button action-prompt__button--primary"
+                    >
+                        Start Next Round
+                    </button>
+                </PromptShell>
+            );
 
         default:
             // Dedicated overlays, recaps, and gameplay surfaces own every other

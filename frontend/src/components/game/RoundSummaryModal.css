@@ -202,6 +202,13 @@
     border-top: 1px solid #ced4da;
 }
 
+.summary-continue-button {
+    width: min(100%, 18rem);
+    min-height: 48px;
+    font-family: 'Oswald', sans-serif;
+    letter-spacing: 0.025em;
+}
+
 .payout-details-banner {
     padding: 10px;
     background-color: #e0eafc;
@@ -213,6 +220,17 @@
     margin: 0;
     font-weight: bold;
     color: #0d6efd;
+}
+
+.settlement-status-banner {
+    padding: 10px;
+    margin-bottom: 15px;
+    color: #7c5a00;
+    font-weight: 700;
+    line-height: 1.35;
+    border: 1px solid #e4c76c;
+    border-radius: 8px;
+    background: #fff7d6;
 }
 
 .game-over-actions {

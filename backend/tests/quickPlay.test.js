@@ -3,6 +3,11 @@
 const assert = require('node:assert/strict');
 const GameEngine = require('../src/core/GameEngine');
 const GameService = require('../src/services/GameService');
+const {
+    TERMINAL_QUICKPLAY_DISCONNECTED_CLEANUP_DELAY_MS,
+    QUICKPLAY_FOURTH_FALLBACK_MIN_DELAY_MS,
+    QUICKPLAY_FOURTH_FALLBACK_MAX_DELAY_MS,
+} = GameService;
 const registerGameHandlers = require('../src/events/gameEvents');
 const { createGameServiceWithoutHeartbeat } = require('./test-helpers');
 
@@ -22,6 +27,7 @@ function createService() {
     const scheduled = [];
     let now = 1_000_000;
     service.nowOverride = () => now;
+    service.quickPlayRandomOverride = () => 0;
     service.timerOverride = (callback, duration) => {
         const timer = { callback, duration };
         scheduled.push(timer);
@@ -126,35 +132,121 @@ function testFirstValidDecisionWinsSynchronously() {
         assert.equal(loser.accepted, false);
         assert.equal(engine.qpPhase, 'seeking_fourth');
         assert.equal(engine.gameStartPending, false);
-        assert.equal(engine.qpWindowEndsAt, 1_020_000);
-        assert.equal(service.qpTimers[engine.tableId].window.handle.duration, 20000);
+        assert.equal(engine.qpWindowEndsAt, 1_008_000);
+        assert.equal(service.qpTimers[engine.tableId].window.handle.duration, 8000);
+        assert.equal(engine.getStateForClient({ userId: 21 }).qpWindowEndsAt, null,
+            'the randomized deadline remains private to the server');
     }
 }
 
-async function testSearchTimeoutReturnsToDecisionAndGuardsDeadline() {
+async function testSearchTimeoutSeatsFallbackAndGuardsDeadline() {
     const harness = createService();
     const { service } = harness;
     const engine = seedDecisionTable(service, 'miss-pauls-academy', [31]);
+    const starts = installPendingStartSpy(service);
     const decisionGeneration = engine.qpGeneration;
     service.quickPlayDecision(engine.tableId, 31, 'seek4', decisionGeneration);
     const searchGeneration = engine.qpGeneration;
     const earlyTimer = service.qpTimers[engine.tableId].window.handle;
 
-    harness.advanceNow(19_000);
+    harness.advanceNow(7_000);
     await earlyTimer.callback();
     assert.equal(engine.qpPhase, 'seeking_fourth', 'an early timer cannot close the search');
     assert.equal(service.qpTimers[engine.tableId].window.handle.duration, 1000, 'early wake is re-armed to the deadline');
 
     harness.advanceNow(1_000);
     await service.qpTimers[engine.tableId].window.handle.callback();
-    assert.equal(engine.qpPhase, 'decision_pending');
+    assert.equal(engine.qpPhase, 'starting_4');
     assert.equal(engine.qpWindowEndsAt, null);
     assert.ok(engine.qpGeneration > searchGeneration);
-    assert.equal(engine.gameStarted, false, 'timeout never silently starts three-player mode');
+    assert.equal(engine.playerOrder.count, 4);
+    const fallbackId = engine.playerOrder.allIds[3];
+    assert.equal(engine.players[fallbackId].isBot, true);
+    assert.equal(engine.qpFallbackBot.userId, fallbackId);
+    assert.equal(engine.gameStartPending, true, 'the four-player roster freezes synchronously');
+    assert.equal(starts.length, 1);
+    assert.equal(starts[0].options.quickPlayStart.playerMode, 4);
+    assert.equal(starts[0].options.quickPlayStart.fallbackBotId, fallbackId);
 
     const currentGeneration = engine.qpGeneration;
     await earlyTimer.callback();
-    assert.equal(engine.qpGeneration, currentGeneration, 'stale search timers cannot mutate a new decision');
+    assert.equal(engine.qpGeneration, currentGeneration, 'stale search timers cannot add a fifth seat or restart');
+    assert.equal(engine.playerOrder.count, 4);
+    assert.equal(starts.length, 1);
+}
+
+async function testEarlyWakeKeepsTheOriginalRandomDeadline() {
+    const harness = createService();
+    const { service } = harness;
+    let randomCalls = 0;
+    service.quickPlayRandomOverride = () => {
+        randomCalls += 1;
+        return 0.5;
+    };
+    const engine = seedDecisionTable(service, 'fort-creek', [32]);
+    service.quickPlayDecision(engine.tableId, 32, 'seek4', engine.qpGeneration);
+    const record = service.qpTimers[engine.tableId].window;
+    const originalDeadline = engine.qpWindowEndsAt;
+    assert.equal(randomCalls, 1);
+
+    harness.setNow(originalDeadline - 1234);
+    await record.handle.callback();
+    assert.equal(randomCalls, 1, 'an early timer rearm does not choose a second random delay');
+    assert.equal(engine.qpWindowEndsAt, originalDeadline);
+    assert.equal(service.qpTimers[engine.tableId].window, record);
+    assert.equal(record.handle.duration, 1234);
+}
+
+async function testHumanBeforeDeadlineWinsAndStaleTimerCannotReplaceThem() {
+    const harness = createService();
+    const { service } = harness;
+    const engine = seedDecisionTable(service, 'dans-deck', [33, 34]);
+    const starts = installPendingStartSpy(service);
+    service.quickPlayDecision(engine.tableId, 33, 'seek4', engine.qpGeneration);
+    const staleTimer = service.qpTimers[engine.tableId].window.handle;
+    harness.setNow(engine.qpWindowEndsAt - 1);
+
+    const claimed = service.claimQuickPlaySeat(
+        engine.theme,
+        { id: 330, username: 'Human Fourth' },
+        'socket-330',
+        '100.00',
+    );
+    assert.equal(claimed, engine);
+    assert.equal(engine.playerOrder.allIds[3], 330);
+    assert.notEqual(engine.players[330].isBot, true);
+    assert.equal(starts.length, 1);
+
+    harness.setNow(harness.service._quickPlayNow() + 1);
+    await staleTimer.callback();
+    assert.equal(engine.playerOrder.count, 4);
+    assert.equal(engine.playerOrder.allIds[3], 330);
+    assert.equal(starts.length, 1);
+}
+
+async function testTimerAtDeadlineWinsAndLateHumanIsRematched() {
+    const harness = createService();
+    const { service } = harness;
+    const engine = seedDecisionTable(service, 'shirecliff-road', [38, 39]);
+    const starts = installPendingStartSpy(service);
+    service.quickPlayDecision(engine.tableId, 38, 'seek4', engine.qpGeneration);
+    const timer = service.qpTimers[engine.tableId].window.handle;
+    harness.setNow(engine.qpWindowEndsAt);
+    await timer.callback();
+
+    const fallbackId = engine.playerOrder.allIds[3];
+    assert.equal(engine.players[fallbackId].isBot, true);
+    assert.equal(starts.length, 1);
+    const lateMatch = service.claimQuickPlaySeat(
+        engine.theme,
+        { id: 390, username: 'Late Human' },
+        'socket-390',
+        '100.00',
+    );
+    assert.ok(lateMatch);
+    assert.notEqual(lateMatch, engine);
+    assert.equal(engine.players[390], undefined);
+    assert.equal(lateMatch.players[390].isSpectator, false);
 }
 
 function testSearchDeadlineIsEnforcedBeforeDelayedTimerRuns() {
@@ -166,6 +258,12 @@ function testSearchDeadlineIsEnforcedBeforeDelayedTimerRuns() {
 
     harness.setNow(deadline - 1);
     assert.equal(service.canAcceptQuickPlayHuman(engine), true, 'the fourth seat remains open before the deadline');
+    assert.equal(engine.addQuickPlayFallbackBot({
+        generation: engine.qpGeneration,
+        deadline,
+        now: deadline - 1,
+    }), null, 'even the dedicated fallback method is deadline-bound');
+    assert.equal(engine.playerOrder.count, 3);
     harness.setNow(deadline);
     assert.equal(service.canAcceptQuickPlayHuman(engine), false, 'the deadline itself is closed even before its timer runs');
 
@@ -183,6 +281,71 @@ function testSearchDeadlineIsEnforcedBeforeDelayedTimerRuns() {
     assert.equal(claim, null, 'a delayed timer cannot leave an expired fourth seat claimable');
     assert.equal(engine.playerOrder.count, 3);
     assert.equal(engine.players[37], undefined);
+}
+
+async function testFallbackCreationFailureReturnsToFreshDecision() {
+    for (const failure of ['null', 'throw']) {
+        const harness = createService();
+        const { service } = harness;
+        const engine = seedDecisionTable(service, 'miss-pauls-academy', [371, 372]);
+        const starts = installPendingStartSpy(service);
+        service.quickPlayDecision(engine.tableId, 371, 'seek4', engine.qpGeneration);
+        const searchGeneration = engine.qpGeneration;
+        const timer = service.qpTimers[engine.tableId].window.handle;
+        engine.addQuickPlayFallbackBot = () => {
+            if (failure === 'throw') throw new Error('synthetic bot construction failure');
+            return null;
+        };
+        harness.setNow(engine.qpWindowEndsAt);
+
+        const originalError = console.error;
+        console.error = () => {};
+        try {
+            await timer.callback();
+        } finally {
+            console.error = originalError;
+        }
+        assert.equal(engine.playerOrder.count, 3);
+        assert.equal(engine.qpPhase, 'decision_pending');
+        assert.ok(engine.qpGeneration > searchGeneration);
+        assert.equal(engine.qpWindowEndsAt, null);
+        assert.equal(starts.length, 0);
+    }
+}
+
+async function testDisconnectBeforeDeadlineCancelsFallback() {
+    const harness = createService();
+    const { service } = harness;
+    const engine = seedDecisionTable(service, 'fort-creek', [373]);
+    service.quickPlayDecision(engine.tableId, 373, 'seek4', engine.qpGeneration);
+    const staleTimer = service.qpTimers[engine.tableId].window.handle;
+
+    engine.disconnectPlayer(373);
+    service.evaluateQuickPlayTable(engine.tableId);
+    assert.equal(engine.qpPhase, 'filling');
+    assert.equal(engine.playerOrder.count, 0, 'the abandoned table sweeps its matchmaking bots');
+    await staleTimer.callback();
+    assert.equal(engine.playerOrder.count, 0);
+    assert.equal(engine.qpFallbackBot, null);
+}
+
+async function testTimerBeforeDisconnectFreezesOneFallbackRoster() {
+    const harness = createService();
+    const { service } = harness;
+    const engine = seedDecisionTable(service, 'dans-deck', [374]);
+    const starts = installPendingStartSpy(service);
+    service.quickPlayDecision(engine.tableId, 374, 'seek4', engine.qpGeneration);
+    const timer = service.qpTimers[engine.tableId].window.handle;
+    harness.setNow(engine.qpWindowEndsAt);
+    await timer.callback();
+    const frozenRoster = [...engine.playerOrder.allIds];
+
+    engine.disconnectPlayer(374);
+    service.evaluateQuickPlayTable(engine.tableId);
+    assert.deepEqual(engine.playerOrder.allIds, frozenRoster,
+        'a disconnect after the funded start is pending cannot reshape its roster');
+    assert.equal(engine.players[374].disconnected, true);
+    assert.equal(starts.length, 1);
 }
 
 function testFourthHumanStartsExactRosterAndBotsCannotTakeSeatFour() {
@@ -207,6 +370,153 @@ function testFourthHumanStartsExactRosterAndBotsCannotTakeSeatFour() {
     assert.deepEqual(starts[0].roster, engine.playerOrder.allIds);
     assert.equal(starts[0].roster[3], 43);
     assert.equal(engine.players[43].isSpectator, false);
+}
+
+async function prepareBoundFallbackStart(harness, theme, humanIds) {
+    const { service } = harness;
+    const engine = seedDecisionTable(service, theme, humanIds);
+    const existingBotIds = engine.playerOrder.allIds.filter(id => engine.players[id]?.isBot);
+    service._startQuickPlayGame = () => {};
+    service.quickPlayDecision(engine.tableId, humanIds[0], 'seek4', engine.qpGeneration);
+    const timer = service.qpTimers[engine.tableId].window.handle;
+    harness.setNow(engine.qpWindowEndsAt);
+    await timer.callback();
+    assert.equal(engine.qpPhase, 'starting_4');
+    const fallbackBotId = engine.playerOrder.allIds[3];
+    assert.equal(engine.qpFallbackBot?.userId, fallbackBotId);
+    assert.equal(engine.qpFallbackBot?.startGeneration, engine.qpGeneration);
+    return { engine, fallbackBotId, existingBotIds };
+}
+
+async function testFallbackAuthorizationTransactionAndRollbackRecovery() {
+    const harness = createService();
+    const { service } = harness;
+    const { engine, fallbackBotId, existingBotIds } = await prepareBoundFallbackStart(
+        harness,
+        'fort-creek',
+        [44, 45],
+    );
+    const generation = engine.qpGeneration;
+
+    const staleAuthorization = engine.startGame(44, {
+        quickPlayStart: {
+            generation: generation + 1,
+            playerMode: 4,
+            fallbackBotId,
+        },
+    });
+    assert.equal(engine.gameStartPending, false);
+    assert.equal(staleAuthorization.effects.some(effect => effect.type === 'START_GAME_TRANSACTIONS'), false,
+        'a fallback marker never authorizes another generation');
+
+    const authorizedStart = engine.startGame(44, {
+        quickPlayStart: { generation, playerMode: 4, fallbackBotId },
+    });
+    const transaction = authorizedStart.effects.find(effect => effect.type === 'START_GAME_TRANSACTIONS');
+    assert.ok(transaction, 'the exact server-marked fallback generation can start');
+    assert.equal(transaction.payload.table.playerMode, 4);
+    assert.deepEqual(transaction.payload.playerIds, [44, 45],
+        'the fallback bot and existing matchmaking bot are excluded from charges');
+
+    transaction.onFailure(new Error('synthetic transaction rollback'), null);
+    service.evaluateQuickPlayTable(engine.tableId);
+    assert.equal(engine.playerOrder.count, 3);
+    assert.equal(engine.players[fallbackBotId], undefined, 'rollback removes the exact fourth fallback bot');
+    assert.equal(engine.qpFallbackBot, null);
+    for (const botId of existingBotIds) {
+        assert.equal(engine.players[botId]?.isBot, true, 'ordinary fill bots remain after fallback rollback');
+    }
+    assert.equal(engine.qpPhase, 'decision_pending');
+    assert.ok(engine.qpGeneration > generation);
+}
+
+async function testThreeHumanFallbackChargesExactHumanRoster() {
+    const harness = createService();
+    const { engine, fallbackBotId } = await prepareBoundFallbackStart(
+        harness,
+        'miss-pauls-academy',
+        [441, 442, 443],
+    );
+    const generation = engine.qpGeneration;
+    const start = engine.startGame(441, {
+        quickPlayStart: { generation, playerMode: 4, fallbackBotId },
+    });
+    const transaction = start.effects.find(effect => effect.type === 'START_GAME_TRANSACTIONS');
+    assert.ok(transaction);
+    assert.equal(transaction.payload.table.playerMode, 4);
+    assert.deepEqual(transaction.payload.playerIds, [441, 442, 443]);
+    assert.equal(transaction.payload.playerIds.includes(fallbackBotId), false);
+    transaction.onFailure(new Error('test cleanup'), null);
+}
+
+async function testRejectedFallbackLaunchRecoversWithoutRetry() {
+    const harness = createService();
+    const { service } = harness;
+    const engine = seedDecisionTable(service, 'shirecliff-road', [46, 47]);
+    let attempts = 0;
+    service.startGame = async () => {
+        attempts += 1;
+        throw new Error('synthetic launch rejection');
+    };
+    service.quickPlayDecision(engine.tableId, 46, 'seek4', engine.qpGeneration);
+    const timer = service.qpTimers[engine.tableId].window.handle;
+    harness.setNow(engine.qpWindowEndsAt);
+    const originalError = console.error;
+    console.error = () => {};
+    try {
+        await timer.callback();
+        await flushAsyncStart();
+    } finally {
+        console.error = originalError;
+    }
+
+    assert.equal(attempts, 1, 'a rejected fire-and-forget start is never automatically retried');
+    assert.equal(engine.playerOrder.count, 3);
+    assert.equal(engine.qpFallbackBot, null);
+    assert.equal(engine.qpPhase, 'decision_pending');
+}
+
+async function testNoopFallbackLaunchAlsoRecoversWithoutRetry() {
+    const harness = createService();
+    const { service } = harness;
+    const engine = seedDecisionTable(service, 'fort-creek', [461, 462]);
+    let attempts = 0;
+    service.startGame = async () => { attempts += 1; };
+    service.quickPlayDecision(engine.tableId, 461, 'seek4', engine.qpGeneration);
+    const timer = service.qpTimers[engine.tableId].window.handle;
+    harness.setNow(engine.qpWindowEndsAt);
+    await timer.callback();
+    await flushAsyncStart();
+
+    assert.equal(attempts, 1);
+    assert.equal(engine.playerOrder.count, 3);
+    assert.equal(engine.qpFallbackBot, null);
+    assert.equal(engine.qpPhase, 'decision_pending');
+}
+
+async function testTerminalResetRemovesOnlyMarkedFallbackBot() {
+    const harness = createService();
+    const { service } = harness;
+    const { engine, fallbackBotId, existingBotIds } = await prepareBoundFallbackStart(
+        harness,
+        'dans-deck',
+        [48, 49],
+    );
+    const generation = engine.qpGeneration;
+    const start = engine.startGame(48, {
+        quickPlayStart: { generation, playerMode: 4, fallbackBotId },
+    });
+    const transaction = start.effects.find(effect => effect.type === 'START_GAME_TRANSACTIONS');
+    transaction.onSuccess(5048, {});
+    engine.state = 'Game Over';
+    engine.settlement = { status: 'complete', kind: 'normal', attempts: 1, lastErrorCode: null };
+
+    await service.resetGame(engine.tableId);
+    assert.equal(engine.players[fallbackBotId], undefined);
+    assert.equal(engine.qpFallbackBot, null);
+    assert.equal(engine.playerOrder.count, 3);
+    for (const botId of existingBotIds) assert.equal(engine.players[botId]?.isBot, true);
+    assert.equal(engine.qpPhase, 'decision_pending', 'the retained three seats require fresh rematch consent');
 }
 
 function testConcurrentFourthsRematchWithoutSpectatorFallback() {
@@ -269,6 +579,27 @@ async function testHardResetGenerationRejectsOldTableTimers() {
     await staleTimer.callback();
     assert.equal(replacement.playerOrder.count, 1);
     assert.equal(replacement.qpGeneration, replacementGeneration);
+}
+
+async function testHardResetRejectsStaleFourthFallbackTimer() {
+    const harness = createService();
+    const { service } = harness;
+    const original = seedDecisionTable(service, 'shirecliff-road', [67, 68]);
+    service.quickPlayDecision(original.tableId, 67, 'seek4', original.qpGeneration);
+    const staleWindow = service.qpTimers[original.tableId].window.handle;
+    const staleDeadline = original.qpWindowEndsAt;
+
+    service.resetAllEngines();
+    const replacement = service.getEngineById(original.tableId);
+    const replacementGeneration = replacement.qpGeneration;
+    harness.setNow(staleDeadline);
+    await staleWindow.callback();
+
+    assert.notEqual(replacement, original);
+    assert.equal(replacement.playerOrder.count, 0);
+    assert.equal(replacement.qpGeneration, replacementGeneration);
+    assert.equal(replacement.qpFallbackBot, null);
+    assert.equal(replacement.gameStartPending, false);
 }
 
 async function testDecisionGuardsGenericStartAndRecoversFromStartFailure() {
@@ -370,6 +701,47 @@ async function testTerminalResetReentersAConsistentQuickPlayPhase() {
     }
 }
 
+function testFourthFallbackDelayIsInclusiveAndInjectable() {
+    const { service } = createService();
+    service.quickPlayRandomOverride = () => 0;
+    assert.equal(service._quickPlayFourthFallbackDelay(), QUICKPLAY_FOURTH_FALLBACK_MIN_DELAY_MS);
+
+    service.quickPlayRandomOverride = () => 1 - Number.EPSILON;
+    assert.equal(service._quickPlayFourthFallbackDelay(), QUICKPLAY_FOURTH_FALLBACK_MAX_DELAY_MS);
+
+    service.quickPlayRandomOverride = () => 0.5;
+    const midpoint = service._quickPlayFourthFallbackDelay();
+    assert.ok(midpoint >= QUICKPLAY_FOURTH_FALLBACK_MIN_DELAY_MS);
+    assert.ok(midpoint <= QUICKPLAY_FOURTH_FALLBACK_MAX_DELAY_MS);
+}
+
+async function testAbandonedTerminalQuickPlayRecyclesAfterReconnectGrace() {
+    const { service } = createService();
+    const engine = seedDecisionTable(service, 'miss-pauls-academy', [85, 86]);
+    engine.gameStarted = true;
+    engine.gameId = 5085;
+    engine.state = 'Game Over';
+    engine.settlement = { status: 'complete', kind: 'normal', attempts: 1, lastErrorCode: null };
+
+    const scheduled = [];
+    service.terminalCleanupTimerOverride = (callback, duration) => {
+        const timer = { callback, duration, unref() {} };
+        scheduled.push(timer);
+        return timer;
+    };
+
+    const lifecycle = service.evaluateTerminalCleanup(engine.tableId);
+    assert.equal(lifecycle.kind, 'disconnected');
+    assert.equal(scheduled[0].duration, TERMINAL_QUICKPLAY_DISCONNECTED_CLEANUP_DELAY_MS);
+    await scheduled[0].callback();
+
+    assert.equal(engine.gameStarted, false);
+    assert.equal(engine.gameId, null);
+    assert.equal(engine.qpPhase, 'filling');
+    assert.equal(engine.playerOrder.count, 0, 'abandoned human seats and matchmaking bots are fully recycled');
+    assert.equal(Object.keys(engine.players).length, 0);
+}
+
 function createSocketHarness(service, io) {
     let connectionHandler;
     io.use = () => {};
@@ -411,6 +783,89 @@ function createSocketHarness(service, io) {
             };
         },
     };
+}
+
+async function testSeekingFourthMultiTabHandoffAndFinalDisconnectCancellation() {
+    const harnessData = createService();
+    const { service, io } = harnessData;
+    const engine = seedDecisionTable(service, 'fort-creek', [806, 807]);
+    service.quickPlayDecision(engine.tableId, 806, 'seek4', engine.qpGeneration);
+    const searchGeneration = engine.qpGeneration;
+    const deadline = engine.qpWindowEndsAt;
+    const staleWindow = service.qpTimers[engine.tableId].window.handle;
+    const socketHarness = createSocketHarness(service, io);
+    const account = { id: 806, username: 'Seeking Two Tabs', is_admin: false };
+    const older = socketHarness.connect(account, 'seeking-older');
+    const latest = socketHarness.connect(account, 'seeking-latest');
+    assert.equal(engine.players[806].socketId, 'seeking-latest');
+
+    await older.disconnect();
+    assert.equal(engine.players[806].socketId, 'seeking-latest');
+    assert.equal(engine.qpPhase, 'seeking_fourth');
+    assert.equal(engine.qpGeneration, searchGeneration);
+    assert.equal(engine.qpWindowEndsAt, deadline);
+    assert.equal(service.qpTimers[engine.tableId].window.handle, staleWindow,
+        'disconnecting a superseded tab leaves the active search intact');
+
+    await latest.disconnect();
+    assert.equal(engine.players[806], undefined);
+    assert.equal(engine.qpPhase, 'filling');
+    assert.notEqual(engine.qpGeneration, searchGeneration);
+    harnessData.setNow(deadline);
+    await staleWindow.callback();
+    assert.equal(engine.playerOrder.count, 2);
+    assert.equal(engine.qpFallbackBot, null,
+        'the cancelled search callback cannot create a fourth bot after the final tab leaves');
+}
+
+async function testTerminalSocketReconnectCancelsAndDisconnectRearmsCleanup() {
+    const io = createIo();
+    const pool = { query: async () => ({ rows: [{ tokens: '100.00' }] }) };
+    const service = createGameServiceWithoutHeartbeat(GameService, io, pool);
+    const engine = service.findQuickPlayTable('fort-creek');
+    seatHuman(engine, 805, 'Terminal Returner');
+    engine.gameStarted = true;
+    engine.gameId = 5805;
+    engine.state = 'Game Over';
+    engine.settlement = { status: 'complete', kind: 'normal', attempts: 1, lastErrorCode: null };
+
+    const scheduled = [];
+    service.terminalCleanupTimerOverride = (callback, duration) => {
+        const timer = { callback, duration, unref() {} };
+        scheduled.push(timer);
+        return timer;
+    };
+    service.evaluateTerminalCleanup(engine.tableId);
+    assert.equal(scheduled.length, 1);
+
+    const harness = createSocketHarness(service, io);
+    const older = harness.connect(
+        { id: 805, username: 'Terminal Returner', is_admin: false },
+        'terminal-older',
+    );
+    assert.equal(engine.players[805].socketId, 'terminal-older');
+    assert.equal(engine.players[805].disconnected, false);
+    assert.equal(service.terminalCleanupTimers[engine.tableId], undefined,
+        'reconnect cancels terminal reclamation while the human views results');
+
+    const latest = harness.connect(
+        { id: 805, username: 'Terminal Returner', is_admin: false },
+        'terminal-latest',
+    );
+    assert.equal(engine.players[805].socketId, 'terminal-latest');
+    await latest.disconnect();
+    assert.equal(engine.players[805].socketId, 'terminal-older',
+        'the newest remaining live socket adopts the terminal seat');
+    assert.equal(engine.players[805].disconnected, false);
+    assert.equal(service.terminalCleanupTimers[engine.tableId], undefined,
+        'promoting a live fallback must not arm abandoned cleanup');
+
+    await older.disconnect();
+    assert.equal(engine.players[805].disconnected, true);
+    assert.equal(engine.players[805].socketId, null);
+    assert.equal(scheduled.length, 2, 'disconnect after reconnect arms a fresh cleanup grace');
+    assert.equal(scheduled[1].duration, TERMINAL_QUICKPLAY_DISCONNECTED_CLEANUP_DELAY_MS);
+    assert.equal(service.terminalCleanupTimers[engine.tableId]?.handle, scheduled[1]);
 }
 
 async function testDeferredBalanceCannotSeatDisconnectedSocket() {
@@ -608,21 +1063,37 @@ async function testNoMatchRetryPreservesPreviousWaitingSeat() {
 }
 
 async function runQuickPlayTests() {
+    testFourthFallbackDelayIsInclusiveAndInjectable();
     await testFillStopsForDecisionAndSerializesContract();
     testFirstValidDecisionWinsSynchronously();
-    await testSearchTimeoutReturnsToDecisionAndGuardsDeadline();
+    await testSearchTimeoutSeatsFallbackAndGuardsDeadline();
+    await testEarlyWakeKeepsTheOriginalRandomDeadline();
+    await testHumanBeforeDeadlineWinsAndStaleTimerCannotReplaceThem();
+    await testTimerAtDeadlineWinsAndLateHumanIsRematched();
     testSearchDeadlineIsEnforcedBeforeDelayedTimerRuns();
+    await testFallbackCreationFailureReturnsToFreshDecision();
+    await testDisconnectBeforeDeadlineCancelsFallback();
+    await testTimerBeforeDisconnectFreezesOneFallbackRoster();
     testFourthHumanStartsExactRosterAndBotsCannotTakeSeatFour();
+    await testFallbackAuthorizationTransactionAndRollbackRecovery();
+    await testThreeHumanFallbackChargesExactHumanRoster();
+    await testRejectedFallbackLaunchRecoversWithoutRetry();
+    await testNoopFallbackLaunchAlsoRecoversWithoutRetry();
+    await testTerminalResetRemovesOnlyMarkedFallbackBot();
     testConcurrentFourthsRematchWithoutSpectatorFallback();
     await testStaleFillTimerAndLeaveRefillCycle();
     await testHardResetGenerationRejectsOldTableTimers();
+    await testHardResetRejectsStaleFourthFallbackTimer();
     await testDecisionGuardsGenericStartAndRecoversFromStartFailure();
     await testFourPlayerStartFailureReturnsToExplicitDecision();
     await testTerminalResetReentersAConsistentQuickPlayPhase();
+    await testAbandonedTerminalQuickPlayRecyclesAfterReconnectGrace();
     await testDeferredBalanceCannotSeatDisconnectedSocket();
     await testReplacementSocketRevokesDeferredJoinBeforeAnySeatExists();
     await testReplacementControllerKeepsAdoptedSeatDuringDeferredJoin();
     await testOlderLiveSocketRecoversWhenLatestDisconnects();
+    await testSeekingFourthMultiTabHandoffAndFinalDisconnectCancellation();
+    await testTerminalSocketReconnectCancelsAndDisconnectRearmsCleanup();
     await testDelayedBalanceRaceAndSocketDecisionValidation();
     await testNoMatchRetryPreservesPreviousWaitingSeat();
 

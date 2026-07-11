@@ -1,10 +1,12 @@
 // frontend/src/components/GameTableView.js
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import './GameTableView.css';
 import DrawVoteModal from './game/DrawVoteModal';
 import PlayerHand from './game/PlayerHand';
 import InsuranceControls from './game/InsuranceControls';
 import RoundSummaryModal from './game/RoundSummaryModal';
+import RoundScoreCeremony, { ROUND_SCORE_CEREMONY_TIMING } from './game/RoundScoreCeremony';
+import GameOverPodium from './game/GameOverPodium';
 import TableLayout from './game/TableLayout';
 import PlayerSeat from './game/PlayerSeat';
 import ActionControls from './game/ActionControls';
@@ -22,6 +24,39 @@ import { shareInvite, getInviteUrl } from '../utils/tableInvites';
 import { SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS } from '../constants';
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
 import { useBidWinnerSplash } from '../hooks/useBidWinnerSplash';
+
+const ROUND_PRESENTATION_STATES = new Set([
+    'WidowReveal',
+    'Awaiting Next Round Trigger',
+    'Game Over'
+]);
+const ROUND_SCORES_RELEASED_PHASES = new Set([
+    'score-settled-waiting',
+    'settled',
+    'podium'
+]);
+
+const scoresBeforeRound = (summary, fallbackScores) => {
+    if (!summary) return null;
+    const finalScores = summary.finalScores || fallbackScores || {};
+    const pointChanges = summary.pointChanges || {};
+    const names = new Set([
+        ...Object.keys(finalScores),
+        ...Object.keys(pointChanges),
+        ...Object.keys(fallbackScores || {})
+    ]);
+
+    return Object.fromEntries([...names].map(name => {
+        const finalScore = Number(finalScores[name] ?? fallbackScores?.[name]);
+        const pointChange = Number(pointChanges[name] ?? 0);
+        return [
+            name,
+            Number.isFinite(finalScore)
+                ? finalScore - (Number.isFinite(pointChange) ? pointChange : 0)
+                : fallbackScores?.[name]
+        ];
+    }));
+};
 
 
 const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, handleShowHowToPlay, emitEvent, playSound, socket, handleOpenFeedbackModal, soundSettings }) => {
@@ -44,6 +79,8 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const [selectedFrogDiscards, setSelectedFrogDiscards] = useState([]);
     const [shareNotice, setShareNotice] = useState(null);
     const [quickPlayDecisionRejectionNonce, setQuickPlayDecisionRejectionNonce] = useState(0);
+    const [roundPresentationPhase, setRoundPresentationPhase] = useState('idle');
+    const [, setPresentationClockTick] = useState(0);
     const shareNoticeTimerRef = useRef(null);
     const turnPlayerRef = useRef(null);
     const trickWinnerRef = useRef(null);
@@ -53,6 +90,10 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const passedCountRef = useRef(0);
     const roundModalTimerRef = useRef(null);
     const roundModalScheduledRef = useRef(false);
+    const roundPresentationAckRef = useRef(null);
+    const roundPresentationConfirmedAckRef = useRef(null);
+    const roundAdvanceTimerRef = useRef(null);
+    const scoreCeremonyStartedAtRef = useRef(null);
     const errorTimerRef = useRef(null);
     const dropZoneRef = useRef(null);
     const prefersReducedMotion = usePrefersReducedMotion();
@@ -64,6 +105,109 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const selfPlayerInTable = currentTableState ? currentTableState.players[playerId] : null;
     const isSpectator = selfPlayerInTable?.isSpectator;
     const selfPlayerName = selfPlayerInTable?.playerName;
+    const roundSummary = currentTableState?.roundSummary;
+    const rawPresentationReadyAt = roundSummary?.presentationReadyAt;
+    const presentationReadyAt = Number(rawPresentationReadyAt);
+    const hasSharedPresentationClock = rawPresentationReadyAt !== null
+        && rawPresentationReadyAt !== undefined
+        && Number.isFinite(presentationReadyAt);
+    const serverTime = Number(currentTableState?.serverTime);
+    const hasServerTime = Number.isFinite(serverTime);
+    const presentationRemainingAtReceipt = hasSharedPresentationClock
+        ? presentationReadyAt - (hasServerTime ? serverTime : Date.now())
+        : 0;
+    const localPresentationDeadline = useMemo(
+        () => Date.now() + Math.max(0, presentationRemainingAtReceipt),
+        [presentationReadyAt, presentationRemainingAtReceipt]
+    );
+    const sharedPresentationReady = !hasSharedPresentationClock
+        || presentationRemainingAtReceipt <= 0
+        || Date.now() >= localPresentationDeadline;
+    const rawPresentationForceReadyAt = roundSummary?.presentationForceReadyAt;
+    const presentationForceReadyAt = Number(rawPresentationForceReadyAt);
+    const hasPresentationForceClock = rawPresentationForceReadyAt !== null
+        && rawPresentationForceReadyAt !== undefined
+        && Number.isFinite(presentationForceReadyAt);
+    const presentationForceRemainingAtReceipt = hasPresentationForceClock
+        ? presentationForceReadyAt - (hasServerTime ? serverTime : Date.now())
+        : null;
+    const localPresentationForceDeadline = useMemo(
+        () => hasPresentationForceClock
+            ? Date.now() + Math.max(0, presentationForceRemainingAtReceipt)
+            : null,
+        [hasPresentationForceClock, presentationForceReadyAt, presentationForceRemainingAtReceipt]
+    );
+    const presentationForceReady = hasPresentationForceClock && (
+        presentationForceRemainingAtReceipt <= 0
+        || Date.now() >= localPresentationForceDeadline
+    );
+    const hasServerPresentationQuorum = roundSummary?.allConnectedHumansPresented !== undefined
+        || rawPresentationForceReadyAt !== undefined;
+    const serverRoundPresentationReady = !hasServerPresentationQuorum
+        || roundSummary?.allConnectedHumansPresented === true
+        || presentationForceReady;
+    const isRoundPresentationState = Boolean(
+        roundSummary && ROUND_PRESENTATION_STATES.has(currentTableState?.state)
+    );
+    const previousRoundScores = useMemo(
+        () => scoresBeforeRound(roundSummary, currentTableState?.scores),
+        [roundSummary, currentTableState?.scores]
+    );
+    const shouldHoldTableScores = Boolean(
+        isRoundPresentationState
+        && !ROUND_SCORES_RELEASED_PHASES.has(roundPresentationPhase)
+        && !(roundPresentationPhase === 'idle'
+            && sharedPresentationReady
+            && hasSharedPresentationClock
+            && currentTableState?.settlement?.status !== 'pending')
+    );
+    const tableStateForPresentation = useMemo(() => (
+        shouldHoldTableScores && previousRoundScores
+            ? { ...currentTableState, scores: previousRoundScores }
+            : currentTableState
+    ), [currentTableState, previousRoundScores, shouldHoldTableScores]);
+    const hasRoundScoreChanges = Object.values(roundSummary?.pointChanges || {})
+        .some(value => Number.isFinite(Number(value)) && Number(value) !== 0);
+    const terminalSettlementStatus = currentTableState?.settlement?.status;
+    const terminalSettlementBlocked = Boolean(
+        roundSummary?.isGameOver
+        && terminalSettlementStatus
+        && terminalSettlementStatus !== 'complete'
+    );
+    const roundPresentationControlsLocked = isRoundPresentationState && [
+        'waiting',
+        'recap',
+        'scoring',
+        'score-settled-waiting'
+    ].includes(roundPresentationPhase);
+    const terminalSettlementMessage = terminalSettlementBlocked
+        ? (roundSummary?.message || (terminalSettlementStatus === 'pending'
+            ? 'Final settlement is still processing.'
+            : 'Final settlement needs administrator review.'))
+        : (roundSummary?.isGameOver
+            && (!sharedPresentationReady || !serverRoundPresentationReady)
+            ? 'Finishing the celebration for everyone at the table.'
+            : null);
+
+    useEffect(() => {
+        if (!hasSharedPresentationClock) return undefined;
+        const remaining = localPresentationDeadline - Date.now();
+        if (remaining <= 0) return undefined;
+        const timer = setTimeout(() => setPresentationClockTick(value => value + 1), remaining + 25);
+        return () => clearTimeout(timer);
+    }, [hasSharedPresentationClock, localPresentationDeadline]);
+
+    useEffect(() => {
+        if (!hasPresentationForceClock || roundSummary?.allConnectedHumansPresented === true) return undefined;
+        const remaining = localPresentationForceDeadline - Date.now();
+        if (remaining <= 0) return undefined;
+        const timer = setTimeout(() => setPresentationClockTick(value => value + 1), remaining + 25);
+        return () => clearTimeout(timer);
+    }, [
+        hasPresentationForceClock,
+        localPresentationForceDeadline,
+        roundSummary?.allConnectedHumansPresented
+    ]);
     
     useEffect(() => {
         getLobbyChatHistory(50)
@@ -150,8 +294,15 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     useEffect(() => {
         if (currentTableState) {
             const { state, drawRequest } = currentTableState;
-            const shouldShow = (drawRequest?.isActive || state === 'DrawDeclined' || state === 'DrawComplete') && !isSpectator;
+            const shouldShow = state === 'DrawComplete'
+                || ((drawRequest?.isActive || state === 'DrawDeclined') && !isSpectator);
             setShowDrawVoteModal(shouldShow);
+            if (shouldShow) {
+                setChatOpen(false);
+                setShowGameMenu(false);
+                setShowInsurancePrompt(false);
+                setShowIosPwaPrompt(false);
+            }
         }
     }, [currentTableState, isSpectator]);
 
@@ -218,22 +369,62 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         }
     }, [currentTableState, playerId]);
     
-    // Hold the recap modal until the end-of-round celebration finishes (players
-    // animate the final trick + widow reveal first). Spectators see it immediately.
+    // Hold the recap until the final trick + widow celebration finishes. Once
+    // it opens, the recap, score count, and terminal result become one explicit
+    // local presentation sequence. Repeated settlement broadcasts must not
+    // restart that sequence.
     useEffect(() => {
         if (!currentTableState) return undefined;
         const { state, roundSummary } = currentTableState;
-        const isModalState = state === "WidowReveal" || state === "Awaiting Next Round Trigger" || state === "Game Over";
+        const isModalState = ROUND_PRESENTATION_STATES.has(state);
         if (roundSummary && isModalState) {
+            // A reconnect can receive Game Over while the settlement transaction
+            // is still running. Keep the table undisturbed until the server has
+            // an authoritative result and presentation clock. Failed settlement
+            // still proceeds so its administrator-review message is visible.
+            if (roundSummary.isGameOver && currentTableState.settlement?.status === 'pending') {
+                return undefined;
+            }
+            if (!roundModalScheduledRef.current) {
+                setChatOpen(false);
+                setShowGameMenu(false);
+                setShowInsurancePrompt(false);
+                setShowIosPwaPrompt(false);
+                setShowDrawVoteModal(false);
+            }
+            const rawReadyAt = roundSummary.presentationReadyAt;
+            const readyAt = Number(rawReadyAt);
+            const stateServerTime = Number(currentTableState.serverTime);
+            const comparisonNow = Number.isFinite(stateServerTime) ? stateServerTime : Date.now();
+            const presentationWasAlreadyCompleted = rawReadyAt !== null
+                && rawReadyAt !== undefined
+                && Number.isFinite(readyAt)
+                && comparisonNow >= readyAt;
+            if (!roundModalScheduledRef.current && presentationWasAlreadyCompleted) {
+                roundModalScheduledRef.current = true;
+                setShowRoundSummaryModal(false);
+                setRoundPresentationPhase(roundSummary.isGameOver ? 'podium' : 'settled');
+                return undefined;
+            }
             if (prefersReducedMotion) {
+                const wasWaitingOnTimer = Boolean(roundModalTimerRef.current);
                 if (roundModalTimerRef.current) clearTimeout(roundModalTimerRef.current);
                 roundModalTimerRef.current = null;
-                roundModalScheduledRef.current = true;
-                setShowRoundSummaryModal(true);
+                if (!roundModalScheduledRef.current || wasWaitingOnTimer) {
+                    roundModalScheduledRef.current = true;
+                    setRoundPresentationPhase('recap');
+                    setShowRoundSummaryModal(true);
+                }
             } else if (!roundModalScheduledRef.current) {
                 roundModalScheduledRef.current = true;
-                const delay = isSpectator ? 0 : END_ROUND_TOTAL_MS;
-                roundModalTimerRef.current = setTimeout(() => setShowRoundSummaryModal(true), delay);
+                setRoundPresentationPhase('waiting');
+                setShowRoundSummaryModal(false);
+                const delay = (isSpectator || roundSummary.forfeit) ? 0 : END_ROUND_TOTAL_MS;
+                roundModalTimerRef.current = setTimeout(() => {
+                    roundModalTimerRef.current = null;
+                    setRoundPresentationPhase('recap');
+                    setShowRoundSummaryModal(true);
+                }, delay);
             }
         } else {
             roundModalScheduledRef.current = false;
@@ -241,10 +432,101 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 clearTimeout(roundModalTimerRef.current);
                 roundModalTimerRef.current = null;
             }
+            if (roundAdvanceTimerRef.current) {
+                clearTimeout(roundAdvanceTimerRef.current);
+                roundAdvanceTimerRef.current = null;
+            }
+            scoreCeremonyStartedAtRef.current = null;
             setShowRoundSummaryModal(false);
+            setRoundPresentationPhase('idle');
         }
         return undefined;
     }, [currentTableState, isSpectator, prefersReducedMotion]);
+
+    useEffect(() => {
+        if (!roundPresentationControlsLocked) return;
+        setChatOpen(false);
+        setShowGameMenu(false);
+    }, [roundPresentationControlsLocked]);
+
+    const handleRoundRecapContinue = useCallback(() => {
+        setShowRoundSummaryModal(false);
+        if (hasRoundScoreChanges && !roundSummary?.forfeit) {
+            scoreCeremonyStartedAtRef.current = Date.now();
+            setRoundPresentationPhase('scoring');
+            return;
+        }
+        setRoundPresentationPhase(roundSummary?.isGameOver ? 'podium' : 'settled');
+    }, [hasRoundScoreChanges, roundSummary]);
+
+    const handleScoreCeremonyComplete = useCallback(() => {
+        if (roundSummary?.isGameOver) {
+            setRoundPresentationPhase('podium');
+            return;
+        }
+
+        // Skip/reduced-motion is local, but advancing the round is shared. Keep
+        // the dealer action gated until the longest normal ceremony window has
+        // elapsed so one client cannot cut off everyone else's score reveal.
+        const elapsed = scoreCeremonyStartedAtRef.current
+            ? Date.now() - scoreCeremonyStartedAtRef.current
+            : ROUND_SCORE_CEREMONY_TIMING.MAX_TOTAL_MS;
+        const remaining = Math.max(0, ROUND_SCORE_CEREMONY_TIMING.MAX_TOTAL_MS - elapsed);
+        if (remaining === 0) {
+            setRoundPresentationPhase('settled');
+            return;
+        }
+
+        setRoundPresentationPhase('score-settled-waiting');
+        if (roundAdvanceTimerRef.current) clearTimeout(roundAdvanceTimerRef.current);
+        roundAdvanceTimerRef.current = setTimeout(() => {
+            roundAdvanceTimerRef.current = null;
+            setRoundPresentationPhase('settled');
+        }, remaining);
+    }, [roundSummary?.isGameOver]);
+
+    useEffect(() => {
+        const presentationComplete = roundPresentationPhase === 'settled'
+            || roundPresentationPhase === 'podium';
+        const readyAt = Number(roundSummary?.presentationReadyAt);
+        const ackKey = `${currentTableState?.tableId || ''}:${readyAt}:${socket?.id || ''}`;
+        const viewerAcknowledged = currentTableState?.viewerRoundPresentationAcknowledged;
+        const acknowledgementWasConfirmed = roundPresentationConfirmedAckRef.current === ackKey;
+        const acknowledgementWasInvalidated = viewerAcknowledged === false
+            && acknowledgementWasConfirmed;
+
+        if (viewerAcknowledged === true) {
+            roundPresentationConfirmedAckRef.current = ackKey;
+        } else if (acknowledgementWasInvalidated) {
+            roundPresentationConfirmedAckRef.current = null;
+        }
+
+        if (!presentationComplete
+            || (roundSummary?.isGameOver
+                && terminalSettlementStatus
+                && terminalSettlementStatus !== 'complete')
+            || !Number.isFinite(readyAt)
+            || !selfPlayerInTable
+            || isSpectator
+            || selfPlayerInTable.isBot
+            || viewerAcknowledged === true
+            || (roundPresentationAckRef.current === ackKey && !acknowledgementWasInvalidated)) {
+            return;
+        }
+
+        roundPresentationAckRef.current = ackKey;
+        emitEvent('ackRoundPresentation', { presentationReadyAt: readyAt });
+    }, [
+        currentTableState?.tableId,
+        currentTableState?.viewerRoundPresentationAcknowledged,
+        emitEvent,
+        isSpectator,
+        roundPresentationPhase,
+        roundSummary?.presentationReadyAt,
+        selfPlayerInTable,
+        socket?.id,
+        terminalSettlementStatus
+    ]);
 
     useEffect(() => {
         if (!currentTableState || !selfPlayerName || isSpectator) return;
@@ -501,6 +783,12 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
 
     useEffect(() => () => {
         if (shareNoticeTimerRef.current) clearTimeout(shareNoticeTimerRef.current);
+        if (roundModalTimerRef.current) clearTimeout(roundModalTimerRef.current);
+        roundModalTimerRef.current = null;
+        roundModalScheduledRef.current = false;
+        if (roundAdvanceTimerRef.current) clearTimeout(roundAdvanceTimerRef.current);
+        roundAdvanceTimerRef.current = null;
+        scoreCeremonyStartedAtRef.current = null;
     }, []);
 
     const handleForfeit = () => {
@@ -716,10 +1004,50 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 playerOrderActive={currentTableState.playerOrderActive}
                 handleLeaveTable={handleLeaveTable}
                 handleLogout={handleLogout}
+                showScoreTotals={false}
+                title={roundSummary?.forfeit
+                    ? 'Game Ended by Forfeit'
+                    : (roundSummary?.isGameOver ? 'Final Round Recap' : 'Round Recap')}
+                continueLabel={hasRoundScoreChanges && !roundSummary?.forfeit
+                    ? 'Count the Score'
+                    : (roundSummary?.isGameOver ? 'View Final Standings' : 'Continue')}
+                onContinue={handleRoundRecapContinue}
+            />
+
+            {roundPresentationPhase === 'scoring' && roundSummary && (
+                <div
+                    className="modal-overlay round-score-ceremony-overlay"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Round score ceremony"
+                >
+                    <RoundScoreCeremony
+                        finalScores={roundSummary.finalScores}
+                        pointChanges={roundSummary.pointChanges}
+                        playerOrder={currentTableState.seatingOrder || currentTableState.playerOrderActive}
+                        playSound={playSound}
+                        onComplete={handleScoreCeremonyComplete}
+                        prefersReducedMotion={prefersReducedMotion}
+                        title={roundSummary.isGameOver ? 'Final Round Totals' : 'Round Totals'}
+                    />
+                </div>
+            )}
+
+            <GameOverPodium
+                show={roundPresentationPhase === 'podium' && currentTableState.state === 'Game Over'}
+                gameWinner={roundSummary?.gameWinner}
+                finalScores={roundSummary?.finalScores}
+                forfeit={roundSummary?.forfeit}
+                statusMessage={terminalSettlementMessage}
+                actionsDisabled={!sharedPresentationReady || !serverRoundPresentationReady}
+                onRematch={(terminalSettlementBlocked || isSpectator)
+                    ? undefined
+                    : () => emitEvent('resetGame')}
+                onLobby={handleLeaveTable}
             />
             
             <TableLayout 
-                currentTableState={currentTableState}
+                currentTableState={tableStateForPresentation}
                 seatAssignments={seatAssignments}
                 isSpectator={isSpectator}
                 renderCard={renderCard}
@@ -736,6 +1064,9 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 selectedFrogDiscards={selectedFrogDiscards}
                 showDebugAnchors={showAnchorDebug}
                 quickPlayDecisionRejectionNonce={quickPlayDecisionRejectionNonce}
+                roundPresentationComplete={roundPresentationPhase === 'settled'
+                    && sharedPresentationReady
+                    && serverRoundPresentationReady}
             />
             
             <footer className="game-footer">
@@ -777,24 +1108,26 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                         emitEvent={emitEvent}
                         onOpenPrompt={() => setShowInsurancePrompt(true)}
                     />
-                    <div className="button-panel">
-                        <button className="game-menu-btn" onClick={() => setShowGameMenu(prev => !prev)}>
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <line x1="3" y1="12" x2="21" y2="12"></line>
-                                <line x1="3" y1="6" x2="21" y2="6"></line>
-                                <line x1="3" y1="18" x2="21" y2="18"></line>
-                            </svg>
-                        </button>
-                        <button className="chat-tab-button" onClick={toggleChatWindow}>
-                            <span>Chat</span>
-                            {!chatOpen && unreadChat > 0 && <span className="unread-badge">{unreadChat}</span>}
-                        </button>
-                    </div>
+                    {!roundPresentationControlsLocked && (
+                        <div className="button-panel">
+                            <button className="game-menu-btn" onClick={() => setShowGameMenu(prev => !prev)}>
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                                </svg>
+                            </button>
+                            <button className="chat-tab-button" onClick={toggleChatWindow}>
+                                <span>Chat</span>
+                                {!chatOpen && unreadChat > 0 && <span className="unread-badge">{unreadChat}</span>}
+                            </button>
+                        </div>
+                    )}
                 </div>
-                {showGameMenu && <GameMenu />}
+                {showGameMenu && !roundPresentationControlsLocked && <GameMenu />}
             </footer>
             
-            {chatOpen && (
+            {chatOpen && !roundPresentationControlsLocked && (
                 <div 
                     className="game-view-chat-container open"
                     onTouchStart={(e) => setTouchStartX(e.touches[0].clientX)}
