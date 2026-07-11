@@ -2,8 +2,15 @@
 // This file creates the necessary database tables and types for the application
 
 const createDbTables = async (pool) => {
+    const client = await pool.connect();
+    // node-postgres transactions are connection-scoped. Keep every migration
+    // statement on this checked-out client rather than hopping through
+    // pool.query(), which can silently split BEGIN/COMMIT across sessions.
+    pool = client;
+    let transactionOpen = false;
     try {
         await pool.query('BEGIN');
+        transactionOpen = true;
 
         await pool.query(`
             DO $$ BEGIN
@@ -14,7 +21,8 @@ const createDbTables = async (pool) => {
                     'forfeit_payout',
                     'admin_adjustment',
                     'free_token_mercy',
-                    'wash_payout'
+                    'wash_payout',
+                    'abandoned_refund'
                 );
             EXCEPTION
                 WHEN duplicate_object THEN null;
@@ -69,9 +77,29 @@ const createDbTables = async (pool) => {
                 theme VARCHAR(50),
                 player_count INTEGER,
                 start_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                last_activity_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                heartbeat_owner_id VARCHAR(128),
                 end_time TIMESTAMP WITH TIME ZONE,
-                outcome TEXT
+                outcome TEXT,
+                reconciliation_status VARCHAR(50),
+                reconciled_at TIMESTAMP WITH TIME ZONE,
+                reconciled_by VARCHAR(128)
             );
+        `);
+
+        // Add without a default first so rows from an older schema remain NULL
+        // until the final migration statement. Their recovery grace therefore
+        // starts at migration completion, not at transaction start.
+        await pool.query("ALTER TABLE game_history ADD COLUMN IF NOT EXISTS last_activity_at TIMESTAMP WITH TIME ZONE");
+        await pool.query("ALTER TABLE game_history ALTER COLUMN last_activity_at SET DEFAULT CURRENT_TIMESTAMP");
+        await pool.query("ALTER TABLE game_history ADD COLUMN IF NOT EXISTS heartbeat_owner_id VARCHAR(128)");
+        await pool.query("ALTER TABLE game_history ADD COLUMN IF NOT EXISTS reconciliation_status VARCHAR(50)");
+        await pool.query("ALTER TABLE game_history ADD COLUMN IF NOT EXISTS reconciled_at TIMESTAMP WITH TIME ZONE");
+        await pool.query("ALTER TABLE game_history ADD COLUMN IF NOT EXISTS reconciled_by VARCHAR(128)");
+        await pool.query(`
+            CREATE INDEX IF NOT EXISTS idx_game_history_recovery_candidates
+            ON game_history (last_activity_at, game_id)
+            WHERE outcome = 'In Progress'
         `);
 
         await pool.query(`
@@ -82,12 +110,19 @@ const createDbTables = async (pool) => {
                 transaction_type transaction_type_enum NOT NULL,
                 amount DECIMAL(10, 2) NOT NULL,
                 description TEXT,
+                idempotency_key TEXT,
                 transaction_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             );
         `);
 
         // Ensure transaction_time column exists (for existing databases)
         await pool.query("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS transaction_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP");
+        await pool.query("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS idempotency_key TEXT");
+        await pool.query(`
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_idempotency_key
+            ON transactions (idempotency_key)
+            WHERE idempotency_key IS NOT NULL
+        `);
 
         await pool.query(`
             CREATE TABLE IF NOT EXISTS feedback (
@@ -163,12 +198,28 @@ const createDbTables = async (pool) => {
             );
         `);
 
+        // This must remain the final statement before COMMIT. clock_timestamp()
+        // grants legacy/null rows a full grace window from migration completion,
+        // while the predicate preserves every non-null heartbeat across deploys.
+        await pool.query(`
+            UPDATE game_history
+            SET last_activity_at = clock_timestamp()
+            WHERE last_activity_at IS NULL
+        `);
+
         await pool.query('COMMIT');
+        transactionOpen = false;
+        // PostgreSQL requires a newly-added enum value to be committed before
+        // it can be used. This idempotent upgrade therefore runs after the
+        // schema transaction and before recovery can insert refund records.
+        await pool.query("ALTER TYPE transaction_type_enum ADD VALUE IF NOT EXISTS 'abandoned_refund'");
         console.log("✅ Tables checked/created/altered successfully.");
     } catch (err) {
-        await pool.query('ROLLBACK');
+        if (transactionOpen) await pool.query('ROLLBACK');
         console.error("Error during table creation/modification:", err);
         throw err;
+    } finally {
+        client.release();
     }
 };
 

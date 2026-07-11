@@ -55,15 +55,45 @@ hashes, tokens, or other private fields are printed.`);
 
 const candidateQuery = `
     SELECT
-        id,
-        username,
-        COALESCE(wins, 0) + COALESCE(losses, 0) + COALESCE(washes, 0) AS games_played,
-        COALESCE(is_admin, FALSE) AS is_admin
-    FROM users
-    WHERE COALESCE(wins, 0) + COALESCE(losses, 0) + COALESCE(washes, 0) < $1
-      AND ($2::boolean OR COALESCE(is_admin, FALSE) = FALSE)
+        u.id,
+        u.username,
+        COALESCE(u.wins, 0) + COALESCE(u.losses, 0) + COALESCE(u.washes, 0) AS games_played,
+        COALESCE(u.is_admin, FALSE) AS is_admin
+    FROM users u
+    WHERE COALESCE(u.wins, 0) + COALESCE(u.losses, 0) + COALESCE(u.washes, 0) < $1
+      AND ($2::boolean OR COALESCE(u.is_admin, FALSE) = FALSE)
+      AND NOT EXISTS (
+          SELECT 1
+          FROM transactions active_transaction
+          JOIN game_history active_game
+            ON active_game.game_id = active_transaction.game_id
+          WHERE active_transaction.user_id = u.id
+            AND (
+                active_game.outcome = 'In Progress'
+                OR active_game.reconciliation_status = 'manual_review'
+            )
+      )
     ORDER BY games_played ASC, id ASC
-    FOR UPDATE
+    FOR UPDATE OF u
+`;
+
+// Report every low-activity account protected by a live or quarantined game ledger.
+// This second query also closes the narrow wait-on-lock window where a game start
+// may commit after the candidate statement took its READ COMMITTED snapshot.
+const activeGameProtectedQuery = `
+    SELECT DISTINCT u.id
+    FROM users u
+    JOIN transactions active_transaction
+      ON active_transaction.user_id = u.id
+    JOIN game_history active_game
+      ON active_game.game_id = active_transaction.game_id
+    WHERE COALESCE(u.wins, 0) + COALESCE(u.losses, 0) + COALESCE(u.washes, 0) < $1
+      AND ($2::boolean OR COALESCE(u.is_admin, FALSE) = FALSE)
+      AND (
+          active_game.outcome = 'In Progress'
+          OR active_game.reconciliation_status = 'manual_review'
+      )
+    ORDER BY u.id ASC
 `;
 
 const protectedAdminQuery = `
@@ -102,7 +132,13 @@ const pruneInactiveUsers = async (pool, options) => {
         transactionOpen = true;
 
         const candidateResult = await client.query(candidateQuery, [options.minGames, options.includeAdmins]);
-        const candidates = candidateResult.rows;
+        const activeGameProtectedResult = await client.query(
+            activeGameProtectedQuery,
+            [options.minGames, options.includeAdmins],
+        );
+        const activeGameProtectedIds = new Set(activeGameProtectedResult.rows.map(({ id }) => Number(id)));
+        const candidates = candidateResult.rows.filter(({ id }) => !activeGameProtectedIds.has(Number(id)));
+        const protectedActiveGameAccounts = activeGameProtectedIds.size;
 
         let protectedAdmins = [];
         if (!options.includeAdmins) {
@@ -124,6 +160,7 @@ const pruneInactiveUsers = async (pool, options) => {
                 executed: false,
                 candidates,
                 protectedAdmins,
+                protectedActiveGameAccounts,
                 dependentData,
                 deleted: [],
             };
@@ -167,6 +204,7 @@ const pruneInactiveUsers = async (pool, options) => {
             executed: true,
             candidates,
             protectedAdmins,
+            protectedActiveGameAccounts,
             dependentData,
             deleted: deleteResult.rows,
         };
@@ -208,6 +246,9 @@ const runCli = async () => {
 
         const result = await pruneInactiveUsers(pool, options);
         printAccounts('Eligible accounts', result.candidates);
+        console.log(
+            `\nProtected game-ledger evidence: ${result.protectedActiveGameAccounts} low-activity account(s) excluded.`,
+        );
         if (result.protectedAdmins.length > 0) {
             printAccounts('Protected low-activity admins', result.protectedAdmins);
         }
@@ -237,6 +278,7 @@ if (require.main === module) {
 
 module.exports = {
     DEFAULT_MIN_GAMES,
+    activeGameProtectedQuery,
     candidateQuery,
     dependentDataCountsQuery,
     parseArgs,

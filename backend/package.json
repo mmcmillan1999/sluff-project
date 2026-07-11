@@ -12,7 +12,8 @@
     "test:leaderboard": "node tests/leaderboard.test.js",
     "test:maintenance": "node tests/pruneInactiveUsers.test.js",
     "test:e2e": "node tests/auth.test.js && node tests/api.test.js",
-    "users:prune": "node scripts/prune-inactive-users.js"
+    "users:prune": "node scripts/prune-inactive-users.js",
+    "games:reconcile": "node scripts/reconcile-abandoned-games.js"
   },
   "engines": {
     "node": ">=20"
