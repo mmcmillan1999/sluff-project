@@ -18,6 +18,7 @@ export const getMockGameState = (overrides = {}) => {
             'Bot B': ['QH', 'JH', '10H', '9H', '8H', '7H', '6H', 'QD', 'JD', '10D', '9D'],
         },
         widow: ['6D', '7D', '8D'],
+        widowCount: 3,
         originalDealtWidow: ['6D', '7D', '8D'],
         scores: { 'You': 120, 'Bot A': 120, 'Bot B': 120 },
         currentHighestBidDetails: null,

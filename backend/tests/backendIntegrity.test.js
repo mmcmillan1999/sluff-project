@@ -290,6 +290,36 @@ function testPersonalizedServiceDelivery() {
     assert.deepEqual(replacementSocket.emitted[0].payload.hands, { Bob: ['KS'] }, 'a legitimate reconnect regains its personalized hand');
 }
 
+function testPublicWidowCountThroughDeal() {
+    const engine = makeEngine('widow-count-through-deal');
+    engine.dealer = 1;
+    engine.state = 'Dealing Pending';
+    engine.hands = {};
+    engine.widow = [];
+    engine.originalDealtWidow = [];
+
+    const rawBeforeDeal = engine._getRawStateForClient();
+    const playerBeforeDeal = engine.getStateForClient({ userId: 2 });
+    assert.equal(rawBeforeDeal.widowCount, 0, 'raw client state reports an empty pre-deal widow plate');
+    assert.equal(playerBeforeDeal.widowCount, 0, 'ordinary players receive the empty pre-deal count');
+    assert.deepEqual(playerBeforeDeal.widow, [], 'ordinary players receive no pre-deal widow identities');
+
+    const dealResult = engine.dealCards(1);
+    assert.ok(dealResult.effects.some(effect => effect.type === 'BROADCAST_STATE'));
+    assert.equal(engine.widow.length, 3, 'the engine deals the normal three-card widow');
+
+    const rawAfterDeal = engine._getRawStateForClient();
+    const playerAfterDeal = engine.getStateForClient({ userId: 2 });
+    const spectatorAfterDeal = engine.getStateForClient({ userId: 99 });
+    assert.equal(rawAfterDeal.widowCount, 3, 'raw client state reports the dealt stack size');
+    assert.equal(playerAfterDeal.widowCount, 3, 'ordinary players receive the dealt stack size');
+    assert.deepEqual(playerAfterDeal.widow, [], 'ordinary players cannot see dealt widow identities');
+    assert.deepEqual(playerAfterDeal.originalDealtWidow, [], 'ordinary players cannot see original widow identities');
+    assert.equal(spectatorAfterDeal.widowCount, 3, 'spectators receive the dealt stack size');
+    assert.deepEqual(spectatorAfterDeal.widow, [], 'spectators cannot see dealt widow identities');
+    assert.deepEqual(spectatorAfterDeal.originalDealtWidow, [], 'spectators cannot see original widow identities');
+}
+
 async function testSocketSeatingAndResetRaces() {
     const tableA = new GameEngine('join-race-a', 'fort-creek', 'Join Race A');
     const tableB = new GameEngine('join-race-b', 'fort-creek', 'Join Race B');
@@ -846,6 +876,7 @@ async function runBackendIntegrityTests() {
     testDrawVotePausesPlayAndGuardsTransitions();
     testSocketActionGuard();
     testPersonalizedServiceDelivery();
+    testPublicWidowCountThroughDeal();
     await testSocketSeatingAndResetRaces();
     await testAtomicGameStart();
     await testAtomicStartRosterFreezeAndCommitBoundary();

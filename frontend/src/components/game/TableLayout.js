@@ -14,6 +14,7 @@ import './KeyAndModal.css';
 import './TableLayout.css';
 import { SUIT_SYMBOLS } from '../../constants';
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion';
+import { deriveTrickPlatePlacement } from './trickPlatePlacement';
 
 // Full deck of 36 cards (9 ranks × 4 suits)
 const FULL_DECK = [
@@ -75,6 +76,15 @@ const TableLayout = ({
     const pendingTrickTargetRef = useRef(null);
     const laggedTrickTimerRef = useRef(null);
     const prefersReducedMotion = usePrefersReducedMotion();
+    const bidderName = currentTableState?.bidWinnerInfo?.playerName;
+    const platePlacement = deriveTrickPlatePlacement({
+        playerMode: currentTableState?.playerMode,
+        seatAssignments,
+        dealer: currentTableState?.dealer,
+        players: currentTableState?.players,
+        playerOrderActive: currentTableState?.playerOrderActive,
+        bidderName,
+    });
 
     const clearEndRoundTimers = () => {
         endRoundTimersRef.current.forEach(clearTimeout);
@@ -381,7 +391,8 @@ const TableLayout = ({
     const renderWidowPeekOverlay = () => {
         const { originalDealtWidow, widowDiscardsForFrogBidder, bidWinnerInfo } = currentTableState;
         if (!widowPeekVisible || !originalDealtWidow?.length) return null;
-        const widowPileClass = currentTableState._widowPilePosition || 'pile-bottom-left';
+        const widowPileClass = platePlacement.widowPileClass;
+        if (!widowPileClass) return null;
         const showFrogDiscards = bidWinnerInfo?.bid === 'Frog' && widowDiscardsForFrogBidder?.length > 0;
         return (
             <div className={`last-trick-overlay-container ${widowPileClass}`}>
@@ -486,105 +497,8 @@ const TableLayout = ({
         const bidderWonLast = lastWinnerName === bidderName;
         const defenderWonLast = lastWinnerName && !bidderWonLast;
         
-        // Determine which of the 4 fixed positions to use based on player positions
-        // We have 4 positions: bottom-left, bottom-right, top-left, top-right
-        
-        // Find where the bidder is sitting
-        let bidderPosition = null;
-        let defenderPositions = [];
-        
-        if (seatAssignments.self === bidderName) {
-            bidderPosition = 'bottom';
-        } else if (seatAssignments.opponentLeft === bidderName) {
-            bidderPosition = 'left';
-        } else if (seatAssignments.opponentRight === bidderName) {
-            bidderPosition = 'right';
-        } else {
-            bidderPosition = 'top'; // Default for across or unknown
-        }
-        
-        // Find defender positions
-        defenderNames.forEach(defenderName => {
-            if (seatAssignments.self === defenderName) {
-                defenderPositions.push('bottom');
-            } else if (seatAssignments.opponentLeft === defenderName) {
-                defenderPositions.push('left');
-            } else if (seatAssignments.opponentRight === defenderName) {
-                defenderPositions.push('right');
-            } else {
-                defenderPositions.push('top');
-            }
-        });
-        
-        // Assign trick piles and widow to the 4 fixed positions
-        // We'll use 3 of 4: bidder pile, defender pile, and widow
-        const allPositions = ['pile-bottom-left', 'pile-bottom-right', 'pile-top-left', 'pile-top-right'];
-        const usedPositions = new Set();
-        
-        let bidderPileClass = '';
-        let defenderPileClass = '';
-        let widowPileClass = '';
-        
-        // Logic: Place defender pile between defenders, bidder pile near bidder, widow in remaining spot
-        if (bidderPosition === 'bottom') {
-            // Bidder at bottom - use bottom-right for bidder
-            bidderPileClass = 'pile-bottom-right';
-            usedPositions.add(bidderPileClass);
-            
-            // Defenders pile goes to best position for defenders
-            if (defenderPositions.includes('left') && defenderPositions.includes('right')) {
-                defenderPileClass = 'pile-top-left';
-            } else if (defenderPositions.includes('left')) {
-                defenderPileClass = 'pile-bottom-left';
-            } else {
-                defenderPileClass = 'pile-top-right';
-            }
-            usedPositions.add(defenderPileClass);
-            
-        } else if (bidderPosition === 'top') {
-            // Bidder at top - use top-right for bidder
-            bidderPileClass = 'pile-top-right';
-            usedPositions.add(bidderPileClass);
-            
-            // Defenders pile
-            if (defenderPositions.includes('left') && defenderPositions.includes('right')) {
-                defenderPileClass = 'pile-bottom-left';
-            } else if (defenderPositions.includes('left')) {
-                defenderPileClass = 'pile-top-left';
-            } else {
-                defenderPileClass = 'pile-bottom-right';
-            }
-            usedPositions.add(defenderPileClass);
-            
-        } else if (bidderPosition === 'left') {
-            // Bidder at left - use top-left for bidder
-            bidderPileClass = 'pile-top-left';
-            usedPositions.add(bidderPileClass);
-            
-            // Defenders pile between the two defenders
-            if (defenderPositions.includes('right') && defenderPositions.includes('bottom')) {
-                defenderPileClass = 'pile-bottom-right';
-            } else {
-                defenderPileClass = 'pile-top-right';
-            }
-            usedPositions.add(defenderPileClass);
-            
-        } else if (bidderPosition === 'right') {
-            // Bidder at right - use top-right for bidder
-            bidderPileClass = 'pile-top-right';
-            usedPositions.add(bidderPileClass);
-            
-            // Defenders pile between the two defenders
-            if (defenderPositions.includes('left') && defenderPositions.includes('bottom')) {
-                defenderPileClass = 'pile-bottom-left';
-            } else {
-                defenderPileClass = 'pile-top-left';
-            }
-            usedPositions.add(defenderPileClass);
-        }
-        
-        // Find the unused position for widow
-        widowPileClass = allPositions.find(pos => !usedPositions.has(pos)) || 'pile-bottom-left';
+        const { bidderPileClass, defenderPileClass } = platePlacement;
+        if (!bidderPileClass || !defenderPileClass) return null;
 
         const TrickPile = ({ count }) => (
             <div className="trick-pile">
@@ -610,9 +524,6 @@ const TableLayout = ({
             </div>
         );
 
-        // Store widow position in parent scope for widow rendering
-        currentTableState._widowPilePosition = widowPileClass;
-        
         return (
             <>
                 {/* Render bidder pile in its assigned position */}
@@ -624,7 +535,7 @@ const TableLayout = ({
                 
                 {/* Render defender pile in its assigned position */}
                 <div className={`trick-pile-container ${defenderPileClass}`}>
-                    <div className={`trick-pile-base defender-base ${defenderWonLast ? 'pulsating-blue' : ''}`} onClick={() => handleTrickPileClick('defender', defenderPileClass)} onKeyDown={(event) => activateOnKey(event, () => handleTrickPileClick('defender', defenderPileClass))} role="button" tabIndex={lastCompletedTrick ? 0 : -1} aria-disabled={!lastCompletedTrick} aria-label={`Defender trick pile, ${defenderTricksCount} tricks`}>
+                    <div className={`trick-pile-base defender-base ${defenderWonLast ? 'pulsating-blue' : ''}`} onClick={() => handleTrickPileClick('defender', defenderPileClass)} onKeyDown={(event) => activateOnKey(event, () => handleTrickPileClick('defender', defenderPileClass))} role="button" tabIndex={lastCompletedTrick ? 0 : -1} aria-disabled={!lastCompletedTrick} aria-label={`Team trick pile, ${defenderTricksCount} tricks`}>
                         <TrickPile count={defenderTricksCount} />
                     </div>
                 </div>
@@ -819,36 +730,48 @@ const TableLayout = ({
     // widow PILE (renderWidowPile) remains in both modes.
 
     const renderWidowPile = () => {
-        const { playerOrderActive, state, widow, originalDealtWidow, roundSummary, bidWinnerInfo } = currentTableState;
-        
-        const hiddenStates = ["Waiting for Players", "Ready to Start", "Dealing Pending"];
-        if (hiddenStates.includes(state)) {
-            return null;
-        }
-        
-        // Don't show widow pile if no bid winner yet
-        if (!bidWinnerInfo) {
-            return null;
-        }
+        const {
+            playerOrderActive,
+            state,
+            widow,
+            originalDealtWidow,
+            roundSummary,
+            gameStarted,
+            dealer,
+            playerMode,
+            widowCount,
+        } = currentTableState;
         
         // The widow pile renders in both modes — in 4-player it's also the
         // sitting-out dealer's peek target (docs/FOUR_PLAYER_SPEC.md).
-        if (!playerOrderActive || playerOrderActive.length === 0) {
+        const supportedPlayerMode = Number(playerMode) === 3 || Number(playerMode) === 4;
+        const widowPileClass = platePlacement.widowPileClass;
+        if (!gameStarted
+            || dealer === null
+            || dealer === undefined
+            || !supportedPlayerMode
+            || !playerOrderActive?.length
+            || !widowPileClass) {
             return null;
         }
 
-        // Get the widow pile position from trick pile calculation
-        const widowPileClass = currentTableState._widowPilePosition || 'pile-bottom-left';
-        
         // Players watch the animated reveal: the static pile stays face-down, then
         // becomes an empty plate once the celebration lifts the cards out. Spectators
         // (who don't see the animation) get the revealed widow.
         const isRoundOver = state === 'Awaiting Next Round Trigger' || state === 'Game Over';
         const showRevealed = isRoundOver && isSpectator;
-        const cardsToDisplay = showRevealed ? roundSummary?.widowForReveal : (widow || originalDealtWidow);
-        const widowSize = (widowCelebrationActive && !isSpectator) ? 0 : (cardsToDisplay?.length || 0);
+        const privateWidowCards = widow?.length ? widow : originalDealtWidow;
+        const cardsToDisplay = showRevealed ? (roundSummary?.widowForReveal || []) : privateWidowCards;
+        const showRevealedCards = showRevealed && cardsToDisplay.length > 0;
+        const publicWidowCount = Math.min(
+            FULL_DECK.length,
+            Math.max(0, Math.trunc(Number(widowCount) || 0)),
+        );
+        const widowSize = (widowCelebrationActive && !isSpectator)
+            ? 0
+            : Math.max(cardsToDisplay?.length || 0, publicWidowCount);
         
-        const dealerCanPeek = currentTableState.playerMode === 4;
+        const dealerCanPeek = Number(playerMode) === 4 && widowSize > 0;
         return (
             <div
                 className={`trick-pile-container ${widowPileClass}`}
@@ -865,7 +788,7 @@ const TableLayout = ({
                             <div className="trick-pile-cards">
                                 {widowSize === 0 ? (
                                     renderCard(null, { isFaceDown: true, style: { opacity: 0.3 }, small: true })
-                                ) : showRevealed ? (
+                                ) : showRevealedCards ? (
                                     // Show revealed widow cards stacked
                                     cardsToDisplay.map((card, i) => (
                                         <div key={card + i} style={{ 
@@ -898,9 +821,6 @@ const TableLayout = ({
             </div>
         );
     };
-
-    // Extract bidder name for use in render
-    const bidderName = currentTableState?.bidWinnerInfo?.playerName;
 
     return (
         <main className="game-table">

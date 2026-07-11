@@ -24,6 +24,7 @@ function makeState(overrides = {}) {
             Cara: ['QH', '7S'],
         },
         widow: ['8D', '9D', 'JD'],
+        widowCount: 3,
         originalDealtWidow: ['8D', '9D', 'JD'],
         widowDiscardsForFrogBidder: ['6C', '7C', '8C'],
         revealedWidowForFrog: ['8D', '9D', 'JD'],
@@ -53,6 +54,7 @@ function runGameStateSerializerTests() {
 
         assert.deepEqual(result.hands, { Bob: ['6C', 'KD'] }, 'a player sees only their own hand');
         assert.deepEqual(result.widow, [], 'the live widow is hidden');
+        assert.equal(result.widowCount, 3, 'the public stack count survives widow redaction');
         assert.deepEqual(result.originalDealtWidow, [], 'the original widow is hidden');
         assert.deepEqual(result.widowDiscardsForFrogBidder, [], 'Frog discards are hidden');
         assert.deepEqual(result.revealedWidowForFrog, ['8D', '9D', 'JD'], 'the intentional Frog reveal stays public');
@@ -73,6 +75,8 @@ function runGameStateSerializerTests() {
         const rawState = makeState();
         const spectator = serializeGameState(makeGame(rawState), { userId: 99, isAdmin: true });
         assert.deepEqual(spectator.hands, {}, 'a normal spectator sees no hands');
+        assert.equal(spectator.widowCount, 3, 'a spectator sees only the public widow stack count');
+        assert.deepEqual(spectator.widow, [], 'a spectator cannot see live widow identities');
         assert.deepEqual(spectator.originalDealtWidow, [], 'an admin spectator is redacted by default');
 
         const spoofedTrustedViewer = serializeGameState(makeGame(rawState), {
@@ -81,6 +85,22 @@ function runGameStateSerializerTests() {
         });
         assert.deepEqual(spoofedTrustedViewer.hands, {}, 'trusted observer opt-in alone is insufficient');
         assert.deepEqual(spoofedTrustedViewer.widow, [], 'a non-admin trusted flag cannot expose the widow');
+    }
+
+    {
+        const preDealState = makeState({
+            state: 'Dealing Pending',
+            widow: [],
+            widowCount: 0,
+            originalDealtWidow: [],
+            widowDiscardsForFrogBidder: [],
+            revealedWidowForFrog: [],
+        });
+        const preDealViewer = serializeGameState(makeGame(preDealState), { userId: 2 });
+
+        assert.equal(preDealViewer.widowCount, 0, 'the public widow stack starts empty before dealing');
+        assert.deepEqual(preDealViewer.widow, [], 'pre-deal state exposes no widow identities');
+        assert.deepEqual(preDealViewer.originalDealtWidow, [], 'pre-deal state exposes no original widow identities');
     }
 
     {
