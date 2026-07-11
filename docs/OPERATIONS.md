@@ -30,7 +30,25 @@ The "where is everything" file. Update this whenever an account, plan, or URL ch
 - Render workspace inventory (May 2026): `sluff-backend` (prod, Pro Ultra — DOWNSIZE), `sluff-backend-pilot` (staging, Starter $6), `Mosaic` (Standard $22 — separate project, not sluff), `SOTOS` (Starter $6 — separate project, not sluff), `sluff-db` (Postgres Basic-1gb, ~$17 — holds ALL game data; servers hold none).
 - **Lesson: a friends-and-family app needs ~$15–25/mo on Render.** Review the first invoice after any change; billing email is the Yahoo address.
 - Backup the DB anytime with `node backend/scripts/backup-db.js` (writes JSON dumps to backend/backups/, gitignored). Run one immediately after the DB comes back from suspension.
+- Prefer setting `SLUFF_BACKUP_DIR` to an access-restricted, encrypted location outside the repository. Backups contain account and application data and must never be committed.
 - Set a calendar reminder: review Render + Squarespace + SendGrid billing every 6 months.
+
+## Low-activity account cleanup
+
+The maintenance command counts games as `wins + losses + washes` and protects
+admin accounts unless they are explicitly included.
+
+```bash
+cd backend
+npm run users:prune                                      # dry run; changes nothing
+node scripts/backup-db.js                                # fresh backup before deletion
+node scripts/prune-inactive-users.js --execute           # delete non-admin candidates
+node scripts/prune-inactive-users.js --execute --include-admins
+```
+
+The final command is destructive. Review the dry-run list first. Deletion is one
+database transaction: related transaction-ledger rows are removed, while retained
+feedback and lobby-chat rows are anonymized as `Deleted User`.
 
 ## Recovery runbook (site is down — do these in order)
 

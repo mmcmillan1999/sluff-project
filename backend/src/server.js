@@ -101,7 +101,7 @@ server.listen(PORT, async () => {
     });
     
     app.use('/api/auth', createAuthRoutes(pool, bcrypt, jwt, io));
-    app.use('/api/leaderboard', createLeaderboardRoutes(pool));
+    app.use('/api/leaderboard', createLeaderboardRoutes(pool, jwt));
     app.use('/api/admin', createAdminRoutes(pool, jwt));
     app.use('/api/feedback', createFeedbackRoutes(pool, jwt));
     app.use('/api/chat', createChatRoutes(pool, io, jwt));
