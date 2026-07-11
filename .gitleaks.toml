@@ -1,0 +1,53 @@
+title = "Sluff secret scanning"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "sluff-sensitive-env"
+description = "Sluff-sensitive environment variable assignment"
+regex = '''(?i)\b(?:JWT_SECRET|AI_SECRET_KEY|ADMIN_SECRET|TEST_USER_PASSWORD|POSTGRES_CONNECT_STRING|DATABASE_URL)\b[ \t]*[:=][ \t]*["'`]?([^ \t\r\n"'`#,;]{8,})'''
+secretGroup = 1
+keywords = [
+  "jwt_secret",
+  "ai_secret_key",
+  "admin_secret",
+  "test_user_password",
+  "postgres_connect_string",
+  "database_url",
+]
+tags = ["sluff", "credential"]
+
+  [[rules.allowlists]]
+  description = "Known test variables and unmistakable example values"
+  regexTarget = "secret"
+  regexes = [
+    '''(?i)^(?:originalSecret|originalJwtSecret|authentication-integrity-secret|leaderboard-test-secret)$''',
+    '''(?i)^(?:replace|your|use)[-_][a-z0-9_-]+$''',
+    '''(?i)^postgres(?:ql)?://[^\s@]+@localhost(?::[0-9]+)?/[a-z0-9_-]+$''',
+  ]
+
+[[rules]]
+id = "sluff-postgres-credential-url"
+description = "PostgreSQL URL containing a password"
+regex = '''(?i)postgres(?:ql)?://[^\s:@/"'`]+:([^\s@/"'`]{8,})@[^\s/"'`]+'''
+secretGroup = 1
+keywords = ["postgres://", "postgresql://"]
+tags = ["database", "credential"]
+
+  [[rules.allowlists]]
+  description = "Localhost-only example database URL"
+  regexTarget = "line"
+  regexes = [
+    '''(?i)postgres(?:ql)?://[^\s@]+@localhost(?::[0-9]+)?/[a-z0-9_-]+''',
+  ]
+
+[[rules]]
+id = "generic-api-key"
+
+  [[rules.allowlists]]
+  description = "AI model identifiers are public configuration, not API keys"
+  regexTarget = "line"
+  regexes = [
+    '''(?i)\bapiModel\s*:\s*["'`][a-z0-9._:/-]+["'`]''',
+  ]

@@ -11,6 +11,8 @@ const suites = [
     { name: 'four-player mode', file: './fourPlayer.test.js' },
     { name: 'leaderboard privacy', file: './leaderboard.test.js' },
     { name: 'inactive-user maintenance', file: './pruneInactiveUsers.test.js' },
+    { name: 'database backup snapshot', file: './backupDatabase.test.js' },
+    { name: 'abandoned-game crash recovery', file: './abandonedGameRecovery.test.js' },
     { name: 'viewer-safe game state', file: './gameStateSerializer.test.js' },
     { name: 'backend integrity', file: './backendIntegrity.test.js' },
     { name: 'atomic game settlement', file: './gameSettlementIntegrity.test.js' },

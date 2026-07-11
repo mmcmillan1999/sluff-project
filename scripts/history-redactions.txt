@@ -1,0 +1,4 @@
+# git-filter-repo replacement expressions for the credential cleanup runbook.
+# This file intentionally contains patterns only, never credential values.
+regex:(?m)(\bTEST_USER_EMAIL\b[ \t]*[:=][ \t]*["'])([^"'\r\n]+)(["'])==>\1deleted-test-account@example.invalid\3
+regex:(?m)(\bTEST_USER_PASSWORD\b[ \t]*[:=][ \t]*["'])([^"'\r\n]+)(["'])==>\1use-a-disposable-test-password\3
