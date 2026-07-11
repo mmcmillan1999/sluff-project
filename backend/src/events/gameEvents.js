@@ -4,6 +4,7 @@ const jwt = require("jsonwebtoken");
 const transactionManager = require('../data/transactionManager');
 const { authorizeTableAction, isPlainObject, validators } = require('./socketActionGuard');
 const { loadCurrentUserByTokenId } = require('../middleware/requireAuth');
+const { playerProgressFields } = require('../services/tutorialProgress');
 
 const DEFAULT_SOCKET_AUTH_REFRESH_INTERVAL_MS = 60_000;
 
@@ -611,13 +612,19 @@ const registerGameHandlers = (io, gameService, options = {}) => {
             const hadTrustedObserverAccess = socket.data.trustedAdminObserver === true;
             try {
                 const pool = gameService.pool;
-                const userQuery = "SELECT id, username, email, created_at, wins, losses, washes, is_admin, is_vip FROM users WHERE id = $1";
+                const userQuery = `
+                    SELECT id, username, email, created_at, wins, losses, washes,
+                           is_admin, is_vip, tutorial_version, tutorial_active_version
+                    FROM users
+                    WHERE id = $1
+                `;
                 const userResult = await pool.query(userQuery, [socket.user.id]);
                 const updatedUser = userResult.rows[0];
                 if (updatedUser) {
-                    const tokenQuery = "SELECT SUM(amount) AS current_tokens FROM transactions WHERE user_id = $1";
+                    const tokenQuery = "SELECT COALESCE(SUM(amount), 0) AS current_tokens FROM transactions WHERE user_id = $1";
                     const tokenResult = await pool.query(tokenQuery, [socket.user.id]);
                     updatedUser.tokens = parseFloat(tokenResult.rows[0]?.current_tokens || 0).toFixed(2);
+                    Object.assign(updatedUser, playerProgressFields(updatedUser));
                     
                     // Keep the live socket identity canonical and revoke observer
                     // trust immediately if this refresh observes an admin demotion.

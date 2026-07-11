@@ -20,7 +20,8 @@ const RoundSummaryModal = ({
     showScoreTotals = true,
     title,
     continueLabel = 'Continue',
-    onContinue
+    onContinue,
+    tutorialHint = null
 }) => {
     const [detailsVisible, setDetailsVisible] = useState(false);
     const dialogRef = useModalFocus(
@@ -61,6 +62,13 @@ const RoundSummaryModal = ({
 
     const myPayoutMessage = isGameOver && payoutDetails ? payoutDetails[playerId] : null;
     const modalTitle = title || (isGameOver ? 'Game Over' : 'Round Over');
+    const tutorialHintPanel = tutorialHint ? (
+        <aside className="summary-tutorial-hint" role="status" aria-live="polite">
+            <span>{tutorialHint.eyebrow}</span>
+            <strong>{tutorialHint.title}</strong>
+            <p>{tutorialHint.body}</p>
+        </aside>
+    ) : null;
 
     if (isGameOver && forfeit) {
         const forfeitingPlayerName = forfeit.forfeitingPlayerName || 'A player';
@@ -79,6 +87,7 @@ const RoundSummaryModal = ({
                 <div ref={dialogRef} className="summary-modal-content" role="dialog" aria-modal="true" aria-label={title || 'Game ended by forfeit'} tabIndex={-1}>
                     <div className="summary-main-area">
                         <h2>{title || 'Game Ended by Forfeit'}</h2>
+                        {tutorialHintPanel}
                         {myPayoutMessage && (
                             <div className="payout-details-banner">
                                 <p>{myPayoutMessage}</p>
@@ -289,6 +298,7 @@ const RoundSummaryModal = ({
             <div ref={dialogRef} className="summary-modal-content" role="dialog" aria-modal="true" aria-label={modalTitle} tabIndex={-1}>
                 <div className="summary-main-area">
                     <h2>{modalTitle}</h2>
+                    {tutorialHintPanel}
                     {myPayoutMessage && (
                         <div className="payout-details-banner">
                             <p>{myPayoutMessage}</p>

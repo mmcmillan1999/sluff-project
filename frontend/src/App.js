@@ -1,7 +1,7 @@
 // frontend/src/App.js
 import React, { useState, useEffect, useCallback } from "react";
 import io from "socket.io-client";
-import { getServerUrl } from "./services/api.js";
+import { getServerUrl, submitFeedback, updateTutorialStatus } from "./services/api.js";
 import AuthContainer from "./components/AuthContainer.js";
 import LobbyView from "./components/LobbyView.js";
 import GameTableView from "./components/GameTableView.js";
@@ -13,7 +13,7 @@ import FeedbackView from "./components/FeedbackView.js";
 import LobbyHeader from "./components/LobbyHeader.js";
 import GameHeader from "./components/GameHeader.js";
 import HowToPlayModal from "./components/HowToPlayModal.js";
-import { submitFeedback } from "./services/api.js";
+import FirstGameWelcome, { shouldShowFirstGameWelcome } from "./components/FirstGameWelcome.js";
 import { extractInviteTableId } from "./utils/tableInvites.js";
 import { newBuildAvailable } from "./utils/clientVersion.js";
 import "./App.css";
@@ -21,6 +21,7 @@ import "./components/AdminView.css";
 import "./styles/no-scroll-fix.css"; // Prevent all scrolling in game view
 // Mobile optimizations removed - using vh-based scaling instead
 import { useSounds } from "./hooks/useSounds.js";
+import { TUTORIAL_THEME_ID } from "./config/tutorial.js";
 
 const SERVER_URL = getServerUrl();
 console.log(`[Socket.IO] Connecting to: ${SERVER_URL}`);
@@ -48,12 +49,17 @@ function App() {
     const [showFeedbackModal, setShowFeedbackModal] = useState(false);
     const [showHowToPlay, setShowHowToPlay] = useState(false);
     const [feedbackGameContext, setFeedbackGameContext] = useState(null);
+    const [socketSessionReady, setSocketSessionReady] = useState(false);
+    const [welcomeDelayElapsed, setWelcomeDelayElapsed] = useState(false);
     // Invite link (/join/<tableId>): parsed once on load, held until the user
     // is logged in and the socket is up, then consumed by the auto-join effect.
     // window.__sluffInviteTableId is the native cold-start handoff (nativeInit).
     const [pendingInviteTableId, setPendingInviteTableId] = useState(() =>
         extractInviteTableId(window.location.href) || window.__sluffInviteTableId || null
     );
+    const [inviteJoinInFlight, setInviteJoinInFlight] = useState(() => Boolean(
+        extractInviteTableId(window.location.href) || window.__sluffInviteTableId
+    ));
     const currentTableId = currentTableState?.tableId;
     const hasConnectedRef = React.useRef(false);
     const errorMessageTimerRef = React.useRef(null);
@@ -63,6 +69,8 @@ function App() {
         localStorage.removeItem("sluff_token");
         setToken(null);
         setUser(null);
+        setSocketSessionReady(false);
+        setInviteJoinInFlight(false);
         if (socket.connected) {
             socket.disconnect();
         }
@@ -72,6 +80,7 @@ function App() {
         localStorage.setItem("sluff_token", data.token);
         setToken(data.token);
         setUser(data.user);
+        setSocketSessionReady(false);
         enableSound();
     };
 
@@ -181,6 +190,9 @@ function App() {
                 if (newLobbyState && newLobbyState.themes) {
                     setLobbyThemes(newLobbyState.themes);
                     setServerVersion(newLobbyState.serverVersion || 'N/A');
+                    // The server sends this only after resolving any automatic
+                    // seat restoration for the newly connected socket.
+                    setSocketSessionReady(true);
                 }
             };
             const onGameState = (newTableState) => {
@@ -203,6 +215,7 @@ function App() {
                 // console.log('[ADMIN] Table name:', gameState?.tableName);
                 // console.log('[ADMIN] Players:', Object.values(gameState?.players || {}).map(p => `${p.playerName} (${p.isSpectator ? 'spectator' : 'player'})`));
                 setCurrentTableState(gameState);
+                setInviteJoinInFlight(false);
                 setView('gameTable');
             };
             const onError = (error) => {
@@ -265,6 +278,7 @@ function App() {
                 socket.disconnect();
             }
             hasConnectedRef.current = false;
+            setSocketSessionReady(false);
             setConnectionNotice(null);
         }
     }, [token, handleLogout, handleLeaveTable]);
@@ -332,7 +346,10 @@ function App() {
     // because the webview URL never changes inside the Capacitor shell.
     useEffect(() => {
         const onInvite = (e) => {
-            if (e.detail?.tableId) setPendingInviteTableId(e.detail.tableId);
+            if (e.detail?.tableId) {
+                setInviteJoinInFlight(true);
+                setPendingInviteTableId(e.detail.tableId);
+            }
         };
         window.addEventListener('sluff:invite', onInvite);
         return () => window.removeEventListener('sluff:invite', onInvite);
@@ -345,6 +362,7 @@ function App() {
         if (!token || !user || !pendingInviteTableId) return;
         const tableId = pendingInviteTableId;
         const join = () => {
+            setInviteJoinInFlight(true);
             socket.emit("joinTable", { tableId });
             setPendingInviteTableId(null);
             delete window.__sluffInviteTableId;
@@ -373,6 +391,34 @@ function App() {
         socket.emit("quickPlay", { theme: themeId });
     };
 
+    const handleTutorialAction = useCallback(async (action) => {
+        if (!['start', 'complete', 'skip'].includes(action)) {
+            throw new Error('Invalid tutorial action.');
+        }
+
+        const tutorialUpdate = await updateTutorialStatus(action);
+        const tutorialVersion = Number(tutorialUpdate?.tutorial_version);
+        const activeVersion = Number(tutorialUpdate?.tutorial_active_version);
+        if (!Number.isFinite(tutorialVersion) || !Number.isFinite(activeVersion)) {
+            throw new Error('The tutorial response was incomplete. Please try again.');
+        }
+
+        setUser(currentUser => currentUser ? {
+            ...currentUser,
+            tutorial_version: tutorialVersion,
+            tutorial_active_version: activeVersion,
+        } : currentUser);
+        return {
+            tutorial_version: tutorialVersion,
+            tutorial_active_version: activeVersion,
+        };
+    }, []);
+
+    const handleStartGuidedTutorial = async () => {
+        await handleTutorialAction('start');
+        handleQuickPlay(TUTORIAL_THEME_ID);
+    };
+
     const handleJoinTableAsSpectator = (tableId) => {
         enableSound();
         socket.emit("joinTable", { tableId, asSpectator: true });
@@ -399,6 +445,24 @@ function App() {
             document.body.classList.remove('game-active');
         };
     }, [view]);
+
+    const welcomeIsEligible = shouldShowFirstGameWelcome({
+        user,
+        isLobby: view === 'lobby',
+        hasCurrentTable: Boolean(currentTableState),
+        hasPendingInvite: Boolean(pendingInviteTableId || inviteJoinInFlight),
+        socketSessionReady,
+    });
+
+    // Give a restored table's immediate gameState a chance to arrive before a
+    // first-game prompt is mounted. Any table/invite/view change cancels this
+    // delay, preventing a welcome flash during reconnect navigation.
+    useEffect(() => {
+        setWelcomeDelayElapsed(false);
+        if (!welcomeIsEligible) return undefined;
+        const timer = setTimeout(() => setWelcomeDelayElapsed(true), 450);
+        return () => clearTimeout(timer);
+    }, [welcomeIsEligible]);
 
     // No header for auth pages
     if (!token || !user) {
@@ -457,14 +521,32 @@ function App() {
             <div className={`app-content-container ${hasAdvertisingHeader ? 'with-header' : 'no-header'} app-view-${view}`}>
                 <MercyWindow show={showMercyWindow} onClose={() => setShowMercyWindow(false)} emitEvent={emitEvent} user={user} />
                 <FeedbackModal show={showFeedbackModal} onClose={handleCloseFeedbackModal} onSubmit={handleSubmitFeedback} gameContext={feedbackGameContext} />
-                <HowToPlayModal show={showHowToPlay} onClose={handleCloseHowToPlay} returnFocusSelector={view === 'gameTable' ? '.game-menu-btn' : '.hamburger-btn'} />
+                <HowToPlayModal
+                    show={showHowToPlay}
+                    onClose={handleCloseHowToPlay}
+                    returnFocusSelector={view === 'gameTable' ? '.game-menu-btn' : '.hamburger-btn'}
+                    onStartGuidedGame={view === 'lobby'
+                        && !currentTableState
+                        && socketSessionReady
+                        && !pendingInviteTableId
+                        && !inviteJoinInFlight
+                        ? handleStartGuidedTutorial
+                        : undefined}
+                />
+                {welcomeIsEligible && welcomeDelayElapsed && (
+                    <FirstGameWelcome
+                        activeVersion={user.tutorial_active_version}
+                        onStartGuided={handleStartGuidedTutorial}
+                        onSkip={() => handleTutorialAction('skip')}
+                    />
+                )}
 
                 {(() => {
                     switch (view) {
                         case 'lobby':
                             return <LobbyView user={user} lobbyThemes={lobbyThemes} serverVersion={serverVersion} handleJoinTable={handleJoinTable} handleQuickPlay={handleQuickPlay} handleJoinTableAsSpectator={handleJoinTableAsSpectator} handleLogout={handleLogout} handleRequestFreeToken={handleRequestFreeToken} handleShowLeaderboard={() => setView('leaderboard')} handleShowAdmin={handleShowAdmin} handleShowFeedback={() => setView('feedback')} handleShowHowToPlay={handleShowHowToPlay} errorMessage={errorMessage} emitEvent={emitEvent} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} soundSettings={soundSettings} />;
                         case 'gameTable':
-                            return currentTableState ? <GameTableView user={user} playerId={user.id} currentTableState={currentTableState} handleLeaveTable={handleLeaveTable} handleLogout={handleLogout} handleShowHowToPlay={handleShowHowToPlay} errorMessage={errorMessage} emitEvent={emitEvent} playSound={playSound} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} soundSettings={soundSettings} /> : <div>Loading table...</div>;
+                            return currentTableState ? <GameTableView user={user} playerId={user.id} currentTableState={currentTableState} handleLeaveTable={handleLeaveTable} handleLogout={handleLogout} handleShowHowToPlay={handleShowHowToPlay} errorMessage={errorMessage} emitEvent={emitEvent} playSound={playSound} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} soundSettings={soundSettings} tutorialState={{ tutorialVersion: Number(user.tutorial_version) || 0, activeVersion: Number(user.tutorial_active_version) || 0, gamesPlayed: Number(user.games_played) || 0 }} onTutorialAction={handleTutorialAction} /> : <div>Loading table...</div>;
                         case 'leaderboard':
                             return <LeaderboardView user={user} onReturnToLobby={handleReturnToLobby} handleResetAllTokens={handleResetAllTokens} handleShowAdmin={handleShowAdmin} />;
                         case 'feedback':

@@ -1,4 +1,5 @@
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import App from './App';
 import * as api from './services/api';
 import { getMockGameState } from './__mocks__/mockGameState';
@@ -41,6 +42,10 @@ describe('App Component and Game Flow', () => {
         });
 
         api.getLobbyChatHistory.mockResolvedValue([]);
+        api.updateTutorialStatus.mockResolvedValue({
+            tutorial_version: 0,
+            tutorial_active_version: 1,
+        });
         Storage.prototype.getItem = vi.fn(() => mockToken);
     });
 
@@ -53,6 +58,59 @@ describe('App Component and Game Flow', () => {
     test('renders LobbyView component when a token is present', async () => {
         render(<App />);
         expect(await screen.findByText('Quick Play')).toBeInTheDocument();
+    });
+
+    test('hydrates before offering the tutorial and persists start before Academy matchmaking', async () => {
+        const user = userEvent.setup();
+        let resolveTutorialStart;
+        api.updateTutorialStatus.mockImplementation(() => new Promise(resolve => {
+            resolveTutorialStart = resolve;
+        }));
+        render(<App />);
+
+        expect(screen.queryByRole('dialog', { name: 'Welcome to Sluff' })).not.toBeInTheDocument();
+        await act(async () => {
+            socketEventHandlers.updateUser({
+                id: 42,
+                username: 'Test Player',
+                tokens: '8.00',
+                games_played: 0,
+                tutorial_version: 0,
+                tutorial_active_version: 0,
+            });
+            socketEventHandlers.lobbyState({ themes: [], serverVersion: 'test' });
+        });
+
+        const startButton = await screen.findByRole('button', { name: 'Play Guided Game' }, { timeout: 1500 });
+        await user.click(startButton);
+        expect(api.updateTutorialStatus).toHaveBeenCalledWith('start');
+        expect(mockSocket.emit).not.toHaveBeenCalledWith('quickPlay', { theme: 'miss-pauls-academy' });
+
+        resolveTutorialStart({ tutorial_version: 0, tutorial_active_version: 1 });
+        await waitFor(() => {
+            expect(mockSocket.emit).toHaveBeenCalledWith('quickPlay', { theme: 'miss-pauls-academy' });
+        });
+    });
+
+    test('cancels the welcome delay when a reconnect restores a table', async () => {
+        render(<App />);
+        await act(async () => {
+            socketEventHandlers.updateUser({
+                id: 42,
+                username: 'Test Player',
+                tokens: '8.00',
+                games_played: 0,
+                tutorial_version: 0,
+                tutorial_active_version: 1,
+            });
+            socketEventHandlers.lobbyState({ themes: [], serverVersion: 'test' });
+            socketEventHandlers.joinedTable({ gameState: getMockGameState() });
+        });
+
+        await act(async () => {
+            await new Promise(resolve => setTimeout(resolve, 500));
+        });
+        expect(screen.queryByRole('dialog', { name: /learning Sluff/i })).not.toBeInTheDocument();
     });
 
     test('renders widow reveal correctly when all players pass', async () => {

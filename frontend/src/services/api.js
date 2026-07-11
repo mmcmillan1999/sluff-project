@@ -189,6 +189,23 @@ export const getLeaderboard = async () => {
     return data;
 };
 
+// --- First-game tutorial calls ---
+
+const TUTORIAL_ACTIONS = new Set(['start', 'complete', 'skip']);
+
+export const updateTutorialStatus = async (action) => {
+    if (!TUTORIAL_ACTIONS.has(action)) {
+        throw new Error('Invalid tutorial action.');
+    }
+
+    const response = await configuredFetch(`/api/auth/tutorial/${action}`, 'POST');
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.message || 'Could not save tutorial progress.');
+    }
+    return data;
+};
+
 // --- Admin Service Calls ---
 
 export const generateSchema = async () => {

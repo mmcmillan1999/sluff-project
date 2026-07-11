@@ -68,6 +68,11 @@ const createDbTables = async (pool) => {
         // --- NEW: Add columns for password recovery ---
         await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token TEXT");
         await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token_expires TIMESTAMP WITH TIME ZONE");
+        // Tutorial progress is durable across browsers/devices. Version 0 means
+        // the player has not completed or skipped a guided tutorial; the active
+        // version lets an interrupted tutorial resume without marking it done.
+        await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS tutorial_version INTEGER NOT NULL DEFAULT 0");
+        await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS tutorial_active_version INTEGER NOT NULL DEFAULT 0");
 
 
         await pool.query(`

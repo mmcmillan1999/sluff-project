@@ -10,6 +10,26 @@ import { getLobbyChatHistory } from '../services/api';
 import { BUILD_ID } from '../utils/clientVersion';
 import { useViewport } from '../hooks/useViewport';
 
+export const deriveLobbyPlayerStats = (user = {}) => {
+    const numericStat = value => {
+        const number = Number(value);
+        return Number.isFinite(number) ? number : 0;
+    };
+    const gamesWon = numericStat(user.wins ?? user.games_won);
+    const gamesPlayed = numericStat(
+        user.games_played
+        ?? (gamesWon + numericStat(user.losses) + numericStat(user.washes))
+    );
+    const coinBalance = numericStat(user.tokens);
+
+    return {
+        gamesWon,
+        gamesPlayed,
+        coinBalance,
+        winRate: gamesPlayed > 0 ? ((gamesWon / gamesPlayed) * 100).toFixed(1) : '0.0',
+    };
+};
+
 const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQuickPlay, handleJoinTableAsSpectator, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowAdmin, handleShowFeedback, handleShowHowToPlay, emitEvent, socket, handleOpenFeedbackModal, soundSettings }) => {
 
     const [activeTab, setActiveTab] = useState('');
@@ -118,10 +138,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
     const DesktopSidebar = () => {
         if (!isDesktop || !user) return null;
         
-        const gamesPlayed = user.games_played || 0;
-        const gamesWon = user.games_won || 0;
-        const winRate = gamesPlayed > 0 ? ((gamesWon / gamesPlayed) * 100).toFixed(1) : '0.0';
-        const tokensEarned = user.tokens_earned || 0;
+        const { gamesPlayed, gamesWon, winRate, coinBalance } = deriveLobbyPlayerStats(user);
         
         return (
             <div className="desktop-sidebar">
@@ -141,8 +158,8 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
                             <span className="stat-value">{winRate}%</span>
                         </div>
                         <div className="stat-row">
-                            <span className="stat-label">Tokens Earned:</span>
-                            <span className="stat-value">{tokensEarned.toFixed(2)}</span>
+                            <span className="stat-label">Coin Balance:</span>
+                            <span className="stat-value">{coinBalance.toFixed(2)}</span>
                         </div>
                     </div>
                 </div>

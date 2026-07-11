@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import CardValueKey from './game/CardValueKey';
 import { BID_HIERARCHY, BID_MULTIPLIERS } from '../constants';
+import { TUTORIAL_BUY_IN_LABEL } from '../config/tutorial';
 import './HowToPlayModal.css';
 
 const BID_DETAILS = {
@@ -18,10 +19,23 @@ const FOCUSABLE = [
     '[tabindex]:not([tabindex="-1"])'
 ].join(',');
 
-const HowToPlayModal = ({ show, onClose, returnFocusSelector }) => {
+const HowToPlayModal = ({ show, onClose, returnFocusSelector, onStartGuidedGame }) => {
     const dialogRef = useRef(null);
     const closeButtonRef = useRef(null);
     const previousFocusRef = useRef(null);
+    const guidedPendingRef = useRef(false);
+    const [guidedPending, setGuidedPending] = useState(false);
+    const [guidedError, setGuidedError] = useState('');
+
+    useEffect(() => {
+        guidedPendingRef.current = guidedPending;
+    }, [guidedPending]);
+
+    useEffect(() => {
+        if (show) return;
+        setGuidedPending(false);
+        setGuidedError('');
+    }, [show]);
 
     useEffect(() => {
         if (!show) return undefined;
@@ -31,7 +45,7 @@ const HowToPlayModal = ({ show, onClose, returnFocusSelector }) => {
         const handleKeyDown = (event) => {
             if (event.key === 'Escape') {
                 event.preventDefault();
-                onClose();
+                if (!guidedPendingRef.current) onClose();
                 return;
             }
             if (event.key !== 'Tab' || !dialogRef.current) return;
@@ -64,11 +78,25 @@ const HowToPlayModal = ({ show, onClose, returnFocusSelector }) => {
     if (!show) return null;
 
     const bids = BID_HIERARCHY.filter(bid => bid !== 'Pass');
+    const startGuidedGame = async () => {
+        if (!onStartGuidedGame || guidedPending) return;
+        setGuidedPending(true);
+        setGuidedError('');
+        try {
+            await onStartGuidedGame();
+            onClose();
+        } catch (error) {
+            setGuidedError(error?.message || 'Could not open the guided game. Please try again.');
+            setGuidedPending(false);
+        }
+    };
 
     return (
         <div
             className="how-to-play-overlay"
-            onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}
+            onMouseDown={(event) => {
+                if (event.target === event.currentTarget && !guidedPending) onClose();
+            }}
         >
             <section
                 ref={dialogRef}
@@ -84,7 +112,7 @@ const HowToPlayModal = ({ show, onClose, returnFocusSelector }) => {
                         <p className="how-to-play-eyebrow">Sluff rules</p>
                         <h2 id="how-to-play-title">How to Play</h2>
                     </div>
-                    <button ref={closeButtonRef} type="button" className="how-to-play-close" onClick={onClose} aria-label="Close How to Play">×</button>
+                    <button ref={closeButtonRef} type="button" className="how-to-play-close" onClick={onClose} aria-label="Close How to Play" disabled={guidedPending}>×</button>
                 </header>
 
                 <div className="how-to-play-content">
@@ -143,8 +171,25 @@ const HowToPlayModal = ({ show, onClose, returnFocusSelector }) => {
                     </section>
                 </div>
 
-                <footer className="how-to-play-footer">
-                    <button type="button" className="game-button" onClick={onClose}>Back to Sluff</button>
+                <footer className={`how-to-play-footer${onStartGuidedGame ? ' has-guided-action' : ''}`}>
+                    {onStartGuidedGame && (
+                        <div className="how-to-play-guided-action">
+                            <div>
+                                <strong>Want hands-on help?</strong>
+                                <span>Replay the guided Academy game · {TUTORIAL_BUY_IN_LABEL} coin</span>
+                                {guidedError && <span className="how-to-play-guided-error" role="alert">{guidedError}</span>}
+                            </div>
+                            <button
+                                type="button"
+                                className="game-button how-to-play-guided-button"
+                                onClick={startGuidedGame}
+                                disabled={guidedPending}
+                            >
+                                {guidedPending ? 'Opening Academy…' : 'Play Guided Game'}
+                            </button>
+                        </div>
+                    )}
+                    <button type="button" className="game-button" onClick={onClose} disabled={guidedPending}>Back to Sluff</button>
                 </footer>
             </section>
         </div>

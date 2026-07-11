@@ -76,6 +76,11 @@ describe('RoundSummaryModal staged presentation', () => {
                 continueLabel="Count the Score"
                 onContinue={onContinue}
                 showScoreTotals={false}
+                tutorialHint={{
+                    eyebrow: 'Round recap',
+                    title: 'See where every point came from',
+                    body: 'Card points and the bid multiplier explain this score.'
+                }}
                 insurance={{}}
                 bidWinnerInfo={{ playerName: 'Alice' }}
                 playerOrderActive={['Alice', 'Bob', 'Cara']}
@@ -96,6 +101,8 @@ describe('RoundSummaryModal staged presentation', () => {
         );
 
         expect(screen.getByRole('dialog', { name: 'Round Recap' })).toBeInTheDocument();
+        expect(screen.getByRole('status')).toHaveTextContent('See where every point came from');
+        expect(screen.getByText(/Card points and the bid multiplier/i)).toBeInTheDocument();
         expect(screen.queryByText('New Total')).not.toBeInTheDocument();
         expect(screen.queryByText('132')).not.toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Count the Score' })).toHaveFocus();

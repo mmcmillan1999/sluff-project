@@ -116,6 +116,44 @@
     animation: pulsating-blue-border 2s infinite;
 }
 
+.summary-tutorial-hint {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    color: #17352d;
+    text-align: left;
+    border: 1px solid rgba(38, 113, 83, 0.3);
+    border-left: 4px solid #287a5c;
+    border-radius: 8px;
+    background: #e9f5ef;
+}
+
+.summary-tutorial-hint span,
+.summary-tutorial-hint strong {
+    display: block;
+}
+
+.summary-tutorial-hint span {
+    margin-bottom: 2px;
+    color: #287a5c;
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.summary-tutorial-hint strong {
+    color: #17352d;
+    font-size: 0.95rem;
+}
+
+.summary-tutorial-hint p {
+    margin: 3px 0 0;
+    color: #35574b;
+    font-size: 0.83rem;
+    line-height: 1.35;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .summary-points-section,
     .insurance-recap-panel {

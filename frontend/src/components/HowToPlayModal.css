@@ -221,6 +221,41 @@
     border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
+.how-to-play-footer.has-guided-action {
+    gap: 0.8rem;
+    justify-content: space-between;
+}
+
+.how-to-play-guided-action {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.how-to-play-guided-action strong,
+.how-to-play-guided-action span {
+    display: block;
+}
+
+.how-to-play-guided-action strong {
+    color: #f8fafc;
+    font-family: 'Oswald', sans-serif;
+}
+
+.how-to-play-guided-action span {
+    color: rgba(248, 250, 252, 0.68);
+    font-size: 0.78rem;
+}
+
+.how-to-play-guided-action .how-to-play-guided-error {
+    color: #fecaca;
+}
+
+.how-to-play-guided-button {
+    flex: 0 0 auto;
+}
+
 @media (max-width: 640px) {
     .how-to-play-overlay {
         padding: max(0.5rem, env(safe-area-inset-top, 0px)) 0.5rem max(0.5rem, env(safe-area-inset-bottom, 0px));
@@ -236,6 +271,16 @@
     .how-to-play-content,
     .how-to-play-footer {
         padding: 0.85rem;
+    }
+
+    .how-to-play-footer.has-guided-action,
+    .how-to-play-guided-action {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .how-to-play-footer.has-guided-action {
+        gap: 0.55rem;
     }
 
     .rules-bid-list {

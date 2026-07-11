@@ -4,8 +4,40 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { sendEmail } = require('../services/emailService');
+const requireAuth = require('../middleware/requireAuth');
+const {
+    applyTutorialAction,
+    playerProgressFields,
+} = require('../services/tutorialProgress');
+
+const PROFILE_COLUMNS = `
+    id, username, email, created_at, wins, losses, washes,
+    is_admin, is_vip, tutorial_version, tutorial_active_version
+`;
+
+async function tokenBalanceForUser(pool, userId) {
+    const result = await pool.query(
+        'SELECT COALESCE(SUM(amount), 0) AS tokens FROM transactions WHERE user_id = $1',
+        [userId],
+    );
+    return parseFloat(result.rows?.[0]?.tokens || 0).toFixed(2);
+}
+
+function publicUserProfile(user, tokens) {
+    return {
+        id: user.id,
+        username: user.username,
+        ...(user.email !== undefined ? { email: user.email } : {}),
+        ...(user.created_at !== undefined ? { created_at: user.created_at } : {}),
+        tokens,
+        is_admin: user.is_admin === true,
+        is_vip: user.is_vip === true,
+        ...playerProgressFields(user),
+    };
+}
 
 module.exports = function(pool, bcrypt, jwt, io) {
+    const checkAuth = requireAuth(pool, jwt);
 
     // REGISTRATION ROUTE
     router.post('/register', async (req, res) => {
@@ -90,7 +122,12 @@ module.exports = function(pool, bcrypt, jwt, io) {
                 return res.status(400).json({ message: "Email and password are required." });
             }
 
-            const userQuery = 'SELECT id, username, password_hash, is_admin, is_verified, is_vip FROM users WHERE email = $1';
+            const userQuery = `
+                SELECT id, username, password_hash, is_admin, is_verified, is_vip,
+                       wins, losses, washes, tutorial_version, tutorial_active_version
+                FROM users
+                WHERE email = $1
+            `;
             const userResult = await pool.query(userQuery, [email]);
 
             if (userResult.rows.length === 0) {
@@ -108,9 +145,7 @@ module.exports = function(pool, bcrypt, jwt, io) {
                 return res.status(403).json({ message: "Account not verified. Please check your email for a verification link." });
             }
 
-            const tokenQuery = "SELECT SUM(amount) AS tokens FROM transactions WHERE user_id = $1";
-            const tokenResult = await pool.query(tokenQuery, [user.id]);
-            const tokens = parseFloat(tokenResult.rows[0].tokens || 0).toFixed(2);
+            const tokens = await tokenBalanceForUser(pool, user.id);
 
             const payload = { id: user.id, username: user.username, is_admin: user.is_admin };
             // 90-day sessions: sign in once, stay signed in (chess.com-style).
@@ -132,13 +167,7 @@ module.exports = function(pool, bcrypt, jwt, io) {
 
             res.json({
                 token,
-                user: {
-                    id: user.id,
-                    username: user.username,
-                    tokens: tokens,
-                    is_admin: user.is_admin,
-                    is_vip: user.is_vip
-                }
+                user: publicUserProfile(user, tokens)
             });
 
         } catch (error) {
@@ -146,6 +175,40 @@ module.exports = function(pool, bcrypt, jwt, io) {
             res.status(500).json({ message: "Internal server error during login." });
         }
     });
+
+    // CURRENT PROFILE ENDPOINT
+    // This is always scoped to the authenticated account. Query/body user ids
+    // are intentionally ignored so tutorial state cannot be changed or read on
+    // behalf of another player.
+    router.get('/profile', checkAuth, async (req, res) => {
+        try {
+            const result = await pool.query(
+                `SELECT ${PROFILE_COLUMNS} FROM users WHERE id = $1`,
+                [req.user.id],
+            );
+            const user = result.rows?.[0];
+            if (!user) return res.status(401).json({ message: 'Authentication required.' });
+
+            const tokens = await tokenBalanceForUser(pool, req.user.id);
+            return res.json({ user: publicUserProfile(user, tokens) });
+        } catch (error) {
+            console.error('Profile load error:', error);
+            return res.status(500).json({ message: 'Unable to load profile.' });
+        }
+    });
+
+    for (const action of ['start', 'complete', 'skip']) {
+        router.post(`/tutorial/${action}`, checkAuth, async (req, res) => {
+            try {
+                const progress = await applyTutorialAction(pool, req.user.id, action);
+                if (!progress) return res.status(401).json({ message: 'Authentication required.' });
+                return res.json(progress);
+            } catch (error) {
+                console.error(`Tutorial ${action} error:`, error);
+                return res.status(500).json({ message: 'Unable to save tutorial progress.' });
+            }
+        });
+    }
 
     // EMAIL VERIFICATION ENDPOINT
     router.post('/verify-email', async (req, res) => {

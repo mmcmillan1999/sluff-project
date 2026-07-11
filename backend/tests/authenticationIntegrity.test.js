@@ -242,20 +242,37 @@ function createIntervalController() {
 }
 
 function createSocketPool() {
-    const users = new Map([[7, { id: 7, username: 'DatabaseName', is_admin: true }]]);
-    const state = { users, identityReads: 0, tokenReads: 0, failIdentityReads: false };
+    const users = new Map([[7, {
+        id: 7,
+        username: 'DatabaseName',
+        email: 'database@example.test',
+        created_at: '2026-01-01T00:00:00.000Z',
+        wins: 4,
+        losses: 2,
+        washes: 1,
+        is_admin: true,
+        is_vip: false,
+        tutorial_version: 0,
+        tutorial_active_version: 1,
+    }]]);
+    const state = { users, identityReads: 0, profileReads: 0, tokenReads: 0, failIdentityReads: false };
     const pool = {
         async query(text, params = []) {
             const sql = String(text);
+            if (/tutorial_version/i.test(sql) && /FROM\s+users/i.test(sql)) {
+                state.profileReads += 1;
+                const user = users.get(Number(params[0]));
+                return { rows: user ? [{ ...user }] : [] };
+            }
             if (/SELECT\s+id,\s*username,\s*is_admin\s+FROM\s+users/i.test(sql)) {
                 state.identityReads += 1;
                 if (state.failIdentityReads) throw new Error('forced identity refresh failure');
                 const user = users.get(Number(params[0]));
-                return { rows: user ? [{ ...user }] : [] };
+                return { rows: user ? [{ id: user.id, username: user.username, is_admin: user.is_admin }] : [] };
             }
             if (/SUM\(amount\)/i.test(sql)) {
                 state.tokenReads += 1;
-                return { rows: [{ tokens: '10.00' }] };
+                return { rows: [{ tokens: '10.00', current_tokens: '10.00' }] };
             }
             if (/INSERT\s+INTO\s+lobby_chat_messages/i.test(sql)) return { rows: [{}] };
             throw new Error(`Unexpected authentication socket test query: ${sql}`);
@@ -370,6 +387,26 @@ async function testSocketAuthenticationAndAdminRevocation() {
             disconnectPlayer() { player.socketId = null; },
         };
         engines = { [engine.tableId]: engine };
+
+        await connected.trigger('requestUserSync');
+        const synchronizedUser = socket.emitted.filter(item => item.event === 'updateUser').at(-1)?.payload;
+        assert.deepEqual({
+            wins: synchronizedUser?.wins,
+            losses: synchronizedUser?.losses,
+            washes: synchronizedUser?.washes,
+            games_played: synchronizedUser?.games_played,
+            tutorial_version: synchronizedUser?.tutorial_version,
+            tutorial_active_version: synchronizedUser?.tutorial_active_version,
+        }, {
+            wins: 4,
+            losses: 2,
+            washes: 1,
+            games_played: 7,
+            tutorial_version: 0,
+            tutorial_active_version: 1,
+        }, 'socket profile sync returns aggregate stats and durable tutorial progress');
+        assert.equal(state.profileReads, 1);
+        assert.equal(state.tokenReads, 1);
 
         socket.data.trustedAdminObserver = true;
         state.users.set(7, { id: 7, username: 'RenamedAfterLogin', is_admin: false });

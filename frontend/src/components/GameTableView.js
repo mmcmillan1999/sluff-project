@@ -24,6 +24,12 @@ import { shareInvite, getInviteUrl } from '../utils/tableInvites';
 import { SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS } from '../constants';
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
 import { useBidWinnerSplash } from '../hooks/useBidWinnerSplash';
+import TutorialCoach, { FIRST_GAME_TUTORIAL_VERSION } from './game/TutorialCoach';
+import {
+    TUTORIAL_FORFEIT_RECAP_HINT,
+    TUTORIAL_RECAP_HINT,
+    TUTORIAL_THEME_ID,
+} from '../config/tutorial';
 
 const ROUND_PRESENTATION_STATES = new Set([
     'WidowReveal',
@@ -59,7 +65,7 @@ const scoresBeforeRound = (summary, fallbackScores) => {
 };
 
 
-const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, handleShowHowToPlay, emitEvent, playSound, socket, handleOpenFeedbackModal, soundSettings }) => {
+const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, handleShowHowToPlay, emitEvent, playSound, socket, handleOpenFeedbackModal, soundSettings, tutorialState, onTutorialAction }) => {
     const [seatAssignments, setSeatAssignments] = useState({ self: null, opponentLeft: null, opponentRight: null });
     const [showRoundSummaryModal, setShowRoundSummaryModal] = useState(false);
     const [showInsurancePrompt, setShowInsurancePrompt] = useState(false);
@@ -105,6 +111,13 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const selfPlayerInTable = currentTableState ? currentTableState.players[playerId] : null;
     const isSpectator = selfPlayerInTable?.isSpectator;
     const selfPlayerName = selfPlayerInTable?.playerName;
+    const tutorialCoachActive = Boolean(
+        tutorialState?.activeVersion === FIRST_GAME_TUTORIAL_VERSION
+        && currentTableState?.theme === TUTORIAL_THEME_ID
+        && currentTableState?.tableType === 'quickplay'
+        && !isSpectator
+        && !isObserverMode
+    );
     const roundSummary = currentTableState?.roundSummary;
     const rawPresentationReadyAt = roundSummary?.presentationReadyAt;
     const presentationReadyAt = Number(rawPresentationReadyAt);
@@ -1012,6 +1025,9 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                     ? 'Count the Score'
                     : (roundSummary?.isGameOver ? 'View Final Standings' : 'Continue')}
                 onContinue={handleRoundRecapContinue}
+                tutorialHint={tutorialCoachActive && roundPresentationPhase === 'recap'
+                    ? (roundSummary?.forfeit ? TUTORIAL_FORFEIT_RECAP_HINT : TUTORIAL_RECAP_HINT)
+                    : null}
             />
 
             {roundPresentationPhase === 'scoring' && roundSummary && (
@@ -1067,6 +1083,17 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 roundPresentationComplete={roundPresentationPhase === 'settled'
                     && sharedPresentationReady
                     && serverRoundPresentationReady}
+            />
+
+            <TutorialCoach
+                key={`${playerId}:${FIRST_GAME_TUTORIAL_VERSION}`}
+                active={tutorialCoachActive}
+                currentTableState={currentTableState}
+                playerId={playerId}
+                selfPlayerName={selfPlayerName}
+                roundPresentationPhase={roundPresentationPhase}
+                onAction={onTutorialAction}
+                tutorialVersion={FIRST_GAME_TUTORIAL_VERSION}
             />
             
             <footer className="game-footer">

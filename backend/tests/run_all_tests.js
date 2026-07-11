@@ -17,6 +17,7 @@ const suites = [
     { name: 'backend integrity', file: './backendIntegrity.test.js' },
     { name: 'atomic game settlement', file: './gameSettlementIntegrity.test.js' },
     { name: 'authentication integrity', file: './authenticationIntegrity.test.js' },
+    { name: 'tutorial persistence', file: './tutorialPersistence.test.js' },
     { name: 'AI prompt rule contract', file: './aiPromptRules.test.js' },
 ];
 
