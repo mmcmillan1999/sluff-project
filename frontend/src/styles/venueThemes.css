@@ -400,7 +400,8 @@
 }
 
 .game-table[data-table-theme] .sluff-watermark {
-  filter: drop-shadow(0 0.3vh 0.6vh rgba(0, 0, 0, 0.4)) sepia(0.1);
+  opacity: 0.24;
+  filter: brightness(1.18) drop-shadow(0 0.3vh 0.6vh rgba(0, 0, 0, 0.42));
 }
 
 /* Game footer, controls, and portaled menu */
