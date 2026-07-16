@@ -5,12 +5,13 @@
 // then every few seconds rotates like a cube tipping forward to reveal the
 // current season's top three players, one per face.
 // When monetization returns, swap this back for AdvertisingHeader.
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getCurrentSeasonStandings } from '../services/api';
 import './BrandHeader.css';
 
 const FACE_INTERVAL_MS = 5000;
 const ROTATE_DURATION_MS = 750; // must match the CSS transition time
+const ROTATE_FALLBACK_MS = ROTATE_DURATION_MS + 250;
 
 const PLACE_LABELS = { 1: '1st', 2: '2nd', 3: '3rd' };
 
@@ -50,7 +51,9 @@ const BrandHeader = ({ viewType = 'default' }) => {
     const [topThree, setTopThree] = useState([]);
     const [faceIndex, setFaceIndex] = useState(0);
     const [isRotating, setIsRotating] = useState(false);
-    const timersRef = useRef([]);
+    const rotationPendingRef = useRef(false);
+    const fallbackTimerRef = useRef(null);
+    const faceCountRef = useRef(1);
 
     useEffect(() => {
         let cancelled = false;
@@ -84,6 +87,27 @@ const BrandHeader = ({ viewType = 'default' }) => {
     ]), [topThree]);
 
     const faceCount = faces.length;
+    faceCountRef.current = faceCount;
+
+    // Commit the face swap exactly once per rotation. Driven by the CSS
+    // transitionend event so the snap-back can never land a frame before the
+    // animation has finished painting (the source of a visible flicker); the
+    // fallback timer only fires if the transition never completes (hidden tab).
+    const finishRotation = useCallback(() => {
+        if (!rotationPendingRef.current) return;
+        rotationPendingRef.current = false;
+        if (fallbackTimerRef.current) {
+            clearTimeout(fallbackTimerRef.current);
+            fallbackTimerRef.current = null;
+        }
+        setFaceIndex(current => (current + 1) % faceCountRef.current);
+        setIsRotating(false);
+    }, []);
+
+    const handleTransitionEnd = (event) => {
+        if (event.target !== event.currentTarget || event.propertyName !== 'transform') return;
+        finishRotation();
+    };
 
     useEffect(() => {
         if (faceCount < 2) return undefined;
@@ -91,24 +115,24 @@ const BrandHeader = ({ viewType = 'default' }) => {
 
         const interval = setInterval(() => {
             if (reducedMotion) {
-                setFaceIndex(current => (current + 1) % faceCount);
+                setFaceIndex(current => (current + 1) % faceCountRef.current);
                 return;
             }
+            if (rotationPendingRef.current) return; // previous spin still settling
+            rotationPendingRef.current = true;
             setIsRotating(true);
-            const settle = setTimeout(() => {
-                setFaceIndex(current => (current + 1) % faceCount);
-                setIsRotating(false);
-            }, ROTATE_DURATION_MS);
-            timersRef.current.push(settle);
+            fallbackTimerRef.current = setTimeout(finishRotation, ROTATE_FALLBACK_MS);
         }, FACE_INTERVAL_MS);
 
-        const timers = timersRef.current;
         return () => {
             clearInterval(interval);
-            timers.forEach(clearTimeout);
-            timers.length = 0;
+            if (fallbackTimerRef.current) {
+                clearTimeout(fallbackTimerRef.current);
+                fallbackTimerRef.current = null;
+            }
+            rotationPendingRef.current = false;
         };
-    }, [faceCount]);
+    }, [faceCount, finishRotation]);
 
     const frontFace = faces[faceIndex % faceCount];
     const bottomFace = faces[(faceIndex + 1) % faceCount];
@@ -116,7 +140,10 @@ const BrandHeader = ({ viewType = 'default' }) => {
     return (
         <div className={`brand-header brand-header--${viewType}`}>
             <div className="brand-cube-viewport">
-                <div className={`brand-cube${isRotating ? ' is-rotating' : ''}`}>
+                <div
+                    className={`brand-cube${isRotating ? ' is-rotating' : ''}`}
+                    onTransitionEnd={handleTransitionEnd}
+                >
                     <div className="brand-cube-face brand-cube-face--front">
                         <FaceContent face={frontFace} />
                     </div>

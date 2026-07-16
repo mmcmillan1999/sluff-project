@@ -25,11 +25,17 @@
     perspective-origin: 50% 50%;
 }
 
+/* The cube is pushed back by half its depth so the resting front face
+   (translateZ +3.75vh) nets out to an exact identity transform: text
+   rasterizes crisp with zero perspective scaling, and the post-rotation
+   snap-back lands on the identical pixels — no flicker. */
 .brand-cube {
     position: relative;
     width: 100%;
     height: 100%;
     transform-style: preserve-3d;
+    transform: translateZ(-3.75vh);
+    will-change: transform;
 }
 
 /* Rotating forward: the top edge of the front face tips away from the
@@ -38,7 +44,7 @@
    content is committed. */
 .brand-cube.is-rotating {
     transition: transform 0.75s cubic-bezier(0.4, 0, 0.2, 1);
-    transform: rotateX(90deg);
+    transform: translateZ(-3.75vh) rotateX(90deg);
 }
 
 .brand-cube-face {
