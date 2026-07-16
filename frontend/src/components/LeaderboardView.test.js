@@ -29,7 +29,7 @@ beforeEach(() => {
     ]);
 });
 
-test('labels persistent bot competitors without marking human players', async () => {
+test('presents every competitor as an ordinary leaderboard player', async () => {
     render(
         <LeaderboardView
             user={{ username: 'Human Player', is_admin: false }}
@@ -39,8 +39,8 @@ test('labels persistent bot competitors without marking human players', async ()
 
     const botName = await screen.findByText('Mike Knight');
     const botRow = botName.closest('tr');
-    expect(within(botRow).getByLabelText('Bot player')).toHaveTextContent('BOT');
-    expect(botName.closest('td')).toHaveAttribute('title', 'Mike Knight (Bot)');
+    expect(within(botRow).queryByText(/bot/i)).not.toBeInTheDocument();
+    expect(botName.closest('td')).toHaveAttribute('title', 'Mike Knight');
 
     const humanRows = screen.getAllByText('Human Player').map(node => node.closest('tr'));
     expect(humanRows.length).toBeGreaterThan(0);

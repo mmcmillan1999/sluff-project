@@ -27,17 +27,30 @@ async function runLeaderboardTests() {
                 };
             }
             return {
-                rows: [{
-                    user_id: 42,
-                    username: 'safe-player',
-                    email: 'private@example.com',
-                    wins: 8,
-                    losses: 3,
-                    washes: 1,
-                    is_admin: true,
-                    is_bot: true,
-                    tokens: '12.50',
-                }],
+                rows: [
+                    {
+                        user_id: 42,
+                        username: 'safe-player',
+                        email: 'private@example.com',
+                        wins: 8,
+                        losses: 3,
+                        washes: 1,
+                        is_admin: true,
+                        is_bot: true,
+                        tokens: '12.50',
+                    },
+                    {
+                        user_id: 43,
+                        username: 'another-player',
+                        email: 'also-private@example.com',
+                        wins: 5,
+                        losses: 4,
+                        washes: 0,
+                        is_admin: false,
+                        is_bot: false,
+                        tokens: '9.00',
+                    },
+                ],
             };
         },
     };
@@ -92,8 +105,13 @@ async function runLeaderboardTests() {
             wins: 8,
             losses: 3,
             washes: 1,
-            isBot: true,
             tokens: '12.50',
+        }, {
+            username: 'another-player',
+            wins: 5,
+            losses: 4,
+            washes: 0,
+            tokens: '9.00',
         }]);
 
         assert.strictEqual(queries.length, 2, 'An authenticated request should hydrate the user before reading the leaderboard.');
@@ -107,7 +125,7 @@ async function runLeaderboardTests() {
         assert(/u\.wins/i.test(selectClause));
         assert(/u\.losses/i.test(selectClause));
         assert(/u\.washes/i.test(selectClause));
-        assert(/u\.is_bot/i.test(selectClause));
+        assert(!/\bis_bot\b/i.test(leaderboardQuery.text), 'The public leaderboard query must not reveal or filter by account classification.');
         assert(/\btokens\b/i.test(selectClause));
 
         assert.deepStrictEqual(verifyCalls, [

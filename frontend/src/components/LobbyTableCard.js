@@ -47,9 +47,9 @@ const LobbyTableCard = ({ table, themeId, canAfford, buyIn, onJoin, onJoinAsSpec
                 </div>
             </div>
             {Number.isFinite(Number(buyIn)) && (
-                <div className="table-economics" aria-label={`Human buy-in ${Number(buyIn)} tokens. In an all-human game, untied returns are 2, 1, and 0 times the buy-in in a three-player game, or 3, 1, 0, and 0 times in a four-player game. Ties are settled from the same pot.`}>
-                    <span className="table-buy-in"><img src="/Sluff_Token.png" alt="" /> {Number(buyIn).toFixed(2)} human buy-in</span>
-                    <span className="table-payout">All-human untied: 3P 2×/1×/0× · 4P 3×/1×/0×/0×</span>
+                <div className="table-economics" aria-label={`Buy-in ${Number(buyIn)} tokens. Untied returns are 2, 1, and 0 times the buy-in in a three-player game, or 3, 1, 0, and 0 times in a four-player game. Ties are settled from the same pot.`}>
+                    <span className="table-buy-in"><img src="/Sluff_Token.png" alt="" /> {Number(buyIn).toFixed(2)} buy-in</span>
+                    <span className="table-payout">Untied returns: 3P 2×/1×/0× · 4P 3×/1×/0×/0×</span>
                 </div>
             )}
             <div className="table-card-body">

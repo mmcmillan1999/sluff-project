@@ -456,7 +456,7 @@ function buildForfeitSettlement(table) {
     for (const entry of entries) {
         payoutDetails[entry.player.userId] = forfeitingFundedPlayer
             ? `You received ${formatCents(entry.cents)} tokens after ${table.forfeitingPlayerName} forfeited.`
-            : 'An unfunded bot forfeited. Your funded buy-in was returned.';
+            : 'The game ended by forfeit. Your buy-in was returned.';
         if (entry.cents > 0) {
             payouts.push({
                 userId: entry.player.userId,

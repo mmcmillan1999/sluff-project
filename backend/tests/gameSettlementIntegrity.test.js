@@ -170,6 +170,10 @@ function testBotNeutralExactCentPlans() {
     assert.equal(tokenEntry(botForfeit, 'Alice').netChangeCents, 0);
     assert.equal(tokenEntry(botForfeit, 'Bob').netChangeCents, 0);
     assert.equal(tokenEntry(botForfeit, 'Bot').tokenOutcome, 'not_funded');
+    assert.equal(
+        botForfeit.result.payoutDetails[1],
+        'The game ended by forfeit. Your buy-in was returned.',
+    );
 
     const humanForfeit = buildForfeitSettlement({
         ...makeTable(9, [['Alice', 100], ['Bob', 80]], [['Bot', 50]]),

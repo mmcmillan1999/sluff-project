@@ -71,7 +71,7 @@ describe('rankPodiumPlayers', () => {
 });
 
 describe('normalizeTokenSettlement', () => {
-    test('keeps score-independent human returns and practice seats explicit', () => {
+    test('shows funded players the same way regardless of internal player type', () => {
         expect(normalizeTokenSettlement({
             buyInCents: 10,
             potCents: 20,
@@ -85,12 +85,12 @@ describe('normalizeTokenSettlement', () => {
                     tokenOutcome: 'wins'
                 },
                 {
-                    playerName: 'Bot Winner',
+                    playerName: 'Mike Knight',
                     isBot: true,
-                    funded: false,
-                    grossReturnCents: 0,
+                    funded: true,
+                    grossReturnCents: 10,
                     netChangeCents: 0,
-                    tokenOutcome: 'practice'
+                    tokenOutcome: 'even'
                 }
             ]
         })).toEqual({
@@ -100,19 +100,43 @@ describe('normalizeTokenSettlement', () => {
             entries: [
                 {
                     playerName: 'Alice',
-                    practiceSeat: false,
+                    funded: true,
                     available: true,
                     grossReturnCents: 20,
                     netChangeCents: 10,
                     outcomeLabel: 'Token gain'
                 },
                 {
-                    playerName: 'Bot Winner',
-                    practiceSeat: true,
+                    playerName: 'Mike Knight',
+                    funded: true,
                     available: true,
-                    outcomeLabel: 'Practice seat'
+                    grossReturnCents: 10,
+                    netChangeCents: 0,
+                    outcomeLabel: 'Even'
                 }
             ]
+        });
+    });
+
+    test('uses neutral transaction copy for an entry without a funded buy-in', () => {
+        const settlement = normalizeTokenSettlement({
+            buyInCents: 10,
+            potCents: 20,
+            entries: [{
+                playerName: 'Courtney Sr.',
+                isBot: true,
+                funded: false,
+                grossReturnCents: 0,
+                netChangeCents: 0,
+                tokenOutcome: 'not_funded'
+            }]
+        });
+
+        expect(settlement.entries[0]).toEqual({
+            playerName: 'Courtney Sr.',
+            funded: false,
+            available: true,
+            outcomeLabel: 'Even'
         });
     });
 
@@ -142,30 +166,30 @@ describe('normalizeTokenSettlement', () => {
 });
 
 describe('GameOverPodium', () => {
-    test('shows token returns separately when the score champion is a practice bot', () => {
+    test('shows a funded automated player as an ordinary token transaction', () => {
         render(
             <GameOverPodium
-                gameWinner="Bot Winner"
-                finalScores={{ 'Bot Winner': 160, Alice: 80, Bob: -4 }}
+                gameWinner="Mike Knight"
+                finalScores={{ 'Mike Knight': 160, Alice: 80, Bob: -4 }}
                 tokenSettlement={{
                     buyInCents: 10,
-                    potCents: 20,
+                    potCents: 30,
                     entries: [
                         {
-                            playerName: 'Bot Winner',
+                            playerName: 'Mike Knight',
                             isBot: true,
-                            funded: false,
-                            grossReturnCents: 0,
-                            netChangeCents: 0,
-                            tokenOutcome: 'practice'
+                            funded: true,
+                            grossReturnCents: 20,
+                            netChangeCents: 10,
+                            tokenOutcome: 'gain'
                         },
                         {
                             playerName: 'Alice',
                             isBot: false,
                             funded: true,
-                            grossReturnCents: 20,
-                            netChangeCents: 10,
-                            tokenOutcome: 'wins'
+                            grossReturnCents: 10,
+                            netChangeCents: 0,
+                            tokenOutcome: 'even'
                         },
                         {
                             playerName: 'Bob',
@@ -182,18 +206,57 @@ describe('GameOverPodium', () => {
             />
         );
 
-        expect(screen.getByRole('heading', { name: 'Bot Winner Wins' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Mike Knight Wins' })).toBeInTheDocument();
         const settlement = screen.getByRole('region', { name: 'Token settlement' });
-        expect(within(settlement).getByText('0.10 tokens buy-in · 0.20 tokens pot')).toBeInTheDocument();
+        expect(within(settlement).getByText('0.10 tokens buy-in · 0.30 tokens pot')).toBeInTheDocument();
         const results = within(settlement).getByRole('list', { name: 'Token settlement results' });
         const rows = within(results).getAllByRole('listitem');
         expect(rows).toHaveLength(3);
-        expect(within(rows[0]).getByText('Practice seat')).toBeInTheDocument();
-        expect(within(rows[0]).getByText('No tokens exchanged')).toBeInTheDocument();
-        expect(within(rows[1]).getByText('Token gain')).toBeInTheDocument();
-        expect(within(rows[1]).getByText('0.20 tokens returned · net +0.10 tokens')).toBeInTheDocument();
+        expect(within(rows[0]).getByText('Token gain')).toBeInTheDocument();
+        expect(within(rows[0]).getByText('0.20 tokens returned · net +0.10 tokens')).toBeInTheDocument();
+        expect(within(rows[1]).getByText('Even')).toBeInTheDocument();
+        expect(within(rows[1]).getByText('0.10 tokens returned · net 0.00 tokens')).toBeInTheDocument();
         expect(within(rows[2]).getByText('No return')).toBeInTheDocument();
         expect(within(rows[2]).getByText('0.00 tokens returned · net -0.10 tokens')).toBeInTheDocument();
+        expect(within(settlement).queryByText(/practice|bot/i)).not.toBeInTheDocument();
+    });
+
+    test('uses neutral zero-change copy for a settlement entry without a buy-in', () => {
+        render(
+            <GameOverPodium
+                gameWinner="Alice"
+                finalScores={{ Alice: 120, 'Courtney Sr.': 80 }}
+                tokenSettlement={{
+                    buyInCents: 10,
+                    potCents: 10,
+                    entries: [
+                        {
+                            playerName: 'Alice',
+                            funded: true,
+                            grossReturnCents: 10,
+                            netChangeCents: 0,
+                            tokenOutcome: 'even'
+                        },
+                        {
+                            playerName: 'Courtney Sr.',
+                            isBot: true,
+                            funded: false,
+                            grossReturnCents: 0,
+                            netChangeCents: 0,
+                            tokenOutcome: 'not_funded'
+                        }
+                    ]
+                }}
+                onRematch={vi.fn()}
+                onLobby={vi.fn()}
+            />
+        );
+
+        const settlement = screen.getByRole('region', { name: 'Token settlement' });
+        const rows = within(settlement).getAllByRole('listitem');
+        expect(within(rows[1]).getByText('Even')).toBeInTheDocument();
+        expect(within(rows[1]).getByText('No token change')).toBeInTheDocument();
+        expect(within(settlement).queryByText(/practice|bot|funded/i)).not.toBeInTheDocument();
     });
 
     test('omits an absent token settlement and reports supplied failed data without guessing', () => {

@@ -21,7 +21,7 @@ export const bulletinTickerItems = Object.freeze([
     'A season shout-out to McSaddle',
     'The final Top 3 will be preserved in the Alpha Season 1 archive',
     'Four-player tables, Quick Play, guided training, and a livelier card table',
-    'Token accountability and 20 persistent bot players are in development',
+    'Token accountability and fully tracked player records are in development',
     'Open the Bulletin for the full story',
 ]);
 
@@ -31,12 +31,12 @@ export const bulletinEntries = Object.freeze([
         dateLabel: 'Current build',
         status: 'In development',
         title: 'Every token accounted for',
-        summary: 'The next release makes token movement visible and gives the test bots real, accountable player records.',
+        summary: 'The next release makes token movement visible and gives every active seat a real, accountable player record.',
         highlights: [
             'A personal Token Ledger shows every buy-in, payout, refund, mercy token, and adjustment.',
             'Historical games with ambiguous recovery data are quarantined instead of guessed at.',
             'A read-only accounting audit can trace suspicious movement without changing balances.',
-            'Twenty named bots are being prepared with persistent identities, funded balances, stats, and leaderboard records.',
+            'Every named player keeps a persistent identity, funded balance, stats, and leaderboard record.',
         ],
     },
     {
@@ -72,7 +72,7 @@ export const bulletinEntries = Object.freeze([
         title: 'More ways to find a game',
         summary: 'Quick Play gets people seated faster while private tables remain easy to share with friends.',
         highlights: [
-            'Quick Play searches for human opponents first, with discreet bot backup for quiet moments.',
+            'Quick Play searches for opponents and quietly keeps games moving during slower moments.',
             'Three-player groups can start immediately or search briefly for a fourth player.',
             'Four-player Sluff is fully playable, with the dealer sitting out each hand.',
             'Private tables can be shared through direct invite links.',

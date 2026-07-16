@@ -32,6 +32,13 @@ test('retains theme identity without rendering venue copy in a private table car
 
     expect(container.firstChild).toHaveAttribute('data-theme', 'dans-deck');
     expect(screen.getByRole('heading', { name: 'Rules Table' })).toBeInTheDocument();
+    expect(screen.getByText('20.00 buy-in')).toBeInTheDocument();
+    expect(screen.getByText('Untied returns: 3P 2×/1×/0× · 4P 3×/1×/0×/0×')).toBeInTheDocument();
+    expect(screen.queryByText(/human|bot/i)).not.toBeInTheDocument();
+    expect(container.querySelector('.table-economics')).toHaveAttribute(
+        'aria-label',
+        'Buy-in 20 tokens. Untied returns are 2, 1, and 0 times the buy-in in a three-player game, or 3, 1, 0, and 0 times in a four-player game. Ties are settled from the same pot.'
+    );
     expect(screen.queryByText('Above the Great Salt Lake')).not.toBeInTheDocument();
     expect(container.querySelector('.table-card-venue')).not.toBeInTheDocument();
 });

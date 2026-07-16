@@ -13,24 +13,22 @@ module.exports = function(pool, jwt) {
                     u.wins, 
                     u.losses, 
                     u.washes,
-                    COALESCE(u.is_bot, FALSE) AS is_bot,
                     COALESCE(SUM(t.amount), 0) as tokens
                 FROM 
                     users u
                 LEFT JOIN 
                     transactions t ON u.id = t.user_id
                 GROUP BY 
-                    u.id, u.username, u.wins, u.losses, u.washes, u.is_bot
+                    u.id, u.username, u.wins, u.losses, u.washes
                 ORDER BY 
                     tokens DESC, u.username ASC;
             `;
             const { rows } = await pool.query(query);
-            const publicLeaderboard = rows.map(({ username, wins, losses, washes, is_bot, tokens }) => ({
+            const publicLeaderboard = rows.map(({ username, wins, losses, washes, tokens }) => ({
                 username,
                 wins,
                 losses,
                 washes,
-                isBot: is_bot === true,
                 tokens,
             }));
 

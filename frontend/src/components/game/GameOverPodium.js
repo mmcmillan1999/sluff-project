@@ -78,13 +78,13 @@ export const normalizeTokenSettlement = (tokenSettlement) => {
             && typeof entry.playerName === 'string' && entry.playerName.trim())
         .map(entry => {
             const playerName = entry.playerName.trim();
-            const practiceSeat = entry.isBot === true || entry.funded === false;
-            if (practiceSeat) {
+            const funded = entry.funded !== false;
+            if (!funded) {
                 return {
                     playerName,
-                    practiceSeat: true,
+                    funded: false,
                     available: true,
-                    outcomeLabel: 'Practice seat',
+                    outcomeLabel: 'Even',
                 };
             }
 
@@ -93,7 +93,7 @@ export const normalizeTokenSettlement = (tokenSettlement) => {
             const available = grossReturnCents !== null && netChangeCents !== null;
             return {
                 playerName,
-                practiceSeat: false,
+                funded: true,
                 available,
                 grossReturnCents,
                 netChangeCents,
@@ -419,8 +419,8 @@ const GameOverPodium = ({
                                         </span>
                                         <span className="game-over-podium__settlement-result">
                                             <strong>{entry.outcomeLabel}</strong>
-                                            {entry.practiceSeat && <small>No tokens exchanged</small>}
-                                            {!entry.practiceSeat && entry.available && (
+                                            {!entry.funded && <small>No token change</small>}
+                                            {entry.funded && entry.available && (
                                                 <small>
                                                     {formatTokenAmount(entry.grossReturnCents)} returned
                                                     {' · '}

@@ -45,10 +45,7 @@ const LeaderboardView = ({ user, onReturnToLobby, handleResetAllTokens, handleSh
         return (
             <tr key={player.username}>
                 <td>{index + 1}</td>
-                <td className="username-cell" title={player.isBot ? `${player.username} (Bot)` : player.username}>
-                    <span className="leaderboard-username">{player.username}</span>
-                    {player.isBot && <span className="bot-badge" aria-label="Bot player">BOT</span>}
-                </td>
+                <td className="username-cell" title={player.username}>{player.username}</td>
                 <td>{formatValue(player.wins, totalGames, showPercent)}</td>
                 <td>{formatValue(player.losses, totalGames, showPercent)}</td>
                 <td>{formatValue(player.washes, totalGames, showPercent)}</td>
