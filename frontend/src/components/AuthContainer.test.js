@@ -2,7 +2,7 @@ import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import AuthContainer from './AuthContainer';
 
-vi.mock('./PublicLanding.js', () => ({
+vi.mock('./ClaudeLanding.js', () => ({
     default: ({ inviteTableId, onRegister, onLogin }) => (
         <section>
             <h1>Public Sluff landing</h1>

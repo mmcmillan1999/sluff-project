@@ -306,10 +306,52 @@
     padding-bottom: 8px;
 }
 
-.claude-landing .cl-hand-card {
+/* Slots stay in flow and keep the fan's shape while a card is airborne;
+   they must match the card dimensions at every breakpoint. */
+.claude-landing .cl-hand-slot {
+    position: relative;
+    width: 78px;
+    height: 109px;
     margin: 0 -18px;
+}
+
+.claude-landing .cl-hand-card {
+    position: absolute;
+    inset: 0;
+    margin: 0;
     transform-origin: 50% 120%;
     animation: cl-card-rise 0.7s ease-out both;
+    cursor: grab;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+/* A card being dragged, flying, or wandering home. LandingCardPhysics owns
+   the inline transform (rotation about the card center). */
+.claude-landing .cl-card-live {
+    position: fixed;
+    inset: auto;
+    left: 0;
+    top: 0;
+    margin: 0;
+    z-index: 1000;
+    transform-origin: 50% 50%;
+    cursor: grabbing;
+    will-change: transform;
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+}
+
+.claude-landing .cl-hand-hint {
+    position: absolute;
+    left: 50%;
+    bottom: -26px;
+    transform: translateX(-50%);
+    margin: 0;
+    white-space: nowrap;
+    font-size: 0.8rem;
+    font-style: italic;
+    color: rgba(246, 239, 224, 0.55);
 }
 
 .claude-landing .cl-hand-card-1 {
@@ -717,6 +759,7 @@
         min-height: 340px;
     }
 
+    .claude-landing .cl-hand-slot,
     .claude-landing .cl-hand-card,
     .claude-landing .cl-flying-card {
         width: 96px;
@@ -756,6 +799,15 @@
     .claude-landing .cl-flying-card,
     .claude-landing .cl-season-token {
         animation: none;
+    }
+
+    /* Card physics is disabled in JS under reduced motion, so drop the invite. */
+    .claude-landing .cl-hand-hint {
+        display: none;
+    }
+
+    .claude-landing .cl-hand-card {
+        cursor: default;
     }
 
     .claude-landing .cl-btn,

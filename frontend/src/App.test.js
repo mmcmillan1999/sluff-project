@@ -64,8 +64,8 @@ describe('App Component and Game Flow', () => {
     test('renders the public Sluff front door on initial load without a token', () => {
         Storage.prototype.getItem.mockReturnValueOnce(null);
         render(<App />);
-        expect(screen.getByRole('heading', { name: /pick your card\. send it\./i })).toBeInTheDocument();
-        expect(screen.getAllByRole('button', { name: /join Alpha Season 2/i })).toHaveLength(2);
+        expect(screen.getByRole('heading', { name: /the card game you don’t play\. you throw it\./i })).toBeInTheDocument();
+        expect(screen.getAllByRole('button', { name: /play free now/i })).toHaveLength(2);
     });
     
     test('renders LobbyView component when a token is present', async () => {

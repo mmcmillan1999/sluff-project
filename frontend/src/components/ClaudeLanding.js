@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
+import LandingCardPhysics from '../utils/LandingCardPhysics.js';
 import './ClaudeLanding.css';
 
 const VENUES = [
@@ -49,8 +50,8 @@ const FEATURES = [
         id: 'full-table',
         icon: '♟',
         title: 'Always a full table',
-        body: 'Quick Play seats you in seconds. When humans are scarce, AI opponents fill the '
-            + 'empty chairs — and they play to win.',
+        body: 'Quick Play deals you in within seconds, day or night. No waiting around '
+            + 'for a fourth — the chairs fill fast and the game gets going.',
     },
     {
         id: 'live',
@@ -92,6 +93,17 @@ const HAND_CARDS = [
 const ClaudeLanding = ({ inviteTableId, onRegister, onLogin }) => {
     const invited = Boolean(inviteTableId);
     const primaryCta = invited ? 'Join your friend’s table' : 'Play free now';
+    const heroHandRef = useRef(null);
+
+    useEffect(() => {
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
+        if (!heroHandRef.current) return undefined;
+        const physics = new LandingCardPhysics();
+        heroHandRef.current.querySelectorAll('.cl-hand-card').forEach((cardEl) => {
+            physics.register(cardEl, cardEl.parentElement);
+        });
+        return () => physics.destroy();
+    }, []);
 
     return (
         <div className="claude-landing">
@@ -145,21 +157,21 @@ const ClaudeLanding = ({ inviteTableId, onRegister, onLogin }) => {
                                 <span className="cl-card-corner cl-card-red">J<em>♥</em></span>
                                 <span className="cl-card-pip cl-card-red">♥</span>
                             </div>
-                            <div className="cl-hero-hand">
+                            <div className="cl-hero-hand" ref={heroHandRef}>
                                 {HAND_CARDS.map((card, index) => (
-                                    <div
-                                        key={card.rank + card.suit}
-                                        className={'cl-hand-card cl-hand-card-' + (index + 1)}
-                                    >
-                                        <span className={'cl-card-corner' + (card.red ? ' cl-card-red' : '')}>
-                                            {card.rank}<em>{card.suit}</em>
-                                        </span>
-                                        <span className={'cl-card-pip' + (card.red ? ' cl-card-red' : '')}>
-                                            {card.suit}
-                                        </span>
+                                    <div key={card.rank + card.suit} className="cl-hand-slot">
+                                        <div className={'cl-hand-card cl-hand-card-' + (index + 1)}>
+                                            <span className={'cl-card-corner' + (card.red ? ' cl-card-red' : '')}>
+                                                {card.rank}<em>{card.suit}</em>
+                                            </span>
+                                            <span className={'cl-card-pip' + (card.red ? ' cl-card-red' : '')}>
+                                                {card.suit}
+                                            </span>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
+                            <p className="cl-hand-hint">Go on — grab a card and throw it.</p>
                         </div>
                     </div>
                 </section>
