@@ -42,6 +42,8 @@ class GameEngine {
         // callbacks cannot mutate a recycled table.
         this.qpPhase = tableType === 'quickplay' ? 'filling' : null;
         this.qpGeneration = 0;
+        this.qpMatchmakingNotice = null;
+        this.qpFundingShortageRecovery = null;
         // Epoch-ms deadline while the table is explicitly seeking a fourth
         // human. This stays server-private; clients only receive the phase.
         this.qpWindowEndsAt = null;
@@ -211,7 +213,7 @@ class GameEngine {
         }
     }
 
-    _addBotPlayer({ allowQuickPlayFourth = false } = {}) {
+    _addBotPlayer({ allowQuickPlayFourth = false, eligibleBotBalances = null } = {}) {
         if (this.gameStarted || this.gameStartPending || this.playerOrder.count >= 4) return;
         // Quick Play's fourth seat is reserved for a human after the table has
         // explicitly entered its fourth-player search. Only the server-owned,
@@ -220,8 +222,11 @@ class GameEngine {
         const currentBots = Object.values(this.players).filter(player => player.isBot);
         const currentBotNames = new Set(currentBots.map(player => player.playerName));
         const currentBotIds = new Set(currentBots.map(player => Number(player.userId)));
+        const hasEligibilityFilter = eligibleBotBalances instanceof Map;
         const availableProfiles = this.botAccounts.filter(profile => (
-            !currentBotIds.has(profile.id) && !currentBotNames.has(profile.username)
+            !currentBotIds.has(profile.id)
+            && !currentBotNames.has(profile.username)
+            && (!hasEligibilityFilter || eligibleBotBalances.has(profile.id))
         ));
         const usePersistentProfile = this.botAccounts.length > 0;
         let botName;
@@ -244,7 +249,9 @@ class GameEngine {
             if (!profile) return;
             botName = profile.username;
             botId = profile.id;
-            tokens = profile.tokens;
+            tokens = hasEligibilityFilter
+                ? eligibleBotBalances.get(profile.id)
+                : profile.tokens;
         } else {
             const availableNames = BOT_NAMES.filter(name => !currentBotNames.has(name));
             if (availableNames.length === 0) return;
@@ -272,11 +279,11 @@ class GameEngine {
         return this.players[botId];
     }
 
-    addBotPlayer() {
-        return this._addBotPlayer();
+    addBotPlayer(options = {}) {
+        return this._addBotPlayer(options && typeof options === 'object' ? options : {});
     }
 
-    addQuickPlayFallbackBot({ generation, deadline, now } = {}) {
+    addQuickPlayFallbackBot({ generation, deadline, now, eligibleBotBalances = null } = {}) {
         if (this.tableType !== 'quickplay'
             || this.gameStarted || this.gameStartPending
             || this.qpPhase !== 'seeking_fourth'
@@ -289,7 +296,7 @@ class GameEngine {
             || !Object.values(this.players).some(player => !player.isBot && !player.isSpectator)
             || this.qpFallbackBot !== null) return null;
 
-        const bot = this._addBotPlayer({ allowQuickPlayFourth: true });
+        const bot = this._addBotPlayer({ allowQuickPlayFourth: true, eligibleBotBalances });
         if (!bot || this.playerOrder.allIds[3] !== bot.userId) {
             if (bot) this.removeBotPlayer(bot.userId);
             return null;
@@ -704,6 +711,8 @@ class GameEngine {
         if (this.tableType === 'quickplay') {
             this.qpPhase = 'filling';
             this.qpGeneration += 1;
+            this.qpMatchmakingNotice = null;
+            this.qpFundingShortageRecovery = null;
         }
         this.qpWindowEndsAt = null;
         this._initializeNewRoundState(); 
@@ -1012,6 +1021,7 @@ class GameEngine {
             tableId: this.tableId, tableName: this.tableName, theme: this.theme, state: this.state, players: this.players,
             serverTime: Date.now(),
             tableType: this.tableType, qpPhase: this.qpPhase, qpGeneration: this.qpGeneration,
+            qpMatchmakingNotice: this.qpMatchmakingNotice,
             // The randomized fallback deadline is deliberately not disclosed;
             // clients render a neutral searching state until a seat is filled.
             qpWindowEndsAt: null,

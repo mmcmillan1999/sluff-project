@@ -130,6 +130,79 @@ describe('ActionControls portrait prompt presentation', () => {
 });
 
 describe('ActionControls Quick Play decisions', () => {
+    test('recommends the next lower stake when the funded fill pool is thin', async () => {
+        const user = userEvent.setup();
+        const handleLeaveTable = vi.fn();
+        renderControls(makeState({
+            tableType: 'quickplay',
+            state: 'Waiting for Players',
+            players: {
+                1: { userId: 1, playerName: 'Alice', isSpectator: false, disconnected: false }
+            },
+            qpPhase: 'filling',
+            qpGeneration: 5,
+            qpMatchmakingNotice: {
+                code: 'HIGH_STAKES_POOL_THIN',
+                recommendedThemeId: 'shirecliff-road',
+                recommendedTableName: 'Shirecliff'
+            }
+        }), { handleLeaveTable });
+
+        expect(screen.getByRole('heading', { name: 'More high rollers needed' })).toBeInTheDocument();
+        expect(screen.getByRole('status')).toHaveTextContent(/Try Shirecliff while more high rollers arrive/i);
+        expect(screen.queryByText(/bot/i)).not.toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'View Lower-Stakes Tables' }));
+        expect(handleLeaveTable).toHaveBeenCalledTimes(1);
+    });
+
+    test('keeps the three-player choice after an unfunded fourth-seat timeout', async () => {
+        const user = userEvent.setup();
+        renderControls(makeState({
+            tableType: 'quickplay',
+            state: 'Ready to Start',
+            qpPhase: 'decision_pending',
+            qpGeneration: 9,
+            qpMatchmakingNotice: {
+                code: 'HIGH_STAKES_POOL_THIN',
+                recommendedThemeId: 'fort-creek',
+                recommendedTableName: 'Fort Creek'
+            }
+        }));
+
+        expect(screen.getByRole('status')).toHaveTextContent(/couldn't find a fourth seat at this buy-in/i);
+        expect(screen.getByRole('status')).toHaveTextContent(/try Fort Creek while more high rollers arrive/i);
+        expect(screen.getByRole('status')).toHaveTextContent(/first game-size choice decides for the table/i);
+        expect(screen.getByRole('button', { name: 'Start 3-Player' })).toBeEnabled();
+        expect(screen.getByRole('button', { name: 'Look for a 4th' })).toBeEnabled();
+        const lobbyButton = screen.getByRole('button', { name: 'View Lower-Stakes Tables' });
+        expect(lobbyButton).toBeEnabled();
+
+        await user.click(screen.getByRole('button', { name: 'Start 3-Player' }));
+        expect(lobbyButton).toBeDisabled();
+    });
+
+    test('announces temporary verification trouble without presenting it as a lower-stakes shortage', () => {
+        renderControls(makeState({
+            tableType: 'quickplay',
+            state: 'Waiting for Players',
+            players: {
+                1: { userId: 1, playerName: 'Alice', isSpectator: false, disconnected: false }
+            },
+            qpPhase: 'filling',
+            qpGeneration: 6,
+            qpMatchmakingNotice: {
+                code: 'MATCHMAKING_TEMPORARILY_UNAVAILABLE',
+                recommendedThemeId: 'shirecliff-road',
+                recommendedTableName: 'Shirecliff'
+            }
+        }));
+
+        expect(screen.getByRole('status')).toHaveTextContent(/could not verify another seat/i);
+        expect(screen.getByRole('button', { name: 'Back to Lobby' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Lower-Stakes/i })).not.toBeInTheDocument();
+        expect(screen.queryByText(/Try Shirecliff/i)).not.toBeInTheDocument();
+    });
+
     test('emits the generation-scoped first-click decision and locks both choices locally', async () => {
         const user = userEvent.setup();
         const emitEvent = vi.fn();

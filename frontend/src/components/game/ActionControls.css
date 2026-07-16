@@ -78,7 +78,8 @@
 
 .action-prompt__copy + .action-prompt__button-grid,
 .action-prompt__copy + .action-prompt__button-row,
-.action-prompt__copy + .action-prompt__button {
+.action-prompt__copy + .action-prompt__button,
+.action-prompt__button-grid + .action-prompt__button {
     margin-top: 0.45rem;
 }
 

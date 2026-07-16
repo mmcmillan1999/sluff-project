@@ -83,6 +83,30 @@ async function loadBotAccounts(queryable) {
     }));
 }
 
+async function loadBotBalances(queryable, botIds) {
+    const normalizedIds = [...new Set((Array.isArray(botIds) ? botIds : [])
+        .map(Number)
+        .filter(id => Number.isInteger(id) && id > 0))];
+    if (normalizedIds.length === 0) return new Map();
+
+    const { rows } = await queryable.query(
+        `SELECT
+            u.id,
+            COALESCE(SUM(t.amount), 0) AS tokens
+         FROM users u
+         LEFT JOIN transactions t ON t.user_id = u.id
+         WHERE u.is_bot = TRUE
+           AND u.id = ANY($1::int[])
+         GROUP BY u.id`,
+        [normalizedIds],
+    );
+
+    const requestedIds = new Set(normalizedIds);
+    return new Map(rows
+        .map(row => [Number(row.id), Number.parseFloat(row.tokens || 0)])
+        .filter(([id, tokens]) => requestedIds.has(id) && Number.isFinite(tokens)));
+}
+
 async function ensureBotAccounts(pool) {
     if (!pool || typeof pool.connect !== 'function') {
         throw new TypeError('A database pool with connect() is required.');
@@ -229,4 +253,5 @@ module.exports = {
     botStartingBalanceKey,
     ensureBotAccounts,
     loadBotAccounts,
+    loadBotBalances,
 };

@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const GameEngine = require('../src/core/GameEngine');
 const GameService = require('../src/services/GameService');
+const transactionManager = require('../src/data/transactionManager');
 const {
     TERMINAL_QUICKPLAY_DISCONNECTED_CLEANUP_DELAY_MS,
     QUICKPLAY_FOURTH_FALLBACK_MIN_DELAY_MS,
@@ -785,6 +786,394 @@ function createSocketHarness(service, io) {
     };
 }
 
+function createFundedQuickPlayHarness({
+    botAccounts,
+    balances = {},
+    queryOverride = null,
+} = {}) {
+    const io = createIo();
+    let balanceQueryCount = 0;
+    const rowsForCurrentBalances = () => botAccounts.map(profile => {
+        const tokens = Number(balances[profile.id] ?? 0);
+        const cents = Math.round(tokens * 100);
+        return {
+            id: profile.id,
+            user_id: profile.id,
+            tokens: String(tokens),
+            current_tokens: String(tokens),
+            balance_cents: String(cents),
+            current_balance_cents: String(cents),
+        };
+    });
+    const pool = {
+        query(sql, params) {
+            balanceQueryCount += 1;
+            if (queryOverride) return queryOverride(sql, params, rowsForCurrentBalances);
+            return Promise.resolve({ rows: rowsForCurrentBalances(), rowCount: botAccounts.length });
+        },
+    };
+    const service = createGameServiceWithoutHeartbeat(
+        GameService,
+        io,
+        pool,
+        { botAccounts },
+    );
+    const scheduled = [];
+    let now = 1_000_000;
+    service.nowOverride = () => now;
+    service.quickPlayRandomOverride = () => 0;
+    service.timerOverride = (callback, duration) => {
+        const timer = { callback, duration };
+        scheduled.push(timer);
+        return timer;
+    };
+    return {
+        service,
+        io,
+        scheduled,
+        getBalanceQueryCount() { return balanceQueryCount; },
+        setNow(value) { now = value; },
+        advanceNow(value) { now += value; },
+    };
+}
+
+const EAGLEWOOD_POOL_THIN_NOTICE = Object.freeze({
+    code: 'HIGH_STAKES_POOL_THIN',
+    recommendedThemeId: 'shirecliff-road',
+    recommendedTableName: 'Shirecliff',
+});
+
+async function testQuickPlaySeatsOnlyBotsWithFreshAffordableBalances() {
+    const botAccounts = [
+        { id: 9001, username: 'Under Funded', tokens: 100, isBot: true },
+        { id: 9002, username: 'Exact Change', tokens: 0, isBot: true },
+        { id: 9003, username: 'High Roller', tokens: 0, isBot: true },
+    ];
+    const harness = createFundedQuickPlayHarness({
+        botAccounts,
+        balances: { 9001: 19.99, 9002: 20, 9003: 60 },
+    });
+    const { service } = harness;
+    const engine = service.findQuickPlayTable('dans-deck');
+    seatHuman(engine, 900, 'Eaglewood Human');
+    service.evaluateQuickPlayTable(engine.tableId, { restartFill: true });
+
+    let fillRecord = service.qpTimers[engine.tableId].fill;
+    await fillRecord.handle.callback();
+    fillRecord = service.qpTimers[engine.tableId].fill;
+    await fillRecord.handle.callback();
+
+    const seatedBotIds = engine.playerOrder.allIds
+        .filter(id => engine.players[id]?.isBot)
+        .sort((left, right) => left - right);
+    assert.deepEqual(seatedBotIds, [9002, 9003],
+        'the stale 100-token snapshot cannot admit a 19.99-token bot to a 20-token table');
+    assert.equal(engine.players[9002].tokens, 20,
+        'a bot with exactly the buy-in remains eligible using integer-cent comparison');
+    assert.equal(engine.players[9003].tokens, 60);
+    assert.equal(engine.players[9001], undefined);
+    assert.equal(engine.qpPhase, 'decision_pending');
+    assert.equal(engine.qpMatchmakingNotice, null);
+    assert.equal(harness.getBalanceQueryCount(), 2,
+        'each delayed bot seat uses a fresh ledger lookup');
+}
+
+async function testQuickPlayStartPreflightRemovesBotWhoseBalanceDropped() {
+    const balances = { 9004: 20 };
+    const harness = createFundedQuickPlayHarness({
+        botAccounts: [
+            { id: 9004, username: 'Fallen High Roller', tokens: 100, isBot: true },
+        ],
+        balances,
+    });
+    const { service } = harness;
+    const engine = service.findQuickPlayTable('dans-deck');
+    seatHuman(engine, 907, 'First Starter');
+    seatHuman(engine, 908, 'Second Starter');
+    service.evaluateQuickPlayTable(engine.tableId, { restartFill: true });
+
+    await service.qpTimers[engine.tableId].fill.handle.callback();
+    assert.deepEqual(engine.playerOrder.allIds, [907, 908, 9004]);
+    assert.equal(engine.qpPhase, 'decision_pending');
+    assert.equal(engine.players[9004].tokens, 20,
+        'the bot was affordable when matchmaking seated it');
+
+    balances[9004] = 19.99;
+    const starts = installPendingStartSpy(service);
+    const decision = service.quickPlayDecision(engine.tableId, 907, 'start3', engine.qpGeneration);
+    assert.equal(decision.accepted, true);
+    assert.equal(engine.qpPhase, 'starting_3');
+    await flushAsyncStart();
+    await flushAsyncStart();
+
+    assert.deepEqual(engine.playerOrder.allIds, [907, 908],
+        'the start preflight removes the newly unaffordable bot');
+    assert.equal(engine.players[9004], undefined);
+    assert.equal(starts.length, 0, 'the stale funded roster never reaches startGame');
+    assert.equal(engine.gameStartPending, false);
+    assert.equal(engine.gameStarted, false);
+    assert.equal(engine.qpPhase, 'filling');
+    assert.deepEqual(engine.qpMatchmakingNotice, EAGLEWOOD_POOL_THIN_NOTICE);
+    assert.ok(service.qpTimers[engine.tableId].fill,
+        'the two-human roster resumes searching after the bot is removed');
+    assert.equal(harness.getBalanceQueryCount(), 2,
+        'matchmaking and start consent each use their own fresh ledger lookup');
+}
+
+async function testFallbackMarkerClearsWhenAffordableFourthSlidesIntoThreeSeatRoster() {
+    const balances = { 9005: 20, 9006: 19.99 };
+    const harness = createFundedQuickPlayHarness({
+        botAccounts: [
+            { id: 9005, username: 'Ordinary Funded Bot', tokens: 20, isBot: true },
+            { id: 9006, username: 'Fallback Funded Bot', tokens: 20, isBot: true },
+        ],
+        balances,
+    });
+    const { service } = harness;
+    const engine = service.findQuickPlayTable('dans-deck');
+    seatHuman(engine, 909, 'Fallback Tester One');
+    seatHuman(engine, 910, 'Fallback Tester Two');
+    service.evaluateQuickPlayTable(engine.tableId, { restartFill: true });
+    await service.qpTimers[engine.tableId].fill.handle.callback();
+    assert.deepEqual(engine.playerOrder.allIds, [909, 910, 9005]);
+
+    // The ordinary bot loses funding while a different bot becomes eligible
+    // for the fourth seat. The fourth is still affordable at start preflight.
+    balances[9005] = 19.99;
+    balances[9006] = 20;
+    const starts = installPendingStartSpy(service);
+    assert.equal(
+        service.quickPlayDecision(engine.tableId, 909, 'seek4', engine.qpGeneration).accepted,
+        true,
+    );
+    let fallbackTimer = service.qpTimers[engine.tableId].window.handle;
+    harness.setNow(engine.qpWindowEndsAt);
+    await fallbackTimer.callback();
+    await flushAsyncStart();
+    await flushAsyncStart();
+
+    assert.deepEqual(engine.playerOrder.allIds, [909, 910, 9006],
+        'removing the ordinary bot slides the funded fourth into the first three seats');
+    assert.equal(engine.players[9006]?.isBot, true);
+    assert.equal(engine.qpFallbackBot, null,
+        'a bot that is no longer fourth is demoted from the generation-bound fallback role');
+    assert.equal(engine.qpPhase, 'decision_pending');
+    assert.deepEqual(engine.qpMatchmakingNotice, EAGLEWOOD_POOL_THIN_NOTICE);
+    assert.equal(starts.length, 0);
+
+    // A fresh fourth-player search must be able to mark another fallback. A
+    // stale marker for 9006 would make addQuickPlayFallbackBot reject this.
+    balances[9005] = 20;
+    assert.equal(
+        service.quickPlayDecision(engine.tableId, 909, 'seek4', engine.qpGeneration).accepted,
+        true,
+    );
+    fallbackTimer = service.qpTimers[engine.tableId].window.handle;
+    harness.setNow(engine.qpWindowEndsAt);
+    await fallbackTimer.callback();
+    await flushAsyncStart();
+    await flushAsyncStart();
+
+    assert.deepEqual(engine.playerOrder.allIds, [909, 910, 9006, 9005]);
+    assert.equal(engine.qpFallbackBot?.userId, 9005,
+        'the later search binds a new fourth-seat fallback instead of being blocked');
+    assert.equal(engine.qpFallbackBot?.startGeneration, engine.qpGeneration);
+    assert.equal(engine.qpPhase, 'starting_4');
+    assert.equal(starts.length, 1);
+    assert.equal(starts[0].options.quickPlayStart.fallbackBotId, 9005);
+}
+
+async function testAtomicBotFundingRacePublishesRecoveredAuthoritativeState() {
+    const balances = { 9007: 20 };
+    const harness = createFundedQuickPlayHarness({
+        botAccounts: [
+            { id: 9007, username: 'Atomic Race Bot', tokens: 20, isBot: true },
+        ],
+        balances,
+    });
+    const { service, io } = harness;
+    const engine = service.findQuickPlayTable('dans-deck');
+    seatHuman(engine, 911, 'Atomic Human One');
+    seatHuman(engine, 912, 'Atomic Human Two');
+    service.evaluateQuickPlayTable(engine.tableId, { restartFill: true });
+    await service.qpTimers[engine.tableId].fill.handle.callback();
+    assert.deepEqual(engine.playerOrder.allIds, [911, 912, 9007]);
+
+    const humanSocket = {
+        id: 'socket-911',
+        user: { id: 911, username: 'Atomic Human One', is_admin: false },
+        data: {},
+        emitted: [],
+        emit(event, payload) { this.emitted.push({ event, payload }); },
+    };
+    io.sockets.sockets.set(humanSocket.id, humanSocket);
+    humanSocket.emitted.length = 0;
+
+    const originalMercy = transactionManager.handleAutomaticBotMercyToken;
+    const originalStartTransaction = transactionManager.startGameTransaction;
+    const originalEmitGameState = service.emitGameState.bind(service);
+    let transactionAttempts = 0;
+    let recoveredStateWasEmitted = false;
+    transactionManager.handleAutomaticBotMercyToken = async () => ({
+        granted: false,
+        reason: 'balance_not_below_threshold',
+        currentTokens: 20,
+    });
+    transactionManager.startGameTransaction = async () => {
+        transactionAttempts += 1;
+        throw new Error('Atomic Race Bot has insufficient tokens. Needs 20, but has 19.99.');
+    };
+    service.emitGameState = tableId => {
+        originalEmitGameState(tableId);
+        const current = service.getEngineById(tableId);
+        if (current?.qpMatchmakingNotice
+            && ['filling', 'decision_pending'].includes(current.qpPhase)) {
+            recoveredStateWasEmitted = true;
+        }
+    };
+
+    let decision;
+    try {
+        decision = service.quickPlayDecision(engine.tableId, 911, 'start3', engine.qpGeneration);
+        // All mocked database operations settle immediately. Drain the complete
+        // preflight -> atomic failure -> state-recovery promise chain.
+        for (let turn = 0; turn < 24; turn += 1) await Promise.resolve();
+    } finally {
+        transactionManager.handleAutomaticBotMercyToken = originalMercy;
+        transactionManager.startGameTransaction = originalStartTransaction;
+        service.emitGameState = originalEmitGameState;
+    }
+
+    assert.equal(decision.accepted, true);
+    assert.equal(transactionAttempts, 1,
+        'the bot passed live preflight before losing the final atomic funding race');
+    assert.deepEqual(engine.playerOrder.allIds, [911, 912]);
+    assert.equal(engine.players[9007], undefined);
+    assert.equal(engine.gameStartPending, false);
+    assert.equal(engine.gameStarted, false);
+    assert.equal(engine.qpFundingShortageRecovery, null);
+    assert.equal(engine.qpPhase, 'filling');
+    assert.deepEqual(engine.qpMatchmakingNotice, EAGLEWOOD_POOL_THIN_NOTICE);
+    assert.equal(recoveredStateWasEmitted, true,
+        'recovery broadcasts authoritative table state instead of relying on a transient error');
+
+    const emittedStates = humanSocket.emitted.filter(item => item.event === 'gameState');
+    assert.ok(emittedStates.length > 0);
+    const finalClientState = emittedStates.at(-1).payload;
+    assert.equal(finalClientState.qpPhase, 'filling');
+    assert.notEqual(finalClientState.qpPhase, 'starting_3');
+    assert.notEqual(finalClientState.qpPhase, 'starting_4');
+    assert.deepEqual(finalClientState.qpMatchmakingNotice, EAGLEWOOD_POOL_THIN_NOTICE);
+}
+
+async function testQuickPlayFillShortageRecommendsLowerStakesAndKeepsSearching() {
+    const harness = createFundedQuickPlayHarness({
+        botAccounts: [
+            { id: 9011, username: 'Almost Eaglewood', tokens: 100, isBot: true },
+        ],
+        balances: { 9011: 19.99 },
+    });
+    const { service } = harness;
+    const engine = service.findQuickPlayTable('dans-deck');
+    seatHuman(engine, 901, 'Waiting High Roller');
+    service.evaluateQuickPlayTable(engine.tableId, { restartFill: true });
+    const expiredFill = service.qpTimers[engine.tableId].fill;
+    const starts = installPendingStartSpy(service);
+
+    await expiredFill.handle.callback();
+
+    assert.equal(engine.playerOrder.count, 1);
+    assert.deepEqual(engine.playerOrder.allIds, [901]);
+    assert.equal(engine.qpPhase, 'filling');
+    assert.deepEqual(engine.qpMatchmakingNotice, EAGLEWOOD_POOL_THIN_NOTICE);
+    assert.deepEqual(
+        engine.getStateForClient({ userId: 901 }).qpMatchmakingNotice,
+        EAGLEWOOD_POOL_THIN_NOTICE,
+        'the lower-stakes recommendation is part of authoritative table state',
+    );
+    assert.equal(starts.length, 0, 'an unfunded bot shortage never starts a game');
+    assert.ok(service.qpTimers[engine.tableId].fill,
+        'matchmaking continues in case an affordable bot or human becomes available');
+    assert.notEqual(service.qpTimers[engine.tableId].fill, expiredFill,
+        'the expired fill attempt cannot be reused as the next search timer');
+}
+
+async function testQuickPlayFourthShortageReturnsToDecisionWithoutStarting() {
+    const harness = createFundedQuickPlayHarness({
+        botAccounts: [
+            { id: 9021, username: 'Priced Out Fourth', tokens: 100, isBot: true },
+        ],
+        balances: { 9021: 19.99 },
+    });
+    const { service } = harness;
+    const engine = seedDecisionTable(service, 'dans-deck', [902, 903, 904]);
+    const starts = installPendingStartSpy(service);
+    const decision = service.quickPlayDecision(engine.tableId, 902, 'seek4', engine.qpGeneration);
+    assert.equal(decision.accepted, true);
+    const searchTimer = service.qpTimers[engine.tableId].window.handle;
+    harness.setNow(engine.qpWindowEndsAt);
+
+    await searchTimer.callback();
+
+    assert.deepEqual(engine.playerOrder.allIds, [902, 903, 904]);
+    assert.equal(engine.qpPhase, 'decision_pending');
+    assert.equal(engine.qpWindowEndsAt, null);
+    assert.equal(engine.qpFallbackBot, null);
+    assert.deepEqual(engine.qpMatchmakingNotice, EAGLEWOOD_POOL_THIN_NOTICE);
+    assert.equal(starts.length, 0, 'a fourth-seat shortage does not launch a three- or four-player game');
+}
+
+async function testStaleAffordableBotLookupCannotBeatAHumanArrival() {
+    let resolveBalanceLookup;
+    const harness = createFundedQuickPlayHarness({
+        botAccounts: [
+            { id: 9031, username: 'Deferred Bot', tokens: 0, isBot: true },
+        ],
+        balances: { 9031: 60 },
+        queryOverride(sql, params, rowsForCurrentBalances) {
+            return new Promise(resolve => {
+                resolveBalanceLookup = () => resolve({
+                    rows: rowsForCurrentBalances(),
+                    rowCount: 1,
+                });
+            });
+        },
+    });
+    const { service } = harness;
+    const engine = service.findQuickPlayTable('dans-deck');
+    seatHuman(engine, 905, 'First Human');
+    service.evaluateQuickPlayTable(engine.tableId, { restartFill: true });
+    const staleFill = service.qpTimers[engine.tableId].fill;
+
+    const pendingFill = staleFill.handle.callback();
+    await Promise.resolve();
+    assert.equal(typeof resolveBalanceLookup, 'function', 'the fresh bot balance lookup is in flight');
+
+    const claimed = service.claimQuickPlaySeat(
+        engine.theme,
+        { id: 906, username: 'Second Human' },
+        'socket-906',
+        '100.00',
+    );
+    assert.equal(claimed, engine);
+    const humanGeneration = engine.qpGeneration;
+    resolveBalanceLookup();
+    await pendingFill;
+    await flushAsyncStart();
+
+    assert.deepEqual(engine.playerOrder.allIds, [905, 906],
+        'the stale continuation cannot add a bot after a human restarts the fill generation');
+    assert.equal(engine.players[9031], undefined);
+    assert.equal(engine.qpGeneration, humanGeneration);
+    assert.equal(engine.qpMatchmakingNotice, null,
+        'a stale lookup cannot publish a notice into the human-updated generation');
+    const currentFill = service.qpTimers[engine.tableId].fill;
+    assert.ok(currentFill);
+    assert.notEqual(currentFill, staleFill);
+    assert.equal(currentFill.generation, humanGeneration);
+    assert.equal(currentFill.expectedSeats, 2);
+}
+
 async function testSeekingFourthMultiTabHandoffAndFinalDisconnectCancellation() {
     const harnessData = createService();
     const { service, io } = harnessData;
@@ -1064,6 +1453,13 @@ async function testNoMatchRetryPreservesPreviousWaitingSeat() {
 
 async function runQuickPlayTests() {
     testFourthFallbackDelayIsInclusiveAndInjectable();
+    await testQuickPlaySeatsOnlyBotsWithFreshAffordableBalances();
+    await testQuickPlayStartPreflightRemovesBotWhoseBalanceDropped();
+    await testFallbackMarkerClearsWhenAffordableFourthSlidesIntoThreeSeatRoster();
+    await testAtomicBotFundingRacePublishesRecoveredAuthoritativeState();
+    await testQuickPlayFillShortageRecommendsLowerStakesAndKeepsSearching();
+    await testQuickPlayFourthShortageReturnsToDecisionWithoutStarting();
+    await testStaleAffordableBotLookupCannotBeatAHumanArrival();
     await testFillStopsForDecisionAndSerializesContract();
     testFirstValidDecisionWinsSynchronously();
     await testSearchTimeoutSeatsFallbackAndGuardsDeadline();

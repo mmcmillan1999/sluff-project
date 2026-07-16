@@ -2,6 +2,7 @@
 
     const GameEngine = require('../core/GameEngine');
     const transactionManager = require('../data/transactionManager');
+    const { loadBotBalances } = require('../data/botAccounts');
     const { THEMES, TABLE_COSTS, SERVER_VERSION, ROUND_PRESENTATION_LOCK_MS } = require('../core/constants');
     const AdaptiveInsuranceStrategy = require('../core/bot-strategies/AdaptiveInsuranceStrategy');
 
@@ -427,6 +428,48 @@
                 + Math.floor(unit * inclusiveRange);
         }
 
+        async _loadAffordableQuickPlayBotBalances(engine) {
+            // Empty bot rosters are retained for lightweight unit/local engines,
+            // whose negative-id bots never touch the funded ledger. Production
+            // always supplies persistent bot principals.
+            if (this.botAccounts.length === 0) return null;
+
+            const balances = await loadBotBalances(
+                this.pool,
+                this.botAccounts.map(profile => profile.id),
+            );
+            const buyInCents = Math.round(Number(TABLE_COSTS[engine.theme] || 0) * 100);
+            return new Map([...balances].filter(([, tokens]) => (
+                Math.round(Number(tokens) * 100) >= buyInCents
+            )));
+        }
+
+        _quickPlayMatchmakingNotice(engine, code = 'HIGH_STAKES_POOL_THIN') {
+            const currentCostCents = Math.round(Number(TABLE_COSTS[engine.theme] || 0) * 100);
+            const recommendedTheme = THEMES
+                .filter(theme => Math.round(Number(TABLE_COSTS[theme.id] || 0) * 100) < currentCostCents)
+                .sort((left, right) => TABLE_COSTS[right.id] - TABLE_COSTS[left.id])[0] || null;
+            return {
+                code,
+                recommendedThemeId: recommendedTheme?.id || null,
+                recommendedTableName: recommendedTheme?.name || null,
+            };
+        }
+
+        _quickPlayMatchmakingMessage(engine) {
+            const recommendation = this._quickPlayMatchmakingNotice(engine);
+            return recommendation.recommendedTableName
+                ? `We couldn't fill this table. Try ${recommendation.recommendedTableName} while more high rollers arrive.`
+                : "We couldn't fill this table yet. Please keep waiting or try again shortly.";
+        }
+
+        _normalizeQuickPlayFallbackMarker(engine) {
+            if (!engine?.qpFallbackBot
+                || engine.playerOrder.allIds[3] === engine.qpFallbackBot.userId) return false;
+            engine.qpFallbackBot = null;
+            return true;
+        }
+
         _clearQuickPlayTimer(tableId, kind) {
             const timers = this.qpTimers[tableId];
             const record = timers?.[kind];
@@ -451,6 +494,7 @@
             engine.qpGeneration = this.qpGenerationCounter;
             engine.qpPhase = phase;
             engine.qpWindowEndsAt = windowEndsAt;
+            engine.qpMatchmakingNotice = null;
             return engine.qpGeneration;
         }
 
@@ -547,16 +591,62 @@
                     const expectedSeats = seated;
                     const record = { generation, expectedSeats, handle: null };
                     timers.fill = record;
-                    record.handle = timerFn(() => {
+                    record.handle = timerFn(async () => {
                         if (timers.fill === record) timers.fill = null;
-                        const eng = this.engines[tableId];
+                        let eng = this.engines[tableId];
                         if (!eng || eng.gameStarted || eng.gameStartPending
                             || eng.qpPhase !== 'filling'
                             || eng.qpGeneration !== generation
                             || eng.playerOrder.count !== expectedSeats
                             || this._humanCount(eng) < 1
                             || eng.playerOrder.count >= 3) return;
-                        eng.addBotPlayer();
+
+                        let eligibleBotBalances;
+                        let noticeCode = 'HIGH_STAKES_POOL_THIN';
+                        try {
+                            eligibleBotBalances = await this._loadAffordableQuickPlayBotBalances(eng);
+                        } catch (error) {
+                            noticeCode = 'MATCHMAKING_TEMPORARILY_UNAVAILABLE';
+                            eligibleBotBalances = new Map();
+                            console.error(`[QUICKPLAY] Could not verify funded bot seats for ${tableId}.`, error);
+                        }
+
+                        // The ledger read yielded. Revalidate the exact engine,
+                        // roster, phase, and timer generation before taking a
+                        // seat so a human arrival/reset always wins the race.
+                        eng = this.engines[tableId];
+                        if (!eng || eng.gameStarted || eng.gameStartPending
+                            || eng.qpPhase !== 'filling'
+                            || eng.qpGeneration !== generation
+                            || eng.playerOrder.count !== expectedSeats
+                            || this._humanCount(eng) < 1
+                            || eng.playerOrder.count >= 3) return;
+
+                        let bot = null;
+                        try {
+                            bot = eng.addBotPlayer({ eligibleBotBalances });
+                        } catch (error) {
+                            console.error(`[QUICKPLAY] Could not fill a funded seat on ${tableId}.`, error);
+                        }
+                        if (!bot) {
+                            // Keep accepting human arrivals and quietly retry in
+                            // another normal fill window. The durable client
+                            // notice gives the waiting player an immediate,
+                            // lower-stakes alternative without exposing bots.
+                            this.evaluateQuickPlayTable(tableId, { restartFill: true });
+                            const waitingEngine = this.engines[tableId];
+                            if (waitingEngine === eng
+                                && waitingEngine.qpPhase === 'filling'
+                                && waitingEngine.playerOrder.count === expectedSeats) {
+                                waitingEngine.qpMatchmakingNotice = this._quickPlayMatchmakingNotice(
+                                    waitingEngine,
+                                    noticeCode,
+                                );
+                                this.emitGameState(tableId);
+                            }
+                            return;
+                        }
+                        eng.qpMatchmakingNotice = null;
                         this.emitGameState(tableId);
                         this.evaluateQuickPlayTable(tableId, { restartFill: true });
                     }, delay);
@@ -640,7 +730,7 @@
                     handle: null,
                 };
                 timers.window = record;
-                const expireSearch = () => {
+                const currentSearchEngine = () => {
                     const current = this.engines[tableId];
                     if (timers.window !== record
                         || !current || current !== record.engine
@@ -651,24 +741,47 @@
                         || current.playerOrder.allIds.some((id, index) => id !== expectedRoster[index])
                         || this._humanCount(current) !== expectedHumans
                         || current.qpWindowEndsAt !== deadline
-                    ) return;
+                    ) return null;
+                    return current;
+                };
+                const expireSearch = async () => {
+                    let current = currentSearchEngine();
+                    if (!current) return;
                     const remaining = deadline - this._quickPlayNow();
                     if (remaining > 0) {
                         record.handle = timerFn(expireSearch, remaining);
                         return;
                     }
+
+                    let eligibleBotBalances;
+                    let noticeCode = 'HIGH_STAKES_POOL_THIN';
+                    try {
+                        eligibleBotBalances = await this._loadAffordableQuickPlayBotBalances(current);
+                    } catch (error) {
+                        noticeCode = 'MATCHMAKING_TEMPORARILY_UNAVAILABLE';
+                        eligibleBotBalances = new Map();
+                        console.error(`[QUICKPLAY] Could not verify a funded fourth seat for ${tableId}.`, error);
+                    }
+                    current = currentSearchEngine();
+                    if (!current) return;
+
                     let fallbackBot = null;
                     try {
                         fallbackBot = current.addQuickPlayFallbackBot({
                             generation: searchGeneration,
                             deadline,
                             now: this._quickPlayNow(),
+                            eligibleBotBalances,
                         });
                     } catch (error) {
                         console.error(`[QUICKPLAY] Could not create a fourth-seat fallback on ${tableId}.`, error);
                     }
                     if (!fallbackBot) {
                         this._advanceQuickPlayPhase(current, 'decision_pending');
+                        current.qpMatchmakingNotice = this._quickPlayMatchmakingNotice(
+                            current,
+                            noticeCode,
+                        );
                         this.emitGameState(tableId);
                         return;
                     }
@@ -728,6 +841,51 @@
             )) return;
             const firstHuman = Object.values(engine.players).find(p => !p.isBot && !p.isSpectator);
             if (!firstHuman) { this.evaluateQuickPlayTable(tableId); return; }
+
+            const expectedRoster = [...engine.playerOrder.allIds];
+            const fundedBotIds = expectedRoster.filter(id => (
+                Number.isInteger(id)
+                && id > 0
+                && engine.players[id]?.isBot === true
+            ));
+            if (fundedBotIds.length > 0 && this.botAccounts.length > 0) {
+                let affordableBotBalances;
+                let noticeCode = 'HIGH_STAKES_POOL_THIN';
+                try {
+                    affordableBotBalances = await this._loadAffordableQuickPlayBotBalances(engine);
+                } catch (error) {
+                    noticeCode = 'MATCHMAKING_TEMPORARILY_UNAVAILABLE';
+                    affordableBotBalances = new Map();
+                    console.error(`[QUICKPLAY] Could not recheck bot buy-ins before starting ${tableId}.`, error);
+                }
+
+                const current = this.engines[tableId];
+                if (current !== engine
+                    || current.gameStarted || current.gameStartPending
+                    || current.qpPhase !== expectedPhase
+                    || current.qpGeneration !== generation
+                    || current.playerOrder.count !== playerMode
+                    || current.playerOrder.allIds.some((id, index) => id !== expectedRoster[index])) return;
+
+                const unaffordableBotIds = fundedBotIds.filter(id => !affordableBotBalances.has(id));
+                if (unaffordableBotIds.length > 0) {
+                    for (const botId of unaffordableBotIds) current.removeBotPlayer(botId);
+                    // If an earlier bot seat was removed, the funded fourth may
+                    // slide into the ordinary three-seat roster. It is still a
+                    // valid funded bot, but no longer the generation-bound
+                    // fourth-seat fallback.
+                    this._normalizeQuickPlayFallbackMarker(current);
+                    const nextPhase = current.playerOrder.count >= 3 ? 'decision_pending' : 'filling';
+                    this._advanceQuickPlayPhase(current, nextPhase);
+                    if (nextPhase === 'filling') {
+                        this.evaluateQuickPlayTable(tableId, { restartFill: true });
+                    }
+                    current.qpMatchmakingNotice = this._quickPlayMatchmakingNotice(current, noticeCode);
+                    this.emitGameState(tableId);
+                    return;
+                }
+            }
+
             engine.qpWindowEndsAt = null;
             try {
                 await this.startGame(tableId, firstHuman.userId, {
@@ -745,6 +903,24 @@
                 return;
             }
             if (!engine.gameStarted) {
+                const fundingRecovery = engine.qpFundingShortageRecovery;
+                if (fundingRecovery?.startGeneration === generation) {
+                    engine.qpFundingShortageRecovery = null;
+                    this.evaluateQuickPlayTable(tableId);
+                    const current = this.engines[tableId];
+                    if (current === engine
+                        && !current.gameStarted
+                        && !current.gameStartPending
+                        && this._humanCount(current) > 0) {
+                        this._normalizeQuickPlayFallbackMarker(current);
+                        current.qpMatchmakingNotice = this._quickPlayMatchmakingNotice(
+                            current,
+                            fundingRecovery.code,
+                        );
+                        this.emitGameState(tableId);
+                    }
+                    return;
+                }
                 if (this._recoverQuickPlayFallbackStart(
                     tableId,
                     engine,
@@ -1252,8 +1428,31 @@
                         } catch (err) {
                             const insufficientFundsMatch = err.message.match(/(.+) has insufficient tokens/);
                             const brokePlayerName = insufficientFundsMatch ? insufficientFundsMatch[1] : null;
+                            const brokePlayer = brokePlayerName
+                                ? Object.values(engine.players).find(player => player.playerName === brokePlayerName)
+                                : null;
+                            const quickPlayBotFundingShortage = engine.tableType === 'quickplay'
+                                && brokePlayer?.isBot === true;
                             if (effect.onFailure) effect.onFailure(err, brokePlayerName);
-                            this.io.to(tableId).emit('gameStartFailed', { message: err.message, kickedPlayer: brokePlayerName });
+                            if (quickPlayBotFundingShortage) {
+                                // A cross-process race can drain a bot after our
+                                // live preflight but before the database locks
+                                // its row. Keep that hidden implementation
+                                // detail out of the player-facing error.
+                                engine.qpFundingShortageRecovery = {
+                                    startGeneration: engine.qpGeneration,
+                                    code: 'HIGH_STAKES_POOL_THIN',
+                                };
+                                engine.qpMatchmakingNotice = this._quickPlayMatchmakingNotice(engine);
+                                this.io.to(tableId).emit('error', {
+                                    message: this._quickPlayMatchmakingMessage(engine),
+                                });
+                            } else {
+                                this.io.to(tableId).emit('gameStartFailed', {
+                                    message: err.message,
+                                    kickedPlayer: brokePlayerName,
+                                });
+                            }
                             break;
                         }
 

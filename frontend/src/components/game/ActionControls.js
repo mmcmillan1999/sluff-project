@@ -66,6 +66,7 @@ const ActionControls = ({
     const [quickPlayDecisionSubmitted, setQuickPlayDecisionSubmitted] = useState(false);
     const qpPhase = currentTableState.qpPhase;
     const qpGeneration = currentTableState.qpGeneration;
+    const qpMatchmakingNotice = currentTableState.qpMatchmakingNotice;
     const hasQpDeadline = deadlineToMs(currentTableState.qpWindowEndsAt) !== null;
 
     useEffect(() => {
@@ -105,6 +106,9 @@ const ActionControls = ({
 
         if (phase === 'decision_pending') {
             const isFourPlayerDecision = activePlayers.length === 4;
+            const lowerStakesName = qpMatchmakingNotice?.recommendedTableName;
+            const hasLowerStakesRecommendation = qpMatchmakingNotice?.code === 'HIGH_STAKES_POOL_THIN'
+                && Boolean(lowerStakesName);
             if (!isActiveHuman) {
                 return (
                     <StatusPrompt label="Quick Play decision">
@@ -135,7 +139,16 @@ const ActionControls = ({
             return (
                 <PromptShell variant="choice" label="Choose Quick Play game size">
                     <h2 className="action-prompt__heading">Three seats are ready</h2>
-                    <p className="action-prompt__copy">First choice at the table decides.</p>
+                    <p
+                        className="action-prompt__copy"
+                        {...(qpMatchmakingNotice ? { role: 'status', 'aria-live': 'polite' } : {})}
+                    >
+                        {qpMatchmakingNotice
+                            ? (qpMatchmakingNotice.code === 'MATCHMAKING_TEMPORARILY_UNAVAILABLE'
+                                ? 'Matchmaking is having trouble checking another seat. Start with three or try again. The first game-size choice decides for the table.'
+                                : `We couldn't find a fourth seat at this buy-in. Start with three${lowerStakesName ? ` or try ${lowerStakesName} while more high rollers arrive` : ' or keep looking'}. The first game-size choice decides for the table.`)
+                            : 'First choice at the table decides.'}
+                    </p>
                     <div className="action-prompt__button-grid action-prompt__button-grid--decision">
                         <button
                             type="button"
@@ -154,6 +167,16 @@ const ActionControls = ({
                             Look for a 4th
                         </button>
                     </div>
+                    {qpMatchmakingNotice && (
+                        <button
+                            type="button"
+                            onClick={handleLeaveTable}
+                            disabled={quickPlayDecisionSubmitted}
+                            className="game-button action-prompt__button action-prompt__button--quiet"
+                        >
+                            {hasLowerStakesRecommendation ? 'View Lower-Stakes Tables' : 'Back to Lobby'}
+                        </button>
+                    )}
                 </PromptShell>
             );
         }
@@ -183,6 +206,35 @@ const ActionControls = ({
                 <StatusPrompt label="Quick Play starting">
                     Starting a {phase === 'starting_3' ? '3' : '4'}-player game…
                 </StatusPrompt>
+            );
+        }
+
+        if (qpMatchmakingNotice) {
+            const lowerStakesName = qpMatchmakingNotice.recommendedTableName;
+            const temporarilyUnavailable = qpMatchmakingNotice.code === 'MATCHMAKING_TEMPORARILY_UNAVAILABLE';
+            const hasLowerStakesRecommendation = !temporarilyUnavailable && Boolean(lowerStakesName);
+            return (
+                <PromptShell variant="pregame" label="Quick Play needs more players">
+                    <h2 className="action-prompt__heading">
+                        {temporarilyUnavailable
+                            ? 'Matchmaking needs a moment'
+                            : (lowerStakesName ? 'More high rollers needed' : 'More players needed')}
+                    </h2>
+                    <p className="action-prompt__copy" role="status" aria-live="polite">
+                        {temporarilyUnavailable
+                            ? 'We could not verify another seat. We will keep trying while you wait.'
+                            : `We couldn't fill this buy-in yet.${lowerStakesName ? ` Try ${lowerStakesName} while more high rollers arrive.` : ' We will keep looking while you wait.'}`}
+                    </p>
+                    {!isSpectator && (
+                        <button
+                            type="button"
+                            onClick={handleLeaveTable}
+                            className="game-button action-prompt__button action-prompt__button--quiet"
+                        >
+                            {hasLowerStakesRecommendation ? 'View Lower-Stakes Tables' : 'Back to Lobby'}
+                        </button>
+                    )}
+                </PromptShell>
             );
         }
 
