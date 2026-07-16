@@ -5,25 +5,36 @@ import Register from './Register.js';
 import VerifyEmail from './VerifyEmail.js';
 import RequestPasswordReset from './RequestPasswordReset.js';
 import ResetPassword from './ResetPassword.js';
+import PublicLanding from './PublicLanding.js';
+
+const viewFromLocation = () => {
+    const path = window.location.pathname;
+    const token = new URLSearchParams(window.location.search).get('token');
+
+    if (path === '/verify-email') return 'verify';
+    if (path === '/reset-password' && token) return 'reset';
+    if (path === '/register') return 'register';
+    if (path === '/login') return 'login';
+    if (path === '/forgot') return 'forgot';
+    return 'landing';
+};
 
 const AuthContainer = ({ onLoginSuccess, inviteTableId }) => {
-    const [view, setView] = useState('login');
+    const [view, setView] = useState(viewFromLocation);
 
     useEffect(() => {
-        const path = window.location.pathname;
-        const token = new URLSearchParams(window.location.search).get('token');
-        
-        if (path === '/verify-email') {
-            setView('verify');
-        }
-        if (path === '/reset-password' && token) {
-            setView('reset');
-        }
+        const handlePopState = () => setView(viewFromLocation());
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
     }, []);
 
     const handleNavigate = (newView) => {
-        const url = newView === 'login' ? '/' : `/${newView}`;
-        // We use pushState to change the URL for user clarity, but the view state is what controls rendering.
+        const encodedInvite = inviteTableId ? encodeURIComponent(inviteTableId) : null;
+        const inviteQuery = encodedInvite ? `?join=${encodedInvite}` : '';
+        const url = newView === 'landing'
+            ? (encodedInvite ? `/join/${encodedInvite}` : '/')
+            : `/${newView}${inviteQuery}`;
+
         window.history.pushState({}, '', url);
         setView(newView);
     };
@@ -38,6 +49,12 @@ const AuthContainer = ({ onLoginSuccess, inviteTableId }) => {
                 return <RequestPasswordReset onNavigate={handleNavigate} />;
             case 'reset':
                 return <ResetPassword onNavigate={handleNavigate} />;
+            case 'landing':
+                return <PublicLanding
+                    inviteTableId={inviteTableId}
+                    onRegister={() => handleNavigate('register')}
+                    onLogin={() => handleNavigate('login')}
+                />;
             case 'login':
             default:
                 return <Login
@@ -51,15 +68,8 @@ const AuthContainer = ({ onLoginSuccess, inviteTableId }) => {
     return (
         <>
             {inviteTableId && (view === 'login' || view === 'register') && (
-                <div style={{
-                    backgroundColor: '#0d6efd',
-                    color: 'white',
-                    textAlign: 'center',
-                    padding: '1.2vh 2vw',
-                    fontFamily: "'Oswald', sans-serif",
-                    fontSize: '1.9vh'
-                }}>
-                    🎴 A friend invited you to their table! Log in or create an account and you'll be seated automatically.
+                <div className="auth-invite-banner" role="status">
+                    A friend invited you to their table. Sign in or create an account and you will be seated automatically.
                 </div>
             )}
             {renderView()}

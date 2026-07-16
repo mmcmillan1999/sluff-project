@@ -166,3 +166,17 @@
 .password-requirements li {
     margin: 0.5vh 0;
 }
+
+.auth-invite-banner {
+    position: relative;
+    z-index: 2;
+    padding: max(0.75rem, calc(var(--safe-top, 0px) + 0.5rem)) 1rem 0.75rem;
+    border-bottom: 1px solid rgba(241, 207, 140, 0.45);
+    background: linear-gradient(135deg, #173e2a, #10281d);
+    color: #fff7e7;
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(0.88rem, 1.9vh, 1.05rem);
+    letter-spacing: 0.02em;
+    line-height: 1.45;
+    text-align: center;
+}

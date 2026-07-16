@@ -61,10 +61,11 @@ describe('App Component and Game Flow', () => {
         Storage.prototype.removeItem = vi.fn();
     });
 
-    test('renders Login component on initial load without a token', () => {
+    test('renders the public Sluff front door on initial load without a token', () => {
         Storage.prototype.getItem.mockReturnValueOnce(null);
         render(<App />);
-        expect(screen.getByRole('button', { name: /Login/i })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: /pick your card\. send it\./i })).toBeInTheDocument();
+        expect(screen.getAllByRole('button', { name: /join Alpha Season 2/i })).toHaveLength(2);
     });
     
     test('renders LobbyView component when a token is present', async () => {

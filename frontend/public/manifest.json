@@ -1,28 +1,24 @@
 {
   "short_name": "Sluff",
-  "name": "Sluff Card Game",
+  "name": "Sluff — Mobile Trick-Taking Card Game",
+  "description": "Join Sluff Alpha Season 2, a mobile-first trick-taking card game for 3 or 4 players where every card is played with an intentional flick.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#0b1711",
+  "orientation": "any",
+  "lang": "en-US",
+  "dir": "ltr",
+  "categories": ["games", "entertainment"],
   "icons": [
     {
-      "src": "favicon.ico",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon"
-    },
-    {
-      "src": "logo192.png",
+      "src": "/sluff-app-icon-v1.png",
       "type": "image/png",
-      "sizes": "192x192"
-    },
-    {
-      "src": "logo512.png",
-      "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "512x512",
+      "purpose": "any maskable"
     }
   ],
-  "start_url": ".",
-  "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff",
-  "description": "A strategic card game where players bid and compete to win tricks and earn tokens.",
-  "categories": ["games", "entertainment"],
-  "orientation": "any"
+  "prefer_related_applications": false
 }
