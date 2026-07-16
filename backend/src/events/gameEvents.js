@@ -527,6 +527,27 @@ const registerGameHandlers = (io, gameService, options = {}) => {
             socket.emit("notification", { message });
         });
 
+        // Player-facing counterpart to findPlayer: frees the most recently
+        // auto-filled seat on a full pregame table so a friend can join.
+        // Same neutrality rule — the copy never says which kind of player left.
+        onTableAction("makeRoom", {
+            validate: (_payload, { engine }) => {
+                if (engine.tableType === 'quickplay') return 'This table manages its own seats.';
+                if (engine.gameStarted || engine.gameStartPending) return 'The game has already started.';
+                return null;
+            },
+        }, ({ engine }) => {
+            const hasRemovableSeat = Object.values(engine.players).some(player => player.isBot);
+            if (!hasRemovableSeat) {
+                socket.emit("notification", { message: 'No seat can be freed right now.' });
+                return;
+            }
+            engine.removeBot();
+            gameService.emitGameState(engine.tableId);
+            gameService.io.emit('lobbyState', gameService.getLobbyState());
+            socket.emit("notification", { message: 'A seat is open — share your game link.' });
+        });
+
         // Bots are quick-play-only for regular players (the matchmaker seats
         // them). Manual bot management remains as an admin testing tool.
         onTableAction("addBot", {
