@@ -1,0 +1,135 @@
+/* Shared styles for legal pages (Privacy Policy, Terms of Service) */
+
+.legal-page {
+    min-height: 100vh;
+    background-color: #0b1711;
+    color: rgba(246, 239, 224, 0.9);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+        'Helvetica Neue', Arial, sans-serif;
+    line-height: 1.65;
+    padding: 4vh 5vw 8vh;
+    box-sizing: border-box;
+    -webkit-font-smoothing: antialiased;
+}
+
+.legal-page .legal-page-inner {
+    max-width: 760px;
+    margin: 0 auto;
+}
+
+.legal-page h1 {
+    font-size: 2rem;
+    color: #f6efe0;
+    margin: 0.5em 0 0.25em;
+    line-height: 1.2;
+}
+
+.legal-page h2 {
+    font-size: 1.25rem;
+    color: #f6efe0;
+    margin: 2em 0 0.5em;
+    padding-bottom: 0.25em;
+    border-bottom: 1px solid rgba(246, 239, 224, 0.15);
+}
+
+.legal-page h3 {
+    font-size: 1.05rem;
+    color: rgba(246, 239, 224, 0.95);
+    margin: 1.25em 0 0.35em;
+}
+
+.legal-page p {
+    margin: 0.6em 0;
+}
+
+.legal-page ul {
+    margin: 0.6em 0;
+    padding-left: 1.4em;
+}
+
+.legal-page li {
+    margin: 0.35em 0;
+}
+
+.legal-page a {
+    color: #9fd6b4;
+    text-decoration: underline;
+}
+
+.legal-page a:hover {
+    color: #c4e8d2;
+}
+
+.legal-page .legal-meta {
+    color: rgba(246, 239, 224, 0.6);
+    font-size: 0.9rem;
+    margin-bottom: 1.5em;
+}
+
+.legal-page .legal-intro {
+    font-size: 1.05rem;
+    color: rgba(246, 239, 224, 0.85);
+}
+
+.legal-page .legal-callout {
+    background-color: rgba(159, 214, 180, 0.08);
+    border: 1px solid rgba(159, 214, 180, 0.35);
+    border-radius: 8px;
+    padding: 0.9em 1.1em;
+    font-weight: 600;
+    color: #f6efe0;
+}
+
+.legal-page .legal-back-button {
+    display: inline-block;
+    background-color: transparent;
+    color: #9fd6b4;
+    border: 1px solid rgba(159, 214, 180, 0.5);
+    border-radius: 6px;
+    padding: 0.5em 1em;
+    font-size: 0.95rem;
+    font-family: inherit;
+    cursor: pointer;
+    margin-bottom: 1em;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.legal-page .legal-back-button:hover {
+    background-color: rgba(159, 214, 180, 0.12);
+    color: #c4e8d2;
+}
+
+.legal-page .legal-link-button {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: #9fd6b4;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.legal-page .legal-link-button:hover {
+    color: #c4e8d2;
+}
+
+.legal-page .legal-crosslink {
+    margin-top: 3em;
+    padding-top: 1em;
+    border-top: 1px solid rgba(246, 239, 224, 0.15);
+    color: rgba(246, 239, 224, 0.75);
+}
+
+@media (max-width: 600px) {
+    .legal-page {
+        padding: 2vh 6vw 6vh;
+    }
+
+    .legal-page h1 {
+        font-size: 1.6rem;
+    }
+
+    .legal-page h2 {
+        font-size: 1.15rem;
+    }
+}

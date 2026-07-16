@@ -1,6 +1,7 @@
 // backend/src/api/auth.js
 
 const express = require('express');
+const { rateLimit } = require('express-rate-limit');
 const { v4: uuidv4 } = require('uuid');
 const { sendEmail } = require('../services/emailService');
 const requireAuth = require('../middleware/requireAuth');
@@ -39,25 +40,48 @@ function publicUserProfile(user, tokens) {
     };
 }
 
+// Per-IP limits on the abuse-prone auth routes. Registration mints starting
+// tokens and burns a bcrypt hash per call; the email routes trigger real
+// sends via Resend, so they get the tightest budget.
+const limiterDefaults = {
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: 'Too many attempts. Please wait a bit and try again.' },
+};
+const loginLimiter = rateLimit({ ...limiterDefaults, windowMs: 15 * 60 * 1000, limit: 10 });
+const registerLimiter = rateLimit({ ...limiterDefaults, windowMs: 60 * 60 * 1000, limit: 5 });
+const emailSendLimiter = rateLimit({ ...limiterDefaults, windowMs: 60 * 60 * 1000, limit: 3 });
+const tokenCheckLimiter = rateLimit({ ...limiterDefaults, windowMs: 15 * 60 * 1000, limit: 30 });
+
+const MIN_PASSWORD_LENGTH = 8;
+
 module.exports = function(pool, bcrypt, jwt, io) {
     const router = express.Router();
     const checkAuth = requireAuth(pool, jwt);
 
     // REGISTRATION ROUTE
-    router.post('/register', async (req, res) => {
+    router.post('/register', registerLimiter, async (req, res) => {
         const client = await pool.connect();
+        let newUserId = null;
+        let committed = false;
         try {
             await client.query('BEGIN');
 
-            const { username, email, password } = req.body;
+            const { username, email, password, acceptedTerms } = req.body;
             if (!username || !email || !password) {
                 return res.status(400).json({ message: "Username, email, and password are required." });
+            }
+            if (typeof password !== 'string' || password.length < MIN_PASSWORD_LENGTH) {
+                return res.status(400).json({ message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.` });
+            }
+            if (acceptedTerms !== true) {
+                return res.status(400).json({ message: "You must accept the Terms of Service and Privacy Policy to create an account." });
             }
             const hashedPassword = await bcrypt.hash(password, 10);
             
             const insertUserQuery = 'INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id';
             const userResult = await client.query(insertUserQuery, [username, email, hashedPassword]);
-            const newUserId = userResult.rows[0].id;
+            newUserId = userResult.rows[0].id;
 
             const startingTokens = 8.00;
             const transactionType = 'admin_adjustment'; 
@@ -86,31 +110,43 @@ module.exports = function(pool, bcrypt, jwt, io) {
                 <p>If you did not register for this account, you can safely ignore this email.</p>
             `;
 
-            // Send the verification email as part of the registration transaction.
-            // If delivery fails we roll the whole thing back so the user can retry,
-            // rather than leaving them with an unverified account they can't activate.
-            // (Email provider is Resend — see backend/src/services/emailService.js.)
-            await sendEmail({
-                to: email,
-                subject: emailSubject,
-                text: emailText,
-                html: emailHtml,
-            });
-
+            // Commit the account BEFORE attempting email delivery. A transient
+            // email-provider failure must not destroy the registration — the
+            // user can request a resend from the login screen instead.
             await client.query('COMMIT');
+            committed = true;
 
-            res.status(201).json({
-                message: "Registration successful! Please check your email to verify your account."
-            });
+            try {
+                await sendEmail({
+                    to: email,
+                    subject: emailSubject,
+                    text: emailText,
+                    html: emailHtml,
+                });
+                res.status(201).json({
+                    message: "Registration successful! Please check your email to verify your account.",
+                    emailSent: true,
+                });
+            } catch (emailError) {
+                console.error(`Registration email failed for user ${newUserId}:`, emailError);
+                res.status(201).json({
+                    message: "Your account was created, but we couldn't send the verification email. "
+                        + "Try signing in — you'll be able to resend it from there.",
+                    emailSent: false,
+                });
+            }
 
         } catch (error) {
-            await client.query('ROLLBACK');
+            if (!committed) {
+                await client.query('ROLLBACK');
+            }
             console.error("Registration error:", error);
             if (error.code === '23505') {
-                 return res.status(409).json({ message: "Username or email already exists." });
-            }
-            if (error.message === 'Failed to send email.') {
-                return res.status(502).json({ message: "We couldn't send your verification email. Please try again in a moment." });
+                const field = error.constraint === 'users_email_key' ? 'email' : 'username';
+                const message = field === 'email'
+                    ? "An account with that email already exists. Try signing in or resetting your password."
+                    : "That username is taken. Pick another one.";
+                return res.status(409).json({ message, field });
             }
             res.status(500).json({ message: error.message || "An unknown error occurred." });
         } finally {
@@ -119,7 +155,7 @@ module.exports = function(pool, bcrypt, jwt, io) {
     });
 
     // LOGIN ROUTE
-    router.post('/login', async (req, res) => {
+    router.post('/login', loginLimiter, async (req, res) => {
         try {
             const { email, password } = req.body;
             if (!email || !password) {
@@ -234,7 +270,7 @@ module.exports = function(pool, bcrypt, jwt, io) {
     }
 
     // EMAIL VERIFICATION ENDPOINT
-    router.post('/verify-email', async (req, res) => {
+    router.post('/verify-email', tokenCheckLimiter, async (req, res) => {
         const { token } = req.body;
         if (!token) {
             return res.status(400).json({ message: "Verification token is required." });
@@ -282,7 +318,7 @@ module.exports = function(pool, bcrypt, jwt, io) {
     });
 
     // REQUEST PASSWORD RESET ENDPOINT
-    router.post('/request-password-reset', async (req, res) => {
+    router.post('/request-password-reset', emailSendLimiter, async (req, res) => {
         const { email } = req.body;
         if (!email) {
             return res.status(400).json({ message: "Email is required." });
@@ -336,7 +372,7 @@ module.exports = function(pool, bcrypt, jwt, io) {
     });
 
     // RESET PASSWORD ENDPOINT
-    router.post('/reset-password', async (req, res) => {
+    router.post('/reset-password', tokenCheckLimiter, async (req, res) => {
         const { token, password } = req.body;
         if (!token || !password) {
             return res.status(400).json({ message: "Token and new password are required." });
@@ -391,7 +427,7 @@ module.exports = function(pool, bcrypt, jwt, io) {
     });
 
     // RESEND VERIFICATION EMAIL ENDPOINT
-    router.post('/resend-verification', async (req, res) => {
+    router.post('/resend-verification', emailSendLimiter, async (req, res) => {
         const { email } = req.body;
         if (!email) {
             return res.status(400).json({ message: "Email is required." });

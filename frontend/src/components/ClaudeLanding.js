@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import LandingCardPhysics from '../utils/LandingCardPhysics.js';
+import { trackEvent } from '../services/api.js';
 import './ClaudeLanding.css';
 
 const VENUES = [
@@ -90,10 +91,19 @@ const HAND_CARDS = [
     { rank: 'Q', suit: '♣', red: false },
 ];
 
-const ClaudeLanding = ({ inviteTableId, onRegister, onLogin }) => {
+const ClaudeLanding = ({ inviteTableId, onRegister, onLogin, onNavigate }) => {
     const invited = Boolean(inviteTableId);
     const primaryCta = invited ? 'Join your friend’s table' : 'Play free now';
     const heroHandRef = useRef(null);
+
+    const handleRegisterCta = () => {
+        trackEvent('landing_cta_click');
+        onRegister?.();
+    };
+
+    useEffect(() => {
+        trackEvent('landing_view');
+    }, []);
 
     useEffect(() => {
         if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
@@ -138,7 +148,7 @@ const ClaudeLanding = ({ inviteTableId, onRegister, onLogin }) => {
                                 online with real card-flinging physics.
                             </p>
                             <div className="cl-cta-row">
-                                <button type="button" className="cl-btn cl-btn-primary" onClick={onRegister}>
+                                <button type="button" className="cl-btn cl-btn-primary" onClick={handleRegisterCta}>
                                     {primaryCta}
                                 </button>
                                 <button type="button" className="cl-btn cl-btn-secondary" onClick={onLogin}>
@@ -252,10 +262,10 @@ const ClaudeLanding = ({ inviteTableId, onRegister, onLogin }) => {
                                 The season is live. The leaderboard is real.
                             </h2>
                             <p>
-                                Every table plays for tokens — free to earn, never bought.
-                                Every win moves you up the season standings. Season 1’s
-                                champions are already in the archive; Season 2 is being written
-                                right now, one trick at a time.
+                                Every table plays for tokens — free to earn, never bought,
+                                and worth nothing but bragging rights. Every win moves you up
+                                the season standings. Season 1’s champions are already in the
+                                archive; Season 2 is being written right now, one trick at a time.
                             </p>
                         </div>
                     </div>
@@ -269,7 +279,7 @@ const ClaudeLanding = ({ inviteTableId, onRegister, onLogin }) => {
                         Free account, free tokens, full table. You could be flicking cards in
                         under a minute.
                     </p>
-                    <button type="button" className="cl-btn cl-btn-primary cl-btn-big" onClick={onRegister}>
+                    <button type="button" className="cl-btn cl-btn-primary cl-btn-big" onClick={handleRegisterCta}>
                         {primaryCta}
                     </button>
                 </section>
@@ -278,12 +288,22 @@ const ClaudeLanding = ({ inviteTableId, onRegister, onLogin }) => {
             <footer className="cl-footer">
                 <img className="cl-footer-logo" src="/SluffLogo.png" alt="Sluff" />
                 <p>A family card game, brought online. © {new Date().getFullYear()} playsluff.com</p>
+                <p className="cl-footer-disclaimer">
+                    Sluff tokens are play money — they have no cash value and can’t be
+                    bought, sold, or redeemed.
+                </p>
                 <div className="cl-footer-links">
-                    <button type="button" className="cl-link-btn" onClick={onRegister}>
+                    <button type="button" className="cl-link-btn" onClick={handleRegisterCta}>
                         Create account
                     </button>
                     <button type="button" className="cl-link-btn" onClick={onLogin}>
                         Sign in
+                    </button>
+                    <button type="button" className="cl-link-btn" onClick={() => onNavigate?.('terms')}>
+                        Terms
+                    </button>
+                    <button type="button" className="cl-link-btn" onClick={() => onNavigate?.('privacy')}>
+                        Privacy
                     </button>
                 </div>
             </footer>

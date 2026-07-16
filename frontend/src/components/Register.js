@@ -1,14 +1,20 @@
 // frontend/src/components/Register.js
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import './AuthForm.css';
-import { register } from '../services/api';
+import { register, trackEvent } from '../services/api';
 
-const Register = ({ onRegisterSuccess, onSwitchToLogin }) => {
+const Register = ({ onRegisterSuccess, onSwitchToLogin, onShowTerms, onShowPrivacy }) => {
     const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [acceptedTerms, setAcceptedTerms] = useState(false);
     const [error, setError] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
+    const [emailSent, setEmailSent] = useState(true);
+
+    useEffect(() => {
+        trackEvent('register_view');
+    }, []);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -16,7 +22,9 @@ const Register = ({ onRegisterSuccess, onSwitchToLogin }) => {
         setSuccessMessage('');
 
         try {
-            const data = await register(username, email, password);
+            const data = await register(username, email, password, acceptedTerms);
+            trackEvent('signup');
+            setEmailSent(data.emailSent !== false);
             setSuccessMessage(data.message);
         } catch (err) {
             if (err && err.message) {
@@ -32,11 +40,13 @@ const Register = ({ onRegisterSuccess, onSwitchToLogin }) => {
             <div className="auth-container">
                 <img src="/SluffLogo.png" alt="Sluff Logo" className="auth-logo" />
                 <div className="auth-form email-sent-message">
-                    <h3 className="auth-success-title">✅ Check Your Email</h3>
+                    <h3 className="auth-success-title">{emailSent ? '✅ Check Your Email' : '✅ Account Created'}</h3>
                     <p className="auth-success-text">{successMessage}</p>
-                    <p className="auth-success-text" style={{ fontSize: '0.9em', opacity: 0.85 }}>
-                        The link is valid for 24 hours. If you don't see it within a minute, check your spam folder.
-                    </p>
+                    {emailSent && (
+                        <p className="auth-success-text" style={{ fontSize: '0.9em', opacity: 0.85 }}>
+                            The link is valid for 24 hours. If you don't see it within a minute, check your spam folder.
+                        </p>
+                    )}
                     {/* This button now correctly uses the onSwitchToLogin prop */}
                     <button onClick={onSwitchToLogin} className="auth-button login">Back to Login</button>
                 </div>
@@ -67,12 +77,27 @@ const Register = ({ onRegisterSuccess, onSwitchToLogin }) => {
                 />
                 <input
                     type="password"
-                    placeholder="Password"
+                    placeholder="Password (8+ characters)"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
+                    minLength={8}
                     className="auth-input"
                 />
+                <label className="auth-terms-row">
+                    <input
+                        type="checkbox"
+                        checked={acceptedTerms}
+                        onChange={(e) => setAcceptedTerms(e.target.checked)}
+                        required
+                    />
+                    <span>
+                        I'm at least 13 years old and agree to the{' '}
+                        <button type="button" className="auth-inline-link" onClick={onShowTerms}>Terms of Service</button>
+                        {' '}and{' '}
+                        <button type="button" className="auth-inline-link" onClick={onShowPrivacy}>Privacy Policy</button>.
+                    </span>
+                </label>
                 {error && <p className="auth-error">{error}</p>}
                 <button type="submit" className="auth-button register">Register</button>
             </form>

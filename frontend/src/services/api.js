@@ -133,9 +133,35 @@ export const login = async (email, password) => {
     return data;
 };
 
-export const register = async (username, email, password) => {
+// First-party, anonymous funnel metrics. Fire-and-forget: failures are
+// swallowed so metrics can never break the product.
+const METRICS_SESSION_KEY = 'sluff_metrics_sid';
+
+const metricsSessionId = () => {
     try {
-        const response = await configuredFetch('/api/auth/register', 'POST', { username, email, password }, false);
+        let sid = localStorage.getItem(METRICS_SESSION_KEY);
+        if (!sid) {
+            sid = (crypto.randomUUID && crypto.randomUUID()) || String(Date.now());
+            localStorage.setItem(METRICS_SESSION_KEY, sid);
+        }
+        return sid;
+    } catch (err) {
+        return null;
+    }
+};
+
+export const trackEvent = (name) => {
+    try {
+        configuredFetch('/api/metrics/event', 'POST', { name, sessionId: metricsSessionId() }, false)
+            .catch(() => {});
+    } catch (err) {
+        // never let metrics throw
+    }
+};
+
+export const register = async (username, email, password, acceptedTerms) => {
+    try {
+        const response = await configuredFetch('/api/auth/register', 'POST', { username, email, password, acceptedTerms }, false);
         const data = await response.json();
         if (!response.ok) {
             // This now correctly throws an error with the API's message

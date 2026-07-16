@@ -820,3 +820,9 @@
         transform: none;
     }
 }
+
+.claude-landing .cl-footer-disclaimer {
+    margin-top: 4px;
+    font-size: 0.78rem;
+    opacity: 0.65;
+}

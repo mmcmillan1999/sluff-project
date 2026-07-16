@@ -6,6 +6,8 @@ import VerifyEmail from './VerifyEmail.js';
 import RequestPasswordReset from './RequestPasswordReset.js';
 import ResetPassword from './ResetPassword.js';
 import ClaudeLanding from './ClaudeLanding.js';
+import PrivacyPolicy from './legal/PrivacyPolicy.js';
+import TermsOfService from './legal/TermsOfService.js';
 
 const viewFromLocation = () => {
     const path = window.location.pathname;
@@ -16,6 +18,8 @@ const viewFromLocation = () => {
     if (path === '/register') return 'register';
     if (path === '/login') return 'login';
     if (path === '/forgot') return 'forgot';
+    if (path === '/terms') return 'terms';
+    if (path === '/privacy') return 'privacy';
     return 'landing';
 };
 
@@ -42,7 +46,16 @@ const AuthContainer = ({ onLoginSuccess, inviteTableId }) => {
     const renderView = () => {
         switch (view) {
             case 'register':
-                return <Register onRegisterSuccess={() => handleNavigate('login')} onSwitchToLogin={() => handleNavigate('login')} />;
+                return <Register
+                    onRegisterSuccess={() => handleNavigate('login')}
+                    onSwitchToLogin={() => handleNavigate('login')}
+                    onShowTerms={() => handleNavigate('terms')}
+                    onShowPrivacy={() => handleNavigate('privacy')}
+                />;
+            case 'terms':
+                return <TermsOfService onNavigate={handleNavigate} />;
+            case 'privacy':
+                return <PrivacyPolicy onNavigate={handleNavigate} />;
             case 'verify':
                 return <VerifyEmail onNavigate={handleNavigate} />;
             case 'forgot':
@@ -54,6 +67,7 @@ const AuthContainer = ({ onLoginSuccess, inviteTableId }) => {
                     inviteTableId={inviteTableId}
                     onRegister={() => handleNavigate('register')}
                     onLogin={() => handleNavigate('login')}
+                    onNavigate={handleNavigate}
                 />;
             case 'login':
             default:

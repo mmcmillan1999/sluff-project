@@ -350,6 +350,19 @@ const createDbTables = async (pool) => {
         `);
 
         await pool.query(`
+            CREATE TABLE IF NOT EXISTS funnel_events (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(40) NOT NULL,
+                session_id VARCHAR(64),
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+        await pool.query(`
+            CREATE INDEX IF NOT EXISTS idx_funnel_events_name_created
+            ON funnel_events (name, created_at);
+        `);
+
+        await pool.query(`
             CREATE TABLE IF NOT EXISTS bot_insurance_logs (
                 log_id SERIAL PRIMARY KEY,
                 game_id INTEGER REFERENCES game_history(game_id) ON DELETE CASCADE,

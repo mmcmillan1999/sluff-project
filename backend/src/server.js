@@ -21,6 +21,7 @@ const createChatRoutes = require('./api/chat');
 const createDbTables = require('./data/createTables');
 const { ensureBotAccounts } = require('./data/botAccounts');
 const createPingRoutes = require('./api/ping');
+const createMetricsRoutes = require('./api/metrics');
 const createBotInsuranceStatsRoutes = require('./api/botInsuranceStats');
 const {
     DEFAULT_GRACE_MS,
@@ -63,15 +64,18 @@ const corsOptions = {
     credentials: true,
 };
 
-const io = new Server(server, { cors: corsOptions });
+// Cap socket payloads well below the 1MB default; game events are tiny.
+const io = new Server(server, { cors: corsOptions, maxHttpBufferSize: 1e5 });
 const PORT = process.env.PORT || 3000;
 const MINIMUM_RECOVERY_GRACE_MS = 60 * 60 * 1000;
 
 let pool;
 let recoveryMonitor;
 
+// One proxy hop (Render) — required so rate limiting sees real client IPs.
+app.set('trust proxy', 1);
 app.use(cors(corsOptions));
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
 
 function recoveryTimingFromEnvironment() {
     const graceHours = process.env.ABANDONED_GAME_GRACE_HOURS === undefined
@@ -125,6 +129,7 @@ async function initializeApplication() {
     app.use('/api/feedback', createFeedbackRoutes(pool, jwt));
     app.use('/api/chat', createChatRoutes(pool, io, jwt));
     app.use('/api/ping', createPingRoutes());
+    app.use('/api/metrics', createMetricsRoutes(pool, jwt));
 
     app.get('/health', async (req, res) => {
         try {

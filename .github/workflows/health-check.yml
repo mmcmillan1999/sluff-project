@@ -1,0 +1,27 @@
+name: Health check
+
+# Pings the backend every 10 minutes. Serves two purposes:
+#  1. Keep-alive — prevents Render idle spin-down so ad clicks never hit a cold start.
+#  2. Uptime alert — a failed run makes the workflow red and GitHub emails the repo owner.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Backend /health
+        run: |
+          status=$(curl -s -o /tmp/health.json -w '%{http_code}' --max-time 30 https://sluff-backend.onrender.com/health)
+          echo "Backend /health -> HTTP $status"
+          cat /tmp/health.json || true
+          test "$status" = "200"
+
+      - name: Frontend playsluff.com
+        run: |
+          status=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 https://playsluff.com/version.json)
+          echo "Frontend version.json -> HTTP $status"
+          test "$status" = "200"
