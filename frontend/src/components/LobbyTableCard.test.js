@@ -18,6 +18,22 @@ const tableForState = (state) => ({
     players: [{ userId: 42, playerName: 'Seated Player' }]
 });
 
+test('carries the venue identity into a private table card', () => {
+    const { container } = render(
+        <LobbyTableCard
+            table={tableForState('Waiting for Players')}
+            themeId="dans-deck"
+            canAfford
+            buyIn={20}
+            onJoin={vi.fn()}
+            user={{ id: 99, is_admin: false }}
+        />
+    );
+
+    expect(container.firstChild).toHaveAttribute('data-theme', 'dans-deck');
+    expect(screen.getByText('Above the Great Salt Lake')).toBeInTheDocument();
+});
+
 describe.each(IN_PROGRESS_STATES)('LobbyTableCard in %s', (state) => {
     test('offers Return to Game to the seated user', async () => {
         const user = userEvent.setup();
@@ -25,6 +41,7 @@ describe.each(IN_PROGRESS_STATES)('LobbyTableCard in %s', (state) => {
         render(
             <LobbyTableCard
                 table={tableForState(state)}
+                themeId="fort-creek"
                 canAfford
                 buyIn={1}
                 onJoin={onJoin}
@@ -43,6 +60,7 @@ describe.each(IN_PROGRESS_STATES)('LobbyTableCard in %s', (state) => {
         render(
             <LobbyTableCard
                 table={tableForState(state)}
+                themeId="fort-creek"
                 canAfford
                 buyIn={1}
                 onJoin={vi.fn()}

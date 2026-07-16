@@ -5,7 +5,7 @@ const GameEngine = require('../src/core/GameEngine');
 const GameService = require('../src/services/GameService');
 const gameLogic = require('../src/core/logic');
 const transactionManager = require('../src/data/transactionManager');
-const { deck } = require('../src/core/constants');
+const { deck, THEMES, TABLE_COSTS } = require('../src/core/constants');
 const { authorizeTableAction, validators } = require('../src/events/socketActionGuard');
 const registerGameHandlers = require('../src/events/gameEvents');
 
@@ -288,6 +288,15 @@ function testPersonalizedServiceDelivery() {
     assert.equal(engine.reconnectPlayer(2, replacementSocket), true);
     service.emitGameState(engine.tableId);
     assert.deepEqual(replacementSocket.emitted[0].payload.hands, { Bob: ['KS'] }, 'a legitimate reconnect regains its personalized hand');
+}
+
+function testThemeCatalogCompatibility() {
+    assert.deepEqual(
+        THEMES.find(theme => theme.id === 'dans-deck'),
+        { id: 'dans-deck', name: 'Eaglewood', count: 10 },
+        'Eaglewood keeps the persisted dans-deck ID',
+    );
+    assert.equal(TABLE_COSTS['dans-deck'], 20, 'the Eaglewood rename cannot change its buy-in');
 }
 
 function testPublicWidowCountThroughDeal() {
@@ -870,6 +879,7 @@ async function testForfeitSettlement() {
 }
 
 async function runBackendIntegrityTests() {
+    testThemeCatalogCompatibility();
     testPlayAndFrogGuards();
     testBidAnnouncementTimerLifecycle();
     testInsuranceOvershootIsZeroSum();

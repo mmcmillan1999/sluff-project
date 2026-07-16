@@ -93,6 +93,7 @@ describe('TableLayout plate lifecycle and placement', () => {
     test('exposes semantic anchors for the deck, widow, and seated players', () => {
         const { container } = render(layout(makeState()));
 
+        expect(container.querySelector('.game-table')).toHaveAttribute('data-table-theme', 'fort-creek');
         expect(container.querySelector('[data-deal-source="deck"]')).toHaveClass('dealer-deck-pile');
         expect(container.querySelector('[data-deal-target="widow"]')).toHaveClass('widow-base');
         expect([...container.querySelectorAll('[data-deal-player]')].map(node => node.dataset.dealPlayer))

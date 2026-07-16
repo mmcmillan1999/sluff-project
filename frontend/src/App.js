@@ -21,6 +21,7 @@ import { newBuildAvailable } from "./utils/clientVersion.js";
 import "./App.css";
 import "./components/AdminView.css";
 import "./styles/no-scroll-fix.css"; // Prevent all scrolling in game view
+import "./styles/venueThemes.css";
 // Mobile optimizations removed - using vh-based scaling instead
 import { useSounds } from "./hooks/useSounds.js";
 import {

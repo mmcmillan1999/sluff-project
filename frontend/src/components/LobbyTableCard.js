@@ -1,7 +1,8 @@
 import React from 'react';
 import './LobbyTableCard.css';
+import { getThemePresentation } from '../config/themePresentation';
 
-const LobbyTableCard = ({ table, canAfford, buyIn, onJoin, onJoinAsSpectator, user }) => {
+const LobbyTableCard = ({ table, themeId, canAfford, buyIn, onJoin, onJoinAsSpectator, user }) => {
     const players = Array.isArray(table.players) ? table.players : Object.values(table.players || {});
     const state = table.state || '';
     const isFull = (table.playerCount ?? players.filter(p => !p.isSpectator).length) >= (table.playerMode || 4);
@@ -9,6 +10,7 @@ const LobbyTableCard = ({ table, canAfford, buyIn, onJoin, onJoinAsSpectator, us
     
     const isMyGame = players.some(p => String(p.userId) === String(user.id));
     const isAdmin = user.is_admin;
+    const presentation = getThemePresentation(themeId);
 
     const canRejoin = isMyGame && isPlaying;
     const canJoin = !isMyGame && !isFull && canAfford && !isPlaying;
@@ -32,9 +34,15 @@ const LobbyTableCard = ({ table, canAfford, buyIn, onJoin, onJoinAsSpectator, us
     else if (isPlaying) buttonTitle = 'This game is already in progress.';
 
     return (
-        <div className={`table-card-container ${isDisabled ? 'disabled' : ''}`}>
+        <div
+            className={`table-card-container ${isDisabled ? 'disabled' : ''}`}
+            data-theme={presentation.id}
+        >
             <div className="table-card-header">
-                <h3 className="table-card-title">{table.tableName}</h3>
+                <div className="table-card-heading">
+                    <span className="table-card-venue">{presentation.eyebrow}</span>
+                    <h3 className="table-card-title">{table.tableName}</h3>
+                </div>
                 <div className={`table-card-status ${statusText.toLowerCase().replace(/ /g, '-')}`}>
                     {statusText}
                 </div>

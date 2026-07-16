@@ -36,6 +36,7 @@ import {
     TUTORIAL_RECAP_HINT,
     TUTORIAL_THEME_ID,
 } from '../config/tutorial';
+import { getThemePresentation } from '../config/themePresentation';
 
 const ROUND_PRESENTATION_STATES = new Set([
     'WidowReveal',
@@ -71,6 +72,7 @@ const scoresBeforeRound = (summary, fallbackScores) => {
 
 
 const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, handleShowHowToPlay, emitEvent, playSound, socket, handleOpenFeedbackModal, soundSettings, tutorialState, onTutorialAction }) => {
+    const themePresentation = getThemePresentation(currentTableState?.theme);
     const [seatAssignments, setSeatAssignments] = useState({ self: null, opponentLeft: null, opponentRight: null });
     const [showRoundSummaryModal, setShowRoundSummaryModal] = useState(false);
     const [showInsurancePrompt, setShowInsurancePrompt] = useState(false);
@@ -1009,7 +1011,11 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const perspectivePlayer = currentTableState ? currentTableState.players[perspectivePlayerId] : null;
     
     const GameMenu = () => createPortal(
-        <div className="game-menu-layer" style={{ zIndex: 2147483000 }}>
+        <div
+            className="game-menu-layer"
+            data-table-theme={themePresentation.id}
+            style={{ zIndex: 2147483000 }}
+        >
             <div
                 className="game-menu-backdrop"
                 aria-hidden="true"
@@ -1024,7 +1030,9 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 aria-label="Game menu"
                 tabIndex="-1"
             >
+                <p className="game-menu-venue">{themePresentation.eyebrow}</p>
                 <h3>{currentTableState.tableName}</h3>
+                <p className="game-menu-description">{themePresentation.description}</p>
                 <div className="game-menu-sound">
                     <SoundControls soundSettings={soundSettings} />
                 </div>
@@ -1077,7 +1085,11 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     );
 
     return (
-        <div className="game-view" ref={gameViewRef}>
+        <div
+            className="game-view"
+            data-table-theme={themePresentation.id}
+            ref={gameViewRef}
+        >
             {shareNotice && <div className="share-invite-notice">{shareNotice}</div>}
             {/* Card position debug overlay */}
             {false && window.cardDebugPositions && window.cardDebugPositions.length > 0 && (

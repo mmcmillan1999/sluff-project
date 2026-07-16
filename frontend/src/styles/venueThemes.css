@@ -1,0 +1,558 @@
+/* Venue identity layer
+   --------------------
+   Theme IDs are intentionally stable because they are persisted in game and
+   ledger records. This file changes presentation only; table geometry and
+   game interaction remain owned by the existing component styles. */
+
+:where([data-theme], [data-table-theme]) {
+  --venue-accent: #d3ad63;
+  --venue-accent-soft: rgba(211, 173, 99, 0.22);
+  --venue-accent-faint: rgba(211, 173, 99, 0.1);
+  --venue-text: #fffaf0;
+  --venue-muted: #d7d0c4;
+  --venue-panel: #27231f;
+  --venue-panel-deep: #171411;
+  --venue-rim: #3e2723;
+  --venue-pinstripe: rgba(255, 215, 0, 0.18);
+  --venue-atmosphere: radial-gradient(circle at 50% 30%, #1c1c1c, #0f0f0f);
+  --venue-table-surface: radial-gradient(ellipse at 50% 35%, #15673a 0%, #0f4d2a 55%, #0a3a1f 100%);
+  --venue-table-size: auto;
+  --venue-table-position: center;
+  --venue-table-repeat: no-repeat;
+  --venue-table-shadow: 0 1vh 3vh rgba(0, 0, 0, 0.5);
+  --venue-lobby-surface: linear-gradient(135deg, #3c3c3c, #222);
+  --venue-lobby-size: cover;
+  --venue-lobby-position: center;
+  --venue-lobby-repeat: no-repeat;
+  --venue-menu-surface: linear-gradient(155deg, #292929, #181818);
+  --venue-footer-surface: rgba(35, 35, 35, 0.94);
+  --venue-control-surface: linear-gradient(145deg, #565656, #303030);
+}
+
+[data-theme="fort-creek"],
+[data-table-theme="fort-creek"] {
+  --venue-accent: #d39a58;
+  --venue-accent-soft: rgba(211, 154, 88, 0.28);
+  --venue-accent-faint: rgba(211, 154, 88, 0.12);
+  --venue-text: #fff7e8;
+  --venue-muted: #dfc8a8;
+  --venue-panel: #3a281f;
+  --venue-panel-deep: #1d1511;
+  --venue-rim: #4b2b1d;
+  --venue-pinstripe: rgba(221, 164, 96, 0.42);
+  --venue-atmosphere:
+    radial-gradient(circle at 50% 18%, rgba(168, 83, 38, 0.34), transparent 48%),
+    repeating-linear-gradient(112deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 9px),
+    linear-gradient(155deg, #3a2419 0%, #1c130e 56%, #0c0907 100%);
+  --venue-table-surface:
+    radial-gradient(ellipse at 50% 42%, rgba(36, 18, 9, 0.12) 0%, rgba(28, 15, 9, 0.4) 68%, rgba(10, 6, 4, 0.72) 100%),
+    linear-gradient(rgba(86, 45, 23, 0.12), rgba(42, 22, 12, 0.28)),
+    url('/assets/themes/fort-creek-cowhide.webp');
+  --venue-table-size: auto, auto, cover;
+  --venue-table-position: center;
+  --venue-table-repeat: no-repeat;
+  --venue-table-shadow: 0 1vh 3vh rgba(18, 8, 3, 0.78), 0 0 2.2vh rgba(164, 88, 39, 0.18);
+  --venue-lobby-surface:
+    linear-gradient(100deg, rgba(27, 14, 8, 0.88) 0%, rgba(39, 20, 11, 0.58) 55%, rgba(15, 9, 6, 0.84) 100%),
+    url('/assets/themes/fort-creek-cowhide.webp');
+  --venue-lobby-size: auto, clamp(270px, 62vw, 430px);
+  --venue-lobby-position: center;
+  --venue-lobby-repeat: no-repeat, repeat;
+  --venue-menu-surface:
+    linear-gradient(145deg, rgba(48, 31, 23, 0.96), rgba(22, 15, 12, 0.98)),
+    url('/assets/themes/fort-creek-cowhide.webp');
+  --venue-footer-surface: linear-gradient(90deg, rgba(45, 28, 20, 0.97), rgba(25, 17, 13, 0.97));
+  --venue-control-surface: linear-gradient(145deg, #6a432e, #39271e);
+}
+
+[data-theme="shirecliff-road"],
+[data-table-theme="shirecliff-road"] {
+  --venue-accent: #c9a76d;
+  --venue-accent-soft: rgba(201, 167, 109, 0.27);
+  --venue-accent-faint: rgba(201, 167, 109, 0.11);
+  --venue-text: #fff9ef;
+  --venue-muted: #dac8b2;
+  --venue-panel: #33231d;
+  --venue-panel-deep: #180f0c;
+  --venue-rim: #2b1712;
+  --venue-pinstripe: rgba(222, 185, 112, 0.5);
+  --venue-atmosphere:
+    radial-gradient(circle at 50% 22%, rgba(127, 67, 38, 0.24), transparent 45%),
+    linear-gradient(145deg, #261612 0%, #120b09 58%, #080605 100%);
+  --venue-table-surface:
+    radial-gradient(ellipse at 50% 36%, rgba(123, 66, 34, 0.12) 0%, rgba(33, 15, 10, 0.2) 60%, rgba(9, 5, 4, 0.62) 100%),
+    linear-gradient(rgba(49, 20, 12, 0.08), rgba(22, 9, 6, 0.24)),
+    url('/assets/themes/shirecliff-walnut.webp');
+  --venue-table-size: auto, auto, cover;
+  --venue-table-position: center;
+  --venue-table-repeat: no-repeat;
+  --venue-table-shadow: 0 1vh 3.2vh rgba(8, 3, 2, 0.8), 0 0 2.4vh rgba(176, 122, 72, 0.13);
+  --venue-lobby-surface:
+    linear-gradient(102deg, rgba(24, 10, 7, 0.88), rgba(59, 27, 17, 0.58), rgba(19, 8, 6, 0.9)),
+    url('/assets/themes/shirecliff-walnut.webp');
+  --venue-lobby-size: auto, cover;
+  --venue-lobby-position: center;
+  --venue-lobby-repeat: no-repeat;
+  --venue-menu-surface:
+    linear-gradient(145deg, rgba(49, 28, 21, 0.96), rgba(19, 11, 9, 0.99)),
+    url('/assets/themes/shirecliff-walnut.webp');
+  --venue-footer-surface: linear-gradient(90deg, rgba(39, 22, 17, 0.97), rgba(18, 11, 9, 0.97));
+  --venue-control-surface: linear-gradient(145deg, #634232, #321f18);
+}
+
+[data-theme="dans-deck"],
+[data-table-theme="dans-deck"] {
+  --venue-accent: #e0a45f;
+  --venue-accent-soft: rgba(224, 164, 95, 0.28);
+  --venue-accent-faint: rgba(224, 164, 95, 0.11);
+  --venue-text: #fffaf1;
+  --venue-muted: #d8d5c5;
+  --venue-panel: #27312d;
+  --venue-panel-deep: #141a18;
+  --venue-rim: #282f2d;
+  --venue-pinstripe: rgba(222, 161, 95, 0.52);
+  --venue-atmosphere:
+    radial-gradient(ellipse at 18% 22%, rgba(242, 184, 104, 0.48), transparent 38%),
+    radial-gradient(ellipse at 78% 28%, rgba(170, 101, 94, 0.36), transparent 42%),
+    linear-gradient(180deg, #5b7280 0%, #99716d 35%, #c38c56 52%, #263a2d 78%, #111816 100%);
+  --venue-table-surface:
+    radial-gradient(ellipse at 50% 40%, rgba(243, 185, 105, 0.08) 0%, rgba(44, 29, 22, 0.18) 65%, rgba(9, 10, 9, 0.58) 100%),
+    linear-gradient(180deg, rgba(108, 136, 147, 0.11) 0%, rgba(218, 148, 89, 0.08) 42%, rgba(30, 24, 19, 0.24) 100%),
+    url('/assets/themes/eaglewood-teak.webp');
+  --venue-table-size: auto, auto, cover;
+  --venue-table-position: center;
+  --venue-table-repeat: no-repeat;
+  --venue-table-shadow: 0 1vh 3vh rgba(9, 13, 12, 0.72), 0 0 2.6vh rgba(222, 161, 95, 0.2);
+  --venue-lobby-surface:
+    linear-gradient(180deg, rgba(91, 118, 132, 0.42) 0%, rgba(171, 102, 94, 0.38) 27%, rgba(46, 29, 22, 0.72) 48%, rgba(17, 21, 19, 0.9) 100%),
+    url('/assets/themes/eaglewood-teak.webp');
+  --venue-lobby-size: auto, cover;
+  --venue-lobby-position: center;
+  --venue-lobby-repeat: no-repeat;
+  --venue-menu-surface:
+    linear-gradient(145deg, rgba(38, 48, 45, 0.96), rgba(17, 23, 21, 0.99)),
+    url('/assets/themes/eaglewood-teak.webp');
+  --venue-footer-surface: linear-gradient(90deg, rgba(32, 43, 39, 0.97), rgba(19, 25, 23, 0.97));
+  --venue-control-surface: linear-gradient(145deg, #53645d, #29352f);
+}
+
+[data-theme="miss-pauls-academy"],
+[data-table-theme="miss-pauls-academy"] {
+  --venue-accent: #e9d69f;
+  --venue-accent-soft: rgba(233, 214, 159, 0.27);
+  --venue-accent-faint: rgba(233, 214, 159, 0.11);
+  --venue-text: #fffdf3;
+  --venue-muted: #dce5d4;
+  --venue-panel: #21382c;
+  --venue-panel-deep: #102018;
+  --venue-rim: #6b5b39;
+  --venue-pinstripe: rgba(238, 218, 161, 0.55);
+  --venue-atmosphere:
+    radial-gradient(circle at 50% 22%, rgba(65, 122, 82, 0.3), transparent 44%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 7px),
+    linear-gradient(155deg, #173a28 0%, #0e271b 58%, #07130d 100%);
+  --venue-table-surface:
+    radial-gradient(ellipse at 50% 38%, rgba(51, 113, 71, 0.06) 0%, rgba(8, 31, 18, 0.18) 65%, rgba(3, 16, 9, 0.62) 100%),
+    linear-gradient(rgba(15, 74, 39, 0.02), rgba(4, 35, 17, 0.18)),
+    url('/assets/themes/academy-green-felt.webp');
+  --venue-table-size: auto, auto, cover;
+  --venue-table-position: center;
+  --venue-table-repeat: no-repeat;
+  --venue-table-shadow: 0 1vh 3vh rgba(2, 12, 6, 0.75), 0 0 2vh rgba(226, 205, 145, 0.12);
+  --venue-lobby-surface:
+    linear-gradient(100deg, rgba(8, 40, 20, 0.9), rgba(20, 74, 40, 0.62), rgba(7, 30, 16, 0.92)),
+    url('/assets/themes/academy-apple.svg'),
+    url('/assets/themes/academy-green-felt.webp');
+  --venue-lobby-size: auto, clamp(46px, 9vh, 72px), 360px;
+  --venue-lobby-position: center, 74% 45%, center;
+  --venue-lobby-repeat: no-repeat, no-repeat, repeat;
+  --venue-menu-surface:
+    linear-gradient(145deg, rgba(29, 61, 42, 0.96), rgba(10, 29, 18, 0.99)),
+    url('/assets/themes/academy-green-felt.webp');
+  --venue-footer-surface: linear-gradient(90deg, rgba(24, 57, 38, 0.97), rgba(12, 31, 20, 0.97));
+  --venue-control-surface: linear-gradient(145deg, #3e694f, #203c2b);
+}
+
+/* Lobby venue cards */
+.qp-card[data-theme] {
+  isolation: isolate;
+  overflow: hidden;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: 1fr;
+  min-height: 10.8vh;
+  padding: 1.35vh clamp(14px, 4vw, 30px);
+  border-color: var(--venue-accent-soft);
+  background: var(--venue-panel-deep);
+  box-shadow:
+    0 0.55vh 1.5vh rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -3px 0 var(--venue-accent-soft);
+}
+
+.qp-card[data-theme]::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: var(--venue-lobby-surface);
+  background-size: var(--venue-lobby-size);
+  background-position: var(--venue-lobby-position);
+  background-repeat: var(--venue-lobby-repeat);
+}
+
+.qp-card[data-theme] > * {
+  position: relative;
+  z-index: 1;
+}
+
+.qp-card-copy {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.12vh;
+}
+
+.qp-card[data-theme] .qp-card-eyebrow {
+  color: var(--venue-accent);
+  font-size: clamp(0.58rem, 1.35vh, 0.74rem);
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  line-height: 1.15;
+  text-transform: uppercase;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+}
+
+.qp-card[data-theme] .qp-card-name {
+  grid-column: auto;
+  grid-row: auto;
+  display: block;
+  color: var(--venue-text);
+  font-size: clamp(1.08rem, 2.65vh, 1.55rem);
+  line-height: 1.1;
+}
+
+.qp-card[data-theme] .qp-card-description {
+  max-width: 38ch;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.78);
+  font-family: 'Merriweather', serif;
+  font-size: clamp(0.58rem, 1.25vh, 0.75rem);
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+.qp-card[data-theme] .qp-card-cost {
+  grid-column: auto;
+  grid-row: auto;
+  margin-top: 0.3vh;
+  color: var(--venue-text);
+  font-size: clamp(0.7rem, 1.55vh, 0.88rem);
+  font-weight: 600;
+}
+
+.qp-card[data-theme] .qp-play-pill {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.94);
+  color: #171717;
+}
+
+.qp-card[data-theme]:hover:not(:disabled) {
+  border-color: var(--venue-accent);
+  box-shadow:
+    0 0.75vh 1.9vh rgba(0, 0, 0, 0.55),
+    0 0 0 1px var(--venue-accent-soft),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.qp-card[data-theme]:focus-visible,
+.lobby-tab[data-theme]:focus-visible,
+.table-card-container[data-theme] .join-table-button:focus-visible {
+  outline: 3px solid var(--venue-accent);
+  outline-offset: 3px;
+}
+
+/* Private-table tabs and cards */
+.tables-section[data-theme] .lobby-nav {
+  border-radius: 0.8rem 0.8rem 0 0;
+  background: linear-gradient(90deg, var(--venue-panel-deep), var(--venue-panel));
+  box-shadow: inset 0 1px 0 var(--venue-accent-soft);
+}
+
+.lobby-tab[data-theme].active {
+  border-bottom-color: var(--venue-accent);
+  background: var(--venue-accent-faint);
+  color: var(--venue-text);
+}
+
+.lobby-tab[data-theme].active .lobby-tab-cost {
+  color: var(--venue-accent);
+  opacity: 1;
+}
+
+.table-card-container[data-theme] {
+  position: relative;
+  overflow: hidden;
+  border-color: var(--venue-accent-soft);
+  background:
+    linear-gradient(120deg, rgba(255, 255, 255, 0.035), transparent 46%),
+    var(--venue-panel);
+  box-shadow:
+    0 0.35rem 0.9rem rgba(0, 0, 0, 0.3),
+    inset 0 2px 0 var(--venue-accent-soft);
+}
+
+.table-card-container[data-theme]:not(.disabled):hover {
+  border-color: var(--venue-accent);
+}
+
+.table-card-heading {
+  min-width: 0;
+}
+
+.table-card-venue {
+  display: block;
+  margin-bottom: 0.16rem;
+  overflow: hidden;
+  color: var(--venue-accent);
+  font-family: 'Oswald', sans-serif;
+  font-size: 0.68em;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.table-card-container[data-theme] .table-card-title {
+  color: var(--venue-text);
+}
+
+.table-card-container[data-theme] .table-economics {
+  border: 1px solid var(--venue-accent-faint);
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.table-card-container[data-theme] .join-table-button:not(:disabled) {
+  border-color: color-mix(in srgb, var(--venue-accent) 72%, #111);
+  background: linear-gradient(to bottom, var(--venue-accent), color-mix(in srgb, var(--venue-accent) 64%, #151515));
+  color: #151515;
+  text-shadow: none;
+}
+
+.table-card-container[data-theme] .join-table-button:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+/* The player menu represents the whole collection, so it gets a restrained
+   four-venue accent rather than inheriting whichever private tab is open. */
+.lobby-menu-popup.venue-menu {
+  overflow: hidden;
+  border-color: rgba(224, 196, 145, 0.36);
+  background: linear-gradient(150deg, rgba(49, 43, 38, 0.99), rgba(20, 20, 20, 0.99));
+  box-shadow: 0 0.75rem 1.8rem rgba(0, 0, 0, 0.58);
+}
+
+.lobby-menu-popup.venue-menu::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  background: linear-gradient(90deg, #b96d3f 0 25%, #9a7047 25% 50%, #d89b5e 50% 75%, #9dbb79 75% 100%);
+}
+
+/* In-game atmosphere and tabletop */
+.game-table[data-table-theme] {
+  background: var(--venue-atmosphere);
+}
+
+.game-table[data-table-theme] .table-oval {
+  border-color: var(--venue-rim);
+  background-color: var(--venue-panel-deep);
+  background-image: var(--venue-table-surface);
+  background-size: var(--venue-table-size);
+  background-position: var(--venue-table-position);
+  background-repeat: var(--venue-table-repeat);
+  box-shadow:
+    inset 0 0 0 0.25vh var(--venue-pinstripe),
+    inset 0 0 6vh rgba(0, 0, 0, 0.56),
+    var(--venue-table-shadow);
+}
+
+.game-table[data-table-theme] .action-prompt-container {
+  border-color: var(--venue-accent-soft);
+  background: color-mix(in srgb, var(--venue-panel-deep) 88%, transparent);
+  box-shadow: 0 0.5vh 1.4vh rgba(0, 0, 0, 0.52), inset 0 1px 0 var(--venue-accent-faint);
+}
+
+.game-table[data-table-theme] .action-prompt-container h4,
+.game-table[data-table-theme] .dealer-deck-action {
+  color: var(--venue-accent);
+}
+
+.game-table[data-table-theme] .sluff-watermark {
+  filter: drop-shadow(0 0.3vh 0.6vh rgba(0, 0, 0, 0.4)) sepia(0.1);
+}
+
+/* Game footer, controls, and portaled menu */
+.game-view[data-table-theme] {
+  background: var(--venue-atmosphere);
+}
+
+.game-view[data-table-theme] .game-footer {
+  border-top-color: var(--venue-accent-soft);
+  background: var(--venue-footer-surface);
+  box-shadow: 0 -0.35vh 1vh rgba(0, 0, 0, 0.3);
+}
+
+.game-view[data-table-theme] .button-panel {
+  border-color: var(--venue-accent-soft);
+  background: linear-gradient(135deg, var(--venue-panel), var(--venue-panel-deep));
+}
+
+.game-view[data-table-theme] .game-menu-btn,
+.game-view[data-table-theme] .chat-tab-button {
+  border-color: var(--venue-accent-soft);
+  background: var(--venue-control-surface);
+}
+
+.game-view[data-table-theme] .game-menu-btn:hover,
+.game-view[data-table-theme] .chat-tab-button:hover {
+  border-color: var(--venue-accent);
+  filter: brightness(1.1);
+}
+
+.game-menu-layer[data-table-theme] .game-menu-popup {
+  overflow-x: hidden;
+  border-color: var(--venue-accent-soft);
+  background-color: var(--venue-panel-deep);
+  background-image: var(--venue-menu-surface);
+  background-size: auto, cover;
+  background-position: center;
+  box-shadow:
+    0 -0.5vh 1.8vh rgba(0, 0, 0, 0.62),
+    inset 0 3px 0 var(--venue-accent);
+  color: var(--venue-text);
+}
+
+.game-menu-layer[data-table-theme] .game-menu-popup h3 {
+  margin-bottom: 0;
+  border-bottom-color: var(--venue-accent-soft);
+  color: var(--venue-text);
+}
+
+.game-menu-venue,
+.game-menu-description {
+  margin: 0;
+  text-align: center;
+}
+
+.game-menu-venue {
+  padding-top: 0.2vh;
+  color: var(--venue-accent);
+  font-family: 'Oswald', sans-serif;
+  font-size: clamp(0.68rem, 1.25vh, 0.82rem);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.game-menu-description {
+  margin-top: -0.6vh;
+  color: var(--venue-muted);
+  font-size: clamp(0.7rem, 1.18vh, 0.82rem);
+  line-height: 1.3;
+}
+
+.game-menu-layer[data-table-theme] .game-menu-section-title {
+  color: var(--venue-accent);
+}
+
+.game-menu-layer[data-table-theme] .game-menu-button:not(.primary):not(.secondary):not(.feedback):not(.danger):not(.invite) {
+  border-color: var(--venue-accent-soft);
+  background: color-mix(in srgb, var(--venue-panel) 88%, #fff 12%);
+  color: var(--venue-text);
+}
+
+.game-menu-layer[data-table-theme="miss-pauls-academy"] .game-menu-venue::before {
+  content: '';
+  display: inline-block;
+  width: 1.15em;
+  height: 1.15em;
+  margin-right: 0.42em;
+  vertical-align: -0.22em;
+  background: url('/assets/themes/academy-apple.svg') center / contain no-repeat;
+}
+
+@media (max-width: 390px) {
+  .qp-card[data-theme] {
+    column-gap: 10px;
+    padding-inline: 13px;
+  }
+
+  .qp-card[data-theme] .qp-play-pill {
+    padding-inline: 12px;
+    font-size: 0.72rem;
+  }
+
+  .qp-card[data-theme] .qp-card-description {
+    max-width: 24ch;
+  }
+}
+
+@media (min-width: 1024px) {
+  .table-card-venue {
+    font-size: 0.72rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qp-card[data-theme],
+  .lobby-tab[data-theme],
+  .table-card-container[data-theme] {
+    transition: none !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .qp-card[data-theme],
+  .table-card-container[data-theme],
+  .game-menu-layer[data-table-theme] .game-menu-popup {
+    border-width: 2px;
+    border-color: var(--venue-accent);
+  }
+
+  .qp-card[data-theme]::before {
+    filter: brightness(0.58) contrast(1.15);
+  }
+
+  .game-table[data-table-theme] .table-oval {
+    box-shadow: inset 0 0 0 0.35vh var(--venue-accent), inset 0 0 7vh rgba(0, 0, 0, 0.72), var(--venue-table-shadow);
+  }
+}
+
+@media (forced-colors: active) {
+  .qp-card[data-theme],
+  .table-card-container[data-theme],
+  .game-table[data-table-theme] .table-oval,
+  .game-menu-layer[data-table-theme] .game-menu-popup {
+    border: 2px solid CanvasText;
+    background: Canvas;
+    color: CanvasText;
+    forced-color-adjust: auto;
+  }
+
+  .qp-card[data-theme]::before,
+  .lobby-menu-popup.venue-menu::before {
+    display: none;
+  }
+}

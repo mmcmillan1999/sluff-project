@@ -10,6 +10,7 @@ import { getLobbyChatHistory } from '../services/api';
 import { BUILD_ID } from '../utils/clientVersion';
 import { useViewport } from '../hooks/useViewport';
 import { TUTORIAL_VERSION } from '../config/tutorial';
+import { getThemePresentation } from '../config/themePresentation';
 
 export const deriveLobbyPlayerStats = (user = {}) => {
     const numericStat = value => {
@@ -272,7 +273,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
     };
     
     const renderLobbyMenu = () => (
-        <div className="lobby-menu-popup" role="group" aria-label="Player menu">
+        <div className="lobby-menu-popup venue-menu" role="group" aria-label="Player menu">
             {renderLobbyActions({ buttonClass: 'lobby-menu-button', closeMenu: true })}
             {tutorialResetError && (
                 <p className="tutorial-reset-error" role="alert">{tutorialResetError}</p>
@@ -352,11 +353,14 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
                         {lobbyThemes && lobbyThemes.length > 0 ? lobbyThemes.map(theme => {
                             const canAfford = parseFloat(user.tokens) >= theme.cost;
                             const isPending = quickPlayPending === theme.id;
+                            const presentation = getThemePresentation(theme.id);
                             return (
                                 <button
                                     key={theme.id}
                                     className={`qp-card qp-${theme.id} ${canAfford ? '' : 'qp-disabled'} ${isPending ? 'qp-pending' : ''}`}
+                                    data-theme={theme.id}
                                     disabled={!canAfford || isPending}
+                                    aria-label={`${theme.name}. ${presentation.description}. ${theme.cost} token buy-in.`}
                                     onClick={() => {
                                         setQuickPlayPending(theme.id);
                                         handleQuickPlay(theme.id);
@@ -364,9 +368,13 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
                                         setTimeout(() => setQuickPlayPending(null), 4000);
                                     }}
                                 >
-                                    <span className="qp-card-name">{theme.name}</span>
-                                    <span className="qp-card-cost">
-                                        <img src="/Sluff_Token.png" alt="Token" className="tab-token-icon" /> {theme.cost}
+                                    <span className="qp-card-copy">
+                                        <span className="qp-card-eyebrow">{presentation.eyebrow}</span>
+                                        <span className="qp-card-name">{theme.name}</span>
+                                        <span className="qp-card-description">{presentation.description}</span>
+                                        <span className="qp-card-cost">
+                                            <img src="/Sluff_Token.png" alt="" className="tab-token-icon" /> {theme.cost}
+                                        </span>
                                     </span>
                                     <span className="qp-play-pill">
                                         {isPending ? 'SEATING YOU…' : canAfford ? 'PLAY NOW ▶' : 'NEED TOKENS'}
@@ -378,7 +386,10 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
                 </div>
 
                 {/* ============ PRIVATE TABLES — play with friends ============ */}
-                <div className="tables-section">
+                <div
+                    className="tables-section"
+                    data-theme={!tablesCollapsed ? activeTheme?.id : undefined}
+                >
                     <div
                         className="tables-toggle"
                         role="button"
@@ -400,6 +411,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
                                         key={theme.id}
                                         onClick={() => setActiveTab(theme.id)}
                                         className={`lobby-tab ${activeTab === theme.id ? 'active' : ''}`}
+                                        data-theme={theme.id}
                                     >
                                         <span className="lobby-tab-name">{theme.name}</span>
                                         <span className="lobby-tab-cost">
@@ -413,6 +425,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
                                     <LobbyTableCard
                                         key={table.tableId}
                                         table={table}
+                                        themeId={activeTheme.id}
                                         canAfford={user.tokens >= activeTheme.cost}
                                         buyIn={activeTheme.cost}
                                         onJoin={handleJoinTable}

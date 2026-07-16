@@ -69,6 +69,7 @@ const socket = {
 
 const makeState = ({
     state = 'Awaiting Next Round Trigger',
+    theme = 'fort-creek',
     isGameOver = false,
     forfeit,
     presentationReadyAt,
@@ -80,6 +81,7 @@ const makeState = ({
 } = {}) => ({
     tableId: 'table-1',
     tableName: 'Presentation table',
+    theme,
     state,
     serverTime,
     viewerRoundPresentationAcknowledged,
@@ -151,9 +153,14 @@ describe('GameTableView round presentation sequence', () => {
 
         const menu = screen.getByRole('dialog', { name: 'Game menu' });
         const menuLayer = menu.closest('.game-menu-layer');
+        const gameView = document.querySelector('.game-view');
         expect(menuLayer).not.toBeNull();
         expect(menuLayer.parentElement).toBe(document.body);
         expect(menu.closest('.game-view')).toBeNull();
+        expect(gameView).toHaveAttribute('data-table-theme', 'fort-creek');
+        expect(menuLayer).toHaveAttribute('data-table-theme', 'fort-creek');
+        expect(within(menu).getByText('Oakley ranch nights')).toBeInTheDocument();
+        expect(within(menu).getByText('Cowhide, leather & campfire cards')).toBeInTheDocument();
         expect(menuButton).toHaveAttribute('aria-expanded', 'true');
         expect(getComputedStyle(menuLayer).zIndex).toBe('2147483000');
 

@@ -15,6 +15,7 @@ import './TableLayout.css';
 import { SUIT_SYMBOLS } from '../../constants';
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion';
 import { deriveTrickPlatePlacement } from './trickPlatePlacement';
+import { getThemePresentation } from '../../config/themePresentation';
 
 // Full deck of 36 cards (9 ranks × 4 suits)
 const FULL_DECK = [
@@ -52,6 +53,7 @@ const TableLayout = ({
     dealCardsRemaining = 36,
     suppressActionControls = false
 }) => {
+    const tableThemeId = getThemePresentation(currentTableState?.theme).id;
     const [lastTrickVisible, setLastTrickVisible] = useState(false);
     const [lastTrickPosition, setLastTrickPosition] = useState(null);
     // 4-player: the sitting-out dealer may peek at the widow (spec privilege)
@@ -855,7 +857,7 @@ const TableLayout = ({
     };
 
     return (
-        <main className="game-table">
+        <main className="game-table" data-table-theme={tableThemeId}>
             <div className="table-oval">
                 <div ref={dropZoneRef} className="card-drop-zone-hitbox">
                     <div className="card-drop-zone-visual"></div>
