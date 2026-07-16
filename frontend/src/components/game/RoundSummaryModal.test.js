@@ -232,6 +232,43 @@ describe('RoundSummaryModal staged presentation', () => {
             expect(onContinue).toHaveBeenCalledTimes(1);
         });
 
+        test('gives every later round a fresh countdown and two fresh extensions', () => {
+            vi.useFakeTimers();
+            const onContinue = vi.fn();
+            const props = makeTimedPreviewProps(onContinue);
+            const { rerender } = render(<RoundSummaryModal {...props} />);
+
+            act(() => vi.advanceTimersByTime(10000));
+            expect(onContinue).toHaveBeenCalledTimes(1);
+
+            rerender(<RoundSummaryModal {...props} showModal={false} />);
+            rerender(
+                <RoundSummaryModal
+                    {...props}
+                    actionTimerKey="round-2"
+                    summaryData={{
+                        ...makeTimedPreviewSummary(),
+                        dealerOfRoundId: 2,
+                        finalScores: { Alice: 138, Bob: 111, Cara: 111 }
+                    }}
+                />
+            );
+
+            expect(onContinue).toHaveBeenCalledTimes(1);
+            const primaryAction = screen.getByRole('button', { name: 'Collect Points' });
+            expect(primaryAction).toHaveTextContent('10s');
+
+            const extendButton = screen.getByRole('button', { name: '+10 seconds' });
+            fireEvent.click(extendButton);
+            fireEvent.click(extendButton);
+            expect(extendButton).toBeDisabled();
+
+            act(() => vi.advanceTimersByTime(29999));
+            expect(onContinue).toHaveBeenCalledTimes(1);
+            act(() => vi.advanceTimersByTime(1));
+            expect(onContinue).toHaveBeenCalledTimes(2);
+        });
+
         test.each([
             ['the recap closes', { showModal: false }],
             ['the recap leaves preview', { scoreStage: 'counting' }]

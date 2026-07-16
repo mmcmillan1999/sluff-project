@@ -51,6 +51,7 @@ const RoundSummaryModal = ({
         ? String(actionTimerKey ?? 'active-score-action')
         : null;
     const [actionDeadline, setActionDeadline] = useState(null);
+    const [actionDeadlineSessionKey, setActionDeadlineSessionKey] = useState(null);
     const [actionAllocatedMs, setActionAllocatedMs] = useState(
         hasScoreActionTimer ? initialActionTimerMs : 0
     );
@@ -77,11 +78,16 @@ const RoundSummaryModal = ({
     }, []);
 
     useEffect(() => {
-        if (timerSessionKey === null) return undefined;
+        if (timerSessionKey === null) {
+            setActionDeadline(null);
+            setActionDeadlineSessionKey(null);
+            return undefined;
+        }
 
         const deadline = Date.now() + initialActionTimerMs;
         actionSubmittedRef.current = false;
         setActionDeadline(deadline);
+        setActionDeadlineSessionKey(timerSessionKey);
         setActionAllocatedMs(initialActionTimerMs);
         setActionRemainingMs(initialActionTimerMs);
         setActionExtensionsUsed(0);
@@ -90,7 +96,11 @@ const RoundSummaryModal = ({
     }, [initialActionTimerMs, timerSessionKey]);
 
     useEffect(() => {
-        if (timerSessionKey === null || !Number.isFinite(actionDeadline)) return undefined;
+        if (timerSessionKey === null
+            || actionDeadlineSessionKey !== timerSessionKey
+            || !Number.isFinite(actionDeadline)) {
+            return undefined;
+        }
 
         const updateTimer = () => {
             const remaining = Math.max(0, actionDeadline - Date.now());
@@ -101,7 +111,7 @@ const RoundSummaryModal = ({
         updateTimer();
         const timer = setInterval(updateTimer, SCORE_ACTION_TICK_MS);
         return () => clearInterval(timer);
-    }, [actionDeadline, submitTimedAction, timerSessionKey]);
+    }, [actionDeadline, actionDeadlineSessionKey, submitTimedAction, timerSessionKey]);
 
     const extendTimedAction = () => {
         if (!timedActionActive
