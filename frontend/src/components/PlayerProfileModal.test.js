@@ -47,6 +47,102 @@ test('shows career and head-to-head records for another player', async () => {
     expect(screen.getByText('62.5%')).toBeInTheDocument();
     expect(screen.getByText('Your win rate against River Ace')).toBeInTheDocument();
     expect(screen.getByText('Ties')).toBeInTheDocument();
+    expect(screen.getAllByText('Lifetime')).toHaveLength(2);
+    expect(screen.queryByText('Current season')).not.toBeInTheDocument();
+});
+
+test('shows current-season and lifetime matchup records together', async () => {
+    getPlayerProfile.mockResolvedValue({
+        ...opponentProfile,
+        currentSeasonHeadToHead: {
+            season: {
+                id: 2,
+                number: 2,
+                slug: 'alpha-season-2',
+                displayName: 'Alpha Season 2',
+            },
+            isSelf: false,
+            gamesPlayed: 4,
+            wins: 3,
+            losses: 1,
+            ties: 0,
+            winRate: 75,
+        },
+    });
+
+    render(
+        <PlayerProfileModal
+            playerName="River Ace"
+            currentUsername="Me"
+            onClose={vi.fn()}
+        />,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'River Ace' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Current season record against River Ace' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Lifetime record against River Ace' })).toBeInTheDocument();
+    expect(screen.getByText('Current season and lifetime')).toBeInTheDocument();
+    expect(screen.getByText('Alpha Season 2 · 4 games together')).toBeInTheDocument();
+    expect(screen.getByText('75.0%')).toBeInTheDocument();
+    expect(screen.getByText('Your current-season win rate against River Ace')).toBeInTheDocument();
+    expect(screen.getByText('62.5%')).toBeInTheDocument();
+    expect(screen.getByText('Your win rate against River Ace')).toBeInTheDocument();
+});
+
+test('shows a new-season empty state without hiding the lifetime matchup', async () => {
+    getPlayerProfile.mockResolvedValue({
+        ...opponentProfile,
+        currentSeasonHeadToHead: {
+            season: { displayName: 'Alpha Season 2' },
+            isSelf: false,
+            gamesPlayed: 0,
+            wins: 0,
+            losses: 0,
+            ties: 0,
+            winRate: null,
+        },
+    });
+
+    render(
+        <PlayerProfileModal
+            playerName="River Ace"
+            currentUsername="Me"
+            onClose={vi.fn()}
+        />,
+    );
+
+    expect(await screen.findByText('No shared games this season')).toBeInTheDocument();
+    expect(screen.getByText('62.5%')).toBeInTheDocument();
+    expect(screen.queryByText('0.0%')).not.toBeInTheDocument();
+});
+
+test('accepts a nested currentSeason matchup during a rolling deployment', async () => {
+    getPlayerProfile.mockResolvedValue({
+        ...opponentProfile,
+        headToHead: {
+            ...opponentProfile.headToHead,
+            currentSeason: {
+                season: { displayName: 'Alpha Season 2' },
+                isSelf: false,
+                gamesPlayed: 1,
+                wins: 1,
+                losses: 0,
+                ties: 0,
+                winRate: 100,
+            },
+        },
+    });
+
+    render(
+        <PlayerProfileModal
+            playerName="River Ace"
+            currentUsername="Me"
+            onClose={vi.fn()}
+        />,
+    );
+
+    expect(await screen.findByText('100.0%')).toBeInTheDocument();
+    expect(screen.getByText('Alpha Season 2 · 1 game together')).toBeInTheDocument();
 });
 
 test('uses a self profile state without inventing a comparison record', async () => {

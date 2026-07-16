@@ -2,6 +2,10 @@
 
 const express = require('express');
 const requireAuth = require('../middleware/requireAuth');
+const {
+    acquireSeasonReadLock,
+    loadActiveSeason,
+} = require('../services/seasonService');
 
 const PUBLIC_PROFILE_QUERY = `
     SELECT
@@ -27,6 +31,7 @@ const HEAD_TO_HEAD_QUERY = `
         SELECT
             ledger.game_id,
             ledger.user_id,
+            game.season_id,
             game.outcome AS game_outcome,
             (SUM(ledger.amount) * 100)::bigint AS game_net_cents,
             BOOL_OR(ledger.transaction_type::text = 'forfeit_payout') AS received_forfeit_payout
@@ -39,7 +44,7 @@ const HEAD_TO_HEAD_QUERY = `
           AND game.end_time IS NOT NULL
           AND game.outcome LIKE 'Game Over!%'
           AND game.reconciliation_status IS NULL
-        GROUP BY ledger.game_id, ledger.user_id, game.outcome
+        GROUP BY ledger.game_id, ledger.user_id, game.season_id, game.outcome
         HAVING COUNT(*) FILTER (
             WHERE ledger.transaction_type::text = 'buy_in'
         ) = 1
@@ -61,6 +66,7 @@ const HEAD_TO_HEAD_QUERY = `
     ), shared_games AS (
         SELECT
             game_id,
+            MAX(season_id) AS season_id,
             MAX(game_outcome) AS game_outcome,
             MAX(game_net_cents) FILTER (WHERE user_id = $2) AS requester_net_cents,
             MAX(game_net_cents) FILTER (WHERE user_id = $3) AS target_net_cents,
@@ -77,6 +83,8 @@ const HEAD_TO_HEAD_QUERY = `
            AND COUNT(*) FILTER (WHERE user_id = $3) = 1
     ), comparisons AS (
         SELECT
+            game_id,
+            season_id,
             CASE
                 WHEN game_outcome LIKE 'Game Over! Draw (%' THEN 0
                 WHEN requester_received_forfeit_payout
@@ -93,7 +101,11 @@ const HEAD_TO_HEAD_QUERY = `
         COUNT(*)::integer AS games_played,
         COUNT(*) FILTER (WHERE result = 1)::integer AS wins,
         COUNT(*) FILTER (WHERE result = -1)::integer AS losses,
-        COUNT(*) FILTER (WHERE result = 0)::integer AS ties
+        COUNT(*) FILTER (WHERE result = 0)::integer AS ties,
+        COUNT(*) FILTER (WHERE season_id = $4)::integer AS current_season_games_played,
+        COUNT(*) FILTER (WHERE season_id = $4 AND result = 1)::integer AS current_season_wins,
+        COUNT(*) FILTER (WHERE season_id = $4 AND result = -1)::integer AS current_season_losses,
+        COUNT(*) FILTER (WHERE season_id = $4 AND result = 0)::integer AS current_season_ties
     FROM comparisons
 `;
 
@@ -161,34 +173,102 @@ function publicHeadToHead(row, isSelf = false) {
     };
 }
 
+function publicCurrentSeasonHeadToHead(row, seasonRow, isSelf = false) {
+    const seasonId = nonnegativeInteger(seasonRow?.season_id, 'season id');
+    const seasonNumber = nonnegativeInteger(seasonRow?.season_number, 'season number');
+    if (seasonId === 0 || seasonNumber === 0) {
+        throw new RangeError('Database returned an invalid active season.');
+    }
+
+    const record = isSelf
+        ? publicHeadToHead(null, true)
+        : publicHeadToHead({
+            games_played: row?.current_season_games_played,
+            wins: row?.current_season_wins,
+            losses: row?.current_season_losses,
+            ties: row?.current_season_ties,
+        });
+    if (!isSelf) {
+        const lifetime = publicHeadToHead(row);
+        if (record.gamesPlayed > lifetime.gamesPlayed
+            || record.wins > lifetime.wins
+            || record.losses > lifetime.losses
+            || record.ties > lifetime.ties) {
+            throw new RangeError('Current-season head-to-head counts exceed lifetime counts.');
+        }
+    }
+
+    return {
+        season: {
+            id: seasonId,
+            number: seasonNumber,
+            slug: seasonRow.slug,
+            displayName: seasonRow.display_name,
+        },
+        ...record,
+    };
+}
+
 module.exports = function createPlayerRoutes(pool, jwt) {
     const router = express.Router();
     const checkAuth = requireAuth(pool, jwt);
 
     router.get('/:username/profile', checkAuth, async (req, res) => {
         res.set('Cache-Control', 'private, no-store');
+        let client;
+        let transactionOpen = false;
         try {
-            const profileResult = await pool.query(PUBLIC_PROFILE_QUERY, [req.params.username]);
+            client = await pool.connect();
+            await client.query('BEGIN READ ONLY');
+            transactionOpen = true;
+            // Keep the active-season label and its filtered comparison stable
+            // if an administrator rolls the season over during this request.
+            await acquireSeasonReadLock(client);
+
+            const profileResult = await client.query(PUBLIC_PROFILE_QUERY, [req.params.username]);
             const target = profileResult.rows?.[0];
-            if (!target) return res.status(404).json({ message: 'Player not found.' });
+            if (!target) {
+                await client.query('COMMIT');
+                transactionOpen = false;
+                return res.status(404).json({ message: 'Player not found.' });
+            }
 
             const isSelf = Number(target.id) === Number(req.user.id);
+            const activeSeason = await loadActiveSeason(client);
             let headToHead = publicHeadToHead(null, true);
+            let currentSeasonHeadToHead = publicCurrentSeasonHeadToHead(null, activeSeason, true);
             if (!isSelf) {
-                const recordResult = await pool.query(
+                const recordResult = await client.query(
                     HEAD_TO_HEAD_QUERY,
-                    [[req.user.id, target.id], req.user.id, target.id],
+                    [[req.user.id, target.id], req.user.id, target.id, activeSeason.season_id],
                 );
                 headToHead = publicHeadToHead(recordResult.rows?.[0]);
+                currentSeasonHeadToHead = publicCurrentSeasonHeadToHead(
+                    recordResult.rows?.[0],
+                    activeSeason,
+                );
             }
+
+            await client.query('COMMIT');
+            transactionOpen = false;
 
             return res.json({
                 player: publicProfile(target),
                 headToHead,
+                currentSeasonHeadToHead,
             });
         } catch (error) {
+            if (transactionOpen) {
+                try {
+                    await client.query('ROLLBACK');
+                } catch (rollbackError) {
+                    console.error('Player-profile rollback error:', rollbackError);
+                }
+            }
             console.error('Player-profile load error:', error);
             return res.status(500).json({ message: 'Unable to load player profile.' });
+        } finally {
+            client?.release();
         }
     });
 
@@ -199,5 +279,6 @@ module.exports.HEAD_TO_HEAD_QUERY = HEAD_TO_HEAD_QUERY;
 module.exports.PUBLIC_PROFILE_QUERY = PUBLIC_PROFILE_QUERY;
 module.exports.nonnegativeInteger = nonnegativeInteger;
 module.exports.percentage = percentage;
+module.exports.publicCurrentSeasonHeadToHead = publicCurrentSeasonHeadToHead;
 module.exports.publicHeadToHead = publicHeadToHead;
 module.exports.publicProfile = publicProfile;

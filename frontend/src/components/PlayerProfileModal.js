@@ -29,6 +29,55 @@ const LoadingState = () => (
     </div>
 );
 
+const MatchupRecord = ({
+    matchup,
+    playerName,
+    period,
+    seasonName = '',
+    isCurrentSeason = false,
+}) => {
+    const gamesPlayed = safeCount(matchup?.gamesPlayed);
+    const emptyTitle = isCurrentSeason ? 'No shared games this season' : 'No shared games yet';
+    const emptyDescription = isCurrentSeason
+        ? 'Your current-season record will begin after you finish a game together.'
+        : 'Your head-to-head record starts the first time you finish a game together.';
+    const rateLabel = isCurrentSeason
+        ? `Your current-season win rate against ${playerName}`
+        : `Your win rate against ${playerName}`;
+    const gamesLabel = `${gamesPlayed} game${gamesPlayed === 1 ? '' : 's'} together`;
+
+    return (
+        <section
+            className={`player-profile-matchup-period${isCurrentSeason ? ' current-season' : ' lifetime'}`}
+            aria-label={`${period} record against ${playerName}`}
+        >
+            <div className="player-profile-period-heading">
+                <strong>{period}</strong>
+                <span>{seasonName ? `${seasonName} · ${gamesLabel}` : gamesLabel}</span>
+            </div>
+
+            {gamesPlayed === 0 ? (
+                <div className="player-profile-empty-matchup">
+                    <strong>{emptyTitle}</strong>
+                    <p>{emptyDescription}</p>
+                </div>
+            ) : (
+                <>
+                    <div className="player-profile-rate-callout">
+                        <strong>{formatRate(matchup?.winRate)}</strong>
+                        <span>{rateLabel}</span>
+                    </div>
+                    <div className="player-profile-stats matchup-stats">
+                        <Stat label="Your wins" value={safeCount(matchup?.wins)} />
+                        <Stat label="Your losses" value={safeCount(matchup?.losses)} />
+                        <Stat label="Ties" value={safeCount(matchup?.ties)} />
+                    </div>
+                </>
+            )}
+        </section>
+    );
+};
+
 const PlayerProfileModal = ({ playerName, currentUsername, onClose }) => {
     const show = Boolean(playerName);
     const [profile, setProfile] = useState(null);
@@ -75,10 +124,14 @@ const PlayerProfileModal = ({ playerName, currentUsername, onClose }) => {
 
     const player = profile?.player;
     const matchup = profile?.headToHead;
+    const currentSeasonMatchup = profile?.currentSeasonHeadToHead ?? matchup?.currentSeason;
     const isSelf = matchup?.isSelf === true
+        || currentSeasonMatchup?.isSelf === true
         || (player?.username && player.username === currentUsername);
     const careerGames = safeCount(player?.totalGames);
-    const sharedGames = safeCount(matchup?.gamesPlayed);
+    const currentSeasonName = typeof currentSeasonMatchup?.season?.displayName === 'string'
+        ? currentSeasonMatchup.season.displayName.trim()
+        : '';
     const initial = (player?.username || playerName).trim().charAt(0).toUpperCase() || 'S';
 
     return createPortal(
@@ -151,27 +204,23 @@ const PlayerProfileModal = ({ playerName, currentUsername, onClose }) => {
                             <div className="player-profile-matchup" aria-label={`Your record against ${player.username}`}>
                                 <div className="player-profile-section-heading">
                                     <span>Your matchup</span>
-                                    <em>{sharedGames} game{sharedGames === 1 ? '' : 's'} together</em>
+                                    <em>{currentSeasonMatchup ? 'Current season and lifetime' : 'Lifetime'}</em>
                                 </div>
 
-                                {sharedGames === 0 ? (
-                                    <div className="player-profile-empty-matchup">
-                                        <strong>No shared games yet</strong>
-                                        <p>Your head-to-head record starts the first time you finish a game together.</p>
-                                    </div>
-                                ) : (
-                                    <>
-                                        <div className="player-profile-rate-callout">
-                                            <strong>{formatRate(matchup?.winRate)}</strong>
-                                            <span>Your win rate against {player.username}</span>
-                                        </div>
-                                        <div className="player-profile-stats matchup-stats">
-                                            <Stat label="Your wins" value={safeCount(matchup?.wins)} />
-                                            <Stat label="Your losses" value={safeCount(matchup?.losses)} />
-                                            <Stat label="Ties" value={safeCount(matchup?.ties)} />
-                                        </div>
-                                    </>
+                                {currentSeasonMatchup && (
+                                    <MatchupRecord
+                                        matchup={currentSeasonMatchup}
+                                        playerName={player.username}
+                                        period="Current season"
+                                        seasonName={currentSeasonName}
+                                        isCurrentSeason
+                                    />
                                 )}
+                                <MatchupRecord
+                                    matchup={matchup}
+                                    playerName={player.username}
+                                    period="Lifetime"
+                                />
                             </div>
                         )}
                     </>
