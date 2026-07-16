@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-// Web Audio API instead of <audio> elements: short SFX mix OVER background
-// audio (YouTube/music keeps playing) instead of seizing the phone's audio
-// session — the same approach Howler.js and HTML5 game engines use.
+// Short effects and the music bed share one unlocked Web Audio context so they
+// mix reliably on mobile. Each channel has its own gain node and preferences.
 const SOUND_FILES = {
     turnAlert: '/Sounds/turn_alert.mp3',
     cardPlay: '/Sounds/card_play.mp3',
@@ -22,80 +21,227 @@ const SOUND_FILES = {
     no_peaking_cheater: '/Sounds/no_peaking_cheater.mp3',
 };
 
-const stored = (key, fallback) => {
+const MUSIC_FILE = '/Music/upbeat-game-loop-v1.mp3';
+const DEFAULT_EFFECTS_VOLUME = 0.7;
+const GAIN_RAMP_SECONDS = 0.12;
+
+const clampVolume = (value) => {
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) ? Math.min(1, Math.max(0, numericValue)) : 0;
+};
+
+const stored = (key, fallback, validate = () => true) => {
     try {
-        const v = localStorage.getItem(key);
-        return v === null ? fallback : JSON.parse(v);
+        const value = localStorage.getItem(key);
+        if (value === null) return fallback;
+        const parsed = JSON.parse(value);
+        return validate(parsed) ? parsed : fallback;
     } catch {
         return fallback;
     }
 };
 
-export const useSounds = () => {
+const storedBoolean = (key, fallback) => stored(key, fallback, value => typeof value === 'boolean');
+const storedVolume = (key, fallback) => clampVolume(stored(
+    key,
+    fallback,
+    value => typeof value === 'number' && Number.isFinite(value)
+));
+
+// Safari has historically supported only the callback form, while modern
+// browsers return a promise. Resolve either API without decoding twice.
+const decodeAudio = (ctx, data) => new Promise((resolve, reject) => {
+    let result;
+    try {
+        result = ctx.decodeAudioData(data, resolve, reject);
+    } catch (error) {
+        reject(error);
+        return;
+    }
+    if (result && typeof result.then === 'function') result.then(resolve, reject);
+});
+
+const setGain = (gainNode, ctx, target, { immediate = false } = {}) => {
+    if (!gainNode || !ctx) return;
+    const gain = gainNode.gain;
+    const value = clampVolume(target);
+    const now = Number.isFinite(ctx.currentTime) ? ctx.currentTime : 0;
+
+    if (immediate) {
+        gain.value = value;
+        return;
+    }
+
+    // A short ramp prevents clicks when a view, mute button, or slider changes.
+    if (typeof gain.cancelScheduledValues === 'function') gain.cancelScheduledValues(now);
+    if (typeof gain.setValueAtTime === 'function') gain.setValueAtTime(gain.value, now);
+    if (typeof gain.linearRampToValueAtTime === 'function') {
+        gain.linearRampToValueAtTime(value, now + GAIN_RAMP_SECONDS);
+    } else if (typeof gain.setTargetAtTime === 'function') {
+        gain.setTargetAtTime(value, now, GAIN_RAMP_SECONDS / 3);
+    } else {
+        gain.value = value;
+    }
+};
+
+export const useSounds = ({ musicActive = false } = {}) => {
+    const hydratedSettingsRef = useRef(null);
+    if (!hydratedSettingsRef.current) {
+        const effectsMuted = storedBoolean('sluff_sound_muted', false);
+        const effectsVolume = storedVolume('sluff_sound_volume', DEFAULT_EFFECTS_VOLUME);
+        hydratedSettingsRef.current = {
+            effectsMuted,
+            effectsVolume,
+            // Respect an existing global mute on the first music-enabled build.
+            musicMuted: storedBoolean('sluff_music_muted', effectsMuted),
+            musicVolume: storedVolume('sluff_music_volume', effectsVolume / 2),
+        };
+    }
+
+    const initialSettings = hydratedSettingsRef.current;
+    const [muted, setMuted] = useState(initialSettings.effectsMuted);
+    const [volume, setVolumeState] = useState(initialSettings.effectsVolume);
+    const [musicMuted, setMusicMuted] = useState(initialSettings.musicMuted);
+    const [musicVolume, setMusicVolumeState] = useState(initialSettings.musicVolume);
+
     const ctxRef = useRef(null);
     const gainRef = useRef(null);
+    const musicGainRef = useRef(null);
     const buffersRef = useRef({});
+    const musicSourceRef = useRef(null);
+    const musicLoadPromiseRef = useRef(null);
     const enabledRef = useRef(false);
-
-    const [muted, setMuted] = useState(() => stored('sluff_sound_muted', false));
-    const [volume, setVolume] = useState(() => stored('sluff_sound_volume', 0.7));
+    const disposedRef = useRef(false);
     const mutedRef = useRef(muted);
     const volumeRef = useRef(volume);
+    const musicMutedRef = useRef(musicMuted);
+    const musicVolumeRef = useRef(musicVolume);
+    const musicActiveRef = useRef(Boolean(musicActive));
 
-    // Persist settings and apply them to the live gain node
-    useEffect(() => {
-        mutedRef.current = muted;
-        volumeRef.current = volume;
+    // Keep event callbacks and asynchronous decoders on the latest settings.
+    mutedRef.current = muted;
+    volumeRef.current = volume;
+    musicMutedRef.current = musicMuted;
+    musicVolumeRef.current = musicVolume;
+    musicActiveRef.current = Boolean(musicActive);
+
+    const desiredMusicGain = useCallback(() => (
+        musicActiveRef.current && !musicMutedRef.current ? musicVolumeRef.current : 0
+    ), []);
+
+    const startMusicLoop = useCallback((ctx, buffer) => {
+        if (
+            disposedRef.current
+            || ctxRef.current !== ctx
+            || !musicGainRef.current
+            || musicSourceRef.current
+        ) return;
+
+        let source;
         try {
-            localStorage.setItem('sluff_sound_muted', JSON.stringify(muted));
-            localStorage.setItem('sluff_sound_volume', JSON.stringify(volume));
-        } catch { /* private browsing */ }
-        if (gainRef.current && ctxRef.current) {
-            gainRef.current.gain.setValueAtTime(muted ? 0 : volume, ctxRef.current.currentTime);
+            source = ctx.createBufferSource();
+            source.buffer = buffer;
+            source.loop = true;
+            source.connect(musicGainRef.current);
+            // Set the ref before start() so repeated async completion cannot
+            // create two loops under React StrictMode or rapid gestures.
+            musicSourceRef.current = source;
+            source.onended = () => {
+                if (musicSourceRef.current === source) musicSourceRef.current = null;
+            };
+            source.start(0);
+        } catch (error) {
+            if (musicSourceRef.current === source) musicSourceRef.current = null;
+            try { source?.disconnect(); } catch { /* best effort */ }
+            console.error('Failed to start background music:', error);
         }
-    }, [muted, volume]);
+    }, []);
+
+    const loadMusic = useCallback((ctx) => {
+        if (musicLoadPromiseRef.current || !musicGainRef.current) return;
+
+        musicLoadPromiseRef.current = (async () => {
+            try {
+                const response = await fetch(MUSIC_FILE);
+                if (!response.ok) throw new Error(`fetch ${response.status}`);
+                const buffer = await decodeAudio(ctx, await response.arrayBuffer());
+                if (disposedRef.current || ctxRef.current !== ctx) return;
+                startMusicLoop(ctx, buffer);
+            } catch (error) {
+                // Music is optional: a bad asset or decode must never disable SFX.
+                if (!disposedRef.current && ctxRef.current === ctx) {
+                    console.error('Failed to load background music:', error);
+                }
+            }
+        })();
+    }, [startMusicLoop]);
+
+    const loadEffects = useCallback((ctx) => {
+        Object.entries(SOUND_FILES).forEach(async ([name, url]) => {
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`fetch ${response.status}`);
+                const buffer = await decodeAudio(ctx, await response.arrayBuffer());
+                if (!disposedRef.current && ctxRef.current === ctx) {
+                    buffersRef.current[name] = buffer;
+                }
+            } catch (error) {
+                if (!disposedRef.current && ctxRef.current === ctx) {
+                    console.error(`Failed to load sound ${name}:`, error);
+                }
+            }
+        });
+    }, []);
 
     const ensureContext = useCallback(() => {
-        if (!ctxRef.current) {
-            const Ctx = window.AudioContext || window.webkitAudioContext;
-            if (!Ctx) return null;
-            ctxRef.current = new Ctx();
-            gainRef.current = ctxRef.current.createGain();
-            gainRef.current.gain.value = mutedRef.current ? 0 : volumeRef.current;
-            gainRef.current.connect(ctxRef.current.destination);
+        if (ctxRef.current) return ctxRef.current;
 
-            Object.entries(SOUND_FILES).forEach(async ([name, url]) => {
-                try {
-                    const res = await fetch(url);
-                    if (!res.ok) throw new Error(`fetch ${res.status}`);
-                    const data = await res.arrayBuffer();
-                    // iOS Safari historically supports only the CALLBACK form of
-                    // decodeAudioData (the promise form returns undefined / throws on
-                    // older versions), and is pickier about mp3 than desktop Chrome.
-                    // Support both forms so buffers actually decode on iPhone.
-                    buffersRef.current[name] = await new Promise((resolve, reject) => {
-                        let ret;
-                        try { ret = ctxRef.current.decodeAudioData(data, resolve, reject); }
-                        catch (e) { return reject(e); }
-                        if (ret && typeof ret.then === 'function') ret.then(resolve, reject);
-                    });
-                } catch (e) {
-                    console.error(`Failed to load sound ${name}:`, e);
-                }
-            });
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return null;
+
+        let ctx;
+        try {
+            ctx = new Ctx();
+            const effectsGain = ctx.createGain();
+            setGain(effectsGain, ctx, mutedRef.current ? 0 : volumeRef.current, { immediate: true });
+            effectsGain.connect(ctx.destination);
+
+            ctxRef.current = ctx;
+            gainRef.current = effectsGain;
+
+            // Build the music branch separately so a music-specific Web Audio
+            // failure leaves the already-connected effects channel usable.
+            try {
+                const musicGain = ctx.createGain();
+                setGain(musicGain, ctx, desiredMusicGain(), { immediate: true });
+                musicGain.connect(ctx.destination);
+                musicGainRef.current = musicGain;
+                loadMusic(ctx);
+            } catch (error) {
+                console.error('Failed to initialize background music:', error);
+            }
+
+            loadEffects(ctx);
+        } catch (error) {
+            console.error('Failed to initialize game audio:', error);
+            try { ctx?.close?.(); } catch { /* best effort */ }
+            ctxRef.current = null;
+            gainRef.current = null;
+            musicGainRef.current = null;
+            return null;
         }
-        return ctxRef.current;
-    }, []);
+
+        return ctx;
+    }, [desiredMusicGain, loadEffects, loadMusic]);
 
     const enableSound = useCallback(() => {
         // Must be called from a user gesture (browsers gate audio on interaction).
         const ctx = ensureContext();
         if (!ctx) return;
         if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-        // iOS Safari won't actually play audio after a bare resume() — it needs a
-        // real (silent) buffer STARTED inside the user gesture to fully unlock the
-        // audio session. This is the canonical Web Audio unlock and is what makes
-        // sound work on iPhone, not just desktop.
+
+        // iOS needs a real (silent) buffer started inside the gesture to unlock
+        // the audio session; resume() alone is insufficient on older versions.
         try {
             const silent = ctx.createBuffer(1, 1, 22050);
             const source = ctx.createBufferSource();
@@ -106,9 +252,42 @@ export const useSounds = () => {
         enabledRef.current = true;
     }, [ensureContext]);
 
-    // iOS suspends the AudioContext whenever the app is backgrounded; once we've
-    // unlocked via a gesture, resume() is allowed on visibility/focus so sound
-    // keeps working after the user switches apps and comes back.
+    const setVolume = useCallback((nextValue) => {
+        setVolumeState(current => clampVolume(
+            typeof nextValue === 'function' ? nextValue(current) : nextValue
+        ));
+    }, []);
+
+    const setMusicVolume = useCallback((nextValue) => {
+        setMusicVolumeState(current => clampVolume(
+            typeof nextValue === 'function' ? nextValue(current) : nextValue
+        ));
+    }, []);
+
+    // Persist and apply the effects channel independently.
+    useEffect(() => {
+        try {
+            localStorage.setItem('sluff_sound_muted', JSON.stringify(muted));
+            localStorage.setItem('sluff_sound_volume', JSON.stringify(volume));
+        } catch { /* private browsing */ }
+        setGain(gainRef.current, ctxRef.current, muted ? 0 : volume);
+    }, [muted, volume]);
+
+    // Persist and apply music activity/preferences without restarting its loop.
+    useEffect(() => {
+        try {
+            localStorage.setItem('sluff_music_muted', JSON.stringify(musicMuted));
+            localStorage.setItem('sluff_music_volume', JSON.stringify(musicVolume));
+        } catch { /* private browsing */ }
+        setGain(
+            musicGainRef.current,
+            ctxRef.current,
+            musicActive && !musicMuted ? musicVolume : 0
+        );
+    }, [musicActive, musicMuted, musicVolume]);
+
+    // Pause the shared context while backgrounded and resume it after a mobile
+    // app/tab returns. Once unlocked, resuming no longer requires another tap.
     useEffect(() => {
         const resumeIfNeeded = () => {
             const ctx = ctxRef.current;
@@ -116,17 +295,27 @@ export const useSounds = () => {
                 ctx.resume().catch(() => {});
             }
         };
-        document.addEventListener('visibilitychange', resumeIfNeeded);
+        const handleVisibility = () => {
+            const ctx = ctxRef.current;
+            if (!ctx || !enabledRef.current) return;
+            if (document.visibilityState === 'hidden') {
+                if (ctx.state === 'running' && typeof ctx.suspend === 'function') {
+                    ctx.suspend().catch(() => {});
+                }
+            } else {
+                resumeIfNeeded();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibility);
         window.addEventListener('focus', resumeIfNeeded);
         return () => {
-            document.removeEventListener('visibilitychange', resumeIfNeeded);
+            document.removeEventListener('visibilitychange', handleVisibility);
             window.removeEventListener('focus', resumeIfNeeded);
         };
     }, []);
 
-    // Safety net: unlock audio on the FIRST user gesture of any kind, so sound
-    // works even on flows that skip the explicit enableSound() call sites
-    // (e.g. auto-rejoining a table after a refresh).
+    // Safety net for refresh/rejoin flows that skip explicit enableSound calls.
     useEffect(() => {
         const unlock = () => {
             enableSound();
@@ -144,8 +333,32 @@ export const useSounds = () => {
         };
     }, [enableSound]);
 
+    // Close the page-lifetime audio graph on a real unmount. The initial
+    // StrictMode effect probe occurs before a gesture can create the context.
+    useEffect(() => {
+        disposedRef.current = false;
+        return () => {
+            disposedRef.current = true;
+            enabledRef.current = false;
+
+            const source = musicSourceRef.current;
+            musicSourceRef.current = null;
+            try { source?.stop(0); } catch { /* already stopped */ }
+            try { source?.disconnect(); } catch { /* best effort */ }
+
+            const ctx = ctxRef.current;
+            ctxRef.current = null;
+            gainRef.current = null;
+            musicGainRef.current = null;
+            buffersRef.current = {};
+            musicLoadPromiseRef.current = null;
+            if (ctx && ctx.state !== 'closed' && typeof ctx.close === 'function') {
+                ctx.close().catch(() => {});
+            }
+        };
+    }, []);
+
     const playSound = useCallback((soundName) => {
-        // Muted players never touch the audio session at all
         if (mutedRef.current) return;
         if (!enabledRef.current) {
             console.warn(`[sound] "${soundName}" skipped — audio not unlocked yet (no user gesture)`);
@@ -164,11 +377,21 @@ export const useSounds = () => {
         source.start(0);
     }, []);
 
-    const toggleMute = useCallback(() => setMuted(m => !m), []);
+    const toggleMute = useCallback(() => setMuted(current => !current), []);
+    const toggleMusicMute = useCallback(() => setMusicMuted(current => !current), []);
 
     return {
         playSound,
         enableSound,
-        soundSettings: { muted, volume, toggleMute, setVolume },
+        soundSettings: {
+            muted,
+            volume,
+            toggleMute,
+            setVolume,
+            musicMuted,
+            musicVolume,
+            toggleMusicMute,
+            setMusicVolume,
+        },
     };
 };

@@ -1,5 +1,5 @@
 // frontend/src/components/game/SoundControls.js
-import React from 'react';
+import React, { useId } from 'react';
 import './SoundControls.css';
 
 const SpeakerOnIcon = () => (
@@ -18,35 +18,113 @@ const SpeakerOffIcon = () => (
     </svg>
 );
 
-const SoundControls = ({ soundSettings, compact = false }) => {
-    if (!soundSettings) return null;
-    const { muted, volume, toggleMute, setVolume } = soundSettings;
+const MusicOnIcon = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M9 18V5l10-2v13" />
+        <circle cx="6" cy="18" r="3" />
+        <circle cx="16" cy="16" r="3" />
+    </svg>
+);
 
-    const handleVolumeChange = (e) => {
-        const v = Number(e.target.value) / 100;
-        setVolume(v);
-        if (muted && v > 0) toggleMute();
+const MusicOffIcon = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M9 14.5V5l10-2v9" />
+        <circle cx="6" cy="18" r="3" />
+        <line x1="14" y1="14" x2="21" y2="21" />
+        <line x1="21" y1="14" x2="14" y2="21" />
+    </svg>
+);
+
+const toPercent = value => {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return 0;
+    return Math.round(Math.min(1, Math.max(0, numericValue)) * 100);
+};
+
+const VolumeRow = ({
+    label,
+    accessibleLabel,
+    muted,
+    volume,
+    toggleMute,
+    setVolume,
+    OnIcon,
+    OffIcon,
+}) => {
+    const sliderId = useId();
+    const muteLabel = `${muted ? 'Unmute' : 'Mute'} ${accessibleLabel.toLowerCase()}`;
+
+    const handleVolumeChange = event => {
+        const nextVolume = Number(event.target.value) / 100;
+        setVolume(nextVolume);
+        if (muted && nextVolume > 0) toggleMute();
     };
 
     return (
-        <div className={`sound-controls${compact ? ' compact' : ''}`}>
+        <div className="sound-control-row">
+            <label className="sound-control-label" htmlFor={sliderId}>{label}</label>
             <button
                 type="button"
                 className="sound-mute-btn"
                 onClick={toggleMute}
-                aria-label={muted ? 'Unmute game sounds' : 'Mute game sounds'}
-                title={muted ? 'Unmute game sounds' : 'Mute game sounds'}
+                aria-label={muteLabel}
+                title={muteLabel}
+                aria-pressed={muted}
             >
-                {muted ? <SpeakerOffIcon /> : <SpeakerOnIcon />}
+                {muted ? <OffIcon /> : <OnIcon />}
             </button>
             <input
+                id={sliderId}
                 type="range"
                 min="0"
                 max="100"
-                value={muted ? 0 : Math.round(volume * 100)}
+                value={muted ? 0 : toPercent(volume)}
                 onChange={handleVolumeChange}
                 className="sound-volume-slider"
-                aria-label="Game sound volume"
+                aria-label={`${accessibleLabel} volume`}
+            />
+        </div>
+    );
+};
+
+const SoundControls = ({ soundSettings, compact = false }) => {
+    if (!soundSettings) return null;
+    const {
+        muted = false,
+        volume = 0.7,
+        toggleMute = () => {},
+        setVolume = () => {},
+        musicMuted = false,
+        musicVolume = 0.35,
+        toggleMusicMute = () => {},
+        setMusicVolume = () => {},
+    } = soundSettings;
+
+    return (
+        <div
+            className={`sound-controls${compact ? ' compact' : ''}`}
+            role="group"
+            aria-label="Audio controls"
+        >
+            <VolumeRow
+                label="Effects"
+                accessibleLabel="Sound effects"
+                muted={muted}
+                volume={volume}
+                toggleMute={toggleMute}
+                setVolume={setVolume}
+                OnIcon={SpeakerOnIcon}
+                OffIcon={SpeakerOffIcon}
+            />
+            <VolumeRow
+                label="Music"
+                accessibleLabel="Music"
+                muted={musicMuted}
+                volume={musicVolume}
+                toggleMute={toggleMusicMute}
+                setVolume={setMusicVolume}
+                OnIcon={MusicOnIcon}
+                OffIcon={MusicOffIcon}
             />
         </div>
     );

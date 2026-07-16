@@ -3,5 +3,16 @@ export const useSounds = () => {
     const playSound = vi.fn();
     const enableSound = vi.fn();
 
-    return { playSound, enableSound };
+    const soundSettings = {
+        muted: false,
+        volume: 0.7,
+        toggleMute: vi.fn(),
+        setVolume: vi.fn(),
+        musicMuted: false,
+        musicVolume: 0.35,
+        toggleMusicMute: vi.fn(),
+        setMusicVolume: vi.fn(),
+    };
+
+    return { playSound, enableSound, soundSettings };
 };

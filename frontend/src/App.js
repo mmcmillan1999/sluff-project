@@ -52,7 +52,9 @@ function App() {
     const [connectionNotice, setConnectionNotice] = useState(null);
     const [serverVersion, setServerVersion] = useState('');
     const [showMercyWindow, setShowMercyWindow] = useState(false);
-    const { playSound, enableSound, soundSettings } = useSounds();
+    const { playSound, enableSound, soundSettings } = useSounds({
+        musicActive: Boolean(user) && (view === 'lobby' || view === 'gameTable'),
+    });
     const [showFeedbackModal, setShowFeedbackModal] = useState(false);
     const [showHowToPlay, setShowHowToPlay] = useState(false);
     const [feedbackGameContext, setFeedbackGameContext] = useState(null);

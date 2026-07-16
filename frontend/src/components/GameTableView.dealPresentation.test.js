@@ -167,6 +167,10 @@ const baseProps = (currentTableState) => ({
         volume: 0.5,
         toggleMute: vi.fn(),
         setVolume: vi.fn(),
+        musicMuted: false,
+        musicVolume: 0.25,
+        toggleMusicMute: vi.fn(),
+        setMusicVolume: vi.fn(),
     },
 });
 

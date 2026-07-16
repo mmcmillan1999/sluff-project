@@ -319,7 +319,8 @@
 /* The player menu represents the whole collection, so it gets a restrained
    four-venue accent rather than inheriting whichever private tab is open. */
 .lobby-menu-popup.venue-menu {
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   border-color: rgba(224, 196, 145, 0.36);
   background: linear-gradient(150deg, rgba(49, 43, 38, 0.99), rgba(20, 20, 20, 0.99));
   box-shadow: 0 0.75rem 1.8rem rgba(0, 0, 0, 0.58);

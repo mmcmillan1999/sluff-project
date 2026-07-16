@@ -273,6 +273,10 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
     
     const renderLobbyMenu = () => (
         <div className="lobby-menu-popup venue-menu" role="group" aria-label="Player menu">
+            <div className="lobby-menu-audio">
+                <p className="lobby-action-group-label">Audio</p>
+                <SoundControls soundSettings={soundSettings} />
+            </div>
             {renderLobbyActions({ buttonClass: 'lobby-menu-button', closeMenu: true })}
             {tutorialResetError && (
                 <p className="tutorial-reset-error" role="alert">{tutorialResetError}</p>
