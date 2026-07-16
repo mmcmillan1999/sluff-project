@@ -499,7 +499,14 @@
         }
 
         canAcceptQuickPlayHuman(engine) {
-            if (!engine || engine.tableType !== 'quickplay' || engine.gameStarted || engine.gameStartPending) return false;
+            if (!engine || engine.gameStarted || engine.gameStartPending) return false;
+            if (engine.tableType !== 'quickplay') {
+                // A private table joins the pool for a short window while its
+                // players look for one more — see seekHumanForPrivateTable.
+                return Number.isFinite(engine.privateSeekUntil)
+                    && this._quickPlayNow() < engine.privateSeekUntil
+                    && engine.playerOrder.count < 4;
+            }
             if (engine.qpPhase === 'filling') return engine.playerOrder.count < 3;
             if (engine.qpPhase === 'seeking_fourth') {
                 return engine.playerOrder.count === 3
@@ -513,6 +520,10 @@
             const pool = Object.values(this.engines).filter(engine => (
                 engine.theme === themeId && this.canAcceptQuickPlayHuman(engine)
             ));
+            // A private table actively looking for a player wins the pool:
+            // real people are already seated there waiting on this seat.
+            const privateSeeker = pool.find(engine => engine.tableType !== 'quickplay');
+            if (privateSeeker) return privateSeeker;
             const seekingFourth = pool.find(engine => engine.qpPhase === 'seeking_fourth');
             if (seekingFourth) return seekingFourth;
             // Prefer a table already filling with at least one human...
@@ -547,8 +558,64 @@
                 }
                 return null;
             }
-            this.evaluateQuickPlayTable(engine.tableId, { restartFill: true });
+            if (engine.tableType === 'quickplay') {
+                this.evaluateQuickPlayTable(engine.tableId, { restartFill: true });
+            } else {
+                // A human claimed the private table's open seat; the search
+                // is over and the pending fallback fill must not fire.
+                this._completePrivateSeek(engine);
+                this.emitGameState(engine.tableId);
+            }
             return engine;
+        }
+
+        _completePrivateSeek(engine) {
+            engine.privateSeekUntil = null;
+            this._clearQuickPlayTimer(engine.tableId, 'privateSeek');
+        }
+
+        // Player-facing "Find a Player" on private tables: expose the table to
+        // the Quick Play pool for one short search window. Anyone matchmaking
+        // into this theme during the window is seated here (same buy-in, so
+        // affordability is already proven). If nobody claims the seat before
+        // the window closes, the matchmaker quietly seats a house opponent
+        // instead — player-facing copy never distinguishes the two.
+        seekHumanForPrivateTable(tableId) {
+            const engine = this.engines[tableId];
+            if (!engine || engine.tableType === 'quickplay') {
+                return { error: 'This table fills automatically.' };
+            }
+            if (engine.gameStarted || engine.gameStartPending) {
+                return { error: 'The game has already started.' };
+            }
+            if (engine.playerOrder.count >= 4) {
+                return { error: 'The table is already full.' };
+            }
+
+            const timers = this.qpTimers[tableId] || (this.qpTimers[tableId] = {});
+            if (timers.privateSeek) return { ok: true, alreadySearching: true };
+
+            const windowMs = 4000 + Math.floor(Math.random() * 4000);
+            engine.privateSeekUntil = this._quickPlayNow() + windowMs;
+            const expectedSeats = engine.playerOrder.count;
+            const timerFn = this.timerOverride || setTimeout;
+            const record = { handle: null };
+            timers.privateSeek = record;
+            record.handle = timerFn(() => {
+                if (timers.privateSeek === record) timers.privateSeek = null;
+                const current = this.engines[tableId];
+                if (!current) return;
+                current.privateSeekUntil = null;
+                if (current.gameStarted || current.gameStartPending) return;
+                // If the seat count changed, someone arrived another way
+                // (invite, matchmaking) — the search already succeeded.
+                if (current.playerOrder.count !== expectedSeats
+                    || current.playerOrder.count >= 4) return;
+                current.addBotPlayer();
+                this.emitGameState(tableId);
+                this.io.emit('lobbyState', this.getLobbyState());
+            }, windowMs);
+            return { ok: true };
         }
 
         // restartFill: true when a human just took a seat — their arrival

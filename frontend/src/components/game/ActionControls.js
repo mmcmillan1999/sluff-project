@@ -64,6 +64,7 @@ const ActionControls = ({
 }) => {
     const [inviteCopied, setInviteCopied] = useState(false);
     const [quickPlayDecisionSubmitted, setQuickPlayDecisionSubmitted] = useState(false);
+    const [seekingPlayer, setSeekingPlayer] = useState(false);
     const qpPhase = currentTableState.qpPhase;
     const qpGeneration = currentTableState.qpGeneration;
     const qpMatchmakingNotice = currentTableState.qpMatchmakingNotice;
@@ -90,6 +91,20 @@ const ActionControls = ({
             window.prompt('Copy this invite link:', getInviteUrl(currentTableState.tableId));
         }
     };
+
+    const handleFindPlayer = () => {
+        emitEvent('findPlayer');
+        setSeekingPlayer(true);
+        // The server's search window tops out around 8s; hold the searching
+        // state slightly longer so the button never re-enables mid-search.
+        setTimeout(() => setSeekingPlayer(false), 9000);
+    };
+
+    // A new arrival (found player, invite) ends the visible search early.
+    const activePlayerCount = activePlayers.length;
+    useEffect(() => {
+        setSeekingPlayer(false);
+    }, [activePlayerCount]);
 
     const handleQuickPlayDecision = (choice) => {
         if (quickPlayDecisionSubmitted) return;
@@ -288,8 +303,15 @@ const ActionControls = ({
                             </svg>
                             {inviteCopied ? 'Link Copied!' : 'Copy Game Link'}
                         </button>
-                        {isAdmin && activePlayers.length < 4 && (
-                            <button type="button" onClick={() => emitEvent('addBot')} className="game-button action-prompt__button">Add Bot</button>
+                        {activePlayers.length < 4 && (
+                            <button
+                                type="button"
+                                onClick={handleFindPlayer}
+                                disabled={seekingPlayer}
+                                className="game-button action-prompt__button"
+                            >
+                                {seekingPlayer ? 'Searching…' : 'Find a Player'}
+                            </button>
                         )}
                         {isAdmin && hasBots && (
                             <button type="button" onClick={() => emitEvent('removeBot')} className="game-button action-prompt__button action-prompt__button--danger">Remove Bot</button>

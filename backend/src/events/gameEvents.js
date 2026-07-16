@@ -508,6 +508,25 @@ const registerGameHandlers = (io, gameService, options = {}) => {
             socket.emit("notification", { message: "You are now a spectator." });
         });
 
+        // Player-facing seat fill for private tables. Opens the table to the
+        // matchmaking pool for a short window; if nobody claims the seat the
+        // matchmaker quietly seats a house opponent instead. Player-facing
+        // copy stays neutral about which one arrived.
+        onTableAction("findPlayer", {
+            validate: (_payload, { engine }) => {
+                if (engine.tableType === 'quickplay') return 'This table fills automatically.';
+                if (engine.gameStarted) return 'The game has already started.';
+                return null;
+            },
+        }, ({ engine }) => {
+            const result = gameService.seekHumanForPrivateTable(engine.tableId);
+            const message = result?.error
+                || (result?.alreadySearching
+                    ? 'Still looking for another player…'
+                    : 'Looking for another player…');
+            socket.emit("notification", { message });
+        });
+
         // Bots are quick-play-only for regular players (the matchmaker seats
         // them). Manual bot management remains as an admin testing tool.
         onTableAction("addBot", {
