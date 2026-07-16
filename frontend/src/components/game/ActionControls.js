@@ -76,7 +76,6 @@ const ActionControls = ({
 
     const players = Object.values(currentTableState.players || {});
     const activePlayers = players.filter(player => !player.isSpectator && !player.disconnected);
-    const hasBots = players.some(player => player.isBot);
     const selfPlayer = currentTableState.players?.[playerId]
         || players.find(player => player.userId === playerId);
     const isActiveHuman = !isSpectator && !selfPlayer?.isBot;
@@ -312,9 +311,6 @@ const ActionControls = ({
                             >
                                 {seekingPlayer ? 'Searching…' : 'Find a Player'}
                             </button>
-                        )}
-                        {isAdmin && hasBots && (
-                            <button type="button" onClick={() => emitEvent('removeBot')} className="game-button action-prompt__button action-prompt__button--danger">Remove Bot</button>
                         )}
                         <button type="button" onClick={handleLeaveTable} className="game-button action-prompt__button action-prompt__button--quiet">Lobby</button>
                     </div>
