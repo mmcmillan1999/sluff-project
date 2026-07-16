@@ -6,6 +6,7 @@ import VerifyEmail from './VerifyEmail.js';
 import RequestPasswordReset from './RequestPasswordReset.js';
 import ResetPassword from './ResetPassword.js';
 import PublicLanding from './PublicLanding.js';
+import ClaudeLanding from './ClaudeLanding.js';
 
 const viewFromLocation = () => {
     const path = window.location.pathname;
@@ -16,6 +17,7 @@ const viewFromLocation = () => {
     if (path === '/register') return 'register';
     if (path === '/login') return 'login';
     if (path === '/forgot') return 'forgot';
+    if (path === '/claude') return 'claude';
     return 'landing';
 };
 
@@ -49,6 +51,12 @@ const AuthContainer = ({ onLoginSuccess, inviteTableId }) => {
                 return <RequestPasswordReset onNavigate={handleNavigate} />;
             case 'reset':
                 return <ResetPassword onNavigate={handleNavigate} />;
+            case 'claude':
+                return <ClaudeLanding
+                    inviteTableId={inviteTableId}
+                    onRegister={() => handleNavigate('register')}
+                    onLogin={() => handleNavigate('login')}
+                />;
             case 'landing':
                 return <PublicLanding
                     inviteTableId={inviteTableId}
