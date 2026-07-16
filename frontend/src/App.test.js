@@ -70,6 +70,41 @@ describe('App Component and Game Flow', () => {
         expect(await screen.findByText('Quick Play')).toBeInTheDocument();
     });
 
+    test('keeps Quick Play copy to the table name, token cost, and action', async () => {
+        render(<App />);
+
+        await act(async () => {
+            socketEventHandlers.updateUser({
+                id: 42,
+                username: 'Test Player',
+                tokens: '8.00',
+                games_played: 12,
+                tutorial_version: 1,
+                tutorial_active_version: 0,
+            });
+            socketEventHandlers.lobbyState({
+                themes: [{
+                    id: 'fort-creek',
+                    name: 'Fort Creek',
+                    cost: 1,
+                    tables: [],
+                }],
+                serverVersion: 'test',
+            });
+        });
+
+        const quickPlayCard = screen.getByRole('button', {
+            name: 'Fort Creek, 1 token buy-in. Play now.',
+        });
+        expect(within(quickPlayCard).getByText('Fort Creek')).toBeInTheDocument();
+        expect(within(quickPlayCard).getByText('1')).toBeInTheDocument();
+        expect(within(quickPlayCard).getByText('PLAY NOW ▶')).toBeInTheDocument();
+        expect(within(quickPlayCard).queryByText('Oakley ranch nights')).not.toBeInTheDocument();
+        expect(within(quickPlayCard).queryByText('Cowhide, leather & campfire cards')).not.toBeInTheDocument();
+        expect(quickPlayCard.querySelector('.qp-card-eyebrow')).not.toBeInTheDocument();
+        expect(quickPlayCard.querySelector('.qp-card-description')).not.toBeInTheDocument();
+    });
+
     test('opens the token ledger from the player menu and returns to the lobby', async () => {
         const user = userEvent.setup();
         render(<App />);

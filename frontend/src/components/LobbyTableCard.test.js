@@ -18,7 +18,7 @@ const tableForState = (state) => ({
     players: [{ userId: 42, playerName: 'Seated Player' }]
 });
 
-test('carries the venue identity into a private table card', () => {
+test('retains theme identity without rendering venue copy in a private table card', () => {
     const { container } = render(
         <LobbyTableCard
             table={tableForState('Waiting for Players')}
@@ -31,7 +31,25 @@ test('carries the venue identity into a private table card', () => {
     );
 
     expect(container.firstChild).toHaveAttribute('data-theme', 'dans-deck');
-    expect(screen.getByText('Above the Great Salt Lake')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Rules Table' })).toBeInTheDocument();
+    expect(screen.queryByText('Above the Great Salt Lake')).not.toBeInTheDocument();
+    expect(container.querySelector('.table-card-venue')).not.toBeInTheDocument();
+});
+
+test('normalizes an unknown private-table theme to the safe classic identity', () => {
+    const { container } = render(
+        <LobbyTableCard
+            table={tableForState('Waiting for Players')}
+            themeId="unknown-theme"
+            canAfford
+            buyIn={1}
+            onJoin={vi.fn()}
+            user={{ id: 99, is_admin: false }}
+        />
+    );
+
+    expect(container.firstChild).toHaveAttribute('data-theme', 'classic');
+    expect(container.querySelector('.table-card-venue')).not.toBeInTheDocument();
 });
 
 describe.each(IN_PROGRESS_STATES)('LobbyTableCard in %s', (state) => {

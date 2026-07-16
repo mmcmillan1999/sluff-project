@@ -53,11 +53,11 @@
   --venue-table-repeat: no-repeat;
   --venue-table-shadow: 0 1vh 3vh rgba(18, 8, 3, 0.78), 0 0 2.2vh rgba(164, 88, 39, 0.18);
   --venue-lobby-surface:
-    linear-gradient(100deg, rgba(27, 14, 8, 0.88) 0%, rgba(39, 20, 11, 0.58) 55%, rgba(15, 9, 6, 0.84) 100%),
-    url('/assets/themes/fort-creek-cowhide.webp');
-  --venue-lobby-size: auto, clamp(270px, 62vw, 430px);
+    linear-gradient(90deg, rgba(20, 10, 5, 0.82) 0%, rgba(24, 12, 7, 0.38) 48%, rgba(13, 8, 5, 0.52) 100%),
+    url('/assets/themes/fort-creek-lobby-v2.webp');
+  --venue-lobby-size: auto, cover;
   --venue-lobby-position: center;
-  --venue-lobby-repeat: no-repeat, repeat;
+  --venue-lobby-repeat: no-repeat;
   --venue-menu-surface:
     linear-gradient(145deg, rgba(48, 31, 23, 0.96), rgba(22, 15, 12, 0.98)),
     url('/assets/themes/fort-creek-cowhide.webp');
@@ -88,8 +88,8 @@
   --venue-table-repeat: no-repeat;
   --venue-table-shadow: 0 1vh 3.2vh rgba(8, 3, 2, 0.8), 0 0 2.4vh rgba(176, 122, 72, 0.13);
   --venue-lobby-surface:
-    linear-gradient(102deg, rgba(24, 10, 7, 0.88), rgba(59, 27, 17, 0.58), rgba(19, 8, 6, 0.9)),
-    url('/assets/themes/shirecliff-walnut.webp');
+    linear-gradient(90deg, rgba(19, 10, 8, 0.68) 0%, rgba(25, 14, 10, 0.18) 48%, rgba(15, 9, 7, 0.34) 100%),
+    url('/assets/themes/shirecliff-lobby-v2.webp');
   --venue-lobby-size: auto, cover;
   --venue-lobby-position: center;
   --venue-lobby-repeat: no-repeat;
@@ -124,8 +124,8 @@
   --venue-table-repeat: no-repeat;
   --venue-table-shadow: 0 1vh 3vh rgba(9, 13, 12, 0.72), 0 0 2.6vh rgba(222, 161, 95, 0.2);
   --venue-lobby-surface:
-    linear-gradient(180deg, rgba(91, 118, 132, 0.42) 0%, rgba(171, 102, 94, 0.38) 27%, rgba(46, 29, 22, 0.72) 48%, rgba(17, 21, 19, 0.9) 100%),
-    url('/assets/themes/eaglewood-teak.webp');
+    linear-gradient(90deg, rgba(15, 10, 10, 0.62) 0%, rgba(35, 14, 8, 0.2) 50%, rgba(20, 10, 8, 0.28) 100%),
+    url('/assets/themes/eaglewood-lobby-v2.webp');
   --venue-lobby-size: auto, cover;
   --venue-lobby-position: center;
   --venue-lobby-repeat: no-repeat;
@@ -160,12 +160,11 @@
   --venue-table-repeat: no-repeat;
   --venue-table-shadow: 0 1vh 3vh rgba(2, 12, 6, 0.75), 0 0 2vh rgba(226, 205, 145, 0.12);
   --venue-lobby-surface:
-    linear-gradient(100deg, rgba(8, 40, 20, 0.9), rgba(20, 74, 40, 0.62), rgba(7, 30, 16, 0.92)),
-    url('/assets/themes/academy-apple.svg'),
-    url('/assets/themes/academy-green-felt.webp');
-  --venue-lobby-size: auto, clamp(46px, 9vh, 72px), 360px;
-  --venue-lobby-position: center, 74% 45%, center;
-  --venue-lobby-repeat: no-repeat, no-repeat, repeat;
+    linear-gradient(90deg, rgba(4, 16, 9, 0.68) 0%, rgba(10, 30, 18, 0.16) 48%, rgba(4, 14, 8, 0.38) 100%),
+    url('/assets/themes/academy-lobby-v2.webp');
+  --venue-lobby-size: auto, cover;
+  --venue-lobby-position: center;
+  --venue-lobby-repeat: no-repeat;
   --venue-menu-surface:
     linear-gradient(145deg, rgba(29, 61, 42, 0.96), rgba(10, 29, 18, 0.99)),
     url('/assets/themes/academy-green-felt.webp');
@@ -217,16 +216,6 @@
   gap: 0.12vh;
 }
 
-.qp-card[data-theme] .qp-card-eyebrow {
-  color: var(--venue-accent);
-  font-size: clamp(0.58rem, 1.35vh, 0.74rem);
-  font-weight: 600;
-  letter-spacing: 0.11em;
-  line-height: 1.15;
-  text-transform: uppercase;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
-}
-
 .qp-card[data-theme] .qp-card-name {
   grid-column: auto;
   grid-row: auto;
@@ -234,18 +223,6 @@
   color: var(--venue-text);
   font-size: clamp(1.08rem, 2.65vh, 1.55rem);
   line-height: 1.1;
-}
-
-.qp-card[data-theme] .qp-card-description {
-  max-width: 38ch;
-  overflow: hidden;
-  color: rgba(255, 255, 255, 0.78);
-  font-family: 'Merriweather', serif;
-  font-size: clamp(0.58rem, 1.25vh, 0.75rem);
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }
 
 .qp-card[data-theme] .qp-card-cost {
@@ -317,20 +294,6 @@
 
 .table-card-heading {
   min-width: 0;
-}
-
-.table-card-venue {
-  display: block;
-  margin-bottom: 0.16rem;
-  overflow: hidden;
-  color: var(--venue-accent);
-  font-family: 'Oswald', sans-serif;
-  font-size: 0.68em;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  white-space: nowrap;
 }
 
 .table-card-container[data-theme] .table-card-title {
@@ -502,16 +465,6 @@
 
   .qp-card[data-theme] .qp-play-pill {
     padding-inline: 12px;
-    font-size: 0.72rem;
-  }
-
-  .qp-card[data-theme] .qp-card-description {
-    max-width: 24ch;
-  }
-}
-
-@media (min-width: 1024px) {
-  .table-card-venue {
     font-size: 0.72rem;
   }
 }

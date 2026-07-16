@@ -10,7 +10,6 @@ import { getLobbyChatHistory } from '../services/api';
 import { BUILD_ID } from '../utils/clientVersion';
 import { useViewport } from '../hooks/useViewport';
 import { TUTORIAL_VERSION } from '../config/tutorial';
-import { getThemePresentation } from '../config/themePresentation';
 
 export const deriveLobbyPlayerStats = (user = {}) => {
     const numericStat = value => {
@@ -353,14 +352,14 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
                         {lobbyThemes && lobbyThemes.length > 0 ? lobbyThemes.map(theme => {
                             const canAfford = parseFloat(user.tokens) >= theme.cost;
                             const isPending = quickPlayPending === theme.id;
-                            const presentation = getThemePresentation(theme.id);
+                            const actionLabel = isPending ? 'Seating you' : (canAfford ? 'Play now' : 'Need tokens');
                             return (
                                 <button
                                     key={theme.id}
                                     className={`qp-card qp-${theme.id} ${canAfford ? '' : 'qp-disabled'} ${isPending ? 'qp-pending' : ''}`}
                                     data-theme={theme.id}
                                     disabled={!canAfford || isPending}
-                                    aria-label={`${theme.name}. ${presentation.description}. ${theme.cost} token buy-in.`}
+                                    aria-label={`${theme.name}, ${theme.cost} token buy-in. ${actionLabel}.`}
                                     onClick={() => {
                                         setQuickPlayPending(theme.id);
                                         handleQuickPlay(theme.id);
@@ -369,9 +368,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
                                     }}
                                 >
                                     <span className="qp-card-copy">
-                                        <span className="qp-card-eyebrow">{presentation.eyebrow}</span>
                                         <span className="qp-card-name">{theme.name}</span>
-                                        <span className="qp-card-description">{presentation.description}</span>
                                         <span className="qp-card-cost">
                                             <img src="/Sluff_Token.png" alt="" className="tab-token-icon" /> {theme.cost}
                                         </span>

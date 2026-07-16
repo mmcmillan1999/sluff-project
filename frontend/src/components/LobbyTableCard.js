@@ -10,7 +10,7 @@ const LobbyTableCard = ({ table, themeId, canAfford, buyIn, onJoin, onJoinAsSpec
     
     const isMyGame = players.some(p => String(p.userId) === String(user.id));
     const isAdmin = user.is_admin;
-    const presentation = getThemePresentation(themeId);
+    const normalizedThemeId = getThemePresentation(themeId).id;
 
     const canRejoin = isMyGame && isPlaying;
     const canJoin = !isMyGame && !isFull && canAfford && !isPlaying;
@@ -36,11 +36,10 @@ const LobbyTableCard = ({ table, themeId, canAfford, buyIn, onJoin, onJoinAsSpec
     return (
         <div
             className={`table-card-container ${isDisabled ? 'disabled' : ''}`}
-            data-theme={presentation.id}
+            data-theme={normalizedThemeId}
         >
             <div className="table-card-header">
                 <div className="table-card-heading">
-                    <span className="table-card-venue">{presentation.eyebrow}</span>
                     <h3 className="table-card-title">{table.tableName}</h3>
                 </div>
                 <div className={`table-card-status ${statusText.toLowerCase().replace(/ /g, '-')}`}>
