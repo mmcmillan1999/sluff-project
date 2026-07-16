@@ -1,0 +1,46 @@
+/* BrandHeader.css - Sluff-branded strip in the fixed 7.5vh header slot. */
+
+.brand-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 7.5vh; /* Must match the layout offset in App.css .with-header */
+    background-color: #1a1a1a;
+    box-shadow: 0 0.12vh 0.25vh rgba(0, 0, 0, 0.25);
+    z-index: 2000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1.5vh;
+    padding: 0.75vh 0.9vh;
+    box-sizing: border-box;
+    font-family: 'Oswald', sans-serif;
+    color: #e0e0e0;
+}
+
+.brand-header-logo {
+    height: 65%;
+    width: auto;
+}
+
+.brand-header-text {
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+    line-height: 1.25;
+}
+
+.brand-header-season {
+    font-size: 2.1vh;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #f1cf8c;
+}
+
+.brand-header-tagline {
+    font-size: 1.4vh;
+    letter-spacing: 0.05em;
+    color: #9fb3a6;
+}

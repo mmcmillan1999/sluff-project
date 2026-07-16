@@ -53,6 +53,13 @@ describe('App Component and Game Flow', () => {
         api.getFeedback.mockResolvedValue([]);
         api.getSeasons.mockResolvedValue({ seasons: [] });
         api.getSeason.mockResolvedValue({ season: null, podium: [], standings: [] });
+        api.getCurrentSeasonStandings.mockResolvedValue({
+            season: { name: 'Alpha Season 2' },
+            standings: [
+                { username: 'DeckWizard', rank: 1, wins: 4, losses: 1, washes: 0 },
+                { username: 'TrumpTight', rank: 2, wins: 3, losses: 2, washes: 0 },
+            ],
+        });
         api.updateTutorialStatus.mockResolvedValue({
             tutorial_version: 0,
             tutorial_active_version: 1,
@@ -238,11 +245,14 @@ describe('App Component and Game Flow', () => {
         render(<App />);
 
         await user.click(await screen.findByRole('button', {
-            name: 'Open Sluff Bulletin: Alpha Season 1 honors and development news',
+            name: 'Open Sluff Bulletin: Alpha Season 2 standings and development news',
         }));
 
-        expect(screen.getByRole('heading', { name: /first Sluff season/i })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: /Season 2 is live/i })).toBeInTheDocument();
         expect(screen.getByText('McSaddle')).toBeInTheDocument();
+        expect(await screen.findByText('DeckWizard')).toBeInTheDocument();
+        expect(screen.getByText('TrumpTight')).toBeInTheDocument();
+        expect(screen.getByText('Up for grabs')).toBeInTheDocument();
 
         await user.click(screen.getByRole('button', { name: 'Lobby' }));
         expect(await screen.findByText('Quick Play')).toBeInTheDocument();

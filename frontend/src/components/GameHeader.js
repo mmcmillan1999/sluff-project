@@ -1,22 +1,12 @@
 // frontend/src/components/GameHeader.js
 import React from 'react';
-import AdvertisingHeader from './AdvertisingHeader';
+import BrandHeader from './BrandHeader';
 
 /**
  * GameHeader - Wrapper component for the game view header
- * Allows independent configuration of the game header without affecting lobby view
+ * Ads are retired until there is a player base worth monetizing;
+ * render the branded season strip instead (same 7.5vh slot).
  */
-const GameHeader = ({ onAdClick, eligibleForMercy }) => {
-    // You can add game-specific header customizations here
-    // For example: smaller height, different ad placement, etc.
-    
-    return (
-        <AdvertisingHeader
-            onAdClick={onAdClick}
-            eligibleForMercy={eligibleForMercy}
-            viewType="game"
-        />
-    );
-};
+const GameHeader = () => <BrandHeader viewType="game" />;
 
 export default GameHeader;

@@ -9,9 +9,9 @@ describe('BulletinTicker', () => {
         render(<BulletinTicker onOpen={onOpen} />);
 
         const openButton = screen.getByRole('button', {
-            name: 'Open Sluff Bulletin: Alpha Season 1 honors and development news',
+            name: 'Open Sluff Bulletin: Alpha Season 2 standings and development news',
         });
-        expect(screen.getByText(/Alpha Season 1 honors and Sluff development news/i)).toBeInTheDocument();
+        expect(screen.getByText(/Alpha Season 2 standings and Sluff development news/i)).toBeInTheDocument();
 
         await user.click(openButton);
         expect(onOpen).toHaveBeenCalledTimes(1);

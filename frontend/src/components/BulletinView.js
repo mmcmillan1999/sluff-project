@@ -1,13 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { getSeason, getSeasons } from '../services/api';
-import { alphaSeasonOne, bulletinEntries } from './BulletinContent';
+import { getCurrentSeasonStandings } from '../services/api';
+import { alphaSeasonTwo, bulletinEntries } from './BulletinContent';
 import './BulletinView.css';
-
-const seasonKey = season => String(season?.slug ?? season?.id ?? '');
 
 const BulletinView = ({ onReturnToLobby, onOpenSeasonRecaps }) => {
     const headingRef = useRef(null);
-    const [alphaArchive, setAlphaArchive] = useState(null);
+    const [standings, setStandings] = useState(null);
+    const [seasonName, setSeasonName] = useState(null);
 
     useEffect(() => {
         headingRef.current?.focus();
@@ -16,40 +15,37 @@ const BulletinView = ({ onReturnToLobby, onOpenSeasonRecaps }) => {
     useEffect(() => {
         let cancelled = false;
 
-        const loadFinalAlphaStandings = async () => {
+        const loadCurrentStandings = async () => {
             try {
-                const index = await getSeasons();
-                const seasons = Array.isArray(index?.seasons) ? index.seasons : [];
-                const alphaOne = seasons.find(season => (
-                    season?.finalizedAt
-                    && (seasonKey(season) === 'alpha-season-1' || season?.name === 'Alpha Season 1')
-                ));
-                if (!alphaOne) return;
-
-                const archive = await getSeason(seasonKey(alphaOne));
-                if (!cancelled) setAlphaArchive(archive);
+                const payload = await getCurrentSeasonStandings();
+                if (cancelled || !payload || !Array.isArray(payload.standings)) return;
+                setStandings(payload.standings);
+                setSeasonName(payload.season?.name || null);
             } catch (error) {
-                // The Bulletin remains useful during a rolling deploy or an
-                // archive outage. Season Recaps owns the authoritative error UI.
+                // The Bulletin stays useful without live standings; the
+                // Leaderboard owns the authoritative error UI.
             }
         };
 
-        loadFinalAlphaStandings();
+        loadCurrentStandings();
         return () => {
             cancelled = true;
         };
     }, []);
 
-    const finalPodium = useMemo(() => {
-        const archivedPodium = Array.isArray(alphaArchive?.podium) ? alphaArchive.podium : [];
-        const byRank = new Map(archivedPodium.map(player => [Number(player?.rank), player]));
-        return alphaSeasonOne.podium.map(slot => ({
+    // Live top 3: ranked players only, by rank. Slots without a ranked
+    // player render as open seats so a young season still looks inviting.
+    const livePodium = useMemo(() => {
+        const ranked = (Array.isArray(standings) ? standings : [])
+            .filter(row => Number.isFinite(Number(row?.rank)) && Number(row.rank) >= 1)
+            .sort((a, b) => Number(a.rank) - Number(b.rank));
+        return alphaSeasonTwo.standings.podium.map((slot, index) => ({
             ...slot,
-            player: byRank.get(slot.place)?.displayName || slot.player,
+            player: ranked[index]?.displayName || ranked[index]?.username || null,
         }));
-    }, [alphaArchive]);
+    }, [standings]);
 
-    const archiveIsFinal = Boolean(alphaArchive?.season?.finalizedAt);
+    const podiumHasPlayers = livePodium.some(slot => slot.player);
 
     return (
         <div className="bulletin-view">
@@ -68,41 +64,41 @@ const BulletinView = ({ onReturnToLobby, onOpenSeasonRecaps }) => {
             <main className="bulletin-view-main">
                 <section className="bulletin-season-hero" aria-labelledby="alpha-season-heading">
                     <div className="bulletin-season-copy">
-                        <p className="bulletin-eyebrow">{alphaSeasonOne.eyebrow}</p>
+                        <p className="bulletin-eyebrow">{alphaSeasonTwo.eyebrow}</p>
                         <h1 id="alpha-season-heading" ref={headingRef} tabIndex="-1">
-                            {archiveIsFinal ? alphaSeasonOne.finalTitle : alphaSeasonOne.title}
+                            {alphaSeasonTwo.title}
                         </h1>
                         <p className="bulletin-season-summary">
-                            {archiveIsFinal ? alphaSeasonOne.finalSummary : alphaSeasonOne.summary}
+                            {alphaSeasonTwo.summary}
                         </p>
                         <div className="bulletin-spotlight">
-                            <span>{alphaSeasonOne.spotlight.label}</span>
-                            <strong>{alphaSeasonOne.spotlight.name}</strong>
-                            <p>{alphaSeasonOne.spotlight.note}</p>
+                            <span>{alphaSeasonTwo.spotlight.label}</span>
+                            <strong>{alphaSeasonTwo.spotlight.name}</strong>
+                            <p>{alphaSeasonTwo.spotlight.note}</p>
                         </div>
                     </div>
 
                     <div
                         className="bulletin-podium-preview"
                         role="group"
-                        aria-label={archiveIsFinal ? 'Alpha Season 1 final podium' : 'Alpha Season 1 podium archive'}
+                        aria-label={`${seasonName || 'Current season'} live top three`}
                     >
                         <p className="bulletin-podium-status">
-                            {archiveIsFinal ? 'Final podium' : alphaSeasonOne.status}
+                            {seasonName ? `${seasonName} · ${alphaSeasonTwo.standings.status}` : alphaSeasonTwo.standings.status}
                         </p>
                         <div className="bulletin-podium-slots">
-                            {finalPodium.map(entry => (
+                            {livePodium.map(entry => (
                                 <div className={`bulletin-podium-slot place-${entry.place}`} key={entry.place}>
                                     <span className="bulletin-podium-place">{entry.place}</span>
-                                    <strong>{entry.player || 'See archive'}</strong>
+                                    <strong>{entry.player || alphaSeasonTwo.standings.openSeatName}</strong>
                                     <span>{entry.label}</span>
                                 </div>
                             ))}
                         </div>
                         <p className="bulletin-archive-note">
-                            {archiveIsFinal
-                                ? 'These names come directly from the frozen Alpha Season 1 scoreboard.'
-                                : alphaSeasonOne.archiveNote}
+                            {podiumHasPlayers
+                                ? alphaSeasonTwo.standings.note
+                                : alphaSeasonTwo.standings.emptyNote}
                         </p>
                         {onOpenSeasonRecaps && (
                             <button
@@ -119,7 +115,7 @@ const BulletinView = ({ onReturnToLobby, onOpenSeasonRecaps }) => {
                 <section className="bulletin-journal" aria-labelledby="build-journal-heading">
                     <div className="bulletin-journal-heading">
                         <p className="bulletin-eyebrow">Development journal</p>
-                        <h2 id="build-journal-heading">Alpha Season 1: the build so far</h2>
+                        <h2 id="build-journal-heading">The build so far</h2>
                         <p>Highlights from the changes shaping Sluff during the Alpha.</p>
                     </div>
 
@@ -142,7 +138,7 @@ const BulletinView = ({ onReturnToLobby, onOpenSeasonRecaps }) => {
             </main>
 
             <footer className="bulletin-view-footer">
-                Shaped with player feedback during Alpha Season 1. Season Recaps holds the official historical record.
+                Shaped with player feedback during the Alpha. Season Recaps holds the official historical record.
             </footer>
         </div>
     );

@@ -117,13 +117,6 @@ function App() {
         await submitFeedback(feedbackData);
     };
 
-    const handleAdClick = (adType) => {
-        // Track advertisement clicks for analytics
-        // console.log("Advertisement clicked");
-        // In a real implementation, this would send analytics data to your tracking service
-    };
-
-
     const handleRequestFreeToken = () => {
         if (user && parseFloat(user.tokens) >= 5) {
             alert("Sorry, free tokens are only available for players with fewer than 5 tokens.");
@@ -495,29 +488,18 @@ function App() {
         );
     }
 
-    // Calculate mercy eligibility for header
-    const mercyEligible = Boolean(
-        user && (
-            parseFloat(user.tokens) < 5 ||
-            user.can_watch_mercy_ad ||
-            user.canWatchMercyAd ||
-            user.mercyEligible ||
-            (user.eligibility && user.eligibility.mercyAd)
-        )
-    );
-
     // Render different headers for different views
     const renderHeader = () => {
         // No header for auth views (login/register)
         if (view === 'auth') {
             return null;
         }
-        
+
         switch (view) {
             case 'lobby':
-                return <LobbyHeader onAdClick={handleAdClick} eligibleForMercy={mercyEligible} />;
+                return <LobbyHeader />;
             case 'gameTable':
-                return <GameHeader onAdClick={handleAdClick} eligibleForMercy={mercyEligible} />;
+                return <GameHeader />;
             default:
                 return null; // No header for admin, leaderboard, feedback, or auth views
         }

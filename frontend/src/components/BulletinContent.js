@@ -1,33 +1,48 @@
-export const alphaSeasonOne = Object.freeze({
-    status: 'Season in progress',
-    eyebrow: 'Alpha Season 1',
-    title: 'The first Sluff season is nearing its official close.',
-    summary: 'When it closes, its official podium and complete final scoreboard will be frozen in Season Recaps.',
-    finalTitle: 'The first Sluff season belongs in the history books.',
-    finalSummary: 'Its official podium and complete final scoreboard are preserved permanently in Season Recaps.',
+export const alphaSeasonTwo = Object.freeze({
+    eyebrow: 'Alpha Season 2',
+    title: 'Season 2 is live. The slate is clean.',
+    summary: 'Season 1 is sealed in the record book, every wallet starts from even footing, '
+        + 'and the new standings are being written one game at a time.',
     spotlight: {
-        label: 'Season shout-out',
+        label: 'Season 1 Champion',
         name: 'McSaddle',
-        note: 'For helping write some of the earliest chapters in Sluff history.',
+        note: 'The first name in the Sluff record book. The title is up for defense all season.',
     },
-    podium: [
-        { place: 1, label: 'Champion', player: null },
-        { place: 2, label: 'Second place', player: null },
-        { place: 3, label: 'Third place', player: null },
-    ],
-    archiveNote: 'Final names, records, and positions will appear only after the season is safely frozen.',
+    standings: {
+        status: 'Live standings',
+        podium: [
+            { place: 1, label: 'Leading' },
+            { place: 2, label: 'Second' },
+            { place: 3, label: 'Third' },
+        ],
+        openSeatName: 'Up for grabs',
+        note: 'Standings move with every ranked game. The full board lives on the Leaderboard.',
+        emptyNote: 'The podium is wide open. Win a ranked game and put your name here first.',
+    },
 });
 
 export const bulletinTickerItems = Object.freeze([
-    'Alpha Season history lives in the Sluff record book',
-    'A season shout-out to McSaddle',
-    'Champions and complete final scoreboards are preserved in Season Recaps',
-    'Four-player tables, Quick Play, guided training, and a livelier card table',
-    'Token accountability and fully tracked player records are in development',
-    'Open the Bulletin for the full story',
+    'Alpha Season 2 is live — fresh stats and an open leaderboard',
+    'Season 1 Champion: McSaddle',
+    'Every ranked game moves the Season 2 standings',
+    'Season 1 is preserved forever in Season Recaps',
+    'Open the Bulletin for the season kickoff',
 ]);
 
 export const bulletinEntries = Object.freeze([
+    {
+        id: 'season-2-kickoff',
+        dateLabel: 'July 2026',
+        status: 'Season news',
+        title: 'Alpha Season 2 kicks off',
+        summary: 'The stats are cleared, the wallets are reset, and everyone starts Season 2 on even footing.',
+        highlights: [
+            'Season 1’s podium and complete final scoreboard are frozen in Season Recaps.',
+            'Every wallet was reset to the season’s starting balance before the first deal.',
+            'Season standings now rank by season performance, not lifetime totals.',
+            'The champion’s title is on the line: McSaddle starts Season 2 at even footing like everyone else.',
+        ],
+    },
     {
         id: 'token-accountability',
         dateLabel: 'Current build',

@@ -27,10 +27,10 @@ const BulletinTicker = ({ onOpen }) => {
                 type="button"
                 className="bulletin-ticker-link"
                 onClick={onOpen}
-                aria-label="Open Sluff Bulletin: Alpha Season 1 honors and development news"
+                aria-label="Open Sluff Bulletin: Alpha Season 2 standings and development news"
             >
                 <span className="bulletin-visually-hidden">
-                    Alpha Season 1 honors and Sluff development news. Open the Bulletin for details.
+                    Alpha Season 2 standings and Sluff development news. Open the Bulletin for details.
                 </span>
                 <span className="bulletin-ticker-viewport" aria-hidden="true">
                     <span className="bulletin-ticker-track" data-paused={isPaused ? 'true' : 'false'}>
