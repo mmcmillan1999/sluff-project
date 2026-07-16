@@ -826,3 +826,10 @@
     font-size: 0.78rem;
     opacity: 0.65;
 }
+
+.claude-landing .cl-inline-link {
+    color: inherit;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}

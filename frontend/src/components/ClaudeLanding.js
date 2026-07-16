@@ -218,7 +218,8 @@ const ClaudeLanding = ({ inviteTableId, onRegister, onLogin, onNavigate }) => {
                     </ol>
                     <p className="cl-how-footnote">
                         New to trick-taking games? The Academy walks you through your first hand,
-                        card by card.
+                        card by card — or read the <a className="cl-inline-link" href="/rules/">full
+                        Sluff rules</a> first.
                     </p>
                 </section>
 
@@ -299,6 +300,9 @@ const ClaudeLanding = ({ inviteTableId, onRegister, onLogin, onNavigate }) => {
                     <button type="button" className="cl-link-btn" onClick={onLogin}>
                         Sign in
                     </button>
+                    <a className="cl-link-btn" href="/rules/">
+                        How to Play
+                    </a>
                     <button type="button" className="cl-link-btn" onClick={() => onNavigate?.('terms')}>
                         Terms
                     </button>

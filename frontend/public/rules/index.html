@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>How to Play Sluff — Rules of the Sluff Card Game</title>
+    <meta
+        name="description"
+        content="Complete rules for Sluff, a trick-taking card game for 3-4 players passed down through a Utah family: bidding Frog, Solo, and Heart Solo, the 120-point round, insurance deals, and card values. Play free online at playsluff.com."
+    />
+    <link rel="canonical" href="https://playsluff.com/rules/" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="Sluff" />
+    <meta property="og:url" content="https://playsluff.com/rules/" />
+    <meta property="og:title" content="How to Play Sluff — Rules of the Sluff Card Game" />
+    <meta property="og:description" content="The complete rules of Sluff: a three-handed trick-taking card game with bidding, trump, and a 120-point round. Free to play online." />
+    <meta property="og:image" content="https://playsluff.com/sluff-social-preview-v1.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@graph": [
+            {
+                "@type": "Game",
+                "name": "Sluff",
+                "url": "https://playsluff.com/",
+                "description": "A trick-taking card game for 3-4 players with bidding, trump, and an insurance mechanic, passed down through a Utah family and playable free online.",
+                "genre": "Trick-taking card game",
+                "numberOfPlayers": {
+                    "@type": "QuantitativeValue",
+                    "minValue": 3,
+                    "maxValue": 4
+                },
+                "isAccessibleForFree": true
+            },
+            {
+                "@type": "FAQPage",
+                "mainEntity": [
+                    {
+                        "@type": "Question",
+                        "name": "How many players do you need for Sluff?",
+                        "acceptedAnswer": {
+                            "@type": "Answer",
+                            "text": "Sluff is played by three active players. In a four-player game the dealer sits out each round and rotates back in on the next deal."
+                        }
+                    },
+                    {
+                        "@type": "Question",
+                        "name": "Is Sluff the same game as Sluff Off! or Rook Sluff?",
+                        "acceptedAnswer": {
+                            "@type": "Answer",
+                            "text": "No. Sluff is a distinct family trick-taking game from Utah played with a 36-card deck, bids of Frog, Solo, and Heart Solo, and a 120-point round. Sluff Off! is an unrelated 2003 commercial card game, and Rook Sluff is a Spades variant played with Rook cards."
+                        }
+                    },
+                    {
+                        "@type": "Question",
+                        "name": "Can I play Sluff online for free?",
+                        "acceptedAnswer": {
+                            "@type": "Answer",
+                            "text": "Yes. Sluff is free to play in any browser at playsluff.com — no download required. Tokens are play money with no cash value."
+                        }
+                    },
+                    {
+                        "@type": "Question",
+                        "name": "What does sluffing mean in card games?",
+                        "acceptedAnswer": {
+                            "@type": "Answer",
+                            "text": "Sluffing means discarding a card of another suit when you cannot follow the led suit and have no trump. In Sluff, timing your sluffs — dumping points onto your partner's tricks or starving the bidder — is a core skill the game is named after."
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+    </script>
+    <style>
+        :root {
+            --night: #0b1f15;
+            --night-2: #123024;
+            --cream: #f6efe0;
+            --mist: #c4d2c6;
+            --gold: #e3a93d;
+            --ink: #1c2a22;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            background: var(--night);
+            color: var(--cream);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+        }
+        header.site {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 14px 20px;
+            background: rgba(0, 0, 0, 0.25);
+        }
+        header.site img { height: 40px; width: auto; }
+        .btn {
+            display: inline-block;
+            padding: 12px 26px;
+            border-radius: 999px;
+            background: linear-gradient(180deg, #f0bb55, var(--gold));
+            color: #221803;
+            font-weight: 700;
+            text-decoration: none;
+        }
+        .btn:hover { filter: brightness(1.05); }
+        main {
+            max-width: 760px;
+            margin: 0 auto;
+            padding: 32px 20px 64px;
+        }
+        h1, h2, h3 {
+            font-family: Georgia, 'Times New Roman', serif;
+            line-height: 1.2;
+            color: var(--cream);
+        }
+        h1 { font-size: clamp(1.9rem, 4.5vw + 0.8rem, 2.8rem); margin: 0.4em 0; }
+        h2 { font-size: 1.5rem; margin: 2em 0 0.5em; color: var(--gold); }
+        h3 { font-size: 1.15rem; margin: 1.4em 0 0.4em; }
+        p, li { color: var(--mist); }
+        strong { color: var(--cream); }
+        a { color: var(--gold); }
+        .eyebrow {
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--gold);
+            margin-bottom: 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0;
+            background: var(--night-2);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 10px 14px;
+            text-align: left;
+            border-bottom: 1px solid rgba(246, 239, 224, 0.12);
+            color: var(--mist);
+        }
+        th { color: var(--cream); background: rgba(0, 0, 0, 0.25); }
+        tr:last-child td { border-bottom: none; }
+        .cta-band {
+            margin: 40px 0 0;
+            padding: 26px;
+            background: var(--night-2);
+            border: 1px solid rgba(227, 169, 61, 0.4);
+            border-radius: 14px;
+            text-align: center;
+        }
+        .cta-band p { margin-top: 0; }
+        footer.site {
+            padding: 24px 20px 40px;
+            text-align: center;
+            color: var(--mist);
+            font-size: 0.85rem;
+        }
+        footer.site a { margin: 0 8px; }
+    </style>
+</head>
+<body>
+    <header class="site">
+        <a href="/" aria-label="Sluff home"><img src="/SluffLogo.png" alt="Sluff" /></a>
+        <a class="btn" href="/register">Play Free</a>
+    </header>
+
+    <main>
+        <p class="eyebrow">Sluff card game rules</p>
+        <h1>How to Play Sluff</h1>
+        <p>
+            <strong>Sluff</strong> is a trick-taking card game for three or four players, passed down
+            through a Utah family for generations and now
+            <a href="/">playable free online at playsluff.com</a>. Each round is a three-way fight
+            over <strong>120 card points</strong>: one player wins the bid and plays alone against the
+            other two. It takes five minutes to learn, and a lifetime of family dinners to master.
+        </p>
+
+        <h2>What you need</h2>
+        <ul>
+            <li><strong>Players:</strong> 3 (with 4, the dealer sits out each round and rotates back in).</li>
+            <li><strong>Deck:</strong> 36 cards — remove the 2s through 5s from a standard deck, keeping 6 through Ace in all four suits.</li>
+            <li><strong>Goal:</strong> as the bidder, capture more than 60 of the round's 120 card points; as a defender, hold the bidder to 60 or less.</li>
+        </ul>
+
+        <h2>Card point values</h2>
+        <table>
+            <thead><tr><th>Card</th><th>Points</th></tr></thead>
+            <tbody>
+                <tr><td>Ace</td><td>11</td></tr>
+                <tr><td>Ten</td><td>10</td></tr>
+                <tr><td>King</td><td>4</td></tr>
+                <tr><td>Queen</td><td>3</td></tr>
+                <tr><td>Jack</td><td>2</td></tr>
+                <tr><td>9, 8, 7, 6</td><td>0</td></tr>
+            </tbody>
+        </table>
+        <p>Four suits of 30 points each put <strong>120 points</strong> in play every round.</p>
+
+        <h2>The deal</h2>
+        <p>
+            Deal <strong>11 cards</strong> to each of the three active players, and <strong>3 cards</strong>
+            face-down to the middle — the <strong>widow</strong>.
+        </p>
+
+        <h2>Bidding</h2>
+        <p>
+            Starting left of the dealer, each player passes or bids. Each bid outranks the one before
+            it, and the highest bid plays alone against the other two:
+        </p>
+        <table>
+            <thead><tr><th>Bid</th><th>Multiplier</th><th>What it means</th></tr></thead>
+            <tbody>
+                <tr>
+                    <td><strong>Frog</strong></td><td>1×</td>
+                    <td>Hearts are trump. The bidder takes the three-card widow into hand, then discards three cards.</td>
+                </tr>
+                <tr>
+                    <td><strong>Solo</strong></td><td>2×</td>
+                    <td>The bidder names diamonds, clubs, or spades as trump. The widow stays down; its points count for the bidder.</td>
+                </tr>
+                <tr>
+                    <td><strong>Heart Solo</strong></td><td>3×</td>
+                    <td>Hearts are trump, no widow exchange. The winner of the last trick takes the widow's points.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>Playing tricks</h2>
+        <ol>
+            <li><strong>Follow suit</strong> whenever you can.</li>
+            <li>If you can't follow suit, you <strong>must play trump</strong> if you have one.</li>
+            <li>If you have neither the led suit nor trump, you may <strong>sluff</strong> any card — that's where the game gets its name.</li>
+            <li>You cannot lead trump until trump has been <strong>broken</strong>, unless your hand is all trump.</li>
+        </ol>
+        <p>
+            The highest trump wins the trick; if no trump was played, the highest card of the led suit
+            wins. The trick winner leads next. Eleven tricks are played in every round.
+        </p>
+
+        <h2>Scoring</h2>
+        <p>
+            Count the bidder's captured card points. <strong>More than 60</strong> and the bid succeeds;
+            <strong>fewer than 60</strong> and it fails; <strong>exactly 60</strong> exchanges nothing.
+            The score that moves is the bidder's distance from 60, multiplied by the bid's multiplier —
+            paid by both defenders on a win, or paid to both on a loss. A Heart Solo swing is triple
+            stakes, which is why table talk gets loud.
+        </p>
+
+        <h2>Insurance: the deal-making twist</h2>
+        <p>
+            Mid-round, the three active players can negotiate an <strong>insurance deal</strong> that
+            replaces the uncertain trick result with agreed numbers. The bidder posts an
+            <strong>ask</strong>; each defender posts an <strong>offer</strong>. When the bidder's ask
+            minus the combined offers reaches zero, the deal locks — and at round end the agreed
+            amounts settle instead of the trick score. Read the table, take the money. Or don't.
+        </p>
+
+        <h2>Four-player Sluff</h2>
+        <p>
+            With four at the table, the dealer sits out the round (they may peek at the widow), and
+            the same three-handed structure plays out. The deal rotates, so everyone takes a turn
+            watching — and dealing themselves back into the fight.
+        </p>
+
+        <h2>Frequently asked questions</h2>
+        <h3>How many players do you need?</h3>
+        <p>Three active players; a fourth rotates in as dealer. Online, the table always fills.</p>
+        <h3>Is this the same game as "Sluff Off!" or "Rook Sluff"?</h3>
+        <p>
+            No — different games entirely. <em>Sluff Off!</em> is a 2003 commercial card game and
+            <em>Rook Sluff</em> is a Spades variant. This Sluff is a traditional family game from Utah,
+            closest in spirit to the classic German game Frog/Solo family of six-bid games.
+        </p>
+        <h3>What does "sluffing" mean?</h3>
+        <p>
+            Discarding off-suit when you can't follow and have no trump. Dumping your points onto a
+            partner's winning trick — or starving the bidder of them — is the skill the game is named for.
+        </p>
+        <h3>Can I play Sluff online?</h3>
+        <p>
+            Yes — <a href="/">playsluff.com</a> is free, runs in any browser with nothing to download,
+            and fills your table automatically. There's a guided first game that teaches you at the felt.
+        </p>
+
+        <div class="cta-band">
+            <p><strong>The fastest way to learn is one guided hand.</strong></p>
+            <a class="btn" href="/register">Play Sluff free — no download</a>
+        </div>
+    </main>
+
+    <footer class="site">
+        <a href="/">Play Sluff</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a>
+        <p>Sluff tokens are play money — no cash value. © playsluff.com</p>
+    </footer>
+</body>
+</html>

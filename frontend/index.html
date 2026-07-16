@@ -55,10 +55,48 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Sluff" />
     <link rel="apple-touch-icon" href="/sluff-app-icon-v1.png" />
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "name": "Sluff",
+          "url": "https://playsluff.com/"
+        },
+        {
+          "@type": "Game",
+          "name": "Sluff",
+          "url": "https://playsluff.com/",
+          "description": "A trick-taking card game for 3-4 players with bidding, trump, and an insurance mechanic, passed down through a Utah family and playable free online with real card-throwing physics.",
+          "genre": "Trick-taking card game",
+          "numberOfPlayers": { "@type": "QuantitativeValue", "minValue": 3, "maxValue": 4 },
+          "isAccessibleForFree": true
+        }
+      ]
+    }
+    </script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="root"></div>
+    <!-- Static shell content: crawlers that fetch raw HTML see real text; the
+         React app replaces this on load. Keep in sync with the landing page. -->
+    <div id="root">
+      <div style="min-height:100vh;background:#0b1f15;color:#f6efe0;font-family:Georgia,serif;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;">
+        <h1 style="margin:0 0 12px;">Sluff — the card game you don&rsquo;t play. You throw it.</h1>
+        <p style="max-width:34em;color:#c4d2c6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
+          Sluff is a fast trick-taking card game for 3&ndash;4 players &mdash; bidding, trump, and
+          table talk, passed down through a Utah family for generations. Play free in your
+          browser with real card-flinging physics. No download, always a full table.
+        </p>
+        <p style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
+          <a href="/register" style="color:#e3a93d;">Create a free account</a> &middot;
+          <a href="/rules/" style="color:#e3a93d;">How to play Sluff</a> &middot;
+          <a href="/login" style="color:#e3a93d;">Sign in</a>
+        </p>
+      </div>
+    </div>
     <script type="module" src="/src/index.js"></script>
   </body>
 </html>
