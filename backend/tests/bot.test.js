@@ -6,9 +6,15 @@ const BotPlayer = require('../src/core/BotPlayer');
 
 // Mock the engine object the bot needs to read from
 class MockEngine {
-    constructor(hand) {
+    constructor(hand, overrides = {}) {
         this.hands = { 'TestBot': hand };
         this.currentHighestBidDetails = null;
+        this.currentTrickCards = [];
+        this.leadSuitCurrentTrick = null;
+        this.trumpSuit = 'H';
+        this.trumpBroken = true;
+        this.capturedTricks = {};
+        Object.assign(this, overrides);
     }
 }
 
@@ -48,6 +54,72 @@ function runBotTests() {
     const bid4 = bot4.decideBid();
     assert.strictEqual(bid4, 'Pass');
     pass('Correctly decides to pass with a weak hand.');
+
+    const makeFollowingBot = (hand, currentTrickCards, leadSuit = 'D') => new BotPlayer(
+        -1,
+        'TestBot',
+        new MockEngine(hand, { currentTrickCards, leadSuitCurrentTrick: leadSuit })
+    );
+
+    let playBot = makeFollowingBot(
+        ['9H', '6H', '7H', 'AS'],
+        [{ userId: 1, playerName: 'Leader', card: 'KD' }]
+    );
+    assert.strictEqual(playBot.playCard(), '6H');
+    pass('Uses rank order to choose the lowest trump when void in a non-trump lead suit.');
+
+    playBot = makeFollowingBot(
+        ['AH', 'AS'],
+        [{ userId: 1, playerName: 'Leader', card: 'KD' }]
+    );
+    assert.strictEqual(playBot.playCard(), 'AH');
+    pass('Uses its only trump when void in a non-trump lead suit.');
+
+    playBot = makeFollowingBot(
+        ['10H', '6H', 'AS'],
+        [{ userId: 1, playerName: 'Leader', card: 'KD' }]
+    );
+    assert.strictEqual(playBot.playCard(), '10H');
+    pass('Sheds the trump 10 when it is one of exactly two trumps in hand.');
+
+    playBot = makeFollowingBot(
+        ['10H', '6H', 'AH', 'AS'],
+        [{ userId: 1, playerName: 'Leader', card: 'KD' }]
+    );
+    assert.strictEqual(playBot.playCard(), '6H');
+    pass('Does not shed the trump 10 when more than two trumps are in hand.');
+
+    playBot = makeFollowingBot(
+        ['AH', 'KH', 'AS'],
+        [{ userId: 1, playerName: 'Leader', card: 'KD' }]
+    );
+    assert.strictEqual(playBot.playCard(), 'KH');
+    pass('Uses the lower trump when exactly two trumps in hand do not include a 10.');
+
+    playBot = makeFollowingBot(
+        ['AH', '6H', 'AS'],
+        [
+            { userId: 1, playerName: 'Leader', card: '6D' },
+            { userId: 2, playerName: 'Second', card: 'QH' }
+        ]
+    );
+    assert.strictEqual(playBot.playCard(), '6H');
+    pass('Uses the lowest trump even when a previous player has already trumped.');
+
+    playBot = makeFollowingBot(
+        ['AD', '6D', '6H'],
+        [{ userId: 1, playerName: 'Leader', card: 'KD' }]
+    );
+    assert.strictEqual(playBot.playCard(), 'AD');
+    pass('Keeps existing winning-card behavior when following the led suit.');
+
+    playBot = makeFollowingBot(
+        ['AH', '6H', '6S'],
+        [{ userId: 1, playerName: 'Leader', card: '10H' }],
+        'H'
+    );
+    assert.strictEqual(playBot.playCard(), 'AH');
+    pass('Keeps existing winning-card behavior when trump itself is led.');
 
     console.log('  ✔ All BotPlayer.js tests passed!');
 }

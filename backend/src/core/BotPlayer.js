@@ -7,6 +7,15 @@ const { calculateInsuranceMove } = require('./bot-strategies/InsuranceStrategy')
 
 const getRankValue = (card) => RANKS_ORDER.indexOf(gameLogic.getRank(card));
 
+const chooseForcedTrump = (trumpCards) => {
+    if (trumpCards.length === 2) {
+        const trumpTen = trumpCards.find(card => gameLogic.getRank(card) === '10');
+        if (trumpTen) return trumpTen;
+    }
+
+    return [...trumpCards].sort((a, b) => getRankValue(a) - getRankValue(b))[0];
+};
+
 class BotPlayer {
     constructor(userId, name, engine) {
         this.userId = userId;
@@ -54,16 +63,32 @@ class BotPlayer {
                 }
             }
         } else {
-            const winningPlays = legalPlays.filter(myCard => {
-                const potentialTrick = [...this.engine.currentTrickCards, { card: myCard, userId: this.userId }];
-                const winner = gameLogic.determineTrickWinner(potentialTrick, this.engine.leadSuitCurrentTrick, this.engine.trumpSuit);
-                return winner.userId === this.userId;
-            });
+            const leadSuit = this.engine.leadSuitCurrentTrick;
+            const trumpSuit = this.engine.trumpSuit;
+            const isVoidInLeadSuit = !hand.some(card => gameLogic.getSuit(card) === leadSuit);
+            const isForcedToTrumpNonTrumpLead = Boolean(
+                leadSuit
+                && trumpSuit
+                && leadSuit !== trumpSuit
+                && isVoidInLeadSuit
+                && legalPlays.every(card => gameLogic.getSuit(card) === trumpSuit)
+            );
 
-            if (winningPlays.length > 0) {
-                cardToPlay = winningPlays.sort((a, b) => getRankValue(b) - getRankValue(a))[0];
+            if (isForcedToTrumpNonTrumpLead) {
+                const trumpCards = hand.filter(card => gameLogic.getSuit(card) === trumpSuit);
+                cardToPlay = chooseForcedTrump(trumpCards);
             } else {
-                cardToPlay = legalPlays.sort((a, b) => getRankValue(a) - getRankValue(b))[0];
+                const winningPlays = legalPlays.filter(myCard => {
+                    const potentialTrick = [...this.engine.currentTrickCards, { card: myCard, userId: this.userId }];
+                    const winner = gameLogic.determineTrickWinner(potentialTrick, leadSuit, trumpSuit);
+                    return winner.userId === this.userId;
+                });
+
+                if (winningPlays.length > 0) {
+                    cardToPlay = winningPlays.sort((a, b) => getRankValue(b) - getRankValue(a))[0];
+                } else {
+                    cardToPlay = legalPlays.sort((a, b) => getRankValue(a) - getRankValue(b))[0];
+                }
             }
         }
         return cardToPlay;
