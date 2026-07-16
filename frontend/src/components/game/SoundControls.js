@@ -95,7 +95,7 @@ const SoundControls = ({ soundSettings, compact = false }) => {
         toggleMute = () => {},
         setVolume = () => {},
         musicMuted = false,
-        musicVolume = 0.35,
+        musicVolume = 0.15,
         toggleMusicMute = () => {},
         setMusicVolume = () => {},
     } = soundSettings;

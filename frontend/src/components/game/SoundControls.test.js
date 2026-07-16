@@ -8,7 +8,7 @@ const makeSettings = overrides => ({
     toggleMute: vi.fn(),
     setVolume: vi.fn(),
     musicMuted: false,
-    musicVolume: 0.35,
+    musicVolume: 0.15,
     toggleMusicMute: vi.fn(),
     setMusicVolume: vi.fn(),
     ...overrides,
@@ -24,7 +24,7 @@ describe('SoundControls', () => {
         expect(screen.getByRole('button', { name: 'Mute sound effects' })).toHaveAttribute('aria-pressed', 'false');
         expect(screen.getByRole('button', { name: 'Mute music' })).toHaveAttribute('aria-pressed', 'false');
         expect(screen.getByRole('slider', { name: 'Sound effects volume' })).toHaveValue('70');
-        expect(screen.getByRole('slider', { name: 'Music volume' })).toHaveValue('35');
+        expect(screen.getByRole('slider', { name: 'Music volume' })).toHaveValue('15');
     });
 
     test('mute buttons operate only their own audio channel', async () => {

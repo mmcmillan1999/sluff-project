@@ -145,7 +145,7 @@ describe('App Component and Game Flow', () => {
         const playerMenu = screen.getByRole('group', { name: 'Player menu' });
         const audioControls = within(playerMenu).getByRole('group', { name: 'Audio controls' });
         expect(within(audioControls).getByRole('slider', { name: 'Sound effects volume' })).toHaveValue('70');
-        expect(within(audioControls).getByRole('slider', { name: 'Music volume' })).toHaveValue('35');
+        expect(within(audioControls).getByRole('slider', { name: 'Music volume' })).toHaveValue('15');
         expect(within(playerMenu).queryByRole('button', { name: 'Sluff Bulletin' })).not.toBeInTheDocument();
         expect(within(playerMenu).queryByRole('button', { name: 'Request Free Token' })).not.toBeInTheDocument();
         expect(within(playerMenu).queryByRole('button', { name: 'Sync Profile' })).not.toBeInTheDocument();

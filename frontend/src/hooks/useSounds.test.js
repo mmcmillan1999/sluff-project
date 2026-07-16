@@ -92,9 +92,10 @@ describe('useSounds music channel', () => {
         vi.unstubAllGlobals();
     });
 
-    test('defaults music to half the hydrated effects volume and inherits legacy mute', () => {
+    test('migrates the original automatic level to fifteen percent and inherits legacy mute', () => {
         localStorage.setItem('sluff_sound_volume', JSON.stringify(0.6));
         localStorage.setItem('sluff_sound_muted', JSON.stringify(true));
+        localStorage.setItem('sluff_music_volume', JSON.stringify(0.3));
 
         const { result } = renderHook(() => useSounds({ musicActive: true }));
 
@@ -102,10 +103,22 @@ describe('useSounds music channel', () => {
             muted: true,
             volume: 0.6,
             musicMuted: true,
-            musicVolume: 0.3,
+            musicVolume: 0.15,
         });
         expect(localStorage.getItem('sluff_music_muted')).toBe('true');
-        expect(localStorage.getItem('sluff_music_volume')).toBe('0.3');
+        expect(localStorage.getItem('sluff_music_volume')).toBe('0.15');
+        expect(localStorage.getItem('sluff_music_default_version')).toBe('2');
+    });
+
+    test('preserves a deliberately customized music level', () => {
+        localStorage.setItem('sluff_sound_volume', JSON.stringify(0.7));
+        localStorage.setItem('sluff_music_volume', JSON.stringify(0.22));
+
+        const { result } = renderHook(() => useSounds({ musicActive: true }));
+
+        expect(result.current.soundSettings.musicVolume).toBe(0.22);
+        expect(localStorage.getItem('sluff_music_volume')).toBe('0.22');
+        expect(localStorage.getItem('sluff_music_default_version')).toBe('2');
     });
 
     test('starts one persistent loop and changes channel gains without restarting it', async () => {
@@ -127,7 +140,7 @@ describe('useSounds music channel', () => {
         const musicGain = ctx.gains[1];
         const musicSource = ctx.sources.find(source => source.loop);
         expect(effectsGain.gain.value).toBe(0.8);
-        expect(musicGain.gain.value).toBe(0.4);
+        expect(musicGain.gain.value).toBe(0.15);
         expect(musicSource.buffer).toEqual({ decodedUrl: MUSIC_URL });
         expect(musicSource.connect).toHaveBeenCalledWith(musicGain);
         expect(musicSource.start).toHaveBeenCalledTimes(1);
@@ -135,7 +148,7 @@ describe('useSounds music channel', () => {
         rerender({ active: false });
         expect(musicGain.gain.value).toBe(0);
         rerender({ active: true });
-        expect(musicGain.gain.value).toBe(0.4);
+        expect(musicGain.gain.value).toBe(0.15);
         expect(ctx.sources.filter(source => source.loop)).toHaveLength(1);
         expect(musicSource.start).toHaveBeenCalledTimes(1);
 

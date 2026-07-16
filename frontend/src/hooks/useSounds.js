@@ -23,6 +23,8 @@ const SOUND_FILES = {
 
 const MUSIC_FILE = '/Music/upbeat-game-loop-v1.mp3';
 const DEFAULT_EFFECTS_VOLUME = 0.7;
+const DEFAULT_MUSIC_VOLUME = 0.15;
+const MUSIC_DEFAULT_VERSION = 2;
 const GAIN_RAMP_SECONDS = 0.12;
 
 const clampVolume = (value) => {
@@ -47,6 +49,7 @@ const storedVolume = (key, fallback) => clampVolume(stored(
     fallback,
     value => typeof value === 'number' && Number.isFinite(value)
 ));
+const volumesMatch = (left, right) => Math.abs(left - right) < 0.0001;
 
 // Safari has historically supported only the callback form, while modern
 // browsers return a promise. Resolve either API without decoding twice.
@@ -89,12 +92,27 @@ export const useSounds = ({ musicActive = false } = {}) => {
     if (!hydratedSettingsRef.current) {
         const effectsMuted = storedBoolean('sluff_sound_muted', false);
         const effectsVolume = storedVolume('sluff_sound_volume', DEFAULT_EFFECTS_VOLUME);
+        const storedMusicVolume = storedVolume('sluff_music_volume', effectsVolume / 2);
+        const musicDefaultVersion = stored(
+            'sluff_music_default_version',
+            1,
+            value => Number.isInteger(value) && value > 0
+        );
+        const usesOriginalAutomaticDefault = musicDefaultVersion < MUSIC_DEFAULT_VERSION
+            && (
+                volumesMatch(storedMusicVolume, effectsVolume / 2)
+                || volumesMatch(storedMusicVolume, DEFAULT_EFFECTS_VOLUME / 2)
+            );
         hydratedSettingsRef.current = {
             effectsMuted,
             effectsVolume,
             // Respect an existing global mute on the first music-enabled build.
             musicMuted: storedBoolean('sluff_music_muted', effectsMuted),
-            musicVolume: storedVolume('sluff_music_volume', effectsVolume / 2),
+            // Migrate the original automatic half-effects default once, while
+            // retaining any music level the player deliberately customized.
+            musicVolume: usesOriginalAutomaticDefault
+                ? DEFAULT_MUSIC_VOLUME
+                : storedMusicVolume,
         };
     }
 
@@ -278,6 +296,7 @@ export const useSounds = ({ musicActive = false } = {}) => {
         try {
             localStorage.setItem('sluff_music_muted', JSON.stringify(musicMuted));
             localStorage.setItem('sluff_music_volume', JSON.stringify(musicVolume));
+            localStorage.setItem('sluff_music_default_version', JSON.stringify(MUSIC_DEFAULT_VERSION));
         } catch { /* private browsing */ }
         setGain(
             musicGainRef.current,

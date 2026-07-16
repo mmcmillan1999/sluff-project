@@ -9,7 +9,7 @@ export const useSounds = () => {
         toggleMute: vi.fn(),
         setVolume: vi.fn(),
         musicMuted: false,
-        musicVolume: 0.35,
+        musicVolume: 0.15,
         toggleMusicMute: vi.fn(),
         setMusicVolume: vi.fn(),
     };
