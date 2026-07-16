@@ -250,6 +250,32 @@
     text-align: center;
 }
 
+.bulletin-season-archive-button {
+    display: block;
+    width: 100%;
+    min-height: 2.65rem;
+    margin: 0.8rem 0 0;
+    padding: 0.55rem 0.8rem;
+    color: #201a0e;
+    background: linear-gradient(180deg, #f0cb70, #d6a942);
+    border: 1px solid rgba(255, 232, 168, 0.68);
+    border-radius: 999px;
+    box-shadow: 0 0.25rem 0.65rem rgba(0, 0, 0, 0.22);
+    font: 700 0.8rem 'Oswald', sans-serif;
+    letter-spacing: 0.035em;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+.bulletin-season-archive-button:hover {
+    filter: brightness(1.05);
+}
+
+.bulletin-season-archive-button:focus-visible {
+    outline: 2px solid #fff1bf;
+    outline-offset: 3px;
+}
+
 .bulletin-journal {
     margin-top: 1.6rem;
 }

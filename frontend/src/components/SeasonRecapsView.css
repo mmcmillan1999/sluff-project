@@ -1,0 +1,443 @@
+.season-recaps-view {
+    box-sizing: border-box;
+    height: 100%;
+    min-height: 0;
+    color: #f8f2e5;
+    background:
+        radial-gradient(circle at 50% -10%, rgba(194, 150, 63, 0.2), transparent 32rem),
+        linear-gradient(180deg, #1b2523 0%, #101715 52%, #0a0f0e 100%);
+    font-family: 'Merriweather', serif;
+    overflow-y: auto;
+}
+
+.season-recaps-header {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: grid;
+    grid-template-columns: minmax(4.5rem, 1fr) auto minmax(4.5rem, 1fr);
+    align-items: center;
+    min-height: 3.5rem;
+    padding: max(0.45rem, env(safe-area-inset-top)) 0.75rem 0.45rem;
+    background: rgba(10, 15, 14, 0.94);
+    border-bottom: 1px solid rgba(232, 190, 100, 0.25);
+    backdrop-filter: blur(12px);
+}
+
+.season-recaps-back {
+    justify-self: start;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-height: 2.5rem;
+    margin: 0;
+    padding: 0.4rem 0.65rem;
+    color: #f8f2e5;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.13);
+    border-radius: 999px;
+    font: 600 0.82rem 'Oswald', sans-serif;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+}
+
+.season-recaps-back span {
+    font-size: 1.45rem;
+    line-height: 0;
+}
+
+.season-recaps-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font: 600 0.88rem 'Oswald', sans-serif;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.season-recaps-brand img {
+    width: auto;
+    height: 1.75rem;
+}
+
+.season-recaps-main {
+    width: min(100% - 1.25rem, 52rem);
+    margin: 0 auto;
+    padding: 1.5rem 0 calc(3rem + env(safe-area-inset-bottom));
+}
+
+.season-recaps-intro {
+    margin-bottom: 1.25rem;
+    text-align: center;
+}
+
+.season-recaps-eyebrow {
+    margin: 0 0 0.35rem;
+    color: #d7aa50;
+    font: 600 0.72rem 'Oswald', sans-serif;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+}
+
+.season-recaps-intro h1,
+.season-recap-hero h2,
+.season-standings-heading h2 {
+    margin: 0;
+    font-family: 'Oswald', sans-serif;
+    line-height: 1.05;
+}
+
+.season-recaps-intro h1 {
+    font-size: clamp(2rem, 10vw, 3.35rem);
+    letter-spacing: -0.025em;
+}
+
+.season-recaps-intro > p:last-child {
+    max-width: 34rem;
+    margin: 0.65rem auto 0;
+    color: #c8ccc7;
+    font-size: 0.9rem;
+    line-height: 1.55;
+}
+
+.season-recaps-picker {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    padding: 0.7rem 0.8rem;
+    background: rgba(255, 255, 255, 0.055);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0.8rem;
+}
+
+.season-recaps-picker label {
+    font: 600 0.78rem 'Oswald', sans-serif;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.season-recaps-picker select {
+    min-width: 0;
+    max-width: 65%;
+    min-height: 2.55rem;
+    padding: 0.45rem 2rem 0.45rem 0.65rem;
+    color: #fff8e8;
+    background: #26322f;
+    border: 1px solid rgba(231, 189, 98, 0.55);
+    border-radius: 0.55rem;
+    font: 600 0.82rem 'Merriweather', serif;
+}
+
+.season-recaps-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.55rem;
+    margin-top: 1.5rem;
+    padding: 2.25rem 1.25rem;
+    color: #cdd2cd;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 1rem;
+    text-align: center;
+    line-height: 1.5;
+}
+
+.season-recaps-state strong {
+    color: #fff8e8;
+    font-family: 'Oswald', sans-serif;
+    font-size: 1.2rem;
+}
+
+.season-recaps-state.is-error strong {
+    color: #ffaaa1;
+}
+
+.season-recaps-state button {
+    min-height: 2.65rem;
+    margin: 0.35rem 0 0;
+    padding: 0.55rem 1rem;
+    color: #1a160d;
+    background: #e5b85b;
+    border: 0;
+    border-radius: 999px;
+    font: 700 0.85rem 'Oswald', sans-serif;
+    cursor: pointer;
+}
+
+.season-recap-hero {
+    position: relative;
+    padding: 1.25rem 0.8rem 0.9rem;
+    overflow: hidden;
+    background:
+        radial-gradient(circle at 50% 0%, rgba(239, 194, 94, 0.19), transparent 55%),
+        rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(226, 182, 87, 0.22);
+    border-radius: 1rem;
+    text-align: center;
+}
+
+.season-recap-hero h2 {
+    color: #fff9ec;
+    font-size: clamp(1.65rem, 8vw, 2.65rem);
+}
+
+.season-recap-meta {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.35rem 0.8rem;
+    margin-top: 0.55rem;
+    color: #afb8b1;
+    font-size: 0.7rem;
+}
+
+.season-recap-rules {
+    max-width: 34rem;
+    margin: 0.55rem auto 0;
+    color: #9fa9a2;
+    font-size: 0.62rem;
+    line-height: 1.5;
+}
+
+.season-podium {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: end;
+    gap: 0.4rem;
+    margin-top: 1.35rem;
+}
+
+.season-podium-card {
+    display: flex;
+    min-width: 0;
+    min-height: 7.6rem;
+    padding: 0.65rem 0.35rem;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.28rem;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.035));
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 0.75rem 0.75rem 0.35rem 0.35rem;
+}
+
+.season-podium-card.place-1 {
+    min-height: 9.5rem;
+    background: linear-gradient(180deg, rgba(231, 189, 91, 0.27), rgba(231, 189, 91, 0.06));
+    border-color: rgba(239, 198, 105, 0.48);
+    order: 2;
+}
+
+.season-podium-card.place-2 { order: 1; }
+.season-podium-card.place-3 { order: 3; }
+
+.season-podium-medal {
+    display: grid;
+    width: 1.75rem;
+    height: 1.75rem;
+    place-items: center;
+    color: #201a0f;
+    background: #d8ad52;
+    border-radius: 50%;
+    font: 800 0.8rem 'Oswald', sans-serif;
+}
+
+.place-2 .season-podium-medal { background: #c9d0d2; }
+.place-3 .season-podium-medal { background: #b98156; }
+
+.season-podium-card strong {
+    width: 100%;
+    overflow: hidden;
+    color: #fff9ec;
+    font: 600 clamp(0.7rem, 3.2vw, 0.95rem) 'Oswald', sans-serif;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.season-podium-record {
+    max-width: 100%;
+    overflow: hidden;
+    color: #b8c0ba;
+    font-size: clamp(0.52rem, 2.3vw, 0.66rem);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.season-podium-score {
+    display: flex;
+    margin-top: 0.15rem;
+    color: #edc56f;
+    flex-direction: column;
+    font: 700 0.8rem 'Oswald', sans-serif;
+}
+
+.season-podium-score small {
+    color: #919b94;
+    font-size: 0.5rem;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.season-standings {
+    margin-top: 1rem;
+    padding: 1rem 0.7rem 0.75rem;
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 1rem;
+}
+
+.season-standings-heading {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0 0.25rem 0.75rem;
+}
+
+.season-standings-heading h2 {
+    font-size: 1.35rem;
+}
+
+.season-standings-heading > span {
+    color: #9ba49e;
+    font: 500 0.68rem 'Oswald', sans-serif;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.season-standings-list {
+    display: flex;
+    margin: 0;
+    padding: 0;
+    flex-direction: column;
+    gap: 0.38rem;
+    list-style: none;
+}
+
+.season-standing-row {
+    display: grid;
+    grid-template-columns: 2rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.55rem;
+    min-height: 4.2rem;
+    margin: 0;
+    padding: 0.55rem 0.6rem;
+    background: rgba(7, 11, 10, 0.42);
+    border: 1px solid rgba(255, 255, 255, 0.065);
+    border-radius: 0.68rem;
+    font-size: inherit;
+}
+
+.season-standing-rank {
+    color: #e4bd67;
+    font: 700 1rem 'Oswald', sans-serif;
+    text-align: center;
+}
+
+.season-standing-player,
+.season-standing-score {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+}
+
+.season-standing-player {
+    text-align: left;
+}
+
+.season-standing-player strong {
+    overflow: hidden;
+    color: #fff9ec;
+    font: 600 0.9rem 'Oswald', sans-serif;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.season-standing-player small {
+    overflow: hidden;
+    color: #aab2ac;
+    font-size: 0.61rem;
+    line-height: 1.45;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.season-standing-player .season-standing-wallet {
+    color: #d9c18c;
+}
+
+.season-standing-score {
+    align-items: flex-end;
+    color: #edc56f;
+    font-family: 'Oswald', sans-serif;
+}
+
+.season-standing-score strong {
+    font-size: 0.98rem;
+}
+
+.season-standing-score small {
+    max-width: 5rem;
+    overflow: hidden;
+    color: #89938d;
+    font-size: 0.5rem;
+    letter-spacing: 0.04em;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.season-standings-empty {
+    margin: 0;
+    padding: 1.5rem 0.5rem;
+    color: #abb3ad;
+    text-align: center;
+}
+
+.season-recaps-back:focus-visible,
+.season-recaps-picker select:focus-visible,
+.season-recaps-state button:focus-visible {
+    outline: 2px solid #f2c568;
+    outline-offset: 3px;
+}
+
+@media (min-width: 42rem) {
+    .season-recaps-main {
+        padding-top: 2rem;
+    }
+
+    .season-recap-hero {
+        padding: 1.75rem 2rem 1.4rem;
+    }
+
+    .season-podium {
+        gap: 0.8rem;
+    }
+
+    .season-podium-card {
+        min-height: 9rem;
+    }
+
+    .season-podium-card.place-1 {
+        min-height: 11rem;
+    }
+
+    .season-standings {
+        padding: 1.25rem;
+    }
+
+    .season-standing-row {
+        grid-template-columns: 2.5rem minmax(0, 1fr) 7rem;
+        padding-inline: 0.9rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .season-recaps-view * {
+        scroll-behavior: auto !important;
+    }
+}

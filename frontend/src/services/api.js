@@ -180,11 +180,102 @@ export const resetPassword = async (token, password) => {
 
 // --- Leaderboard Service Calls ---
 
+const normalizeSeason = (season) => {
+    if (!season || typeof season !== 'object') return null;
+
+    const identity = season.slug ?? season.id;
+    return {
+        ...season,
+        id: season.id ?? identity,
+        slug: season.slug ?? (identity == null ? null : String(identity)),
+        rankingLabel: season.rankingLabel
+            ?? (season.rankingMethod === 'wallet_balance' ? 'Final tokens' : 'Season +/-'),
+    };
+};
+
+const normalizeArchivedStanding = standing => ({
+    ...standing,
+    displayName: standing?.displayName ?? standing?.username ?? 'Unknown player',
+});
+
+const readJsonResponse = async response => {
+    try {
+        return await response.json();
+    } catch {
+        return {};
+    }
+};
+
+export const getCurrentSeasonStandings = async () => {
+    const response = await configuredFetch('/api/seasons/current', 'GET');
+    const data = await readJsonResponse(response);
+    if (!response.ok) {
+        throw new Error(data.message || 'Failed to fetch the current season standings.');
+    }
+
+    return {
+        season: normalizeSeason(data?.season),
+        standings: Array.isArray(data?.standings) ? data.standings : [],
+    };
+};
+
+export const getSeasons = async () => {
+    const response = await configuredFetch('/api/seasons', 'GET');
+    const data = await readJsonResponse(response);
+    if (!response.ok) {
+        throw new Error(data.message || 'Failed to fetch season recaps.');
+    }
+
+    const seasons = Array.isArray(data) ? data : data?.seasons;
+    return {
+        seasons: Array.isArray(seasons)
+            ? seasons.map(normalizeSeason).filter(Boolean)
+            : [],
+    };
+};
+
+export const getSeason = async (slugOrId) => {
+    if ((typeof slugOrId !== 'string' && typeof slugOrId !== 'number') || String(slugOrId).trim() === '') {
+        throw new Error('A season is required.');
+    }
+
+    const response = await configuredFetch(
+        `/api/seasons/${encodeURIComponent(String(slugOrId))}`,
+        'GET',
+    );
+    const data = await readJsonResponse(response);
+    if (!response.ok) {
+        throw new Error(data.message || 'Failed to fetch the season recap.');
+    }
+
+    return {
+        season: normalizeSeason(data?.season),
+        podium: Array.isArray(data?.podium) ? data.podium.map(normalizeArchivedStanding) : [],
+        standings: Array.isArray(data?.standings) ? data.standings.map(normalizeArchivedStanding) : [],
+    };
+};
+
 export const getLeaderboard = async () => {
     const response = await configuredFetch('/api/leaderboard', 'GET');
     const data = await response.json();
     if (!response.ok) {
         throw new Error(data.message || 'Failed to fetch leaderboard data.');
+    }
+    return data;
+};
+
+export const getPlayerProfile = async (username) => {
+    if (typeof username !== 'string' || !username.trim()) {
+        throw new Error('A player name is required.');
+    }
+
+    const response = await configuredFetch(
+        `/api/players/${encodeURIComponent(username)}/profile`,
+        'GET',
+    );
+    const data = await readJsonResponse(response);
+    if (!response.ok) {
+        throw new Error(data.message || 'Failed to load player profile.');
     }
     return data;
 };
@@ -223,6 +314,31 @@ export const updateTutorialStatus = async (action) => {
 };
 
 // --- Admin Service Calls ---
+
+export const getSeasonRolloverPreview = async () => {
+    const response = await configuredFetch('/api/admin/seasons/rollover-preview', 'GET');
+    const data = await readJsonResponse(response);
+    if (!response.ok) {
+        throw new Error(data.message || 'Could not prepare the season rollover preview.');
+    }
+    return data;
+};
+
+export const finalizeSeasonRollover = async ({ expectedPreviewHash, expectedSeasonId } = {}) => {
+    if (!expectedPreviewHash || expectedSeasonId == null) {
+        throw new Error('Refresh the season rollover preview before finalizing.');
+    }
+
+    const response = await configuredFetch('/api/admin/seasons/rollover', 'POST', {
+        expectedPreviewHash,
+        expectedSeasonId,
+    });
+    const data = await readJsonResponse(response);
+    if (!response.ok) {
+        throw new Error(data.message || 'Could not finalize the season rollover.');
+    }
+    return data;
+};
 
 export const generateSchema = async () => {
     const response = await configuredFetch('/api/admin/generate-schema', 'POST');

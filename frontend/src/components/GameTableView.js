@@ -37,6 +37,7 @@ import {
     TUTORIAL_THEME_ID,
 } from '../config/tutorial';
 import { getThemePresentation } from '../config/themePresentation';
+import PlayerProfileModal from './PlayerProfileModal';
 
 const ROUND_PRESENTATION_STATES = new Set([
     'WidowReveal',
@@ -89,6 +90,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const [isObserverMode, setIsObserverMode] = useState(false);
     const [showAnchorDebug, setShowAnchorDebug] = useState(false); // Toggle debug overlay
     const [selectedFrogDiscards, setSelectedFrogDiscards] = useState([]);
+    const [profilePlayerName, setProfilePlayerName] = useState(null);
     const [shareNotice, setShareNotice] = useState(null);
     const gameMenuRef = useModalFocus(showGameMenu, '.game-menu-button:not(:disabled)');
     const [quickPlayDecisionRejectionNonce, setQuickPlayDecisionRejectionNonce] = useState(0);
@@ -1259,6 +1261,12 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                     : () => emitEvent('resetGame')}
                 onLobby={handleLeaveTable}
             />
+
+            <PlayerProfileModal
+                playerName={profilePlayerName}
+                currentUsername={user?.username}
+                onClose={() => setProfilePlayerName(null)}
+            />
             
             <TableLayout 
                 currentTableState={tableStateForDealPresentation}
@@ -1284,6 +1292,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 dealPresentationActive={dealPresentation.active}
                 dealCardsRemaining={dealPresentation.cardsRemaining}
                 suppressActionControls={dealPresentation.active}
+                onPlayerProfile={setProfilePlayerName}
             />
 
             <TutorialCoach

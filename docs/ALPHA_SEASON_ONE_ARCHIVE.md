@@ -1,37 +1,79 @@
-# Alpha Season 1 archive plan
+# Alpha Season 1 archive and Alpha Season 2 rollover
 
-Alpha Season 1 is still in progress. The in-game Bulletin may celebrate McSaddle now, but it must not claim final ranks or final leaderboard totals until the season is officially closed.
+## Status
 
-The current leaderboard contains lifetime totals and the database does not yet assign games to a season. Before calling any result an Alpha Season 1 result, define its baseline. The simplest defensible choice may be "all recorded Sluff history through the Alpha 1 close," but that remains a product decision. A different start date requires a verified historical baseline; it cannot be reconstructed reliably from the current lifetime counters alone.
+The season-aware implementation and guarded operator flow are complete locally, but the production rollover has **not** happened yet. Alpha Season 1 remains live until the code has been deployed, a fresh database backup, token audit, and read-only preview have been reviewed, and the explicit finalization action is confirmed.
 
-## What the permanent archive should preserve
+Deploying the season code must never finalize a season automatically.
 
-- The complete ranked leaderboard, not only the podium.
-- The displayed username, bot status, wins, losses, washes, games played, and exact token balance at the moment the season closes.
-- The final first-, second-, and third-place entries.
-- A separate McSaddle season spotlight. If McSaddle finishes in the top three, the final presentation should avoid repeating the name as though it represented two different players.
-- The ranking and eligibility rules used for the snapshot.
+## Approved season rules
 
-The archive must be an immutable snapshot. It must not read its historical names or ranks from the changing live leaderboard after finalization.
+### Alpha Season 1
 
-## Decisions to make before closing the season
+- Alpha Season 1 covers all recorded Sluff history through the official close.
+- Its final standings preserve the exact live leaderboard at the close: every current account is ordered by wallet token balance descending, then username ascending as the deterministic tie-breaker.
+- There is no retroactive minimum-games filter. Applying one would change the leaderboard being memorialized.
+- Persistent bot accounts compete under the same rules as every other account. The public leaderboard and archive must not label or otherwise distinguish them as bots. An internal snapshot may retain account classification only for private audit purposes.
+- The snapshot records each final position, displayed username, wins, losses, washes, games played, and exact wallet token balance.
 
-- Confirm whether ranking remains token balance descending with username as the deterministic tie-breaker.
-- Confirm the minimum-games requirement, if any.
-- Confirm whether persistent bots compete in the archived standings.
-- Finish the token-accounting review and record any necessary corrections as new ledger adjustments before taking the snapshot.
-- Choose the official close time and make sure no games or settlements are still in progress.
-- Define the Alpha 1 start or explicitly adopt all recorded history as the season baseline.
+### Alpha Season 2
 
-## Safe finalization outline
+- Wallet balances carry forward unchanged and remain the balances used to enter tables.
+- Existing wins, losses, and washes remain lifetime career totals. They are not erased or repurposed as seasonal fields.
+- Alpha Season 2 starts with separate per-season wins, losses, and washes at zero for every account.
+- Alpha Season 2 rank is based on net game-linked token movement from Alpha Season 2 games, ordered descending, then username ascending. Starting grants, mercy tokens, and unrelated administrative adjustments do not improve season rank.
+- An account needs at least one settled Alpha Season 2 game to receive a numbered rank. Accounts with no settled games may remain visible as unranked.
+- The live leaderboard must identify the ranking value as **Season +/-** and show the carried wallet balance separately as **Wallet**. A lifetime wallet balance must not be presented as though it were the Alpha Season 2 ranking value.
 
-1. Preview the exact final standings without changing data.
-2. Review the accounting audit and the Alpha eligibility rules.
-3. Close new Alpha play, wait for active settlements, and acquire a settlement-compatible finalization lock.
-4. Freeze every ranked row in one guarded, repeatable-read database transaction and store it in dedicated season snapshot tables.
-5. Store snapshot display names so later renames or account cleanup cannot rewrite history.
-6. Mark the season finalized and reject any attempt to overwrite it.
-7. Serve the complete archived standings through a read-only season leaderboard endpoint.
-8. Replace every provisional Bulletin state: podium names, ticker copy, hero text, archive note, footer, and accessibility labels.
+This is a logical reset, not a destructive data reset. It keeps player-profile career records accurate, preserves the accountable token ledger, and avoids making established accounts appear inactive to maintenance tools that use lifetime game counts.
 
-Future game-history records should carry a season identifier so later seasons can be reconstructed independently of lifetime player totals.
+## Permanent legacy page
+
+The Season Archive must be backed by immutable database snapshots rather than hardcoded names or the changing live leaderboard. Each finalized season page should contain:
+
+- A podium built from the stored first-, second-, and third-place rows.
+- The complete frozen standings beneath the podium.
+- The season name, close time, ranking method, eligibility rule, and deterministic tie-breaker.
+- Snapshot display names and values that survive later account renames or deletion.
+- The separate McSaddle Alpha Season 1 spotlight. If McSaddle also finishes on the podium, the presentation should avoid implying that the spotlight and podium entry represent different players.
+
+The public archive must not expose internal bot classification. Once a season is finalized, neither a deploy nor an administrative retry may overwrite or rebuild its stored standings from current account data.
+
+## Data boundaries
+
+- Every game-history row must carry a season identifier. Existing history is assigned to Alpha Season 1; games created after the rollover are assigned to Alpha Season 2.
+- Per-season player statistics are stored separately from lifetime career totals.
+- Final standings store frozen ranks, names, statistics, wallet balances, and the ranking value used for that season.
+- Alpha Season 1 uses closing wallet balance as its ranking value. Alpha Season 2 uses net tokens from game-linked ledger entries in that season.
+- Token transactions remain the source of truth for wallet balances. Finalization must not delete, rewrite, or zero ledger history.
+
+## Safe production rollover
+
+1. Deploy and test the season schema, season-aware game creation and settlement, live Alpha Season 2 leaderboard, read-only archive endpoint, and legacy-season page while Alpha Season 1 remains active. Confirm the deploy is complete and no old backend instance can still accept game traffic before finalizing; an old settlement path does not write the new per-season statistics.
+2. Verify that every newly created game is assigned to Alpha Season 1 before attempting the close.
+3. Create a fresh full database backup in the approved external, access-restricted backup location.
+4. Run the token-accounting audit and a read-only Alpha Season 1 preview. Together they must show the accounting blockers, complete ordered standings, podium, row count, and canonical snapshot hash without changing production data.
+5. Review and retain the preview hash. Resolve or explicitly reconcile every abandoned, quarantined, or manual-review game before continuing.
+6. Stop new Alpha Season 1 games and allow existing games and settlements to finish. Finalization requires zero in-progress games.
+7. Acquire the season lifecycle lock and perform one guarded database transaction that:
+   - Rechecks the season status and confirms that no game or settlement remains active.
+   - Recomputes the exact standings and rejects the operation if they no longer match the reviewed preview hash.
+   - Writes the complete immutable Alpha Season 1 snapshot.
+   - Creates zeroed Alpha Season 2 per-season records while leaving carried wallet balances intact in the accountable ledger.
+   - Marks Alpha Season 1 finalized and activates Alpha Season 2.
+   - Leaves lifetime career totals and every wallet balance unchanged.
+8. Commit all rollover changes together. Any error must roll back the snapshot, Alpha Season 2 activation, and all associated season changes.
+9. Verify the stored podium and complete archive against the reviewed preview, verify the live leaderboard reports Alpha Season 2, and verify the Bulletin automatically switches from provisional copy to the final results and archive link.
+
+Finalization must be idempotent: retrying a successfully completed command returns the existing result and cannot duplicate or replace the snapshot.
+
+## Production gate
+
+Production finalization is pending. Do not run it until:
+
+- The implementation is deployed and verified.
+- The external backup succeeds.
+- The accounting audit and complete preview have been reviewed.
+- The preview hash is confirmed.
+- Alpha Season 1 has zero active games.
+- The operator intentionally confirms the explicit Alpha Season 1 to Alpha Season 2 finalization action.

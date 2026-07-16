@@ -2,7 +2,7 @@
 import React from 'react';
 import './PlayerSeat.css'; // Import the CSS file
 
-const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent, showTrumpIndicator, trumpIndicatorPuck, renderCard, seatPosition }) => {
+const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent, showTrumpIndicator, trumpIndicatorPuck, renderCard, seatPosition, onPlayerProfile }) => {
     if (!playerName) {
         return null; 
     }
@@ -122,9 +122,22 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent, showTrum
             
             {renderOpponentCards()}
             <div className={seatClasses} style={dynamicStyles}>
-                <div className={nameClasses}>
-                    {playerName}
-                </div>
+                {onPlayerProfile ? (
+                    <button
+                        type="button"
+                        className={`${nameClasses} player-name-button`}
+                        onPointerDown={event => event.stopPropagation()}
+                        onClick={event => {
+                            event.stopPropagation();
+                            onPlayerProfile(playerName);
+                        }}
+                        aria-label={isSelf ? 'View your player profile' : `View ${playerName}'s player profile`}
+                    >
+                        {playerName}
+                    </button>
+                ) : (
+                    <div className={nameClasses}>{playerName}</div>
+                )}
                 <div className="player-stats-line">
                     <span className="player-tokens">
                         <img src="/Sluff_Token.png" alt="Tokens" className="token-icon-inline" />

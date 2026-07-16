@@ -6,6 +6,11 @@ const fs = require('fs');
 const path = require('path');
 const securityMonitor = require('../utils/securityMonitor');
 const requireAuth = require('../middleware/requireAuth');
+const {
+  SeasonConflictError,
+  finalizeRollover,
+  previewRollover,
+} = require('../services/seasonService');
 
 // This function creates the router and gives it the database pool
 const createAdminRoutes = (pool, jwt) => {
@@ -64,6 +69,41 @@ const createAdminRoutes = (pool, jwt) => {
     } catch (error) {
       console.error('Error checking suspicious activity:', error);
       res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  router.get('/seasons/rollover-preview', checkAuth, isAdmin, async (req, res) => {
+    try {
+      res.json(await previewRollover(pool));
+    } catch (error) {
+      console.error('Failed to preview season rollover:', error);
+      res.status(500).json({ message: 'Unable to preview season rollover.' });
+    }
+  });
+
+  router.post('/seasons/rollover', checkAuth, isAdmin, async (req, res) => {
+    try {
+      const result = await finalizeRollover(pool, {
+        expectedPreviewHash: req.body?.expectedPreviewHash,
+        expectedSeasonId: req.body?.expectedSeasonId,
+      });
+      res.status(201).json(result);
+    } catch (error) {
+      if (error instanceof SeasonConflictError) {
+        return res.status(409).json({ code: error.code, message: error.message });
+      }
+      if (error?.code === 'PREVIEW_HASH_REQUIRED' || error instanceof TypeError) {
+        return res.status(400).json({ code: error.code || 'INVALID_REQUEST', message: error.message });
+      }
+      // PostgreSQL uses 40001 when a serializable transaction loses a race.
+      if (error?.code === '40001') {
+        return res.status(409).json({
+          code: 'ROLLOVER_RACE',
+          message: 'Season data changed during rollover. Preview again before retrying.',
+        });
+      }
+      console.error('Failed to finalize season rollover:', error);
+      return res.status(500).json({ message: 'Unable to finalize season rollover.' });
     }
   });
 

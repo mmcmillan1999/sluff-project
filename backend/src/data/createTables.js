@@ -79,7 +79,35 @@ const createDbTables = async (pool) => {
         await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS tutorial_version INTEGER NOT NULL DEFAULT 0");
         await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS tutorial_active_version INTEGER NOT NULL DEFAULT 0");
 
-
+        // Seasons are deliberately separate from the lifetime counters on
+        // users. A rollover starts a new competitive scoreboard without
+        // changing a wallet or erasing a player's career record.
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS seasons (
+                season_id SERIAL PRIMARY KEY,
+                season_number INTEGER NOT NULL UNIQUE,
+                slug VARCHAR(80) NOT NULL UNIQUE,
+                display_name VARCHAR(80) NOT NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'active'
+                    CHECK (status IN ('active', 'finalized')),
+                ranking_method VARCHAR(40) NOT NULL
+                    CHECK (ranking_method IN ('wallet_balance', 'game_token_net')),
+                rules JSONB NOT NULL DEFAULT '{}'::jsonb,
+                starts_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                ends_at TIMESTAMP WITH TIME ZONE,
+                finalized_at TIMESTAMP WITH TIME ZONE,
+                final_standings_hash CHAR(64),
+                final_player_count INTEGER CHECK (final_player_count >= 0),
+                created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+        await pool.query("ALTER TABLE seasons ADD COLUMN IF NOT EXISTS final_standings_hash CHAR(64)");
+        await pool.query("ALTER TABLE seasons ADD COLUMN IF NOT EXISTS final_player_count INTEGER");
+        await pool.query(`
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_seasons_one_active
+            ON seasons ((status))
+            WHERE status = 'active'
+        `);
         await pool.query(`
             CREATE TABLE IF NOT EXISTS game_history (
                 game_id SERIAL PRIMARY KEY,
@@ -96,6 +124,20 @@ const createDbTables = async (pool) => {
                 reconciled_at TIMESTAMP WITH TIME ZONE,
                 reconciled_by VARCHAR(128)
             );
+        `);
+        await pool.query(`
+            INSERT INTO seasons
+                (season_number, slug, display_name, status, ranking_method, rules, starts_at)
+            SELECT
+                1,
+                'alpha-season-1',
+                'Alpha Season 1',
+                'active',
+                'wallet_balance',
+                '{"minimumSettledGames": 0, "ranking": "wallet_balance"}'::jsonb,
+                COALESCE((SELECT MIN(start_time) FROM game_history), CURRENT_TIMESTAMP)
+            WHERE NOT EXISTS (SELECT 1 FROM seasons)
+            ON CONFLICT (season_number) DO NOTHING
         `);
 
         // Add without a default first so rows from an older schema remain NULL
@@ -114,6 +156,51 @@ const createDbTables = async (pool) => {
         await pool.query("ALTER TABLE game_history ADD COLUMN IF NOT EXISTS reconciliation_status VARCHAR(50)");
         await pool.query("ALTER TABLE game_history ADD COLUMN IF NOT EXISTS reconciled_at TIMESTAMP WITH TIME ZONE");
         await pool.query("ALTER TABLE game_history ADD COLUMN IF NOT EXISTS reconciled_by VARCHAR(128)");
+        await pool.query("ALTER TABLE game_history ADD COLUMN IF NOT EXISTS season_id INTEGER REFERENCES seasons(season_id)");
+        // Alpha Season 1 represents all history that predates seasons as well
+        // as every game played before the first explicit rollover.
+        await pool.query(`
+            UPDATE game_history
+            SET season_id = (
+                SELECT season_id FROM seasons WHERE season_number = 1
+            )
+            WHERE season_id IS NULL
+        `);
+        await pool.query("ALTER TABLE game_history ALTER COLUMN season_id SET NOT NULL");
+        await pool.query(`
+            CREATE INDEX IF NOT EXISTS idx_game_history_season
+            ON game_history (season_id, game_id)
+        `);
+        // This trigger protects rolling deployments: an older application
+        // process that omits season_id still joins the sole active season.
+        await pool.query(`
+            CREATE OR REPLACE FUNCTION assign_active_season_to_game()
+            RETURNS trigger AS $$
+            BEGIN
+                IF NEW.season_id IS NULL THEN
+                    SELECT season_id INTO NEW.season_id
+                    FROM seasons
+                    WHERE status = 'active';
+                END IF;
+                IF NEW.season_id IS NULL THEN
+                    RAISE EXCEPTION 'No active season is available for a new game';
+                END IF;
+                IF NOT EXISTS (
+                    SELECT 1 FROM seasons
+                    WHERE season_id = NEW.season_id AND status = 'active'
+                ) THEN
+                    RAISE EXCEPTION 'New games must belong to the active season';
+                END IF;
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql
+        `);
+        await pool.query('DROP TRIGGER IF EXISTS trg_game_history_active_season ON game_history');
+        await pool.query(`
+            CREATE TRIGGER trg_game_history_active_season
+            BEFORE INSERT ON game_history
+            FOR EACH ROW EXECUTE FUNCTION assign_active_season_to_game()
+        `);
         await pool.query(`
             CREATE INDEX IF NOT EXISTS idx_game_history_recovery_candidates
             ON game_history (last_activity_at, game_id)
@@ -267,6 +354,97 @@ const createDbTables = async (pool) => {
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 expires_at TIMESTAMP WITH TIME ZONE
             );
+        `);
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS season_player_stats (
+                season_id INTEGER NOT NULL REFERENCES seasons(season_id),
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                wins INTEGER NOT NULL DEFAULT 0 CHECK (wins >= 0),
+                losses INTEGER NOT NULL DEFAULT 0 CHECK (losses >= 0),
+                washes INTEGER NOT NULL DEFAULT 0 CHECK (washes >= 0),
+                updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (season_id, user_id)
+            )
+        `);
+        // While Season 1 is active, career stats and Season 1 stats are the
+        // same thing. Never run this update after the season is finalized.
+        await pool.query(`
+            INSERT INTO season_player_stats (season_id, user_id, wins, losses, washes)
+            SELECT s.season_id, u.id, u.wins, u.losses, u.washes
+            FROM seasons s
+            CROSS JOIN users u
+            WHERE s.season_number = 1 AND s.status = 'active'
+            ON CONFLICT (season_id, user_id) DO UPDATE
+            SET wins = EXCLUDED.wins,
+                losses = EXCLUDED.losses,
+                washes = EXCLUDED.washes,
+                updated_at = CURRENT_TIMESTAMP
+        `);
+
+        // Snapshot rows intentionally retain only a plain source_user_id, not
+        // a foreign key. Account deletion must never rewrite or block a legacy
+        // season's immutable standings or display name.
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS season_standings_snapshots (
+                season_id INTEGER NOT NULL REFERENCES seasons(season_id),
+                position INTEGER NOT NULL CHECK (position > 0),
+                rank INTEGER CHECK (rank > 0),
+                source_user_id INTEGER,
+                display_name VARCHAR(50) NOT NULL,
+                wins INTEGER NOT NULL CHECK (wins >= 0),
+                losses INTEGER NOT NULL CHECK (losses >= 0),
+                washes INTEGER NOT NULL CHECK (washes >= 0),
+                games_played INTEGER NOT NULL CHECK (games_played >= 0),
+                eligible BOOLEAN NOT NULL,
+                ranking_tokens DECIMAL(14, 2) NOT NULL,
+                wallet_tokens DECIMAL(14, 2) NOT NULL,
+                snapshotted_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (season_id, position),
+                UNIQUE (season_id, source_user_id)
+            )
+        `);
+        await pool.query(`
+            CREATE OR REPLACE FUNCTION reject_finalized_season_mutation()
+            RETURNS trigger AS $$
+            BEGIN
+                IF TG_OP = 'DELETE' THEN
+                    RAISE EXCEPTION 'Seasons cannot be deleted';
+                END IF;
+                IF OLD.status = 'finalized' THEN
+                    RAISE EXCEPTION 'Finalized seasons are immutable';
+                END IF;
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql
+        `);
+        await pool.query('DROP TRIGGER IF EXISTS trg_seasons_immutable ON seasons');
+        await pool.query(`
+            CREATE TRIGGER trg_seasons_immutable
+            BEFORE UPDATE OR DELETE ON seasons
+            FOR EACH ROW EXECUTE FUNCTION reject_finalized_season_mutation()
+        `);
+        await pool.query(`
+            CREATE OR REPLACE FUNCTION reject_standings_snapshot_mutation()
+            RETURNS trigger AS $$
+            BEGIN
+                IF TG_OP = 'INSERT' THEN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM seasons
+                        WHERE season_id = NEW.season_id AND status = 'active'
+                    ) THEN
+                        RAISE EXCEPTION 'Final season standings are immutable';
+                    END IF;
+                    RETURN NEW;
+                END IF;
+                RAISE EXCEPTION 'Final season standings are immutable';
+            END;
+            $$ LANGUAGE plpgsql
+        `);
+        await pool.query('DROP TRIGGER IF EXISTS trg_standings_snapshots_immutable ON season_standings_snapshots');
+        await pool.query(`
+            CREATE TRIGGER trg_standings_snapshots_immutable
+            BEFORE INSERT OR UPDATE OR DELETE ON season_standings_snapshots
+            FOR EACH ROW EXECUTE FUNCTION reject_standings_snapshot_mutation()
         `);
 
         // This must remain the final statement before COMMIT. clock_timestamp()

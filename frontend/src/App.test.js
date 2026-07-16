@@ -51,6 +51,8 @@ describe('App Component and Game Flow', () => {
             hasMore: false,
         });
         api.getFeedback.mockResolvedValue([]);
+        api.getSeasons.mockResolvedValue({ seasons: [] });
+        api.getSeason.mockResolvedValue({ season: null, podium: [], standings: [] });
         api.updateTutorialStatus.mockResolvedValue({
             tutorial_version: 0,
             tutorial_active_version: 1,
@@ -119,6 +121,86 @@ describe('App Component and Game Flow', () => {
         await user.click(screen.getByRole('button', { name: 'Lobby' }));
         expect(await screen.findByText('Quick Play')).toBeInTheDocument();
         expect(mockSocket.emit).toHaveBeenCalledWith('requestUserSync');
+    });
+
+    test('opens Season Recaps from the lobby player menu and returns to Quick Play', async () => {
+        const user = userEvent.setup();
+        api.getSeasons.mockResolvedValue({
+            seasons: [{
+                slug: 'alpha-season-1',
+                name: 'Alpha Season 1',
+                finalizedAt: '2026-07-16T00:00:00Z',
+                playerCount: 1,
+                rankingMethod: 'wallet_balance',
+                rankingLabel: 'Final tokens',
+            }],
+        });
+        api.getSeason.mockResolvedValue({
+            season: {
+                slug: 'alpha-season-1',
+                name: 'Alpha Season 1',
+                finalizedAt: '2026-07-16T00:00:00Z',
+                playerCount: 1,
+                rankingMethod: 'wallet_balance',
+                rankingLabel: 'Final tokens',
+            },
+            podium: [{
+                rank: 1,
+                displayName: 'McSaddle',
+                wins: 1,
+                losses: 0,
+                washes: 0,
+                gamesPlayed: 1,
+                rankingTokens: 1,
+                walletTokens: 9,
+            }],
+            standings: [{
+                rank: 1,
+                displayName: 'McSaddle',
+                wins: 1,
+                losses: 0,
+                washes: 0,
+                gamesPlayed: 1,
+                rankingTokens: 1,
+                walletTokens: 9,
+            }],
+        });
+        render(<App />);
+
+        await user.click(await screen.findByRole('button', { name: 'Open player menu' }));
+        await user.click(within(screen.getByRole('group', { name: 'Player menu' }))
+            .getByRole('button', { name: 'Season Recaps' }));
+
+        expect(await screen.findByRole('heading', { name: 'Season Recaps' })).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { name: 'Alpha Season 1' })).toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Lobby' }));
+        expect(await screen.findByText('Quick Play')).toBeInTheDocument();
+    });
+
+    test('describes the global wallet reset as maintenance instead of a season rollover', async () => {
+        const user = userEvent.setup();
+        const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+        render(<App />);
+
+        await act(async () => {
+            socketEventHandlers.updateUser({
+                id: 42,
+                username: 'Test Player',
+                tokens: '8.00',
+                is_admin: true,
+                games_played: 12,
+                tutorial_version: 1,
+                tutorial_active_version: 0,
+            });
+        });
+        await user.click(await screen.findByRole('button', { name: 'Open player menu' }));
+        await user.click(within(screen.getByRole('group', { name: 'Player menu' }))
+            .getByRole('button', { name: 'Admin Tools' }));
+        await user.click(screen.getByRole('button', { name: 'Reset Tokens' }));
+
+        expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/does not archive standings or start a new competitive season/i));
+        expect(mockSocket.emit).toHaveBeenCalledWith('resetAllTokens', {});
+        confirm.mockRestore();
     });
 
     test('opens the bulletin from the lobby ticker and returns to Quick Play', async () => {

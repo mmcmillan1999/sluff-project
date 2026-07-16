@@ -1,8 +1,10 @@
 export const alphaSeasonOne = Object.freeze({
     status: 'Season in progress',
     eyebrow: 'Alpha Season 1',
-    title: 'The first Sluff season is headed for the history books.',
-    summary: 'When Alpha Season 1 closes, its final leaderboard will be preserved here instead of changing with the live standings.',
+    title: 'The first Sluff season is nearing its official close.',
+    summary: 'When it closes, its official podium and complete final scoreboard will be frozen in Season Recaps.',
+    finalTitle: 'The first Sluff season belongs in the history books.',
+    finalSummary: 'Its official podium and complete final scoreboard are preserved permanently in Season Recaps.',
     spotlight: {
         label: 'Season shout-out',
         name: 'McSaddle',
@@ -13,13 +15,13 @@ export const alphaSeasonOne = Object.freeze({
         { place: 2, label: 'Second place', player: null },
         { place: 3, label: 'Third place', player: null },
     ],
-    archiveNote: 'Final names and records will be added only after the season is officially closed and the standings are safely frozen.',
+    archiveNote: 'Final names, records, and positions will appear only after the season is safely frozen.',
 });
 
 export const bulletinTickerItems = Object.freeze([
-    'Alpha Season 1 is headed for the history books',
+    'Alpha Season history lives in the Sluff record book',
     'A season shout-out to McSaddle',
-    'The final Top 3 will be preserved in the Alpha Season 1 archive',
+    'Champions and complete final scoreboards are preserved in Season Recaps',
     'Four-player tables, Quick Play, guided training, and a livelier card table',
     'Token accountability and fully tracked player records are in development',
     'Open the Bulletin for the full story',

@@ -14,7 +14,7 @@ class MockPool {
     }
     query(text, params) {
         this.queries.push({ text, params });
-        if (text.includes('SELECT outcome FROM game_history')) {
+        if (text.includes('SELECT outcome') && text.includes('FROM game_history')) {
             return Promise.resolve({ rows: [{ outcome: 'In Progress' }], rowCount: 1 });
         }
         if (text.includes('SELECT id FROM users') && text.includes('FOR UPDATE')) {

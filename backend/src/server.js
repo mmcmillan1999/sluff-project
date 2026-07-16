@@ -13,6 +13,8 @@ const GameService = require('./services/GameService');
 const registerGameHandlers = require('./events/gameEvents');
 const createAuthRoutes = require('./api/auth');
 const createLeaderboardRoutes = require('./api/leaderboard');
+const createPlayerRoutes = require('./api/players');
+const createSeasonRoutes = require('./api/seasons');
 const createAdminRoutes = require('./api/admin');
 const createFeedbackRoutes = require('./api/feedback');
 const createChatRoutes = require('./api/chat');
@@ -117,6 +119,8 @@ async function initializeApplication() {
     registerGameHandlers(io, gameService);
     app.use('/api/auth', createAuthRoutes(pool, bcrypt, jwt, io));
     app.use('/api/leaderboard', createLeaderboardRoutes(pool, jwt));
+    app.use('/api/players', createPlayerRoutes(pool, jwt));
+    app.use('/api/seasons', createSeasonRoutes(pool, jwt));
     app.use('/api/admin', createAdminRoutes(pool, jwt));
     app.use('/api/feedback', createFeedbackRoutes(pool, jwt));
     app.use('/api/chat', createChatRoutes(pool, io, jwt));

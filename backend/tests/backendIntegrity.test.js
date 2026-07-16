@@ -475,7 +475,7 @@ function makeTransactionPool({ failOn } = {}) {
             if (failOn && sql.includes(failOn)) throw new Error('forced transaction failure');
             if (sql === 'BEGIN') openTransactions += 1;
             if (sql === 'COMMIT' || sql === 'ROLLBACK') openTransactions -= 1;
-            if (sql.includes('SELECT outcome FROM game_history')) {
+            if (sql.includes('SELECT outcome') && sql.includes('FROM game_history')) {
                 return { rows: [{ outcome: 'In Progress' }], rowCount: 1 };
             }
             if (sql.includes('SELECT id FROM users') && sql.includes('FOR UPDATE')) {
@@ -565,6 +565,7 @@ function makeAtomicStartPool({ balances, usernames, failOnBuyInNumber = null }) 
                 pending = null;
                 return { rows: [] };
             }
+            if (sql.startsWith('SELECT pg_advisory_xact_lock')) return { rows: [{}] };
             if (sql.includes('INSERT INTO game_history')) {
                 pending.games.push({ gameId, params });
                 return { rows: [{ game_id: gameId }] };

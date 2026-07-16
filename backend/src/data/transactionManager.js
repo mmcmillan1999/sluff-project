@@ -2,6 +2,7 @@
 
 const { TABLE_COSTS } = require('../core/constants');
 const securityMonitor = require('../utils/securityMonitor');
+const { acquireSeasonLock } = require('../services/seasonService');
 const {
     buildDrawSettlement,
     buildForfeitSettlement,
@@ -108,20 +109,32 @@ const handleAutomaticBotMercyToken = async (pool, userId) => {
 
 const createGameRecord = async (pool, table) => {
     const { tableId, theme, playerMode } = table;
-    
+    const client = await pool.connect();
+    let transactionOpen = false;
     try {
+        await client.query('BEGIN');
+        transactionOpen = true;
+        await acquireSeasonLock(client);
         const query = `
-            INSERT INTO game_history (table_id, theme, player_count, outcome)
-            VALUES ($1, $2, $3, $4)
-            RETURNING game_id
+            INSERT INTO game_history (table_id, theme, player_count, outcome, season_id)
+            SELECT $1, $2, $3, $4, season_id
+            FROM seasons
+            WHERE status = 'active'
+            RETURNING game_id, season_id
         `;
-        const result = await pool.query(query, [tableId, theme, playerMode, 'In Progress']);
+        const result = await client.query(query, [tableId, theme, playerMode, 'In Progress']);
+        if (result.rows?.length !== 1) throw new Error('Unable to attach the game to an active season.');
         const gameId = result.rows[0].game_id;
+        await client.query('COMMIT');
+        transactionOpen = false;
         console.log(`✅ Game record created with ID ${gameId} for table ${tableId}`);
         return gameId;
     } catch (error) {
+        if (transactionOpen) await client.query('ROLLBACK');
         console.error('❌ Failed to create game record:', error);
         throw error;
+    } finally {
+        client.release();
     }
 };
 
@@ -367,13 +380,23 @@ const startGameTransaction = async (pool, table, playerIds) => {
     try {
         await client.query('BEGIN');
         transactionStarted = true;
-
+        // This must be a separate statement. If the lock were inside the
+        // INSERT, a statement snapshot taken before a blocked rollover could
+        // still see the just-finalized season after the lock is released.
+        await acquireSeasonLock(client);
         const gameResult = await client.query(
-            `INSERT INTO game_history (table_id, theme, player_count, outcome)
-             VALUES ($1, $2, $3, 'In Progress')
-             RETURNING game_id`,
+            `INSERT INTO game_history (table_id, theme, player_count, outcome, season_id)
+             SELECT $1, $2, $3, 'In Progress', season_id
+             FROM seasons
+             WHERE status = 'active'
+             RETURNING game_id, season_id`,
             [table.tableId, table.theme, table.playerMode],
         );
+        if (gameResult.rows?.length !== 1) {
+            const error = new Error('Unable to attach the game to an active season.');
+            error.code = 'ACTIVE_SEASON_REQUIRED';
+            throw error;
+        }
         const gameId = gameResult.rows[0].game_id;
 
         let lockedUsers = [];
@@ -468,7 +491,7 @@ async function settleGameTransaction(pool, settlement) {
         transactionOpen = true;
 
         const gameResult = await client.query(
-            'SELECT outcome FROM game_history WHERE game_id = $1 FOR UPDATE',
+            'SELECT outcome, season_id FROM game_history WHERE game_id = $1 FOR UPDATE',
             [settlement.gameId],
         );
         if (!gameResult.rows?.length) {
@@ -478,6 +501,7 @@ async function settleGameTransaction(pool, settlement) {
         }
 
         const persistedOutcome = gameResult.rows[0].outcome;
+        const seasonId = Number(gameResult.rows[0].season_id);
         if (persistedOutcome !== 'In Progress') {
             if (persistedOutcome !== settlement.outcome) {
                 throw new SettlementConflictError(
@@ -530,6 +554,19 @@ async function settleGameTransaction(pool, settlement) {
                 `UPDATE users SET ${stat.column} = ${stat.column} + 1 WHERE id = $1`,
                 [stat.userId],
             );
+            // game_history.season_id is NOT NULL in the real schema. The guard
+            // keeps older test doubles that only return outcome compatible.
+            if (Number.isInteger(seasonId) && seasonId > 0) {
+                await client.query(
+                    `INSERT INTO season_player_stats
+                        (season_id, user_id, ${stat.column})
+                     VALUES ($1, $2, 1)
+                     ON CONFLICT (season_id, user_id) DO UPDATE
+                     SET ${stat.column} = season_player_stats.${stat.column} + 1,
+                         updated_at = CURRENT_TIMESTAMP`,
+                    [seasonId, stat.userId],
+                );
+            }
         }
 
         // A funded bot that finishes below five gets one normal mercy ledger

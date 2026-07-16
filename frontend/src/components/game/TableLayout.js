@@ -51,7 +51,8 @@ const TableLayout = ({
     roundPresentationComplete = false,
     dealPresentationActive = false,
     dealCardsRemaining = 36,
-    suppressActionControls = false
+    suppressActionControls = false,
+    onPlayerProfile
 }) => {
     const tableThemeId = getThemePresentation(currentTableState?.theme).id;
     const [lastTrickVisible, setLastTrickVisible] = useState(false);
@@ -873,6 +874,7 @@ const TableLayout = ({
                     PlayerSeat={PlayerSeat}
                     rotation={0}
                     debugMode={showDebugAnchors}
+                    onPlayerProfile={onPlayerProfile}
                 />
                 <PlayerSeatPositioner
                     playerName={seatAssignments.opponentRight}
@@ -884,6 +886,7 @@ const TableLayout = ({
                     PlayerSeat={PlayerSeat}
                     rotation={0}
                     debugMode={showDebugAnchors}
+                    onPlayerProfile={onPlayerProfile}
                 />
                 {/* 4-player: the across player takes the top seat (the widow
                     seat in 3-player). null playerName renders nothing. */}
@@ -898,6 +901,7 @@ const TableLayout = ({
                         PlayerSeat={PlayerSeat}
                         rotation={0}
                         debugMode={showDebugAnchors}
+                        onPlayerProfile={onPlayerProfile}
                     />
                 )}
 
@@ -930,6 +934,7 @@ const TableLayout = ({
                     PlayerSeat={PlayerSeat}
                     rotation={0}
                     debugMode={showDebugAnchors}
+                    onPlayerProfile={onPlayerProfile}
                 />
 
                 {renderPlayedCardsOnTable()}

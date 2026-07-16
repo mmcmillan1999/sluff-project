@@ -15,6 +15,7 @@ const PlayerSeatPositioner = ({
     PlayerSeat,  // Component passed as prop
     showTrumpIndicator,
     trumpIndicatorPuck,
+    onPlayerProfile,
     // New positioning controls
     anchorX = null,  // vw units - if null, use default CSS positioning
     anchorY = null,  // vh units - if null, use default CSS positioning  
@@ -129,6 +130,7 @@ const PlayerSeatPositioner = ({
                 seatPosition={seatPosition}
                 showTrumpIndicator={showTrumpIndicator}
                 trumpIndicatorPuck={trumpIndicatorPuck}
+                onPlayerProfile={onPlayerProfile}
             />
         </div>
     );

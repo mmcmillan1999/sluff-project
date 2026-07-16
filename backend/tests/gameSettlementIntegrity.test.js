@@ -293,7 +293,7 @@ function createSettlementPool({
                         clearPending();
                         return { rows: [] };
                     }
-                    if (sql.includes('SELECT outcome FROM game_history')) {
+                    if (sql.includes('SELECT outcome') && sql.includes('FROM game_history')) {
                         if (remainingTransientLockFailures > 0) {
                             remainingTransientLockFailures -= 1;
                             const error = new Error('injected transient lock failure');

@@ -31,7 +31,7 @@ export const deriveLobbyPlayerStats = (user = {}) => {
     };
 };
 
-const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQuickPlay, handleJoinTableAsSpectator, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowTokenLedger, handleShowBulletin, handleShowAdmin, handleShowFeedback, handleShowHowToPlay, handleResetTutorial, socket, soundSettings }) => {
+const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQuickPlay, handleJoinTableAsSpectator, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowSeasonRecaps, handleShowTokenLedger, handleShowBulletin, handleShowAdmin, handleShowFeedback, handleShowHowToPlay, handleResetTutorial, socket, soundSettings }) => {
 
     const [activeTab, setActiveTab] = useState('');
     const [showMenu, setShowMenu] = useState(false);
@@ -166,6 +166,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
             label: 'Player',
             actions: [
                 { id: 'leaderboard', label: 'Leaderboard', shortcut: 'L', onSelect: handleShowLeaderboard },
+                { id: 'season-recaps', label: 'Season Recaps', onSelect: handleShowSeasonRecaps },
                 { id: 'ledger', label: 'Token Ledger', onSelect: handleShowTokenLedger },
             ],
         },
@@ -237,7 +238,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
         return (
             <div className="desktop-sidebar">
                 <div className="sidebar-section">
-                    <h3>Player Stats</h3>
+                    <h3>Career Stats</h3>
                     <div className="user-stats-card">
                         <div className="stat-row">
                             <span className="stat-label">Games Played:</span>

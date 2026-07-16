@@ -13,6 +13,8 @@ const suites = [
     { name: 'quick play', file: './quickPlay.test.js' },
     { name: 'four-player mode', file: './fourPlayer.test.js' },
     { name: 'leaderboard privacy', file: './leaderboard.test.js' },
+    { name: 'season lifecycle and archives', file: './seasons.test.js' },
+    { name: 'player profiles', file: './playerProfiles.test.js' },
     { name: 'token ledger', file: './tokenLedger.test.js' },
     { name: 'inactive-user maintenance', file: './pruneInactiveUsers.test.js' },
     { name: 'database backup snapshot', file: './backupDatabase.test.js' },

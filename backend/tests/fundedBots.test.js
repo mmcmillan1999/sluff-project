@@ -55,11 +55,12 @@ function createLedgerPool({ balances = { 1: 10, 2: 10, 100: 4 }, recentBotMercy 
                 state.rollbacks += 1;
                 return { rows: [] };
             }
+            if (sql.startsWith('SELECT pg_advisory_xact_lock')) return { rows: [{}] };
             if (sql.includes('INSERT INTO game_history')) {
                 state.gameOutcome = 'In Progress';
                 return { rows: [{ game_id: state.gameId }] };
             }
-            if (sql.startsWith('SELECT outcome FROM game_history')) {
+            if (sql.startsWith('SELECT outcome') && sql.includes('FROM game_history')) {
                 return { rows: [{ outcome: state.gameOutcome }] };
             }
             if (sql.includes('FROM users') && sql.includes('id = ANY')) {
