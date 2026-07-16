@@ -1,6 +1,6 @@
 // frontend/src/components/LobbyView.js
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './LobbyView.css';
 import BulletinTicker from './BulletinTicker';
 import LobbyTableCard from './LobbyTableCard';
@@ -31,7 +31,7 @@ export const deriveLobbyPlayerStats = (user = {}) => {
     };
 };
 
-const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQuickPlay, handleJoinTableAsSpectator, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowTokenLedger, handleShowBulletin, handleShowAdmin, handleShowFeedback, handleShowHowToPlay, handleResetTutorial, emitEvent, socket, handleOpenFeedbackModal, soundSettings }) => {
+const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQuickPlay, handleJoinTableAsSpectator, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowTokenLedger, handleShowBulletin, handleShowAdmin, handleShowFeedback, handleShowHowToPlay, handleResetTutorial, socket, soundSettings }) => {
 
     const [activeTab, setActiveTab] = useState('');
     const [showMenu, setShowMenu] = useState(false);
@@ -43,6 +43,8 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
     const [chatMinimized, setChatMinimized] = useState(false);
     const [tutorialResetPending, setTutorialResetPending] = useState(false);
     const [tutorialResetError, setTutorialResetError] = useState('');
+    const menuContainerRef = useRef(null);
+    const menuButtonRef = useRef(null);
     
     // Get viewport information for responsive behavior
     const viewport = useViewport();
@@ -73,10 +75,25 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
     }, [socket]);
 
     useEffect(() => {
-        if (!showMenu || tutorialResetPending || tutorialResetError) return;
-        const timer = setTimeout(() => setShowMenu(false), 3000);
-        return () => clearTimeout(timer);
-    }, [showMenu, tutorialResetPending, tutorialResetError]);
+        if (!showMenu) return undefined;
+
+        const closeFromOutside = event => {
+            if (!menuContainerRef.current?.contains(event.target)) setShowMenu(false);
+        };
+        const closeFromKeyboard = event => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            setShowMenu(false);
+            menuButtonRef.current?.focus();
+        };
+
+        document.addEventListener('pointerdown', closeFromOutside);
+        window.addEventListener('keydown', closeFromKeyboard);
+        return () => {
+            document.removeEventListener('pointerdown', closeFromOutside);
+            window.removeEventListener('keydown', closeFromKeyboard);
+        };
+    }, [showMenu]);
 
     useEffect(() => {
         if (lobbyThemes && lobbyThemes.length > 0 && !activeTab) {
@@ -103,15 +120,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
                     break;
                 case 'f':
                     e.preventDefault();
-                    handleOpenFeedbackModal();
-                    break;
-                case 't':
-                    e.preventDefault();
-                    handleRequestFreeToken();
-                    break;
-                case 's':
-                    e.preventDefault();
-                    emitEvent("requestUserSync");
+                    handleShowFeedback();
                     break;
                 case 'a':
                     if (user?.is_admin) {
@@ -131,8 +140,8 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isDesktop, user, handleShowLeaderboard, handleOpenFeedbackModal, handleRequestFreeToken, 
-        handleShowAdmin, handleLogout, emitEvent]);
+    }, [isDesktop, user, handleShowLeaderboard, handleShowFeedback,
+        handleShowAdmin, handleLogout]);
 
     const activeTheme = lobbyThemes.find(theme => theme.id === activeTab);
     const hasTutorialTraining = Number(user?.tutorial_version) >= TUTORIAL_VERSION;
@@ -150,6 +159,74 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
             setTutorialResetPending(false);
         }
     };
+
+    const lobbyActionGroups = [
+        {
+            id: 'player',
+            label: 'Player',
+            actions: [
+                { id: 'leaderboard', label: 'Leaderboard', shortcut: 'L', onSelect: handleShowLeaderboard },
+                { id: 'ledger', label: 'Token Ledger', onSelect: handleShowTokenLedger },
+            ],
+        },
+        {
+            id: 'learn',
+            label: 'Learn',
+            actions: [
+                { id: 'how-to-play', label: 'How to Play', onSelect: handleShowHowToPlay },
+                ...(hasTutorialTraining ? [{
+                    id: 'replay-tutorial',
+                    label: tutorialResetPending ? 'Preparing Tutorial…' : 'Replay Tutorial',
+                    onSelect: resetTutorialTraining,
+                    disabled: tutorialResetPending,
+                    managesMenuState: true,
+                }] : []),
+            ],
+        },
+        {
+            id: 'support',
+            label: 'Support',
+            actions: [
+                { id: 'feedback', label: 'Feedback', shortcut: 'F', onSelect: handleShowFeedback },
+            ],
+        },
+        {
+            id: 'account',
+            label: 'Account',
+            actions: [
+                ...(user?.is_admin ? [{
+                    id: 'admin',
+                    label: 'Admin Tools',
+                    shortcut: 'A',
+                    tone: 'admin',
+                    onSelect: handleShowAdmin,
+                }] : []),
+                { id: 'logout', label: 'Sign Out', shortcut: 'Q', tone: 'logout', onSelect: handleLogout },
+            ],
+        },
+    ];
+
+    const renderLobbyActions = ({ buttonClass, closeMenu }) => lobbyActionGroups.map(group => (
+        <div className="lobby-action-group" key={group.id}>
+            <p className="lobby-action-group-label">{group.label}</p>
+            {group.actions.map(action => (
+                <button
+                    type="button"
+                    key={action.id}
+                    className={`${buttonClass}${action.tone ? ` ${action.tone}` : ''}`}
+                    disabled={action.disabled}
+                    aria-keyshortcuts={action.shortcut || undefined}
+                    onClick={() => {
+                        action.onSelect();
+                        if (closeMenu && !action.managesMenuState) setShowMenu(false);
+                    }}
+                >
+                    {action.label}
+                    {action.shortcut && <span className="keyboard-shortcut" aria-hidden="true">{action.shortcut}</span>}
+                </button>
+            ))}
+        </div>
+    ));
 
     // Desktop sidebar component
     const renderDesktopSidebar = () => {
@@ -184,57 +261,10 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
                 <div className="sidebar-section">
                     <h3>Quick Actions</h3>
                     <div className="quick-actions">
-                        <button onClick={handleShowHowToPlay} className="quick-action-btn">
-                            How to Play
-                        </button>
-                        {hasTutorialTraining && (
-                            <button
-                                type="button"
-                                onClick={resetTutorialTraining}
-                                className="quick-action-btn"
-                                disabled={tutorialResetPending}
-                            >
-                                {tutorialResetPending ? 'Resetting Tutorial…' : 'Reset Tutorial Training'}
-                            </button>
-                        )}
+                        {renderLobbyActions({ buttonClass: 'quick-action-btn', closeMenu: false })}
                         {tutorialResetError && !showMenu && (
                             <p className="tutorial-reset-error" role="alert">{tutorialResetError}</p>
                         )}
-                        <button onClick={handleShowLeaderboard} className="quick-action-btn">
-                            Leaderboard
-                            <span className="keyboard-shortcut">L</span>
-                        </button>
-                        <button onClick={handleShowTokenLedger} className="quick-action-btn">
-                            Token Ledger
-                        </button>
-                        <button onClick={handleShowBulletin} className="quick-action-btn">
-                            Sluff Bulletin
-                        </button>
-                        <button onClick={handleShowFeedback} className="quick-action-btn">
-                            Feedback Repository
-                        </button>
-                        <button onClick={handleOpenFeedbackModal} className="quick-action-btn">
-                            Submit Feedback
-                            <span className="keyboard-shortcut">F</span>
-                        </button>
-                        <button onClick={handleRequestFreeToken} className="quick-action-btn">
-                            Request Free Token
-                            <span className="keyboard-shortcut">T</span>
-                        </button>
-                        <button onClick={() => emitEvent("requestUserSync")} className="quick-action-btn">
-                            Sync Profile
-                            <span className="keyboard-shortcut">S</span>
-                        </button>
-                        {user?.is_admin && (
-                            <button onClick={handleShowAdmin} className="quick-action-btn admin">
-                                Admin Panel
-                                <span className="keyboard-shortcut">A</span>
-                            </button>
-                        )}
-                        <button onClick={handleLogout} className="quick-action-btn logout">
-                            Logout
-                            <span className="keyboard-shortcut">Q</span>
-                        </button>
                     </div>
                 </div>
             </div>
@@ -243,29 +273,10 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
     
     const renderLobbyMenu = () => (
         <div className="lobby-menu-popup" role="group" aria-label="Player menu">
-            <button onClick={() => { handleShowHowToPlay(); setShowMenu(false); }} className="lobby-menu-button">How to Play</button>
-            {hasTutorialTraining && (
-                <button
-                    type="button"
-                    onClick={resetTutorialTraining}
-                    className="lobby-menu-button"
-                    disabled={tutorialResetPending}
-                >
-                    {tutorialResetPending ? 'Resetting Tutorial…' : 'Reset Tutorial Training'}
-                </button>
-            )}
+            {renderLobbyActions({ buttonClass: 'lobby-menu-button', closeMenu: true })}
             {tutorialResetError && (
                 <p className="tutorial-reset-error" role="alert">{tutorialResetError}</p>
             )}
-            <button onClick={() => { handleShowLeaderboard(); setShowMenu(false); }} className="lobby-menu-button">Leaderboard</button>
-            <button onClick={() => { handleShowTokenLedger(); setShowMenu(false); }} className="lobby-menu-button">Token Ledger</button>
-            <button onClick={() => { handleShowBulletin(); setShowMenu(false); }} className="lobby-menu-button">Sluff Bulletin</button>
-            <button onClick={() => { handleShowFeedback(); setShowMenu(false); }} className="lobby-menu-button">Feedback Repository</button>
-            <button onClick={() => { handleOpenFeedbackModal(); setShowMenu(false); }} className="lobby-menu-button">Submit Feedback</button>
-            <button onClick={() => { handleRequestFreeToken(); setShowMenu(false); }} className="lobby-menu-button">Request Free Token</button>
-            <button onClick={() => { emitEvent("requestUserSync"); setShowMenu(false); }} className="lobby-menu-button">Sync Profile</button>
-            {user?.is_admin && <button onClick={() => { handleShowAdmin(); setShowMenu(false); }} className="lobby-menu-button admin">Admin Panel</button>}
-            <button onClick={() => { handleLogout(); setShowMenu(false); }} className="lobby-menu-button logout">Logout</button>
         </div>
     );
 
@@ -306,10 +317,11 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
                             </button>
                         );
                     })()}
-                    <div className="hamburger-menu-container">
+                    <div className="hamburger-menu-container" ref={menuContainerRef}>
                         <button
                             type="button"
                             className="hamburger-btn"
+                            ref={menuButtonRef}
                             onClick={() => {
                                 setTutorialResetError('');
                                 setShowMenu(prev => !prev);

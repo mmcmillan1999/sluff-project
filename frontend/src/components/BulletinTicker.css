@@ -27,6 +27,12 @@
     text-transform: uppercase;
     white-space: nowrap;
     box-shadow: 0.2rem 0 0.6rem rgba(0, 0, 0, 0.3);
+    border: 0;
+    cursor: pointer;
+    font-family: inherit;
+    touch-action: manipulation;
+    margin: 0;
+    border-radius: 0;
     z-index: 1;
 }
 
@@ -39,6 +45,20 @@
     cursor: pointer;
     font: inherit;
     touch-action: manipulation;
+    margin: 0;
+    border-radius: 0;
+}
+
+.bulletin-ticker-label:hover {
+    background: linear-gradient(135deg, #7b4d15, #c28d27);
+}
+
+.bulletin-ticker-link:hover {
+    background: transparent;
+}
+
+.bulletin-ticker-pause:hover {
+    background: rgba(255, 214, 102, 0.08);
 }
 
 .bulletin-ticker-link {
@@ -109,6 +129,7 @@
     fill: #e7cc82;
 }
 
+.bulletin-ticker-label:focus-visible,
 .bulletin-ticker-link:focus-visible,
 .bulletin-ticker-pause:focus-visible {
     outline: 2px solid #ffd86b;

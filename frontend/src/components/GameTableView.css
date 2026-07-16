@@ -244,7 +244,7 @@
     z-index: 1;
     box-shadow: 0 -0.5vh 1.5vh rgba(0,0,0,0.5);
     color: white;
-    width: 30vh; 
+    width: min(19rem, calc(100vw - 1.5rem));
     display: flex;
     flex-direction: column;
     gap: 1.2vh;
@@ -259,43 +259,57 @@
     border-bottom: 0.12vh solid #444;
     font-family: 'Oswald', sans-serif;
     text-align: center;
-    font-size: 2vh;
-}
-
-.game-menu-info {
-    font-size: 1.5vh;
-    background-color: #333;
-    padding: 1vh;
-    border-radius: 0.5vh;
-    margin-bottom: 0.6vh;
-}
-
-.game-menu-info p {
-    margin: 0 0 0.6vh 0;
-    display: flex;
-    justify-content: space-between;
-}
-.game-menu-info p:last-child {
-    margin-bottom: 0;
+    font-size: clamp(1rem, 2vh, 1.25rem);
 }
 
 .game-menu-actions {
     display: flex;
-    flex-direction: column; 
+    flex-direction: column;
+    gap: 1.4vh;
+}
+
+.game-menu-section {
+    display: flex;
+    flex-direction: column;
     gap: 1vh;
 }
 
+.game-menu-game-actions {
+    padding-top: 1.2vh;
+    border-top: 0.12vh solid #555;
+}
+
+.game-menu-section-title {
+    margin: 0;
+    color: #c9c9c9;
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(0.75rem, 1.45vh, 0.9rem);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.game-menu-helper {
+    margin: -0.25vh 0 0;
+    padding: 0 0.4vh;
+    color: #c5c5c5;
+    font-size: clamp(0.78rem, 1.35vh, 0.9rem);
+    line-height: 1.4;
+}
+
 .game-menu-button {
+    box-sizing: border-box;
     width: 100%;
-    padding: 1vh 1.5vh;
+    padding: 8px 12px;
+    margin: 0;
     text-align: left;
     border: 0.12vh solid #444;
     border-radius: 0.5vh;
     font-family: 'Oswald', sans-serif;
-    font-size: 1.8vh;
+    font-size: clamp(0.9rem, 1.8vh, 1.05rem);
     cursor: pointer;
     transition: background-color 0.2s, border-color 0.2s;
-    min-height: 5vh;
+    min-height: 44px;
 }
 
 .game-menu-button:hover:not(:disabled) {

@@ -15,6 +15,9 @@ describe('BulletinTicker', () => {
 
         await user.click(openButton);
         expect(onOpen).toHaveBeenCalledTimes(1);
+
+        await user.click(screen.getByRole('button', { name: 'Open Sluff Bulletin from Sluff Wire' }));
+        expect(onOpen).toHaveBeenCalledTimes(2);
     });
 
     test('lets the player pause and resume the moving headlines', async () => {

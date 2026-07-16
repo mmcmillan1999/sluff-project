@@ -25,7 +25,7 @@ function AdvertisingHeader({ onAdClick = () => {}, eligibleForMercy = false, isL
     };
 
     return (
-        <div className={`advertising-header ${viewType}-header`}>
+        <div className={`advertising-header advertising-header--${viewType}`}>
             <div className="ad-container">
                 <div 
                     className={`ad-placeholder ${isLoading ? 'loading' : ''} ${eligibleForMercy ? 'ad-attention' : ''}`}

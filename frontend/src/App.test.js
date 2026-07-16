@@ -1,4 +1,4 @@
-import { render, screen, act, waitFor, within } from '@testing-library/react';
+import { render, screen, act, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from './App';
 import * as api from './services/api';
@@ -50,6 +50,7 @@ describe('App Component and Game Flow', () => {
             nextCursor: null,
             hasMore: false,
         });
+        api.getFeedback.mockResolvedValue([]);
         api.updateTutorialStatus.mockResolvedValue({
             tutorial_version: 0,
             tutorial_active_version: 1,
@@ -101,16 +102,44 @@ describe('App Component and Game Flow', () => {
         expect(mockSocket.emit).toHaveBeenCalledWith('requestUserSync');
     });
 
-    test('opens the bulletin from the player menu', async () => {
+    test('keeps the player menu focused and opens the combined feedback destination', async () => {
         const user = userEvent.setup();
         render(<App />);
 
         await user.click(await screen.findByRole('button', { name: 'Open player menu' }));
         const playerMenu = screen.getByRole('group', { name: 'Player menu' });
-        await user.click(within(playerMenu).getByRole('button', { name: 'Sluff Bulletin' }));
+        expect(within(playerMenu).queryByRole('button', { name: 'Sluff Bulletin' })).not.toBeInTheDocument();
+        expect(within(playerMenu).queryByRole('button', { name: 'Request Free Token' })).not.toBeInTheDocument();
+        expect(within(playerMenu).queryByRole('button', { name: 'Sync Profile' })).not.toBeInTheDocument();
+        expect(within(playerMenu).queryByRole('button', { name: 'Submit Feedback' })).not.toBeInTheDocument();
+        await user.click(within(playerMenu).getByRole('button', { name: 'Feedback' }));
 
-        const pageHeading = screen.getByRole('heading', { name: /first Sluff season/i });
+        const pageHeading = await screen.findByRole('heading', { name: 'Player Feedback' });
         expect(pageHeading).toHaveFocus();
+        expect(screen.queryByRole('group', { name: 'Player menu' })).not.toBeInTheDocument();
+
+        await user.click(screen.getByRole('button', { name: 'Send Feedback' }));
+        expect(screen.getByRole('heading', { name: 'Submit Feedback' })).toBeInTheDocument();
+    });
+
+    test('keeps the player menu open until it is deliberately dismissed', async () => {
+        const user = userEvent.setup();
+        render(<App />);
+
+        const menuButton = await screen.findByRole('button', { name: 'Open player menu' });
+        await user.click(menuButton);
+        expect(screen.getByRole('group', { name: 'Player menu' })).toBeInTheDocument();
+
+        vi.useFakeTimers();
+        act(() => vi.advanceTimersByTime(10_000));
+        expect(screen.getByRole('group', { name: 'Player menu' })).toBeInTheDocument();
+        fireEvent.keyDown(window, { key: 'Escape' });
+        expect(screen.queryByRole('group', { name: 'Player menu' })).not.toBeInTheDocument();
+        expect(menuButton).toHaveFocus();
+        vi.useRealTimers();
+
+        await user.click(menuButton);
+        fireEvent.pointerDown(document.body);
         expect(screen.queryByRole('group', { name: 'Player menu' })).not.toBeInTheDocument();
     });
 
@@ -232,7 +261,7 @@ describe('App Component and Game Flow', () => {
         expect(screen.queryByRole('dialog', { name: /Academy/i })).not.toBeInTheDocument();
         await user.click(screen.getByRole('button', { name: 'Open player menu' }));
         const playerMenu = screen.getByRole('group', { name: 'Player menu' });
-        await user.click(within(playerMenu).getByRole('button', { name: 'Reset Tutorial Training' }));
+        await user.click(within(playerMenu).getByRole('button', { name: 'Replay Tutorial' }));
 
         expect(api.updateTutorialStatus).toHaveBeenCalledWith('reset');
         expect(localStorage.removeItem).toHaveBeenCalledWith('sluff:tutorial:1:lessons:42');
@@ -267,18 +296,18 @@ describe('App Component and Game Flow', () => {
 
         await user.click(screen.getByRole('button', { name: 'Open player menu' }));
         const playerMenu = screen.getByRole('group', { name: 'Player menu' });
-        const resetButton = within(playerMenu).getByRole('button', { name: 'Reset Tutorial Training' });
+        const resetButton = within(playerMenu).getByRole('button', { name: 'Replay Tutorial' });
         await user.click(resetButton);
 
         expect(within(screen.getByRole('group', { name: 'Player menu' }))
-            .getByRole('button', { name: 'Resetting Tutorial…' })).toBeDisabled();
+            .getByRole('button', { name: 'Preparing Tutorial…' })).toBeDisabled();
         await act(async () => {
             rejectReset(new Error('Reset could not be saved.'));
         });
 
         expect(await screen.findByRole('alert')).toHaveTextContent('Reset could not be saved.');
         const retryButton = within(screen.getByRole('group', { name: 'Player menu' }))
-            .getByRole('button', { name: 'Reset Tutorial Training' });
+            .getByRole('button', { name: 'Replay Tutorial' });
         expect(retryButton).toBeEnabled();
         expect(localStorage.removeItem).not.toHaveBeenCalled();
 

@@ -1,6 +1,8 @@
 // frontend/src/components/FeedbackModal.js
 import React, { useState, useEffect } from 'react';
 import './FeedbackModal.css';
+import { sanitizeFeedbackGameContext } from '../utils/feedbackGameContext';
+import { useModalFocus } from '../hooks/useModalFocus';
 
 const FeedbackModal = ({ show, onClose, onSubmit, gameContext }) => {
     const [feedbackText, setFeedbackText] = useState('');
@@ -8,6 +10,7 @@ const FeedbackModal = ({ show, onClose, onSubmit, gameContext }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
+    const dialogRef = useModalFocus(show, '.feedback-modal-textarea');
 
     // Reset the modal's state whenever it is closed and re-opened.
     useEffect(() => {
@@ -19,6 +22,20 @@ const FeedbackModal = ({ show, onClose, onSubmit, gameContext }) => {
             setSuccessMessage('');
         }
     }, [show]);
+
+    useEffect(() => {
+        if (!show) return undefined;
+        const closeOnEscape = event => {
+            if (event.key === 'Escape') onClose();
+        };
+        document.addEventListener('keydown', closeOnEscape);
+        return () => document.removeEventListener('keydown', closeOnEscape);
+    }, [show, onClose]);
+
+    useEffect(() => {
+        if (!successMessage) return;
+        dialogRef.current?.querySelector('[data-feedback-success-action]')?.focus({ preventScroll: true });
+    }, [successMessage, dialogRef]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -36,7 +53,7 @@ const FeedbackModal = ({ show, onClose, onSubmit, gameContext }) => {
         };
 
         if (gameContext && includeGameState) {
-            dataToSubmit.game_state_json = gameContext;
+            dataToSubmit.game_state_json = sanitizeFeedbackGameContext(gameContext);
         }
 
         try {
@@ -55,16 +72,30 @@ const FeedbackModal = ({ show, onClose, onSubmit, gameContext }) => {
 
     return (
         <div className="feedback-modal-overlay">
-            <div className="feedback-modal-content">
+            <div
+                className="feedback-modal-content"
+                ref={dialogRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="feedback-modal-title"
+                tabIndex="-1"
+            >
                 {successMessage ? (
-                    <div className="feedback-modal-result">
-                        <h3>Success!</h3>
+                    <div className="feedback-modal-result" role="status" aria-live="polite">
+                        <h3 id="feedback-modal-title">Success!</h3>
                         <p>{successMessage}</p>
-                        <button onClick={onClose} className="feedback-modal-button primary">Close</button>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="feedback-modal-button primary"
+                            data-feedback-success-action
+                        >
+                            Close
+                        </button>
                     </div>
                 ) : (
                     <form onSubmit={handleSubmit}>
-                        <h3>Submit Feedback</h3>
+                        <h3 id="feedback-modal-title">Submit Feedback</h3>
                         <p className="feedback-modal-subtitle">
                             Found a bug or have a suggestion? Let us know!
                         </p>

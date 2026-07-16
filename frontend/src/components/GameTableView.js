@@ -16,10 +16,10 @@ import IosPwaPrompt from './game/IosPwaPrompt';
 import { END_ROUND_TOTAL_MS, SETTLED_RECAP_HOLD_MS } from '../config/endRoundTiming';
 import LobbyChat from './LobbyChat';
 import AdminObserverMode from './AdminObserverMode';
-import LayoutDevPanel from './LayoutDevPanel';
 import PlayerHandAnchorDebug from './game/PlayerHandAnchorDebug';
 import { getLobbyChatHistory } from '../services/api';
 import SoundControls from './game/SoundControls';
+import { useModalFocus } from '../hooks/useModalFocus';
 import { shareInvite, getInviteUrl } from '../utils/tableInvites';
 import { SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS } from '../constants';
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
@@ -81,10 +81,10 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const [chatMessages, setChatMessages] = useState([]);
     const [observedPlayerId, setObservedPlayerId] = useState(playerId);
     const [isObserverMode, setIsObserverMode] = useState(false);
-    const [showLayoutDev, setShowLayoutDev] = useState(false);
     const [showAnchorDebug, setShowAnchorDebug] = useState(false); // Toggle debug overlay
     const [selectedFrogDiscards, setSelectedFrogDiscards] = useState([]);
     const [shareNotice, setShareNotice] = useState(null);
+    const gameMenuRef = useModalFocus(showGameMenu, '.game-menu-button:not(:disabled)');
     const [quickPlayDecisionRejectionNonce, setQuickPlayDecisionRejectionNonce] = useState(0);
     const [roundPresentationPhase, setRoundPresentationPhase] = useState('idle');
     const [dealPresentation, setDealPresentation] = useState({
@@ -125,6 +125,18 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const selfPlayerInTable = currentTableState ? currentTableState.players[playerId] : null;
     const isSpectator = selfPlayerInTable?.isSpectator;
     const selfPlayerName = selfPlayerInTable?.playerName;
+    const gameState = currentTableState?.state;
+    const gameHasSettled = gameState === 'Game Over' || gameState === 'DrawComplete';
+    const activeSeatIsHeld = Boolean(
+        selfPlayerInTable
+        && !isSpectator
+        && currentTableState?.gameStarted
+        && !gameHasSettled
+    );
+    const canRequestDraw = activeSeatIsHeld
+        && gameState === 'Playing Phase'
+        && !currentTableState?.drawRequest?.isActive;
+    const canForfeit = activeSeatIsHeld && gameState !== 'Draw Resolving';
     const dealLocalPlayerName = isObserverMode
         ? currentTableState?.players?.[observedPlayerId]?.playerName
         : (!isSpectator ? selfPlayerName : null);
@@ -442,13 +454,6 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
         };
     }, [socket]);
-
-    useEffect(() => {
-        if (!showGameMenu) return;
-        const timer = setTimeout(() => setShowGameMenu(false), 3000);
-        return () => clearTimeout(timer);
-    }, [showGameMenu]);
-
 
     // Keyboard accessibility: close the top-most utility first and support debug toggles.
     useEffect(() => {
@@ -1009,47 +1014,58 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             <div
                 id="game-menu-dialog"
                 className="game-menu-popup"
+                ref={gameMenuRef}
                 role="dialog"
                 aria-modal="true"
                 aria-label="Game menu"
+                tabIndex="-1"
             >
                 <h3>{currentTableState.tableName}</h3>
-                <div className="game-menu-info">
-                    <p><strong>State:</strong> {currentTableState?.state || "N/A"}</p>
-                    <p><strong>Bid:</strong> {currentTableState?.bidWinnerInfo?.bid || "N/A"} {currentTableState?.bidWinnerInfo?.playerName && ` by ${currentTableState.bidWinnerInfo.playerName}`}</p>
-                </div>
                 <div className="game-menu-sound">
                     <SoundControls soundSettings={soundSettings} />
                 </div>
                 <div className="game-menu-actions">
-                    <button onClick={() => { handleShowHowToPlay(); setShowGameMenu(false); }} className="game-menu-button">How to Play</button>
-                    <button onClick={handleShareInvite} className="game-menu-button invite">📨 Invite Friends</button>
-                    <button onClick={handleLeaveTable} className="game-menu-button secondary">Back to Lobby</button>
-                    <button
-                        onClick={() => {
-                            handleOpenFeedbackModal(currentTableState);
-                            setShowGameMenu(false);
-                        }}
-                        className="game-menu-button feedback"
-                    >
-                        Submit Feedback
-                    </button>
-                    {user?.is_admin && (
+                    <div className="game-menu-section">
+                        <button onClick={() => { handleShowHowToPlay(); setShowGameMenu(false); }} className="game-menu-button">How to Play</button>
+                        <button onClick={handleShareInvite} className="game-menu-button invite">Invite Friends</button>
                         <button
-                            onClick={() => { setShowLayoutDev(true); setShowGameMenu(false); }}
-                            className="game-menu-button"
+                            onClick={() => {
+                                handleOpenFeedbackModal(currentTableState);
+                                setShowGameMenu(false);
+                            }}
+                            className="game-menu-button feedback"
                         >
-                            🎨 Layout Dev
+                            Send Feedback
                         </button>
+                        <button
+                            onClick={handleLeaveTable}
+                            className="game-menu-button secondary"
+                            aria-describedby={activeSeatIsHeld ? 'game-menu-seat-held-note' : undefined}
+                        >
+                            Return to Lobby
+                        </button>
+                        {activeSeatIsHeld && (
+                            <p id="game-menu-seat-held-note" className="game-menu-helper">
+                                Your seat stays reserved. Returning to the lobby does not forfeit the game.
+                            </p>
+                        )}
+                    </div>
+                    {(canRequestDraw || canForfeit) && (
+                        <div className="game-menu-section game-menu-game-actions">
+                            <p className="game-menu-section-title">Game Actions</p>
+                            {canRequestDraw && (
+                                <button
+                                    onClick={() => { emitEvent("requestDraw"); setShowGameMenu(false); }}
+                                    className="game-menu-button primary"
+                                >
+                                    Request Draw
+                                </button>
+                            )}
+                            {canForfeit && (
+                                <button onClick={handleForfeit} className="game-menu-button danger">Forfeit Game</button>
+                            )}
+                        </div>
                     )}
-                    <button
-                        onClick={() => { emitEvent("requestDraw"); setShowGameMenu(false); }}
-                        className="game-menu-button primary"
-                        disabled={currentTableState.state !== 'Playing Phase'}
-                    >
-                        Request Draw
-                    </button>
-                    <button onClick={handleForfeit} className="game-menu-button danger">Forfeit Game</button>
                 </div>
             </div>
         </div>,
@@ -1169,13 +1185,6 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                         isSpectator={currentTableState.players?.[playerId]?.isSpectator}
                         userId={playerId}
                     />
-                    {showLayoutDev && (
-                        <LayoutDevPanel 
-                            onClose={() => setShowLayoutDev(false)}
-                            emitEvent={emitEvent}
-                            currentTableState={currentTableState}
-                        />
-                    )}
                     {showAnchorDebug && (
                         <PlayerHandAnchorDebug />
                     )}
@@ -1321,7 +1330,10 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                                 aria-haspopup="dialog"
                                 aria-expanded={showGameMenu}
                                 aria-controls="game-menu-dialog"
-                                onClick={() => setShowGameMenu(prev => !prev)}
+                                onClick={event => {
+                                    event.currentTarget.focus();
+                                    setShowGameMenu(prev => !prev);
+                                }}
                             >
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <line x1="3" y1="12" x2="21" y2="12"></line>

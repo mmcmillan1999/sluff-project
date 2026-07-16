@@ -135,18 +135,18 @@
 /* NO MEDIA QUERIES - Everything scales with vh units consistently */
 
 /* View-specific header customizations */
-.advertising-header.lobby-header {
+.advertising-header.advertising-header--lobby {
     /* Lobby-specific styling can go here */
     /* For example: different height, background, etc. */
 }
 
-.advertising-header.game-header {
+.advertising-header.advertising-header--game {
     /* Game-specific styling can go here */
     /* For example: smaller height to save space for game */
     /* height: 6vh; */ /* Example: smaller header for game view */
 }
 
-.advertising-header.game-header .ad-placeholder {
+.advertising-header.advertising-header--game .ad-placeholder {
     /* Adjust ad size for game view if needed */
     /* height: 4.5vh; */
     /* width: calc(4.5vh * 8); */

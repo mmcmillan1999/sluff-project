@@ -1,14 +1,15 @@
 // frontend/src/components/FeedbackView.js
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { getFeedback, updateFeedback } from '../services/api';
 import './FeedbackView.css';
 
-const FeedbackView = ({ user, onReturnToLobby }) => {
+const FeedbackView = ({ user, onOpenFeedbackModal, onReturnToLobby }) => {
     const [feedbackItems, setFeedbackItems] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
     const [editingItemId, setEditingItemId] = useState(null);
     const [editFormData, setEditFormData] = useState({ admin_response: '', admin_notes: '' });
+    const headingRef = useRef(null);
 
     const fetchFeedback = useCallback(async () => {
         setIsLoading(true);
@@ -26,6 +27,10 @@ const FeedbackView = ({ user, onReturnToLobby }) => {
     useEffect(() => {
         fetchFeedback();
     }, [fetchFeedback]);
+
+    useEffect(() => {
+        headingRef.current?.focus();
+    }, []);
 
     const handleUpdateStatus = async (id, newStatus) => {
         try {
@@ -133,8 +138,11 @@ const FeedbackView = ({ user, onReturnToLobby }) => {
     return (
         <div className="feedback-view">
             <header className="feedback-header">
-                <h2>Feedback Repository</h2>
-                <button onClick={onReturnToLobby} className="back-button">Back to Lobby</button>
+                <h2 ref={headingRef} tabIndex="-1">Player Feedback</h2>
+                <div className="feedback-header-actions">
+                    <button type="button" onClick={onOpenFeedbackModal} className="feedback-submit-button">Send Feedback</button>
+                    <button type="button" onClick={onReturnToLobby} className="back-button">Back to Lobby</button>
+                </div>
             </header>
             <main className="feedback-main">
                 {isLoading ? (

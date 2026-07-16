@@ -15,7 +15,14 @@ const BulletinTicker = ({ onOpen }) => {
 
     return (
         <section className="bulletin-ticker" aria-label="Sluff news ticker">
-            <span className="bulletin-ticker-label" aria-hidden="true">Sluff Wire</span>
+            <button
+                type="button"
+                className="bulletin-ticker-label"
+                onClick={onOpen}
+                aria-label="Open Sluff Bulletin from Sluff Wire"
+            >
+                Sluff Wire
+            </button>
             <button
                 type="button"
                 className="bulletin-ticker-link"

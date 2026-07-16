@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import GameTableView from './GameTableView';
 import { END_ROUND_TOTAL_MS, SETTLED_RECAP_HOLD_MS } from '../config/endRoundTiming';
@@ -171,6 +171,75 @@ describe('GameTableView round presentation sequence', () => {
 
         await user.keyboard('{Escape}');
         expect(screen.queryByRole('dialog', { name: 'Game menu' })).not.toBeInTheDocument();
+    });
+
+    test('keeps the cleaned active-game menu open until the player dismisses it', () => {
+        vi.useFakeTimers();
+        renderGame(makeState({ state: 'Playing Phase' }), {
+            user: { id: 1, username: 'Alice', is_admin: true }
+        });
+
+        const menuButton = screen.getByRole('button', { name: 'Open game menu' });
+        fireEvent.click(menuButton);
+        const menu = screen.getByRole('dialog', { name: 'Game menu' });
+
+        expect(within(menu).queryByText(/^State:/)).not.toBeInTheDocument();
+        expect(within(menu).queryByText(/^Bid:/)).not.toBeInTheDocument();
+        expect(within(menu).getByRole('button', { name: 'How to Play' })).toHaveFocus();
+        expect(within(menu).getByRole('button', { name: 'Invite Friends' })).toBeEnabled();
+        expect(within(menu).getByRole('button', { name: 'Send Feedback' })).toBeEnabled();
+        expect(within(menu).getByRole('button', { name: 'Return to Lobby' })).toHaveAccessibleDescription(
+            /seat stays reserved.*does not forfeit/i
+        );
+        expect(within(menu).getByText('Game Actions')).toBeInTheDocument();
+        expect(within(menu).getByRole('button', { name: 'Request Draw' })).toBeEnabled();
+        expect(within(menu).getByRole('button', { name: 'Forfeit Game' })).toBeEnabled();
+        expect(within(menu).queryByRole('button', { name: /Layout Dev/i })).not.toBeInTheDocument();
+
+        act(() => vi.advanceTimersByTime(10_000));
+        expect(screen.getByRole('dialog', { name: 'Game menu' })).toBeInTheDocument();
+
+        fireEvent.keyDown(window, { key: 'Escape' });
+        expect(screen.queryByRole('dialog', { name: 'Game menu' })).not.toBeInTheDocument();
+        expect(menuButton).toHaveFocus();
+    });
+
+    test('hides player-only game actions from spectators', () => {
+        const state = makeState({ state: 'Playing Phase' });
+        state.players[1].isSpectator = true;
+        renderGame(state);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Open game menu' }));
+        const menu = screen.getByRole('dialog', { name: 'Game menu' });
+
+        expect(within(menu).getByRole('button', { name: 'Return to Lobby' })).toBeEnabled();
+        expect(within(menu).queryByText(/seat stays reserved/i)).not.toBeInTheDocument();
+        expect(within(menu).queryByText('Game Actions')).not.toBeInTheDocument();
+        expect(within(menu).queryByRole('button', { name: 'Request Draw' })).not.toBeInTheDocument();
+        expect(within(menu).queryByRole('button', { name: 'Forfeit Game' })).not.toBeInTheDocument();
+    });
+
+    test('hides funded game actions before a game starts', () => {
+        const state = makeState({ state: 'Ready to Start' });
+        state.gameStarted = false;
+        renderGame(state);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Open game menu' }));
+        const menu = screen.getByRole('dialog', { name: 'Game menu' });
+
+        expect(within(menu).queryByText(/seat stays reserved/i)).not.toBeInTheDocument();
+        expect(within(menu).queryByRole('button', { name: 'Request Draw' })).not.toBeInTheDocument();
+        expect(within(menu).queryByRole('button', { name: 'Forfeit Game' })).not.toBeInTheDocument();
+    });
+
+    test('offers forfeiting but not a draw outside the playing phase', () => {
+        renderGame(makeState({ state: 'Bidding Phase' }));
+
+        fireEvent.click(screen.getByRole('button', { name: 'Open game menu' }));
+        const menu = screen.getByRole('dialog', { name: 'Game menu' });
+
+        expect(within(menu).queryByRole('button', { name: 'Request Draw' })).not.toBeInTheDocument();
+        expect(within(menu).getByRole('button', { name: 'Forfeit Game' })).toBeEnabled();
     });
 
     test('removes an open game menu when round presentation locks the controls', async () => {
