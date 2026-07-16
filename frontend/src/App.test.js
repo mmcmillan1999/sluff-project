@@ -177,9 +177,26 @@ describe('App Component and Game Flow', () => {
         expect(await screen.findByText('Quick Play')).toBeInTheDocument();
     });
 
-    test('describes the global wallet reset as maintenance instead of a season rollover', async () => {
+    test('routes the Alpha Season 2 wallet reset through its guarded admin preview', async () => {
         const user = userEvent.setup();
-        const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+        api.getAlpha2WalletResetPreview.mockResolvedValue({
+            season: { id: 2, name: 'Alpha Season 2' },
+            targetTokens: '8.00',
+            accounts: [],
+            summary: {
+                accountCount: 0,
+                changedAccountCount: 0,
+                oldSupply: '0.00',
+                newSupply: '0.00',
+                minted: '0.00',
+                burned: '0.00',
+                net: '0.00',
+            },
+            currentSeasonGameCount: 0,
+            canApply: true,
+            alreadyApplied: false,
+            previewHash: 'reviewed-wallet-reset',
+        });
         render(<App />);
 
         await act(async () => {
@@ -196,11 +213,23 @@ describe('App Component and Game Flow', () => {
         await user.click(await screen.findByRole('button', { name: 'Open player menu' }));
         await user.click(within(screen.getByRole('group', { name: 'Player menu' }))
             .getByRole('button', { name: 'Admin Tools' }));
-        await user.click(screen.getByRole('button', { name: 'Reset Tokens' }));
+        expect(screen.queryByRole('button', { name: 'Reset Tokens' })).not.toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Review Wallet Reset' }));
 
-        expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/does not archive standings or start a new competitive season/i));
-        expect(mockSocket.emit).toHaveBeenCalledWith('resetAllTokens', {});
-        confirm.mockRestore();
+        expect(api.getAlpha2WalletResetPreview).toHaveBeenCalledOnce();
+        expect(await screen.findByText('Every wallet → 8.00 tokens')).toBeInTheDocument();
+        expect(mockSocket.emit).not.toHaveBeenCalledWith('resetAllTokens', {});
+    });
+
+    test('requests a fresh user balance after the server broadcasts the wallet reset', async () => {
+        render(<App />);
+        await waitFor(() => expect(socketEventHandlers.tokenBalancesReset).toEqual(expect.any(Function)));
+        mockSocket.emit.mockClear();
+
+        act(() => socketEventHandlers.tokenBalancesReset());
+
+        expect(mockSocket.emit).toHaveBeenCalledTimes(1);
+        expect(mockSocket.emit).toHaveBeenCalledWith('requestUserSync');
     });
 
     test('opens the bulletin from the lobby ticker and returns to Quick Play', async () => {

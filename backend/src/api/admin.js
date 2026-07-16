@@ -11,9 +11,14 @@ const {
   finalizeRollover,
   previewRollover,
 } = require('../services/seasonService');
+const {
+  Alpha2WalletResetConflictError,
+  applyAlpha2WalletReset,
+  previewAlpha2WalletReset,
+} = require('../services/alpha2WalletResetService');
 
 // This function creates the router and gives it the database pool
-const createAdminRoutes = (pool, jwt) => {
+const createAdminRoutes = (pool, jwt, io = null) => {
   const router = express.Router();
   const checkAuth = requireAuth(pool, jwt);
 
@@ -104,6 +109,59 @@ const createAdminRoutes = (pool, jwt) => {
       }
       console.error('Failed to finalize season rollover:', error);
       return res.status(500).json({ message: 'Unable to finalize season rollover.' });
+    }
+  });
+
+  router.get('/seasons/alpha-2-wallet-reset-preview', checkAuth, isAdmin, async (req, res) => {
+    try {
+      return res.json(await previewAlpha2WalletReset(pool));
+    } catch (error) {
+      if (error instanceof Alpha2WalletResetConflictError) {
+        return res.status(409).json({ code: error.code, message: error.message });
+      }
+      console.error('Failed to preview the Alpha Season 2 wallet reset:', error);
+      return res.status(500).json({ message: 'Unable to preview the Alpha Season 2 wallet reset.' });
+    }
+  });
+
+  router.post('/seasons/alpha-2-wallet-reset', checkAuth, isAdmin, async (req, res) => {
+    try {
+      const result = await applyAlpha2WalletReset(pool, {
+        expectedPreviewHash: req.body?.expectedPreviewHash,
+        expectedSeasonId: req.body?.expectedSeasonId,
+        appliedBy: req.user,
+      });
+      if (!result.alreadyApplied && io && typeof io.emit === 'function') {
+        try {
+          io.emit('tokenBalancesReset', {
+            seasonId: result.season.id,
+            targetTokens: result.targetTokens,
+          });
+        } catch (broadcastError) {
+          // The ledger commit is authoritative. A transient socket broadcast
+          // failure must not misreport a completed reset as a database failure;
+          // clients also refresh balances on their next normal sync.
+          console.error('Wallet reset committed but balance broadcast failed:', broadcastError);
+        }
+      }
+      return res.status(result.alreadyApplied ? 200 : 201).json(result);
+    } catch (error) {
+      if (error instanceof Alpha2WalletResetConflictError) {
+        return res.status(409).json({ code: error.code, message: error.message });
+      }
+      if (error?.code === 'PREVIEW_HASH_REQUIRED' || error instanceof TypeError) {
+        return res.status(400).json({ code: error.code || 'INVALID_REQUEST', message: error.message });
+      }
+      // PostgreSQL serialization and unique-key races are reported as a safe
+      // conflict so an operator refreshes rather than guessing at state.
+      if (error?.code === '40001' || error?.code === '23505') {
+        return res.status(409).json({
+          code: 'WALLET_RESET_RACE',
+          message: 'Wallet state changed during the reset. Refresh the preview before retrying.',
+        });
+      }
+      console.error('Failed to apply the Alpha Season 2 wallet reset:', error);
+      return res.status(500).json({ message: 'Unable to apply the Alpha Season 2 wallet reset.' });
     }
   });
 

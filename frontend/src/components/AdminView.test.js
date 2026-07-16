@@ -1,11 +1,18 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import AdminView from './AdminView';
-import { finalizeSeasonRollover, getSeasonRolloverPreview } from '../services/api';
+import {
+    applyAlpha2WalletReset,
+    finalizeSeasonRollover,
+    getAlpha2WalletResetPreview,
+    getSeasonRolloverPreview,
+} from '../services/api';
 
 vi.mock('../services/api', () => ({
     getSeasonRolloverPreview: vi.fn(),
     finalizeSeasonRollover: vi.fn(),
+    getAlpha2WalletResetPreview: vi.fn(),
+    applyAlpha2WalletReset: vi.fn(),
 }));
 
 const preview = {
@@ -31,7 +38,6 @@ const renderAdmin = () => {
     const props = {
         onReturnToLobby: vi.fn(),
         handleHardReset: vi.fn(),
-        handleResetAllTokens: vi.fn(),
     };
     render(<AdminView {...props} />);
     return props;
@@ -45,19 +51,21 @@ describe('AdminView season rollover', () => {
             finalizedSeason: { id: 1, name: 'Alpha Season 1' },
             activeSeason: { id: 2, name: 'Alpha Season 2' },
         });
+        getAlpha2WalletResetPreview.mockResolvedValue({});
+        applyAlpha2WalletReset.mockResolvedValue({});
     });
 
-    test('keeps token reset maintenance separate and does not load a rollover automatically', async () => {
-        const user = userEvent.setup();
-        const { handleResetAllTokens } = renderAdmin();
+    test('keeps the one-time wallet reset guarded and does not load either preview automatically', () => {
+        renderAdmin();
 
-        expect(screen.getByText(/This does not archive or start a competitive season/i)).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Alpha Season 2 Wallet Reset' })).toBeInTheDocument();
+        expect(screen.getByText(/season standings, career records, and archived seasons stay intact/i)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Review Wallet Reset' })).toBeInTheDocument();
+        expect(getAlpha2WalletResetPreview).not.toHaveBeenCalled();
+        expect(applyAlpha2WalletReset).not.toHaveBeenCalled();
         expect(screen.getByText(/wallets and career stats are preserved/i)).toBeInTheDocument();
         expect(getSeasonRolloverPreview).not.toHaveBeenCalled();
         expect(finalizeSeasonRollover).not.toHaveBeenCalled();
-
-        await user.click(screen.getByRole('button', { name: 'Reset Tokens' }));
-        expect(handleResetAllTokens).toHaveBeenCalledOnce();
     });
 
     test('loads an explicit preview with the destination, archive size, and top three', async () => {

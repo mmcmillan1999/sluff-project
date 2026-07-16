@@ -50,6 +50,31 @@ The final command is destructive. Review the dry-run list first. Deletion is one
 database transaction: related transaction-ledger rows are removed, while retained
 feedback and lobby-chat rows are anonymized as `Deleted User`.
 
+## Alpha Season 2 opening wallet baseline
+
+The one-time Alpha Season 2 reset sets every current account, including bots and
+admins, to exactly 8 tokens with append-only `admin_adjustment` ledger entries.
+It does not alter the Alpha Season 1 archive, career records, seasonal stats, or
+the game-only Alpha Season 2 ranking. It is permanently blocked after the first
+Alpha Season 2 game record is created.
+
+1. Take a fresh external database backup and run `npm run tokens:audit` from
+   `backend/`.
+2. In Admin Tools, select **Review Wallet Reset** and review the account counts
+   and supply totals.
+3. Confirm no Alpha Season 2 games have started, acknowledge the backup/audit,
+   and apply the reset once.
+4. Verify every wallet is 8 and rerun the token audit.
+
+The maintenance CLI is preview-only unless both explicit execution proof values
+from a fresh preview are supplied:
+
+```bash
+cd backend
+npm run tokens:reset-alpha2
+node scripts/reset-alpha2-wallets.js --execute --expected-hash=HASH --expected-season-id=2
+```
+
 ## Recovery runbook (site is down — do these in order)
 
 1. **Backend up?** `curl https://sluff-backend.onrender.com/health` — 503 with `x-render-routing: suspend` header = Render suspended the service (billing). Render dashboard → resume.

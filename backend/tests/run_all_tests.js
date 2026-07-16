@@ -14,6 +14,7 @@ const suites = [
     { name: 'four-player mode', file: './fourPlayer.test.js' },
     { name: 'leaderboard privacy', file: './leaderboard.test.js' },
     { name: 'season lifecycle and archives', file: './seasons.test.js' },
+    { name: 'Alpha Season 2 wallet reset', file: './alpha2WalletReset.test.js' },
     { name: 'player profiles', file: './playerProfiles.test.js' },
     { name: 'token ledger', file: './tokenLedger.test.js' },
     { name: 'inactive-user maintenance', file: './pruneInactiveUsers.test.js' },

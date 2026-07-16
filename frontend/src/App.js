@@ -100,12 +100,6 @@ function App() {
         }
     };
 
-    const handleResetAllTokens = () => {
-        if (window.confirm("TOKEN RESET WARNING:\n\nThis maintenance action will reset the wallet balance for ALL players on the server to the default amount (8). It does not archive standings or start a new competitive season.\n\nAre you sure you want to proceed?")) {
-            socket.emit("resetAllTokens", {});
-        }
-    };
-
     const handleOpenFeedbackModal = (context = null) => {
         setFeedbackGameContext(context);
         setShowFeedbackModal(true);
@@ -255,6 +249,7 @@ function App() {
             const onGameStartFailed = ({ message }) => alert(`Game could not start:\n\n${message}`);
             const onNotification = ({ message }) => alert(message);
             const onForceLobbyReturn = () => handleLeaveTable();
+            const onTokenBalancesReset = () => socket.emit('requestUserSync');
 
             socket.on('connect', onConnect);
             socket.on('disconnect', onDisconnect);
@@ -269,6 +264,7 @@ function App() {
             socket.on('gameStartFailed', onGameStartFailed);
             socket.on('notification', onNotification);
             socket.on('forceLobbyReturn', onForceLobbyReturn);
+            socket.on('tokenBalancesReset', onTokenBalancesReset);
 
             return () => {
                 socket.off('connect', onConnect);
@@ -284,6 +280,7 @@ function App() {
                 socket.off('gameStartFailed', onGameStartFailed);
                 socket.off('notification', onNotification);
                 socket.off('forceLobbyReturn', onForceLobbyReturn);
+                socket.off('tokenBalancesReset', onTokenBalancesReset);
                 if (errorMessageTimerRef.current) clearTimeout(errorMessageTimerRef.current);
                 if (connectionNoticeTimerRef.current) clearTimeout(connectionNoticeTimerRef.current);
             };
@@ -573,7 +570,7 @@ function App() {
                         case 'gameTable':
                             return currentTableState ? <GameTableView user={user} playerId={user.id} currentTableState={currentTableState} handleLeaveTable={handleLeaveTable} handleLogout={handleLogout} handleShowHowToPlay={handleShowHowToPlay} errorMessage={errorMessage} emitEvent={emitEvent} playSound={playSound} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} soundSettings={soundSettings} tutorialState={{ tutorialVersion: Number(user.tutorial_version) || 0, activeVersion: Number(user.tutorial_active_version) || 0, gamesPlayed: Number(user.games_played) || 0 }} onTutorialAction={handleTutorialAction} /> : <div>Loading table...</div>;
                         case 'leaderboard':
-                            return <LeaderboardView user={user} onReturnToLobby={handleReturnToLobby} handleResetAllTokens={handleResetAllTokens} handleShowAdmin={handleShowAdmin} />;
+                            return <LeaderboardView user={user} onReturnToLobby={handleReturnToLobby} handleShowAdmin={handleShowAdmin} />;
                         case 'tokenLedger':
                             return <TokenLedgerView onReturnToLobby={handleReturnToLobby} />;
                         case 'seasonRecaps':
@@ -583,7 +580,7 @@ function App() {
                         case 'feedback':
                             return <FeedbackView user={user} onOpenFeedbackModal={() => handleOpenFeedbackModal()} onReturnToLobby={handleReturnToLobby} />;
                         case 'admin':
-                            return <AdminView onReturnToLobby={handleReturnToLobby} handleHardReset={handleHardReset} handleResetAllTokens={handleResetAllTokens} />;
+                            return <AdminView onReturnToLobby={handleReturnToLobby} handleHardReset={handleHardReset} />;
                         default:
                             setView('lobby');
                             return null;

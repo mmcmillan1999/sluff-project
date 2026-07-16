@@ -181,3 +181,20 @@ test('opens a player profile from a leaderboard name without exposing an account
     expect(await screen.findByText('Your matchup')).toBeInTheDocument();
     expect(screen.getByText('50.0%')).toBeInTheDocument();
 });
+
+test('routes administrators to the guarded admin panel without a direct token reset', async () => {
+    const handleShowAdmin = vi.fn();
+    const user = userEvent.setup();
+    render(
+        <LeaderboardView
+            user={{ username: 'Human Player', is_admin: true }}
+            onReturnToLobby={vi.fn()}
+            handleShowAdmin={handleShowAdmin}
+        />,
+    );
+
+    await screen.findByText('Mike Knight');
+    expect(screen.queryByRole('button', { name: /reset all tokens/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Admin Panel' }));
+    expect(handleShowAdmin).toHaveBeenCalledOnce();
+});

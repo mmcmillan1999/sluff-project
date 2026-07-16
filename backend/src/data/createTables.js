@@ -282,6 +282,45 @@ const createDbTables = async (pool) => {
             WHERE transaction_type = 'free_token_mercy'
         `);
 
+        // Records the one authoritative opening-wallet baseline for a season.
+        // Wallets remain ledger-derived: the operation itself inserts normal
+        // admin_adjustment rows, while this immutable marker makes retries
+        // auditable and prevents the reset from being applied twice.
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS season_wallet_reset_operations (
+                operation_key VARCHAR(100) PRIMARY KEY,
+                season_id INTEGER NOT NULL UNIQUE REFERENCES seasons(season_id),
+                target_tokens DECIMAL(10, 2) NOT NULL CHECK (target_tokens >= 0),
+                preview_hash CHAR(64) NOT NULL,
+                account_count INTEGER NOT NULL CHECK (account_count >= 0),
+                changed_account_count INTEGER NOT NULL CHECK (changed_account_count >= 0),
+                old_supply DECIMAL(14, 2) NOT NULL,
+                new_supply DECIMAL(14, 2) NOT NULL,
+                minted DECIMAL(14, 2) NOT NULL CHECK (minted >= 0),
+                burned DECIMAL(14, 2) NOT NULL CHECK (burned >= 0),
+                net_change DECIMAL(14, 2) NOT NULL,
+                applied_by_user_id INTEGER,
+                applied_by_username VARCHAR(50) NOT NULL,
+                applied_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CHECK (changed_account_count <= account_count),
+                CHECK (preview_hash ~ '^[a-f0-9]{64}$')
+            )
+        `);
+        await pool.query(`
+            CREATE OR REPLACE FUNCTION reject_wallet_reset_operation_mutation()
+            RETURNS trigger AS $$
+            BEGIN
+                RAISE EXCEPTION 'Season wallet reset operations are immutable';
+            END;
+            $$ LANGUAGE plpgsql
+        `);
+        await pool.query('DROP TRIGGER IF EXISTS trg_wallet_reset_operations_immutable ON season_wallet_reset_operations');
+        await pool.query(`
+            CREATE TRIGGER trg_wallet_reset_operations_immutable
+            BEFORE UPDATE OR DELETE ON season_wallet_reset_operations
+            FOR EACH ROW EXECUTE FUNCTION reject_wallet_reset_operation_mutation()
+        `);
+
         await pool.query(`
             CREATE TABLE IF NOT EXISTS feedback (
                 feedback_id SERIAL PRIMARY KEY,

@@ -121,7 +121,7 @@ async function initializeApplication() {
     app.use('/api/leaderboard', createLeaderboardRoutes(pool, jwt));
     app.use('/api/players', createPlayerRoutes(pool, jwt));
     app.use('/api/seasons', createSeasonRoutes(pool, jwt));
-    app.use('/api/admin', createAdminRoutes(pool, jwt));
+    app.use('/api/admin', createAdminRoutes(pool, jwt, io));
     app.use('/api/feedback', createFeedbackRoutes(pool, jwt));
     app.use('/api/chat', createChatRoutes(pool, io, jwt));
     app.use('/api/ping', createPingRoutes());

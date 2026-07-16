@@ -1,6 +1,7 @@
 // frontend/src/components/AdminView.js
 import React, { useState } from 'react';
 import BotInsuranceStats from './BotInsuranceStats';
+import Alpha2WalletResetCard from './Alpha2WalletResetCard';
 import { finalizeSeasonRollover, getSeasonRolloverPreview } from '../services/api';
 
 const seasonName = season => {
@@ -25,7 +26,7 @@ const podiumPlayers = preview => {
 
 const playerName = player => player?.displayName || player?.username || 'Unknown player';
 
-const AdminView = ({ onReturnToLobby, handleHardReset, handleResetAllTokens }) => {
+const AdminView = ({ onReturnToLobby, handleHardReset }) => {
     const [showBotStats, setShowBotStats] = useState(false);
     const [rolloverPreview, setRolloverPreview] = useState(null);
     const [rolloverResult, setRolloverResult] = useState(null);
@@ -100,13 +101,7 @@ const AdminView = ({ onReturnToLobby, handleHardReset, handleResetAllTokens }) =
                 <button onClick={onReturnToLobby} className="admin-button back-button">Back to Lobby</button>
             </header>
             <div className="admin-actions-container">
-                <div className="admin-action-card">
-                    <h3>Reset All Tokens</h3>
-                    <p>Maintenance tool: reset every player's wallet to the default starting amount. This does not archive or start a competitive season.</p>
-                    <button onClick={handleResetAllTokens} className="admin-button danger-button">
-                        Reset Tokens
-                    </button>
-                </div>
+                <Alpha2WalletResetCard />
                 <section className="admin-action-card season-rollover-card" aria-labelledby="season-rollover-heading">
                     <h3 id="season-rollover-heading">Season Rollover</h3>
                     <p className="season-rollover-intro">

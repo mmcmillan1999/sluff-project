@@ -2,9 +2,9 @@
 
 ## Status
 
-The season-aware implementation and guarded operator flow are complete locally, but the production rollover has **not** happened yet. Alpha Season 1 remains live until the code has been deployed, a fresh database backup, token audit, and read-only preview have been reviewed, and the explicit finalization action is confirmed.
+Alpha Season 1 was finalized and Alpha Season 2 was activated in production on July 16, 2026 through the guarded operator flow. The immutable Alpha Season 1 snapshot is now the historical record. Deploying season code must never finalize a season automatically.
 
-Deploying the season code must never finalize a season automatically.
+The separate one-time Alpha Season 2 opening-wallet baseline is documented in `OPERATIONS.md`; it preserves this archive and is not part of the season rollover itself.
 
 ## Approved season rules
 
@@ -18,14 +18,14 @@ Deploying the season code must never finalize a season automatically.
 
 ### Alpha Season 2
 
-- Wallet balances carry forward unchanged and remain the balances used to enter tables.
+- The rollover itself carried wallet balances forward unchanged. A separately authorized, one-time Alpha Season 2 opening baseline then sets every current account to 8 tokens with append-only administrative ledger adjustments before the season's first game; those balances remain the balances used to enter tables.
 - Existing wins, losses, and washes remain lifetime career totals. They are not erased or repurposed as seasonal fields.
 - Alpha Season 2 starts with separate per-season wins, losses, and washes at zero for every account.
 - Alpha Season 2 rank is based on net game-linked token movement from Alpha Season 2 games, ordered descending, then username ascending. Starting grants, mercy tokens, and unrelated administrative adjustments do not improve season rank.
 - An account needs at least one settled Alpha Season 2 game to receive a numbered rank. Accounts with no settled games may remain visible as unranked.
 - The live leaderboard must identify the ranking value as **Season +/-** and show the carried wallet balance separately as **Wallet**. A lifetime wallet balance must not be presented as though it were the Alpha Season 2 ranking value.
 
-This is a logical reset, not a destructive data reset. It keeps player-profile career records accurate, preserves the accountable token ledger, and avoids making established accounts appear inactive to maintenance tools that use lifetime game counts.
+This is a logical competitive reset, not a destructive data reset. The separate wallet baseline adds auditable deltas rather than rewriting history. Together they keep player-profile career records accurate, preserve the accountable token ledger, and avoid making established accounts appear inactive to maintenance tools that use lifetime game counts.
 
 ## Permanent legacy page
 
@@ -69,7 +69,7 @@ Finalization must be idempotent: retrying a successfully completed command retur
 
 ## Production gate
 
-Production finalization is pending. Do not run it until:
+The Alpha Season 1 production finalization is complete. Retain these gates for every future season rollover:
 
 - The implementation is deployed and verified.
 - The external backup succeeds.

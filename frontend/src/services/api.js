@@ -340,6 +340,31 @@ export const finalizeSeasonRollover = async ({ expectedPreviewHash, expectedSeas
     return data;
 };
 
+export const getAlpha2WalletResetPreview = async () => {
+    const response = await configuredFetch('/api/admin/seasons/alpha-2-wallet-reset-preview', 'GET');
+    const data = await readJsonResponse(response);
+    if (!response.ok) {
+        throw new Error(data.message || 'Could not prepare the Alpha Season 2 wallet reset preview.');
+    }
+    return data;
+};
+
+export const applyAlpha2WalletReset = async ({ expectedPreviewHash, expectedSeasonId } = {}) => {
+    if (!expectedPreviewHash || expectedSeasonId == null) {
+        throw new Error('Refresh the Alpha Season 2 wallet reset preview before applying it.');
+    }
+
+    const response = await configuredFetch('/api/admin/seasons/alpha-2-wallet-reset', 'POST', {
+        expectedPreviewHash,
+        expectedSeasonId,
+    });
+    const data = await readJsonResponse(response);
+    if (!response.ok) {
+        throw new Error(data.message || 'Could not apply the Alpha Season 2 wallet reset.');
+    }
+    return data;
+};
+
 export const generateSchema = async () => {
     const response = await configuredFetch('/api/admin/generate-schema', 'POST');
     const responseText = await response.text();

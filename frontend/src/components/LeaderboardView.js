@@ -49,7 +49,7 @@ const recordValue = (player, showPercent) => {
     return `${percentage(player.wins)} · ${percentage(player.losses)} · ${percentage(player.washes)}%`;
 };
 
-const LeaderboardView = ({ user, onReturnToLobby, handleResetAllTokens, handleShowAdmin }) => {
+const LeaderboardView = ({ user, onReturnToLobby, handleShowAdmin }) => {
     const [leaderboardData, setLeaderboardData] = useState([]);
     const [season, setSeason] = useState(null);
     const [isLegacyFallback, setIsLegacyFallback] = useState(false);
@@ -220,7 +220,6 @@ const LeaderboardView = ({ user, onReturnToLobby, handleResetAllTokens, handleSh
             {user?.is_admin && (
                 <footer className="leaderboard-footer">
                     <button type="button" onClick={handleShowAdmin} className="admin-button">Admin Panel</button>
-                    <button type="button" onClick={handleResetAllTokens} className="admin-button">Reset All Tokens</button>
                 </footer>
             )}
 
