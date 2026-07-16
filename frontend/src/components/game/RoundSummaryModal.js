@@ -1,16 +1,20 @@
 // frontend/src/components/game/RoundSummaryModal.js
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import './RoundSummaryModal.css';
 import { CARD_POINT_VALUES, BID_MULTIPLIERS, PLACEHOLDER_ID_CLIENT } from '../../constants';
 import PointsBreakdownBar from './PointsBreakdownBar';
 import RoundScoreCeremony from './RoundScoreCeremony';
 import { useModalFocus } from '../../hooks/useModalFocus';
+import {
+    ROUND_RECAP_EXTENSION_MS,
+    ROUND_RECAP_MAX_EXTENSIONS,
+} from '../../config/endRoundTiming';
+
+const SCORE_ACTION_TICK_MS = 100;
 
 const RoundSummaryModal = ({
     summaryData,
     showModal,
-    playerId,
-    getPlayerNameByUserId,
     renderCard,
     emitEvent,
     insurance,
@@ -28,13 +32,96 @@ const RoundSummaryModal = ({
     playSound,
     onScoreComplete,
     prefersReducedMotion,
-    tutorialHint = null
+    tutorialHint = null,
+    scoreActionTimerMs = null,
+    actionTimerKey = null
 }) => {
     const [detailsVisible, setDetailsVisible] = useState(false);
+    const initialActionTimerMs = Number(scoreActionTimerMs);
+    const hasScoreActionTimer = Number.isFinite(initialActionTimerMs)
+        && initialActionTimerMs > 0;
+    const timedActionActive = Boolean(
+        showModal
+        && summaryData
+        && onContinue
+        && scoreStage === 'preview'
+        && hasScoreActionTimer
+    );
+    const timerSessionKey = timedActionActive
+        ? String(actionTimerKey ?? 'active-score-action')
+        : null;
+    const [actionDeadline, setActionDeadline] = useState(null);
+    const [actionAllocatedMs, setActionAllocatedMs] = useState(
+        hasScoreActionTimer ? initialActionTimerMs : 0
+    );
+    const [actionRemainingMs, setActionRemainingMs] = useState(
+        hasScoreActionTimer ? initialActionTimerMs : 0
+    );
+    const [actionExtensionsUsed, setActionExtensionsUsed] = useState(0);
+    const onContinueRef = useRef(onContinue);
+    const actionSubmittedRef = useRef(false);
     const dialogRef = useModalFocus(
         showModal,
         '.summary-continue-button, .summary-action-area button:not(:disabled)'
     );
+
+    useEffect(() => {
+        onContinueRef.current = onContinue;
+    }, [onContinue]);
+
+    const submitTimedAction = useCallback(() => {
+        if (actionSubmittedRef.current) return;
+        actionSubmittedRef.current = true;
+        setActionRemainingMs(0);
+        onContinueRef.current?.();
+    }, []);
+
+    useEffect(() => {
+        if (timerSessionKey === null) return undefined;
+
+        const deadline = Date.now() + initialActionTimerMs;
+        actionSubmittedRef.current = false;
+        setActionDeadline(deadline);
+        setActionAllocatedMs(initialActionTimerMs);
+        setActionRemainingMs(initialActionTimerMs);
+        setActionExtensionsUsed(0);
+
+        return undefined;
+    }, [initialActionTimerMs, timerSessionKey]);
+
+    useEffect(() => {
+        if (timerSessionKey === null || !Number.isFinite(actionDeadline)) return undefined;
+
+        const updateTimer = () => {
+            const remaining = Math.max(0, actionDeadline - Date.now());
+            setActionRemainingMs(remaining);
+            if (remaining === 0) submitTimedAction();
+        };
+
+        updateTimer();
+        const timer = setInterval(updateTimer, SCORE_ACTION_TICK_MS);
+        return () => clearInterval(timer);
+    }, [actionDeadline, submitTimedAction, timerSessionKey]);
+
+    const extendTimedAction = () => {
+        if (!timedActionActive
+            || actionSubmittedRef.current
+            || actionExtensionsUsed >= ROUND_RECAP_MAX_EXTENSIONS) {
+            return;
+        }
+
+        setActionDeadline(current => (
+            Number.isFinite(current)
+                ? current + ROUND_RECAP_EXTENSION_MS
+                : Date.now() + ROUND_RECAP_EXTENSION_MS
+        ));
+        setActionAllocatedMs(current => current + ROUND_RECAP_EXTENSION_MS);
+        setActionRemainingMs(current => current + ROUND_RECAP_EXTENSION_MS);
+        setActionExtensionsUsed(current => Math.min(
+            ROUND_RECAP_MAX_EXTENSIONS,
+            current + 1
+        ));
+    };
 
     useEffect(() => {
         if (!showModal || scoreStage === 'counting') {
@@ -51,7 +138,6 @@ const RoundSummaryModal = ({
         gameWinner,
         message,
         forfeit,
-        dealerOfRoundId,
         widowForReveal,
         insuranceHindsight,
         allTricks,
@@ -374,22 +460,54 @@ const RoundSummaryModal = ({
                 )}
                 
                 {normalizedScoreStage !== 'counting'
-                    && (normalizedScoreStage === 'preview' || !onContinue) && (
+                    && (normalizedScoreStage === 'preview' || !onContinue)
+                    && (onContinue || isGameOver) && (
                     <div className="summary-action-area">
                         {onContinue ? (
-                            <button type="button" onClick={onContinue} className="game-button summary-continue-button">
-                                {scoreActionLabel || continueLabel}
-                            </button>
+                            timedActionActive ? (
+                                <div className="summary-timed-action-row">
+                                    <button
+                                        type="button"
+                                        aria-label={scoreActionLabel || continueLabel}
+                                        onClick={submitTimedAction}
+                                        className="game-button summary-continue-button summary-timed-action"
+                                        style={{
+                                            '--summary-action-progress': Math.max(
+                                                0,
+                                                Math.min(
+                                                    1,
+                                                    actionAllocatedMs > 0
+                                                        ? actionRemainingMs / actionAllocatedMs
+                                                        : 0
+                                                )
+                                            )
+                                        }}
+                                    >
+                                        <span className="summary-timed-action__fill" aria-hidden="true" />
+                                        <span className="summary-timed-action__content">
+                                            <span>{scoreActionLabel || continueLabel}</span>
+                                            <span className="summary-timed-action__seconds" aria-hidden="true">
+                                                {Math.max(0, Math.ceil(actionRemainingMs / 1000))}s
+                                            </span>
+                                        </span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        aria-label="+10 seconds"
+                                        onClick={extendTimedAction}
+                                        disabled={actionExtensionsUsed >= ROUND_RECAP_MAX_EXTENSIONS}
+                                        className="game-button summary-time-extension-button"
+                                    >
+                                        +10s
+                                    </button>
+                                </div>
+                            ) : (
+                                <button type="button" onClick={onContinue} className="game-button summary-continue-button">
+                                    {scoreActionLabel || continueLabel}
+                                </button>
+                            )
                         ) : (
                             <>
-                                {!isGameOver && playerId === dealerOfRoundId && (
-                                    <button onClick={() => emitEvent("requestNextRound")} className="game-button">
-                                        Start Next Round
-                                    </button>
-                                )}
-                                {!isGameOver && playerId !== dealerOfRoundId && (
-                                    <p>Waiting for {getPlayerNameByUserId(dealerOfRoundId)} to start the next round...</p>
-                                )}
                                 {isGameOver && (
                                     <div className="game-over-actions">
                                         <button onClick={() => emitEvent("resetGame")} className="game-button">

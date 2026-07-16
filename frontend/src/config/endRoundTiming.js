@@ -38,6 +38,12 @@ export const WIDOW_OVERLAY_TO_PILE_MS = WIDOW_TO_CENTER_MS + WIDOW_ANTICIPATION_
 // Total before the recap modal is allowed to appear.
 export const END_ROUND_TOTAL_MS = WIDOW_TO_PILE_START_MS + WIDOW_TO_PILE_MS; // 9200
 
+// Players get ten seconds to study the recap before score counting begins.
+// They may add two ten-second extensions, capping this reading window at 30s.
+export const ROUND_RECAP_ACTION_MS = 10_000;
+export const ROUND_RECAP_EXTENSION_MS = 10_000;
+export const ROUND_RECAP_MAX_EXTENSIONS = 2;
+
 // Once score counting finishes, keep the settled recap visible long enough
 // for players to read and absorb every new total before the table advances.
 export const SETTLED_RECAP_HOLD_MS = 5000;

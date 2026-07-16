@@ -9,6 +9,7 @@ const {
 } = GameService;
 const transactionManager = require('../src/data/transactionManager');
 const { validators } = require('../src/events/socketActionGuard');
+const { ROUND_PRESENTATION_ACK_GRACE_MS } = require('../src/core/constants');
 const {
     buildDrawSettlement,
     buildForfeitSettlement,
@@ -787,6 +788,14 @@ async function testSharedResultPresentationGate() {
     engine.startRoundPresentationWindow(10_000);
 
     const service = makeService(engine, createSettlementPool({ gameId: 70, userIds: [1, 2] }));
+    // Keep the service's automatic round transition deterministic here; this
+    // test separately exercises the legacy bot-dealer retry loop below.
+    const automaticRoundTimers = [];
+    service.roundAdvanceTimerOverride = (callback, duration) => {
+        const timer = { callback, duration, unref() {} };
+        automaticRoundTimers.push(timer);
+        return timer;
+    };
     const makeSocket = (id, userId) => ({ id, user: { id: userId }, connected: true, emit() {} });
     const aliceSocket = makeSocket('alice', 1);
     const bobSocket = makeSocket('bob', 2);
@@ -983,6 +992,123 @@ async function testSharedResultPresentationGate() {
     assert.equal(validators.terminalReset({}, { engine: drawEngine }), null, 'DrawComplete without presentation fields is unaffected');
 }
 
+async function testAutomaticNextRoundLifecycle() {
+    assert.ok(
+        ROUND_PRESENTATION_ACK_GRACE_MS >= 35_000,
+        'the force fallback leaves useful margin beyond the longest 47.75s client recap path',
+    );
+
+    const now = { value: 1_000_000 };
+    const engine = new GameEngine('automatic-next-round', 'fort-creek', 'Automatic Next Round');
+    engine.joinTable({ id: 1, username: 'Alice' }, 'auto-alice', '10.00');
+    engine.joinTable({ id: 2, username: 'Bob' }, 'auto-bob', '10.00');
+    engine.joinTable({ id: 3, username: 'Cara' }, 'auto-cara', '10.00');
+    engine.gameStarted = true;
+    engine.playerMode = 3;
+    engine.dealer = 1;
+    engine.playerOrder.setTurnOrder(engine.dealer, false);
+    engine.state = 'Awaiting Next Round Trigger';
+    engine.roundSummary = { dealerOfRoundId: engine.dealer };
+    engine.startRoundPresentationWindow(18_000, now.value);
+
+    const service = makeService(engine, createSettlementPool({ gameId: 72, userIds: [1, 2, 3] }));
+    service.roundAdvanceNowOverride = () => now.value;
+    const timers = [];
+    service.roundAdvanceTimerOverride = (callback, duration) => {
+        const timer = { callback, duration, unref() {} };
+        timers.push(timer);
+        return timer;
+    };
+    const makeSocket = (id, userId) => ({ id, user: { id: userId }, connected: true, emit() {} });
+    for (const [id, userId] of [['auto-alice', 1], ['auto-bob', 2], ['auto-cara', 3]]) {
+        service.io.sockets.sockets.set(id, makeSocket(id, userId));
+    }
+
+    service.emitGameState(engine.tableId);
+    assert.equal(timers.length, 1);
+    assert.equal(
+        timers[0].duration,
+        18_000 + ROUND_PRESENTATION_ACK_GRACE_MS,
+        'an unacknowledged presentation receives one bounded force fallback',
+    );
+    service.emitGameState(engine.tableId);
+    assert.equal(timers.length, 1, 'recomputing unchanged readiness is timer-idempotent');
+    const fallbackTimer = timers[0];
+
+    service.ackRoundPresentation(
+        engine.tableId,
+        1,
+        engine.roundSummary.presentationReadyAt,
+        'auto-alice',
+    );
+    service.ackRoundPresentation(
+        engine.tableId,
+        2,
+        engine.roundSummary.presentationReadyAt,
+        'auto-bob',
+    );
+    assert.equal(timers.length, 1, 'a partial quorum keeps the existing force fallback');
+
+    engine.disconnectPlayer(3);
+    service.io.sockets.sockets.delete('auto-cara');
+    service.emitGameState(engine.tableId);
+    assert.equal(engine.roundSummary.allConnectedHumansPresented, true);
+    assert.equal(timers.length, 2, 'disconnect recomputation moves a newly satisfied quorum to the base lock');
+    assert.equal(timers[1].duration, 18_000);
+    const readyTimer = timers[1];
+    now.value += 250;
+    service.emitGameState(engine.tableId);
+    assert.equal(timers.length, 2, 'an already queued quorum timer is stable as the service clock advances');
+
+    now.value = engine.roundSummary.presentationReadyAt;
+    await fallbackTimer.callback();
+    assert.equal(engine.state, 'Awaiting Next Round Trigger', 'a superseded fallback callback is inert');
+    await readyTimer.callback();
+    assert.equal(engine.state, 'Dealing Pending');
+    assert.deepEqual(engine.hands, {}, 'automatic setup never deals cards');
+    assert.equal(service.roundAdvanceTimers[engine.tableId], undefined, 'leaving Awaiting clears the presentation timer');
+
+    const forceEngine = new GameEngine('automatic-force-round', 'fort-creek', 'Automatic Force Round');
+    forceEngine.joinTable({ id: 11, username: 'Drew' }, 'force-drew', '10.00');
+    forceEngine.joinTable({ id: 12, username: 'Emi' }, 'force-emi', '10.00');
+    forceEngine.joinTable({ id: 13, username: 'Finn' }, 'force-finn', '10.00');
+    forceEngine.gameStarted = true;
+    forceEngine.playerMode = 3;
+    forceEngine.dealer = 11;
+    forceEngine.playerOrder.setTurnOrder(forceEngine.dealer, false);
+    forceEngine.state = 'Awaiting Next Round Trigger';
+    forceEngine.roundSummary = { dealerOfRoundId: forceEngine.dealer };
+    forceEngine.startRoundPresentationWindow(18_000, now.value);
+
+    const forceService = makeService(forceEngine, createSettlementPool({ gameId: 73, userIds: [11, 12, 13] }));
+    forceService.roundAdvanceNowOverride = () => now.value;
+    const forceTimers = [];
+    forceService.roundAdvanceTimerOverride = (callback, duration) => {
+        const timer = { callback, duration, unref() {} };
+        forceTimers.push(timer);
+        return timer;
+    };
+    for (const [id, userId] of [['force-drew', 11], ['force-emi', 12], ['force-finn', 13]]) {
+        forceService.io.sockets.sockets.set(id, makeSocket(id, userId));
+    }
+    forceService.emitGameState(forceEngine.tableId);
+    const forceTimer = forceTimers[0];
+
+    // Replacing the summary creates a new presentation generation even when a
+    // test clock gives it the same timestamp. The old callback must stay inert.
+    forceEngine.roundSummary = { dealerOfRoundId: forceEngine.dealer };
+    forceEngine.startRoundPresentationWindow(18_000, now.value);
+    forceService.emitGameState(forceEngine.tableId);
+    assert.equal(forceTimers.length, 2);
+    await forceTimer.callback();
+    assert.equal(forceEngine.state, 'Awaiting Next Round Trigger');
+
+    now.value = forceEngine.roundSummary.presentationForceReadyAt;
+    await forceTimers[1].callback();
+    assert.equal(forceEngine.state, 'Dealing Pending', 'the bounded force fallback advances without acknowledgements');
+    assert.deepEqual(forceEngine.hands, {});
+}
+
 async function runGameSettlementIntegrityTests() {
     testBotNeutralExactCentPlans();
     testEngineSettlementSnapshots();
@@ -992,6 +1118,7 @@ async function runGameSettlementIntegrityTests() {
     await testDrawSettlementFailureCompletesForExit();
     await testTerminalConnectivityAwareCleanupLifecycle();
     await testSharedResultPresentationGate();
+    await testAutomaticNextRoundLifecycle();
     console.log('Atomic game-settlement integrity tests passed.');
 }
 

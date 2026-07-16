@@ -13,7 +13,11 @@ import ActionControls from './game/ActionControls';
 import InsurancePrompt from './game/InsurancePrompt';
 import BidWinnerSplash from './game/BidWinnerSplash';
 import IosPwaPrompt from './game/IosPwaPrompt';
-import { END_ROUND_TOTAL_MS, SETTLED_RECAP_HOLD_MS } from '../config/endRoundTiming';
+import {
+    END_ROUND_TOTAL_MS,
+    ROUND_RECAP_ACTION_MS,
+    SETTLED_RECAP_HOLD_MS,
+} from '../config/endRoundTiming';
 import LobbyChat from './LobbyChat';
 import AdminObserverMode from './AdminObserverMode';
 import PlayerHandAnchorDebug from './game/PlayerHandAnchorDebug';
@@ -1221,6 +1225,10 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 playSound={playSound}
                 onScoreComplete={handleScoreCeremonyComplete}
                 prefersReducedMotion={prefersReducedMotion}
+                scoreActionTimerMs={hasRoundScoreChanges && !roundSummary?.forfeit
+                    ? ROUND_RECAP_ACTION_MS
+                    : null}
+                actionTimerKey={roundSummary?.presentationReadyAt}
                 tutorialHint={tutorialCoachActive && roundPresentationPhase === 'recap'
                     ? (roundSummary?.forfeit ? TUTORIAL_FORFEIT_RECAP_HINT : TUTORIAL_RECAP_HINT)
                     : null}

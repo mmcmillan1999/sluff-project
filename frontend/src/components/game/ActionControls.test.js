@@ -278,61 +278,15 @@ describe('ActionControls dedicated-state suppression', () => {
         expect(container).toBeEmptyDOMElement();
     });
 
-    test('offers only the round dealer a compact next-round action after score settlement', async () => {
-        const user = userEvent.setup();
+    test('keeps the settled table clear while the server prepares the next deal', () => {
         const emitEvent = vi.fn();
-        renderControls(makeState({
+        const { container } = renderControls(makeState({
             state: 'Awaiting Next Round Trigger',
             roundSummary: { dealerOfRoundId: 1 }
         }), { emitEvent, roundPresentationComplete: true });
 
-        const button = screen.getByRole('button', { name: 'Start Next Round' });
-        expect(screen.getByRole('region', { name: 'Start the next round' })).toBeInTheDocument();
-        await user.click(button);
-        expect(emitEvent).toHaveBeenCalledWith('requestNextRound');
-        expect(button).toBeDisabled();
-    });
-
-    test('releases a rejected next-round submission after authoritative readiness changes', async () => {
-        const user = userEvent.setup();
-        const emitEvent = vi.fn();
-        const state = makeState({
-            state: 'Awaiting Next Round Trigger',
-            roundSummary: { dealerOfRoundId: 1 }
-        });
-        const { rerender } = renderControls(state, { emitEvent, roundPresentationComplete: true });
-
-        await user.click(screen.getByRole('button', { name: 'Start Next Round' }));
-        expect(emitEvent).toHaveBeenCalledTimes(1);
-
-        rerender(
-            <ActionControls
-                {...defaultProps}
-                emitEvent={emitEvent}
-                currentTableState={state}
-                roundPresentationComplete={false}
-            />
-        );
-        expect(screen.queryByRole('button', { name: 'Start Next Round' })).not.toBeInTheDocument();
-
-        rerender(
-            <ActionControls
-                {...defaultProps}
-                emitEvent={emitEvent}
-                currentTableState={state}
-                roundPresentationComplete
-            />
-        );
-        await user.click(screen.getByRole('button', { name: 'Start Next Round' }));
-        expect(emitEvent).toHaveBeenCalledTimes(2);
-    });
-
-    test('keeps the settled table unobstructed for players who are not the round dealer', () => {
-        const { container } = renderControls(makeState({
-            state: 'Awaiting Next Round Trigger',
-            roundSummary: { dealerOfRoundId: 2 }
-        }), { roundPresentationComplete: true });
-
         expect(container).toBeEmptyDOMElement();
+        expect(screen.queryByRole('button', { name: 'Start Next Round' })).not.toBeInTheDocument();
+        expect(emitEvent).not.toHaveBeenCalledWith('requestNextRound');
     });
 });

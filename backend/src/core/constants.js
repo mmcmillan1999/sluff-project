@@ -12,10 +12,11 @@ const PLACEHOLDER_ID = "ScoreAbsorber";
 // totals remain visible for at least 5s. Shared state transitions stay locked
 // until every normally animated client has had that full reading window.
 const ROUND_PRESENTATION_LOCK_MS = 18_000;
-// A vanished/backgrounded client must not pin a live table forever. Once the
-// normal presentation lock has elapsed, acknowledgements may hold the shared
-// transition for at most this additional grace period.
-const ROUND_PRESENTATION_ACK_GRACE_MS = 30_000;
+// A vanished/backgrounded client must not pin a live table forever. The longest
+// interactive recap can now take about 47.75s from the final trick (9.2s finale
+// + up to 30s review + 3.55s count + 5s reading time). The base 18s lock plus
+// this grace leaves a little over five seconds of network/scheduling margin.
+const ROUND_PRESENTATION_ACK_GRACE_MS = 35_000;
 
 const TABLE_COSTS = {
     'miss-pauls-academy': 0.1,

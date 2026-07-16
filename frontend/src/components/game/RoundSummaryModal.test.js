@@ -12,6 +12,36 @@ const baseProps = {
     handleLogout: vi.fn()
 };
 
+const makeTimedPreviewSummary = () => ({
+    isGameOver: false,
+    dealerOfRoundId: 1,
+    finalScores: { Alice: 132, Bob: 114, Cara: 114 },
+    pointChanges: { Alice: 12, Bob: -6, Cara: -6 },
+    finalBidderPoints: 72,
+    finalDefenderPoints: 48,
+    bidType: 'Frog',
+    insuranceDealWasMade: false,
+    insuranceHindsight: {},
+    widowForReveal: [],
+    widowPointsValue: 0
+});
+
+const makeTimedPreviewProps = (onContinue, overrides = {}) => ({
+    ...baseProps,
+    playerId: 1,
+    title: 'Round Recap',
+    scoreActionLabel: 'Collect Points',
+    onContinue,
+    scoreStage: 'preview',
+    scoreActionTimerMs: 10000,
+    actionTimerKey: 'round-1',
+    insurance: {},
+    bidWinnerInfo: { playerName: 'Alice' },
+    playerOrderActive: ['Alice', 'Bob', 'Cara'],
+    summaryData: makeTimedPreviewSummary(),
+    ...overrides
+});
+
 const cases = [
     {
         label: 'voluntary forfeit',
@@ -112,6 +142,111 @@ describe('RoundSummaryModal staged presentation', () => {
         expect(screen.getByRole('button', { name: 'Collect Points' })).toHaveFocus();
         await user.click(screen.getByRole('button', { name: 'Collect Points' }));
         expect(onContinue).toHaveBeenCalledTimes(1);
+    });
+
+    describe('score action timer', () => {
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        test('automatically runs the primary score action once after ten seconds', () => {
+            vi.useFakeTimers();
+            const onContinue = vi.fn();
+            render(<RoundSummaryModal {...makeTimedPreviewProps(onContinue)} />);
+
+            const primaryAction = screen.getByRole('button', { name: 'Collect Points' });
+            expect(Number(primaryAction.style.getPropertyValue('--summary-action-progress'))).toBe(1);
+            act(() => vi.advanceTimersByTime(9999));
+            expect(onContinue).not.toHaveBeenCalled();
+            expect(primaryAction).toHaveAccessibleName('Collect Points');
+            expect(Number(primaryAction.style.getPropertyValue('--summary-action-progress'))).toBeLessThan(0.02);
+
+            act(() => vi.advanceTimersByTime(1));
+            expect(onContinue).toHaveBeenCalledTimes(1);
+
+            act(() => vi.advanceTimersByTime(30000));
+            expect(onContinue).toHaveBeenCalledTimes(1);
+        });
+
+        test('allows two ten-second extensions and caps the total wait at thirty seconds', () => {
+            vi.useFakeTimers();
+            const onContinue = vi.fn();
+            render(<RoundSummaryModal {...makeTimedPreviewProps(onContinue)} />);
+
+            const extendButton = screen.getByRole('button', { name: '+10 seconds' });
+            fireEvent.click(extendButton);
+            expect(extendButton).toBeEnabled();
+            fireEvent.click(extendButton);
+            expect(extendButton).toBeDisabled();
+
+            act(() => vi.advanceTimersByTime(29999));
+            expect(onContinue).not.toHaveBeenCalled();
+            act(() => vi.advanceTimersByTime(1));
+            expect(onContinue).toHaveBeenCalledTimes(1);
+        });
+
+        test('a manual score action cancels its timer and cannot fire a duplicate', () => {
+            vi.useFakeTimers();
+            const onContinue = vi.fn();
+            render(<RoundSummaryModal {...makeTimedPreviewProps(onContinue)} />);
+
+            act(() => vi.advanceTimersByTime(4000));
+            fireEvent.click(screen.getByRole('button', { name: 'Collect Points' }));
+            expect(onContinue).toHaveBeenCalledTimes(1);
+
+            act(() => vi.advanceTimersByTime(30000));
+            expect(onContinue).toHaveBeenCalledTimes(1);
+        });
+
+        test('a fresh summary object rebroadcast does not restart the countdown', () => {
+            vi.useFakeTimers();
+            const onContinue = vi.fn();
+            const props = makeTimedPreviewProps(onContinue);
+            const { rerender } = render(<RoundSummaryModal {...props} />);
+
+            act(() => vi.advanceTimersByTime(6000));
+            rerender(
+                <RoundSummaryModal
+                    {...props}
+                    summaryData={makeTimedPreviewSummary()}
+                />
+            );
+
+            act(() => vi.advanceTimersByTime(3999));
+            expect(onContinue).not.toHaveBeenCalled();
+            act(() => vi.advanceTimersByTime(1));
+            expect(onContinue).toHaveBeenCalledTimes(1);
+        });
+
+        test('a new action timer key starts a fresh ten-second countdown', () => {
+            vi.useFakeTimers();
+            const onContinue = vi.fn();
+            const props = makeTimedPreviewProps(onContinue);
+            const { rerender } = render(<RoundSummaryModal {...props} />);
+
+            act(() => vi.advanceTimersByTime(9000));
+            rerender(<RoundSummaryModal {...props} actionTimerKey="round-2" />);
+            act(() => vi.advanceTimersByTime(9999));
+            expect(onContinue).not.toHaveBeenCalled();
+            act(() => vi.advanceTimersByTime(1));
+            expect(onContinue).toHaveBeenCalledTimes(1);
+        });
+
+        test.each([
+            ['the recap closes', { showModal: false }],
+            ['the recap leaves preview', { scoreStage: 'counting' }]
+        ])('cancels the pending score action when %s', (_reason, transitionProps) => {
+            vi.useFakeTimers();
+            const onContinue = vi.fn();
+            const props = makeTimedPreviewProps(onContinue);
+            const { rerender } = render(<RoundSummaryModal {...props} />);
+
+            act(() => vi.advanceTimersByTime(5000));
+            rerender(<RoundSummaryModal {...props} {...transitionProps} />);
+            act(() => vi.advanceTimersByTime(30000));
+
+            expect(onContinue).not.toHaveBeenCalled();
+        });
     });
 
     test('runs the score count inside the recap without adding a nested modal', () => {

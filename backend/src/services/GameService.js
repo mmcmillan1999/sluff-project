@@ -44,6 +44,7 @@
             this.engines = {};
             this.qpGenerationCounter = 0;
             this.terminalCleanupTimers = {};
+            this.roundAdvanceTimers = {};
             this.adaptiveInsurance = new AdaptiveInsuranceStrategy(pool, io);
             this._initializeEngines();
 
@@ -206,6 +207,7 @@
             const summary = engine?.roundSummary;
             const presentationReadyAt = summary?.presentationReadyAt;
             if (!engine || !Number.isFinite(presentationReadyAt)) {
+                this._clearRoundAdvanceTimer(tableId);
                 return { active: false, changed: false, allConnectedHumansPresented: null };
             }
 
@@ -218,7 +220,7 @@
             ));
             const changed = summary.allConnectedHumansPresented !== allConnectedHumansPresented;
             summary.allConnectedHumansPresented = allConnectedHumansPresented;
-            return {
+            const readiness = {
                 active: true,
                 changed,
                 connectedHumanCount: connectedHumans.length,
@@ -227,6 +229,108 @@
                 )).length,
                 allConnectedHumansPresented,
             };
+            this._reconcileAutomaticNextRoundTimer(tableId, readiness);
+            return readiness;
+        }
+
+        _roundAdvanceNow() {
+            return typeof this.roundAdvanceNowOverride === 'function'
+                ? this.roundAdvanceNowOverride()
+                : Date.now();
+        }
+
+        _clearRoundAdvanceTimer(tableId) {
+            const timers = this.roundAdvanceTimers || (this.roundAdvanceTimers = {});
+            const record = timers[tableId];
+            if (!record) return;
+            if (record.handle !== undefined && record.handle !== null) clearTimeout(record.handle);
+            delete timers[tableId];
+        }
+
+        _clearRoundAdvanceTimers() {
+            for (const tableId of Object.keys(this.roundAdvanceTimers || {})) {
+                this._clearRoundAdvanceTimer(tableId);
+            }
+            this.roundAdvanceTimers = {};
+        }
+
+        _reconcileAutomaticNextRoundTimer(tableId, readiness = null) {
+            const engine = this.getEngineById(tableId);
+            const summary = engine?.roundSummary;
+            const presentationReadyAt = Number(summary?.presentationReadyAt);
+            if (!engine || engine.state !== 'Awaiting Next Round Trigger'
+                || !Number.isFinite(presentationReadyAt)) {
+                this._clearRoundAdvanceTimer(tableId);
+                return { status: 'inactive' };
+            }
+
+            const now = this._roundAdvanceNow();
+            const allConnectedHumansPresented = readiness?.allConnectedHumansPresented
+                ?? summary.allConnectedHumansPresented === true;
+            const presentationForceReadyAt = Number(summary.presentationForceReadyAt);
+            const mode = allConnectedHumansPresented ? 'quorum' : 'force';
+            const dueAt = allConnectedHumansPresented
+                ? Math.max(now, presentationReadyAt)
+                : (Number.isFinite(presentationForceReadyAt)
+                    ? Math.max(now, presentationForceReadyAt)
+                    : null);
+            if (!Number.isFinite(dueAt)) {
+                this._clearRoundAdvanceTimer(tableId);
+                return { status: 'inactive' };
+            }
+
+            const timers = this.roundAdvanceTimers || (this.roundAdvanceTimers = {});
+            const existing = timers[tableId];
+            if (existing
+                && existing.engine === engine
+                && existing.summary === summary
+                && existing.presentationReadyAt === presentationReadyAt
+                && existing.mode === mode) {
+                return { status: 'scheduled', dueAt: existing.dueAt };
+            }
+
+            this._clearRoundAdvanceTimer(tableId);
+            const record = {
+                engine,
+                summary,
+                presentationReadyAt,
+                mode,
+                dueAt,
+                handle: null,
+            };
+            timers[tableId] = record;
+            const timerFn = this.roundAdvanceTimerOverride || setTimeout;
+            record.handle = timerFn(async () => {
+                const currentTimers = this.roundAdvanceTimers || {};
+                if (currentTimers[tableId] !== record) return;
+                delete currentTimers[tableId];
+
+                // Re-fetch and check both engine and summary identity. A reset,
+                // replacement engine, or newer presentation can never be
+                // advanced by an old callback, even if timestamps collide.
+                const current = this.getEngineById(tableId);
+                if (current !== record.engine
+                    || current?.state !== 'Awaiting Next Round Trigger'
+                    || current.roundSummary !== record.summary
+                    || current.roundSummary?.presentationReadyAt !== record.presentationReadyAt) {
+                    this._reconcileAutomaticNextRoundTimer(tableId);
+                    return;
+                }
+
+                if (!current.isRoundPresentationAdvanceReady(this._roundAdvanceNow())) {
+                    this._reconcileAutomaticNextRoundTimer(tableId);
+                    return;
+                }
+
+                // Use the dealer captured in authoritative server state. The
+                // existing engine boundary still validates it and advances only
+                // as far as Dealing Pending; dealing remains a separate action.
+                const dealerOfRoundId = current.roundSummary.dealerOfRoundId;
+                await this.requestNextRound(tableId, dealerOfRoundId);
+                this._reconcileAutomaticNextRoundTimer(tableId);
+            }, Math.max(0, dueAt - now));
+            record.handle?.unref?.();
+            return { status: 'scheduled', dueAt };
         }
 
         ackRoundPresentation(tableId, userId, presentationReadyAt, socketId) {
@@ -781,6 +885,7 @@
             console.log("[ADMIN] Resetting all game engines to initial state.");
             this._clearQuickPlayTimers();
             this._clearTerminalCleanupTimers();
+            this._clearRoundAdvanceTimers();
             this.engines = {};
             this._initializeEngines();
             this.io.emit('lobbyState', this.getLobbyState());

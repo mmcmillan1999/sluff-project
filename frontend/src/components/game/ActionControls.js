@@ -60,12 +60,10 @@ const ActionControls = ({
     handleLeaveTable,
     renderCard,
     isAdmin,
-    quickPlayDecisionRejectionNonce = 0,
-    roundPresentationComplete = false
+    quickPlayDecisionRejectionNonce = 0
 }) => {
     const [inviteCopied, setInviteCopied] = useState(false);
     const [quickPlayDecisionSubmitted, setQuickPlayDecisionSubmitted] = useState(false);
-    const [roundAdvanceSubmitted, setRoundAdvanceSubmitted] = useState(false);
     const qpPhase = currentTableState.qpPhase;
     const qpGeneration = currentTableState.qpGeneration;
     const hasQpDeadline = deadlineToMs(currentTableState.qpWindowEndsAt) !== null;
@@ -73,12 +71,6 @@ const ActionControls = ({
     useEffect(() => {
         setQuickPlayDecisionSubmitted(false);
     }, [qpPhase, qpGeneration, quickPlayDecisionRejectionNonce]);
-
-    useEffect(() => {
-        if (currentTableState.state !== 'Awaiting Next Round Trigger' || !roundPresentationComplete) {
-            setRoundAdvanceSubmitted(false);
-        }
-    }, [currentTableState.state, roundPresentationComplete]);
 
     const players = Object.values(currentTableState.players || {});
     const activePlayers = players.filter(player => !player.isSpectator && !player.disconnected);
@@ -375,30 +367,9 @@ const ActionControls = ({
         }
 
         case 'Awaiting Next Round Trigger':
-            if (
-                !roundPresentationComplete
-                || isSpectator
-                || playerId !== currentTableState.roundSummary?.dealerOfRoundId
-            ) {
-                return null;
-            }
-            return (
-                <PromptShell variant="choice" label="Start the next round">
-                    <button
-                        type="button"
-                        autoFocus
-                        disabled={roundAdvanceSubmitted}
-                        onClick={() => {
-                            if (roundAdvanceSubmitted) return;
-                            setRoundAdvanceSubmitted(true);
-                            emitEvent('requestNextRound');
-                        }}
-                        className="game-button action-prompt__button action-prompt__button--primary"
-                    >
-                        Start Next Round
-                    </button>
-                </PromptShell>
-            );
+            // The server advances to Dealing Pending once every connected human
+            // finishes the recap. The new dealer still starts the actual deal.
+            return null;
 
         default:
             // Dedicated overlays, recaps, and gameplay surfaces own every other
