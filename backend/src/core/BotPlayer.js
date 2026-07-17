@@ -23,6 +23,26 @@ class BotPlayer {
         this.engine = engine; 
     }
 
+    // True only when it is certain the defense already owns this trick:
+    // I am a defender, I am last to act, and the current winner is the
+    // other defender. Never fires when the bot is the bidder (no teammate),
+    // when the bidder still acts behind us, or when the bidder is winning
+    // (starving the bidder with low cards remains correct there).
+    _fellowDefenderHasTrickLocked() {
+        const bidderName = this.engine.bidWinnerInfo?.playerName;
+        if (!bidderName || bidderName === this.playerName) return false;
+        const trickCards = this.engine.currentTrickCards || [];
+        const isLastToAct = trickCards.length === 2; // three active seats
+        if (!isLastToAct) return false;
+        const currentWinner = gameLogic.determineTrickWinner(
+            trickCards,
+            this.engine.leadSuitCurrentTrick,
+            this.engine.trumpSuit,
+        );
+        const winnerName = currentWinner?.playerName;
+        return Boolean(winnerName) && winnerName !== bidderName && winnerName !== this.playerName;
+    }
+
     _analyzeHand(hand) {
         if (!hand || hand.length === 0) return { points: 0, suits: { H: 0, S: 0, C: 0, D: 0 } };
         const points = gameLogic.calculateCardPoints(hand);
@@ -77,6 +97,16 @@ class BotPlayer {
             if (isForcedToTrumpNonTrumpLead) {
                 const trumpCards = hand.filter(card => gameLogic.getSuit(card) === trumpSuit);
                 cardToPlay = chooseForcedTrump(trumpCards);
+            } else if (this._fellowDefenderHasTrickLocked()) {
+                // Third-seat team play: the trick already belongs to my fellow
+                // defender, so take the money — dump the highest-point legal
+                // card onto it (Ace before 10: an Ace saved for later can
+                // always be trumped; the points on this trick are certain).
+                cardToPlay = [...legalPlays].sort((a, b) => {
+                    const pointsDiff = CARD_POINT_VALUES[gameLogic.getRank(b)] - CARD_POINT_VALUES[gameLogic.getRank(a)];
+                    if (pointsDiff !== 0) return pointsDiff;
+                    return getRankValue(a) - getRankValue(b); // equal points: shed the lowest rank
+                })[0];
             } else {
                 const winningPlays = legalPlays.filter(myCard => {
                     const potentialTrick = [...this.engine.currentTrickCards, { card: myCard, userId: this.userId }];
