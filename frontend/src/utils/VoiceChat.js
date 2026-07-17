@@ -108,10 +108,13 @@ class VoiceChat {
 
         this._bindSocket();
         this.joined = true;
+        console.log(`[voice] joining voice room for table ${this.tableId}`
+            + ' (a voiceRoster log must follow; if it never does, the server rejected the join)');
         this.socket.emit('voiceJoin', { tableId: this.tableId });
     }
 
     leave() {
+        console.log('[voice] leaving voice room');
         if (this.boundHandlers) {
             for (const [event, handler] of Object.entries(this.boundHandlers)) {
                 this.socket.off(event, handler);
@@ -153,8 +156,14 @@ class VoiceChat {
                 }
                 this.micStream = stream;
                 const track = stream.getAudioTracks()[0];
+                console.log(`[voice] mic acquired — replaceTrack(mic) into ${this.peers.size} peer sender(s)`);
                 for (const peer of this.peers.values()) {
-                    peer.audioSender?.replaceTrack(track).catch(() => {});
+                    if (!peer.audioSender) {
+                        console.warn(`[voice] peer ${peer.userId}: no negotiated sender yet — track will attach after negotiation`);
+                        continue;
+                    }
+                    peer.audioSender.replaceTrack(track)
+                        .catch(err => console.warn(`[voice] peer ${peer.userId}: replaceTrack failed`, err));
                 }
                 this.socket.emit('voiceSpeaking', { tableId: this.tableId, speaking: true });
             } catch (error) {
@@ -174,6 +183,7 @@ class VoiceChat {
 
     _releaseMic() {
         if (!this.micStream) return;
+        console.log('[voice] mic released — replaceTrack(null) on all senders');
         for (const peer of this.peers.values()) {
             peer.audioSender?.replaceTrack(null).catch(() => {});
         }
@@ -209,8 +219,24 @@ class VoiceChat {
 
     _bindSocket() {
         const handlers = {
+            // Socket.IO auto-reconnect gives this user a NEW server-side
+            // socket; the server's disconnect handler already removed us from
+            // the voice room (and told everyone else via voicePeerLeft), so
+            // every signal we send afterwards is silently dropped. Re-join
+            // and rebuild the mesh from scratch — as the newcomer we will
+            // re-initiate offers from fresh RTCPeerConnections.
+            connect: () => {
+                if (!this.joined) return;
+                console.log('[voice] socket reconnected — rejoining voice room');
+                for (const userId of [...this.peers.keys()]) {
+                    this._teardownPeer(userId, { silent: true });
+                }
+                this._emitPeers();
+                this.socket.emit('voiceJoin', { tableId: this.tableId });
+            },
             voiceRoster: ({ tableId, peers }) => {
                 if (tableId !== this.tableId) return;
+                console.log(`[voice] roster received: ${(peers || []).length} existing peer(s)`);
                 // We are the newcomer: initiate an offer to everyone already in.
                 for (const peer of peers || []) {
                     this._createPeer(Number(peer.userId), peer.playerName, true);
@@ -218,11 +244,21 @@ class VoiceChat {
                 this._emitPeers();
             },
             voicePeerJoined: ({ userId, playerName }) => {
+                console.log(`[voice] peer joined: ${userId} (${playerName})`);
+                // A voicePeerJoined for a user we already track means that
+                // user re-joined the room (e.g. after their socket dropped):
+                // their side built a brand-new RTCPeerConnection, so our old
+                // one can never pair with it. Replace it with a fresh record.
+                if (this.peers.has(Number(userId))) {
+                    console.log(`[voice] peer ${userId} rejoined — resetting stale connection`);
+                    this._teardownPeer(Number(userId), { silent: true });
+                }
                 // The joiner initiates; we just prepare a record to answer with.
                 this._createPeer(Number(userId), playerName, false);
                 this._emitPeers();
             },
             voicePeerLeft: ({ userId }) => {
+                console.log(`[voice] peer left: ${userId}`);
                 this._teardownPeer(Number(userId));
                 this._emitPeers();
             },
@@ -255,6 +291,7 @@ class VoiceChat {
             return existing;
         }
 
+        console.log(`[voice] creating peer ${userId} (${playerName || 'Player'}) initiator=${initiator}`);
         const pc = new RTCPeerConnection({ iceServers: buildIceServers() });
         const peer = {
             userId,
@@ -262,6 +299,7 @@ class VoiceChat {
             pc,
             initiator,
             connected: false,
+            iceState: 'new',
             speaking: false,
             muted: false,
             volume: DEFAULT_VOLUME,
@@ -272,32 +310,69 @@ class VoiceChat {
         };
         this.peers.set(userId, peer);
 
-        // A dedicated audio transceiver keeps the m-line negotiated even while
-        // no track is being sent; replaceTrack later swaps the live mic in and
-        // out without renegotiation. (An unassociated transceiver added before
-        // setRemoteDescription is reused by the remote offer, so both sides
-        // share a single audio line.)
-        try {
-            const transceiver = pc.addTransceiver('audio', { direction: 'sendrecv' });
-            peer.audioSender = transceiver.sender;
-            if (this.micStream) {
-                const track = this.micStream.getAudioTracks()[0];
-                if (track) peer.audioSender.replaceTrack(track).catch(() => {});
+        // Only the OFFERER pre-creates the audio transceiver. It keeps the
+        // m-line negotiated while no track is sent; replaceTrack later swaps
+        // the live mic in/out without renegotiation (WebRTC 1.0 §5.2:
+        // replaceTrack explicitly avoids negotiation).
+        //
+        // The ANSWERER must NOT pre-create one. When a remote offer is
+        // applied, the browser only reuses unassociated transceivers that
+        // were created by addTrack() (WebRTC 1.0 §4.4.1.9 / RFC 8829 §5.10);
+        // an addTransceiver()-created transceiver is skipped and a NEW
+        // transceiver with direction 'recvonly' is created for the offered
+        // m-line. Pre-creating one here made the answer a=recvonly (this
+        // side could never send) and left peer.audioSender pointing at the
+        // unassociated sender, so replaceTrack() fed a sender with no
+        // m-line. The answerer instead adopts the transceiver the offer
+        // creates — see _handleSignal.
+        if (initiator) {
+            try {
+                const transceiver = pc.addTransceiver('audio', { direction: 'sendrecv' });
+                peer.audioSender = transceiver.sender;
+                if (this.micStream) {
+                    const track = this.micStream.getAudioTracks()[0];
+                    if (track) {
+                        console.log(`[voice] peer ${userId}: replaceTrack(mic) into new initiator sender`);
+                        peer.audioSender.replaceTrack(track)
+                            .catch(err => console.warn(`[voice] peer ${userId}: replaceTrack failed`, err));
+                    }
+                }
+            } catch (error) {
+                console.error('[voice] failed to add audio transceiver:', error);
             }
-        } catch (error) {
-            console.error('[voice] failed to add audio transceiver:', error);
         }
 
         pc.onicecandidate = (event) => {
-            if (event.candidate) this._signal(userId, { candidate: event.candidate });
+            if (event.candidate) {
+                const typeMatch = / typ (\w+)/.exec(event.candidate.candidate || '');
+                console.log(`[voice] peer ${userId}: local ICE candidate (${typeMatch ? typeMatch[1] : 'end'})`);
+                this._signal(userId, { candidate: event.candidate });
+            }
         };
         pc.ontrack = (event) => {
+            console.log(`[voice] peer ${userId}: remote track received (streams=${event.streams.length})`);
             this._attachRemoteStream(peer, event.streams[0] || new MediaStream([event.track]));
+        };
+        pc.onsignalingstatechange = () => {
+            console.log(`[voice] peer ${userId}: signaling ${pc.signalingState}`);
+        };
+        pc.onicegatheringstatechange = () => {
+            console.log(`[voice] peer ${userId}: ICE gathering ${pc.iceGatheringState}`);
+        };
+        pc.oniceconnectionstatechange = () => {
+            peer.iceState = pc.iceConnectionState;
+            console.log(`[voice] peer ${userId}: ICE ${pc.iceConnectionState}`);
+            this._emitPeers();
         };
         pc.onconnectionstatechange = () => {
             peer.connected = pc.connectionState === 'connected';
+            console.log(`[voice] peer ${userId}: connection ${pc.connectionState}`);
+            if (pc.connectionState === 'connected') {
+                this._logSelectedCandidatePair(peer);
+            }
             if (pc.connectionState === 'failed') {
                 // One retry via ICE restart; WebRTC handles the renegotiation.
+                console.warn(`[voice] peer ${userId}: connection failed — attempting ICE restart`);
                 pc.restartIce?.();
             }
             this._emitPeers();
@@ -307,6 +382,7 @@ class VoiceChat {
             pc.onnegotiationneeded = async () => {
                 try {
                     await pc.setLocalDescription(await pc.createOffer());
+                    console.log(`[voice] peer ${userId}: sending offer`);
                     this._signal(userId, { sdp: pc.localDescription });
                 } catch (error) {
                     console.error('[voice] offer failed:', error);
@@ -315,6 +391,37 @@ class VoiceChat {
         }
 
         return peer;
+    }
+
+    // Diagnostic: log which candidate types carried the connection. If both
+    // sides only ever pair host/srflx candidates and still fail, the network
+    // needs a TURN relay (VITE_TURN_URL).
+    async _logSelectedCandidatePair(peer) {
+        try {
+            const stats = await peer.pc.getStats();
+            let pair = null;
+            stats.forEach((report) => {
+                if (report.type === 'transport' && report.selectedCandidatePairId) {
+                    pair = stats.get(report.selectedCandidatePairId) || pair;
+                }
+            });
+            if (!pair) {
+                // Firefox does not expose transport.selectedCandidatePairId.
+                stats.forEach((report) => {
+                    if (report.type === 'candidate-pair' && report.state === 'succeeded'
+                        && (report.selected || report.nominated)) {
+                        pair = pair || report;
+                    }
+                });
+            }
+            if (!pair) return;
+            const local = stats.get(pair.localCandidateId);
+            const remote = stats.get(pair.remoteCandidateId);
+            console.log(`[voice] peer ${peer.userId}: selected pair local=${local?.candidateType || '?'}`
+                + ` remote=${remote?.candidateType || '?'} protocol=${local?.protocol || '?'}`);
+        } catch (error) {
+            console.warn('[voice] getStats failed:', error);
+        }
     }
 
     async _handleSignal(fromUserId, data) {
@@ -326,9 +433,38 @@ class VoiceChat {
         const { pc } = peer;
 
         if (data?.sdp) {
+            console.log(`[voice] peer ${fromUserId}: received ${data.sdp.type}`);
             await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
             if (data.sdp.type === 'offer') {
+                // Adopt the transceiver that applying the offer just created.
+                // setRemoteDescription(offer) associates the audio m-line with
+                // a browser-created transceiver whose direction is 'recvonly'
+                // (WebRTC 1.0 §4.4.1.9 / RFC 8829 §5.10 — only addTrack()-
+                // created transceivers are reused, and we deliberately create
+                // none on the answering side). Upgrading its direction to
+                // 'sendrecv' BEFORE createAnswer makes the generated answer
+                // sendrecv (RFC 8829 §5.3.1: answer direction is the
+                // intersection of the offered direction and the transceiver
+                // direction), which is what lets this side transmit later via
+                // replaceTrack without renegotiation.
+                const transceiver = pc.getTransceivers()
+                    .find(t => t.receiver?.track?.kind === 'audio');
+                if (transceiver) {
+                    transceiver.direction = 'sendrecv';
+                    peer.audioSender = transceiver.sender;
+                    if (this.micStream) {
+                        const track = this.micStream.getAudioTracks()[0];
+                        if (track) {
+                            console.log(`[voice] peer ${fromUserId}: replaceTrack(mic) into adopted answer sender`);
+                            peer.audioSender.replaceTrack(track)
+                                .catch(err => console.warn(`[voice] peer ${fromUserId}: replaceTrack failed`, err));
+                        }
+                    }
+                } else {
+                    console.warn(`[voice] peer ${fromUserId}: no audio transceiver found in remote offer`);
+                }
                 await pc.setLocalDescription(await pc.createAnswer());
+                console.log(`[voice] peer ${fromUserId}: sending answer`);
                 this._signal(fromUserId, { sdp: pc.localDescription });
             }
             while (peer.pendingCandidates.length > 0) {
@@ -377,6 +513,9 @@ class VoiceChat {
         try {
             peer.pc.onicecandidate = null;
             peer.pc.ontrack = null;
+            peer.pc.onsignalingstatechange = null;
+            peer.pc.onicegatheringstatechange = null;
+            peer.pc.oniceconnectionstatechange = null;
             peer.pc.onconnectionstatechange = null;
             peer.pc.onnegotiationneeded = null;
             peer.pc.close();
@@ -396,6 +535,7 @@ class VoiceChat {
             userId: peer.userId,
             playerName: peer.playerName,
             connected: peer.connected,
+            iceState: peer.iceState,
             speaking: peer.speaking,
             muted: peer.muted,
             volume: peer.volume,

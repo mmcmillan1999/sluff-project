@@ -5,6 +5,16 @@ import React, { useEffect, useRef, useState } from 'react';
 import VoiceChat from '../../utils/VoiceChat';
 import './VoiceControls.css';
 
+// Surface the peer's ICE connection state so a stuck connection is visible
+// ("checking" forever or "failed" means the audio path never came up).
+const connectionStatus = (peer) => {
+    if (peer.connected) return null;
+    const state = peer.iceState || 'new';
+    if (state === 'failed') return 'connection failed';
+    if (state === 'disconnected') return `reconnecting… (${state})`;
+    return `connecting… (${state})`;
+};
+
 const VoiceControls = ({ socket, tableId }) => {
     const [joined, setJoined] = useState(false);
     const [joining, setJoining] = useState(false);
@@ -159,7 +169,7 @@ const VoiceControls = ({ socket, tableId }) => {
                             <span className={`voice-peer-name${peer.speaking ? ' is-speaking' : ''}`}>
                                 <span className="voice-peer-dot" aria-hidden="true" />
                                 {peer.playerName}
-                                {!peer.connected && <em className="voice-peer-status"> connecting…</em>}
+                                {!peer.connected && <em className="voice-peer-status"> {connectionStatus(peer)}</em>}
                             </span>
                             <input
                                 type="range"
