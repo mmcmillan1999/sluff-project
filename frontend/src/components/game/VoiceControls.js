@@ -60,10 +60,18 @@ const VoiceControls = ({ socket, tableId }) => {
             voiceRef.current = voice;
             setJoined(true);
         } catch (err) {
-            const denied = err?.name === 'NotAllowedError';
-            setError(denied
-                ? 'Microphone access was blocked. Allow it in your browser settings to use voice.'
-                : 'Could not start voice. Check your microphone and try again.');
+            if (err?.name === 'NotAllowedError') {
+                setError('Microphone access was blocked. Allow it in your browser settings to use voice.');
+            } else if (err?.name === 'TimeoutError') {
+                setError('We never got an answer from the microphone permission prompt. '
+                    + 'Look for a mic icon in your browser’s address bar, allow access, and try again.');
+            } else if (err?.name === 'NotSupportedError') {
+                setError('Voice chat is not supported in this browser.');
+            } else if (err?.name === 'NotFoundError') {
+                setError('No microphone was found on this device.');
+            } else {
+                setError('Could not start voice. Check your microphone and try again.');
+            }
         } finally {
             setJoining(false);
         }

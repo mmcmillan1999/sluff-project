@@ -50,6 +50,29 @@ const MIC_CONSTRAINTS = {
 const DEFAULT_VOLUME = 1.0;
 const MAX_VOLUME = 1.5;
 
+// A dismissed (not denied) permission prompt leaves getUserMedia pending
+// FOREVER in Chrome — without a timeout the UI would hang on "Joining…".
+const MIC_TIMEOUT_MS = 12000;
+
+const acquireMic = () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+        const unsupported = new Error('Voice chat is not supported in this browser.');
+        unsupported.name = 'NotSupportedError';
+        return Promise.reject(unsupported);
+    }
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            const timeout = new Error('Timed out waiting for microphone permission.');
+            timeout.name = 'TimeoutError';
+            reject(timeout);
+        }, MIC_TIMEOUT_MS);
+        navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS).then(
+            (stream) => { clearTimeout(timer); resolve(stream); },
+            (error) => { clearTimeout(timer); reject(error); },
+        );
+    });
+};
+
 class VoiceChat {
     constructor(socket, tableId, { onPeersChanged, onSpeakingChanged, onError } = {}) {
         this.socket = socket;
@@ -71,14 +94,16 @@ class VoiceChat {
         // Prompt for permission up front (and fail early with a clear error),
         // then release the device immediately — capture only runs while the
         // talk button is held. The grant is cached for subsequent presses.
-        const probe = await navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS);
+        const probe = await acquireMic();
         probe.getTracks().forEach(track => track.stop());
 
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
         this.audioContext = new AudioContextClass();
-        // join() runs from a user gesture, which is what iOS needs to unlock audio.
+        // join() runs from a user gesture, which is what iOS needs to unlock
+        // audio. Fire-and-forget: resume() can wedge in odd session states and
+        // must never hang the join.
         if (this.audioContext.state === 'suspended') {
-            await this.audioContext.resume().catch(() => {});
+            this.audioContext.resume().catch(() => {});
         }
 
         this._bindSocket();
@@ -120,7 +145,7 @@ class VoiceChat {
             if (this.micStream || this.talking) return;
             this.talking = true;
             try {
-                const stream = await navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS);
+                const stream = await acquireMic();
                 // Released (or left voice) before the mic spun up.
                 if (this.talkToken !== token || !this.talking || !this.joined) {
                     stream.getTracks().forEach(track => track.stop());
