@@ -6,11 +6,18 @@
 // Audio never touches the game server; Socket.IO only relays the WebRTC
 // handshake (offers/answers/ICE) between players seated at the same table.
 //
-// Push-to-talk works by toggling the local audio track's `enabled` flag —
-// the connection stays warm, so there is no latency when the button is
-// pressed. Remote audio routes through a per-peer WebAudio GainNode, which
-// is what makes per-player volume work on iOS (media-element volume is
-// read-only there).
+// Push-to-talk RELEASES the microphone entirely between presses and
+// re-acquires it on press via RTCRtpSender.replaceTrack (no renegotiation).
+// Holding the mic open all the time would keep the phone's audio session in
+// call mode, which ducks the game's music/effects the entire time voice is
+// joined (and players compensate with hardware volume, then get blasted when
+// the session flips modes). Releasing capture between presses keeps game
+// audio at its true level except during the moment someone is talking. The
+// price is ~100-300ms of mic spin-up on the first syllable of each press.
+//
+// Remote audio routes through a per-peer WebAudio GainNode, which is what
+// makes per-player volume work on iOS (media-element volume is read-only
+// there).
 //
 // NAT traversal: STUN by default (free). For the small share of networks
 // that need a relay, provide TURN credentials via VITE_TURN_URL /
@@ -31,6 +38,15 @@ const buildIceServers = () => {
     return servers;
 };
 
+const MIC_CONSTRAINTS = {
+    audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+    },
+    video: false,
+};
+
 const DEFAULT_VOLUME = 1.0;
 const MAX_VOLUME = 1.5;
 
@@ -42,25 +58,21 @@ class VoiceChat {
         this.onSpeakingChanged = onSpeakingChanged || (() => {});
         this.onError = onError || (() => {});
         this.peers = new Map(); // userId -> peer record
-        this.localStream = null;
+        this.micStream = null;  // live only while the talk button is held
         this.audioContext = null;
         this.joined = false;
         this.talking = false;
+        this.talkToken = 0;     // invalidates in-flight mic acquisitions
         this.boundHandlers = null;
     }
 
     async join() {
         if (this.joined) return;
-        this.localStream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true,
-            },
-            video: false,
-        });
-        // Push-to-talk: the mic starts muted and only opens while pressed.
-        this.localStream.getAudioTracks().forEach(track => { track.enabled = false; });
+        // Prompt for permission up front (and fail early with a clear error),
+        // then release the device immediately — capture only runs while the
+        // talk button is held. The grant is cached for subsequent presses.
+        const probe = await navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS);
+        probe.getTracks().forEach(track => track.stop());
 
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
         this.audioContext = new AudioContextClass();
@@ -81,6 +93,7 @@ class VoiceChat {
             }
             this.boundHandlers = null;
         }
+        this._releaseMic();
         if (this.joined) {
             this.socket.emit('voiceLeave', { tableId: this.tableId });
         }
@@ -88,10 +101,6 @@ class VoiceChat {
             this._teardownPeer(userId, { silent: true });
         }
         this.peers.clear();
-        if (this.localStream) {
-            this.localStream.getTracks().forEach(track => track.stop());
-            this.localStream = null;
-        }
         if (this.audioContext) {
             this.audioContext.close().catch(() => {});
             this.audioContext = null;
@@ -103,13 +112,48 @@ class VoiceChat {
 
     // --- push-to-talk ------------------------------------------------------
 
-    setTalking(on) {
-        if (!this.joined || !this.localStream) return;
-        const next = Boolean(on);
-        if (next === this.talking) return;
-        this.talking = next;
-        this.localStream.getAudioTracks().forEach(track => { track.enabled = next; });
-        this.socket.emit('voiceSpeaking', { tableId: this.tableId, speaking: next });
+    async setTalking(on) {
+        if (!this.joined) return;
+        if (on) {
+            this.talkToken += 1;
+            const token = this.talkToken;
+            if (this.micStream || this.talking) return;
+            this.talking = true;
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS);
+                // Released (or left voice) before the mic spun up.
+                if (this.talkToken !== token || !this.talking || !this.joined) {
+                    stream.getTracks().forEach(track => track.stop());
+                    return;
+                }
+                this.micStream = stream;
+                const track = stream.getAudioTracks()[0];
+                for (const peer of this.peers.values()) {
+                    peer.audioSender?.replaceTrack(track).catch(() => {});
+                }
+                this.socket.emit('voiceSpeaking', { tableId: this.tableId, speaking: true });
+            } catch (error) {
+                this.talking = false;
+                this.onError(error);
+            }
+        } else {
+            this.talkToken += 1;
+            if (!this.talking) return;
+            this.talking = false;
+            if (this.micStream) {
+                this.socket.emit('voiceSpeaking', { tableId: this.tableId, speaking: false });
+            }
+            this._releaseMic();
+        }
+    }
+
+    _releaseMic() {
+        if (!this.micStream) return;
+        for (const peer of this.peers.values()) {
+            peer.audioSender?.replaceTrack(null).catch(() => {});
+        }
+        this.micStream.getTracks().forEach(track => track.stop());
+        this.micStream = null;
     }
 
     // --- per-peer output controls -------------------------------------------
@@ -198,12 +242,25 @@ class VoiceChat {
             volume: DEFAULT_VOLUME,
             gainNode: null,
             audioEl: null,
+            audioSender: null,
             pendingCandidates: [],
         };
         this.peers.set(userId, peer);
 
-        if (this.localStream) {
-            this.localStream.getTracks().forEach(track => pc.addTrack(track, this.localStream));
+        // A dedicated audio transceiver keeps the m-line negotiated even while
+        // no track is being sent; replaceTrack later swaps the live mic in and
+        // out without renegotiation. (An unassociated transceiver added before
+        // setRemoteDescription is reused by the remote offer, so both sides
+        // share a single audio line.)
+        try {
+            const transceiver = pc.addTransceiver('audio', { direction: 'sendrecv' });
+            peer.audioSender = transceiver.sender;
+            if (this.micStream) {
+                const track = this.micStream.getAudioTracks()[0];
+                if (track) peer.audioSender.replaceTrack(track).catch(() => {});
+            }
+        } catch (error) {
+            console.error('[voice] failed to add audio transceiver:', error);
         }
 
         pc.onicecandidate = (event) => {
