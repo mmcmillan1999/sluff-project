@@ -80,6 +80,29 @@ const registerGameHandlers = (io, gameService, options = {}) => {
     const cancelInterval = options.clearIntervalFn || clearInterval;
     const latestSocketIdByUser = new Map();
 
+    // Voice chat signaling. Audio flows peer-to-peer over WebRTC; the server
+    // only relays session descriptions / ICE candidates between players seated
+    // at the same table and tracks who currently has voice enabled.
+    const voiceRooms = new Map(); // tableId -> Map(userId -> { socketId, playerName })
+
+    const voiceRoomFor = (tableId) => {
+        if (!voiceRooms.has(tableId)) voiceRooms.set(tableId, new Map());
+        return voiceRooms.get(tableId);
+    };
+
+    const leaveVoiceRoom = (tableId, userId) => {
+        const room = voiceRooms.get(tableId);
+        if (!room || !room.has(userId)) return;
+        room.delete(userId);
+        if (room.size === 0) {
+            voiceRooms.delete(tableId);
+            return;
+        }
+        for (const member of room.values()) {
+            io.to(member.socketId).emit('voicePeerLeft', { userId });
+        }
+    };
+
     io.use((socket, next) => {
         const token = socket.handshake?.auth?.token;
         if (!token) return next(new Error("Authentication error: No token provided."));
@@ -508,6 +531,73 @@ const registerGameHandlers = (io, gameService, options = {}) => {
             socket.emit("notification", { message: "You are now a spectator." });
         });
 
+        // --- Voice chat (push-to-talk) signaling ---------------------------
+        // Seated humans opt in per table. The joiner initiates WebRTC offers
+        // to everyone already in the room; the server never sees audio.
+        onTableAction("voiceJoin", {}, ({ engine }) => {
+            const room = voiceRoomFor(engine.tableId);
+            const peers = [...room.entries()]
+                .filter(([userId]) => userId !== socket.user.id)
+                .map(([userId, member]) => ({ userId, playerName: member.playerName }));
+            room.set(socket.user.id, { socketId: socket.id, playerName: socket.user.username });
+            socket.emit('voiceRoster', { tableId: engine.tableId, peers });
+            for (const peer of peers) {
+                const member = room.get(peer.userId);
+                if (member) {
+                    io.to(member.socketId).emit('voicePeerJoined', {
+                        userId: socket.user.id,
+                        playerName: socket.user.username,
+                    });
+                }
+            }
+        });
+
+        onTableAction("voiceSignal", {
+            validate: (payload) => {
+                if (!Number.isSafeInteger(Number(payload?.targetUserId))) return 'Invalid voice target.';
+                let size = 0;
+                try {
+                    size = JSON.stringify(payload?.data ?? '').length;
+                } catch (err) {
+                    return 'Invalid voice payload.';
+                }
+                if (!payload?.data || size > 30000) return 'Invalid voice payload.';
+                return null;
+            },
+        }, ({ engine, payload }) => {
+            const room = voiceRooms.get(engine.tableId);
+            const self = room?.get(socket.user.id);
+            const target = room?.get(Number(payload.targetUserId));
+            if (!self || self.socketId !== socket.id || !target) return;
+            io.to(target.socketId).emit('voiceSignal', {
+                fromUserId: socket.user.id,
+                data: payload.data,
+            });
+        });
+
+        onTableAction("voiceSpeaking", {
+            validate: (payload) => (typeof payload?.speaking === 'boolean' ? null : 'Invalid speaking state.'),
+        }, ({ engine, payload }) => {
+            const room = voiceRooms.get(engine.tableId);
+            if (!room?.has(socket.user.id)) return;
+            for (const [userId, member] of room) {
+                if (userId === socket.user.id) continue;
+                io.to(member.socketId).emit('voiceSpeaking', {
+                    userId: socket.user.id,
+                    speaking: payload.speaking,
+                });
+            }
+        });
+
+        // Raw handler (not onTableAction): players must be able to leave voice
+        // even after their seat at the table is already gone.
+        socket.on('voiceLeave', (payload) => {
+            const tableId = typeof payload?.tableId === 'string' ? payload.tableId : null;
+            if (!tableId) return;
+            const member = voiceRooms.get(tableId)?.get(socket.user.id);
+            if (member?.socketId === socket.id) leaveVoiceRoom(tableId, socket.user.id);
+        });
+
         // Player-facing seat fill for private tables. Opens the table to the
         // matchmaking pool for a short window; if nobody claims the seat the
         // matchmaker quietly seats a house opponent instead. Player-facing
@@ -861,6 +951,12 @@ const registerGameHandlers = (io, gameService, options = {}) => {
                 else latestSocketIdByUser.delete(socketUserKey);
             }
             console.log(`Socket disconnected: ${socket.user.username} (ID: ${socket.user.id}, Socket: ${socket.id})`);
+            for (const [voiceTableId, voiceRoom] of voiceRooms) {
+                const voiceMember = voiceRoom.get(socket.user.id);
+                if (voiceMember && voiceMember.socketId === socket.id) {
+                    leaveVoiceRoom(voiceTableId, socket.user.id);
+                }
+            }
             const enginePlayerIsOn = Object.values(gameService.getAllEngines()).find(e => e.players[socket.user.id]);
             if (enginePlayerIsOn) {
                 const player = enginePlayerIsOn.players[socket.user.id];

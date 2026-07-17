@@ -1,0 +1,136 @@
+/* VoiceControls.css - table voice chat cluster, docked below the header on
+   the left edge, sized in vh per game-layout conventions. */
+
+.voice-controls {
+    position: fixed;
+    top: 9vh; /* just below the 7.5vh header */
+    left: 1vh;
+    z-index: 1500;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6vh;
+    font-family: 'Oswald', sans-serif;
+}
+
+.voice-join-btn,
+.voice-ptt-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.6vh;
+    min-height: 44px;
+    padding: 0.8vh 1.4vh;
+    border-radius: 999px;
+    border: 0.15vh solid rgba(241, 207, 140, 0.5);
+    background: rgba(20, 32, 25, 0.92);
+    color: #f1cf8c;
+    font-family: inherit;
+    font-size: 1.7vh;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    box-shadow: 0 0.3vh 0.8vh rgba(0, 0, 0, 0.4);
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.voice-ptt-btn.is-talking {
+    background: #7a1f1f;
+    border-color: #e3a93d;
+    color: #fff3dd;
+    box-shadow: 0 0 1.2vh rgba(227, 169, 61, 0.7);
+}
+
+.voice-secondary-row {
+    display: flex;
+    gap: 0.6vh;
+}
+
+.voice-mini-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 0.12vh solid rgba(241, 207, 140, 0.35);
+    background: rgba(20, 32, 25, 0.92);
+    color: #e0e0e0;
+    font-size: 1.9vh;
+    cursor: pointer;
+}
+
+.voice-mute-btn.is-muted {
+    background: #5a2323;
+}
+
+.voice-error {
+    max-width: 34vh;
+    margin: 0;
+    padding: 0.8vh 1.2vh;
+    border-radius: 0.8vh;
+    background: rgba(90, 35, 35, 0.95);
+    color: #ffd9d9;
+    font-size: 1.5vh;
+}
+
+.voice-mixer {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8vh;
+    padding: 1vh 1.2vh;
+    border-radius: 1vh;
+    border: 0.12vh solid rgba(241, 207, 140, 0.35);
+    background: rgba(20, 32, 25, 0.96);
+    box-shadow: 0 0.4vh 1vh rgba(0, 0, 0, 0.45);
+    min-width: 30vh;
+}
+
+.voice-mixer-empty {
+    margin: 0;
+    color: #9fb3a6;
+    font-size: 1.5vh;
+}
+
+.voice-mixer-row {
+    display: flex;
+    align-items: center;
+    gap: 1vh;
+}
+
+.voice-peer-name {
+    display: flex;
+    align-items: center;
+    gap: 0.6vh;
+    min-width: 9vh;
+    color: #e0e0e0;
+    font-size: 1.6vh;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.voice-peer-dot {
+    width: 1vh;
+    height: 1vh;
+    border-radius: 50%;
+    background: #4a5a50;
+    flex-shrink: 0;
+}
+
+.voice-peer-name.is-speaking .voice-peer-dot {
+    background: #57d98a;
+    box-shadow: 0 0 0.8vh rgba(87, 217, 138, 0.8);
+}
+
+.voice-peer-status {
+    color: #9fb3a6;
+    font-size: 1.3vh;
+    font-style: normal;
+}
+
+.voice-mixer-row input[type='range'] {
+    flex: 1;
+    min-width: 12vh;
+    accent-color: #e3a93d;
+}

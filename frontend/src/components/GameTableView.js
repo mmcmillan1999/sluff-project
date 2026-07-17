@@ -38,6 +38,7 @@ import {
 } from '../config/tutorial';
 import { getThemePresentation } from '../config/themePresentation';
 import PlayerProfileModal from './PlayerProfileModal';
+import VoiceControls from './game/VoiceControls';
 
 const ROUND_PRESENTATION_STATES = new Set([
     'WidowReveal',
@@ -1267,8 +1268,12 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 currentUsername={user?.username}
                 onClose={() => setProfilePlayerName(null)}
             />
-            
-            <TableLayout 
+
+            {!isSpectator && socket && currentTableState?.tableId && (
+                <VoiceControls socket={socket} tableId={currentTableState.tableId} />
+            )}
+
+            <TableLayout
                 currentTableState={tableStateForDealPresentation}
                 seatAssignments={seatAssignments}
                 isSpectator={isSpectator}
