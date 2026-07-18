@@ -1,6 +1,13 @@
+/* Score chips as true 2.5D casino stacks: each chip is an elliptical top face
+   over a striped cylindrical edge, and every layer rides straight up the
+   stack by one chip thickness — the same riser perspective as the stacked
+   card piles. Footprint and mount points are unchanged. */
+
 .score-chip-bank {
     --score-chip-diameter: 2.75vh;
-    --chip-cream: #f6e7b0;
+    --chip-face-h: 1.62vh;   /* face ellipse height (~0.59 of diameter) */
+    --chip-thick: 0.42vh;    /* visible edge per chip; matches JS CHIP_THICKNESS_VH */
+    --chip-cream: #f2e3b3;
     --chip-ink: #171006;
     position: relative;
     width: min(11.66vh, 30.8vw);
@@ -17,92 +24,126 @@
 
 .score-chip-stacks {
     position: absolute;
-    inset: 0.11vh 0 0;
+    inset: 0;
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     justify-content: center;
     overflow: visible;
 }
 
-/* Each score band is a separate overhead pile. The footprint stays fixed;
-   its child chip faces overlap the same way cards do in the trick plates. */
+/* Each score band is one upright pile. Columns are narrower than the chips so
+   neighbouring piles overlap a little, like a real chip bank. */
 .score-chip-stack {
-    --chip-base: #b83d35;
-    --chip-edge: #5f1717;
+    --chip-base: #b8352b;
+    --chip-edge: #6e1a12;
+    --chip-side: #8c2419;
     position: relative;
     flex: 0 0 1.89vh;
     width: 1.89vh;
-    height: 3.58vh;
+    height: 100%;
     overflow: visible;
 }
 
 .score-chip-stack--tone-2 {
-    --chip-base: #325b78;
-    --chip-edge: #172f42;
+    --chip-base: #2e5f8a;
+    --chip-edge: #14324e;
+    --chip-side: #204a6e;
 }
 
 .score-chip-stack--tone-3 {
-    --chip-base: #397451;
-    --chip-edge: #173b28;
+    --chip-base: #2e7d54;
+    --chip-edge: #123f28;
+    --chip-side: #1f5c3c;
 }
 
-/* Flat, full-face poker chips. A later layer paints on top and settles a small
-   amount up and left of the layer beneath it—the dealer-deck/trick-pile view. */
+/* Soft contact shadow pooling under each pile */
+.score-chip-stack::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: 0.08vh;
+    width: calc(var(--score-chip-diameter) * 1.15);
+    height: 0.75vh;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: radial-gradient(ellipse at center, rgba(8, 5, 2, 0.5) 0 40%, transparent 72%);
+}
+
+/* --- One chip: ::after paints the face ellipse, ::before the edge below it.
+   The face covers all but the bottom sliver of the edge, so exactly one chip
+   thickness of striped rim shows per layer. --- */
 .score-chip-layer {
     position: absolute;
-    top: 0.86vh;
-    left: -0.43vh;
+    left: calc(50% - var(--score-chip-diameter) / 2);
+    bottom: 0.42vh;
     width: var(--score-chip-diameter);
-    height: var(--score-chip-diameter);
-    border: 0.12vh solid var(--chip-edge);
-    border-radius: 50%;
-    box-sizing: border-box;
-    background:
-        radial-gradient(circle at 50% 50%, rgba(252, 239, 195, 0.99) 0 43%, transparent 44%),
-        radial-gradient(circle at 50% 50%, transparent 0 48%, rgba(255, 255, 255, 0.34) 49% 52%, transparent 53%),
-        repeating-conic-gradient(
-            from 1deg,
-            var(--chip-cream) 0deg 13deg,
-            var(--chip-base) 13deg 47deg,
-            var(--chip-edge) 47deg 52deg,
-            var(--chip-base) 52deg 70deg
-        );
-    box-shadow:
-        inset 0 0 0 0.11vh rgba(255, 255, 255, 0.25),
-        0.14vh 0.2vh 0.22vh rgba(28, 15, 7, 0.42);
-    transform:
-        translate(var(--chip-settle-x), var(--chip-settle-y))
-        rotate(var(--chip-turn));
-    transform-origin: center;
+    height: calc(var(--chip-face-h) + var(--chip-thick));
+    transform: translate(var(--chip-settle-x), var(--chip-settle-y));
     will-change: transform, opacity;
 }
 
 .score-chip-layer::before {
     content: '';
     position: absolute;
-    inset: 0.53vh;
-    border: 0.08vh solid rgba(69, 44, 16, 0.48);
+    z-index: 0;
+    top: var(--chip-thick);
+    left: 0;
+    width: 100%;
+    height: var(--chip-face-h);
     border-radius: 50%;
-    box-shadow: inset 0 0 0 0.07vh rgba(255, 255, 255, 0.42);
+    box-sizing: border-box;
+    border: 0.09vh solid rgba(12, 6, 2, 0.55);
+    /* Edge stripes: cream spacers between blocks of the chip colour, shaded
+       darker than the face and curved off at the bottom */
+    background:
+        linear-gradient(180deg, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.3)),
+        repeating-linear-gradient(
+            90deg,
+            var(--chip-cream) 0 0.3vh,
+            var(--chip-side) 0.3vh 0.85vh
+        );
 }
 
-.score-chip-layer--score {
-    box-shadow:
-        inset 0 0 0 0.11vh rgba(255, 255, 255, 0.3),
-        0.14vh 0.2vh 0.22vh rgba(28, 15, 7, 0.46),
-        0 0 0.13vh rgba(246, 231, 176, 0.34);
+.score-chip-layer::after {
+    content: '';
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: var(--chip-face-h);
+    border-radius: 50%;
+    box-sizing: border-box;
+    border: 0.09vh solid var(--chip-edge);
+    background:
+        /* top-light gloss */
+        linear-gradient(180deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 48%),
+        /* cream inlay centre */
+        radial-gradient(ellipse at 50% 50%, rgba(250, 240, 205, 0.96) 0 40%, rgba(250, 240, 205, 0) 41%),
+        /* inlay ring */
+        radial-gradient(ellipse at 50% 50%, transparent 0 43%, rgba(0, 0, 0, 0.28) 44% 47%, transparent 48%),
+        /* edge spots around the rim */
+        repeating-conic-gradient(
+            from 8deg,
+            var(--chip-cream) 0deg 14deg,
+            var(--chip-base) 14deg 60deg
+        );
 }
 
-/* Keep the exact score on the top chip, but isolate it from every chip tone
-   with a small high-contrast inlay. */
+/* The numbered chip crowns its pile */
+.score-chip-layer--score::after {
+    box-shadow: 0 0 0.3vh rgba(246, 231, 176, 0.4);
+}
+
+/* Exact score inlaid on the top face */
 .score-chip-total {
     position: absolute;
-    top: 50%;
+    top: calc(var(--chip-face-h) / 2);
     left: 50%;
     z-index: 2;
     min-width: 1.55vh;
-    min-height: 1.4vh;
-    padding: 0.08vh 0.25vh;
+    min-height: 1.35vh;
+    padding: 0.08vh 0.28vh;
     box-sizing: border-box;
     display: grid;
     place-items: center;
@@ -160,10 +201,9 @@
     background: #9b2c2c;
 }
 
-/* Match the trick-card magnet: a weighted slide from down/right, shrinking
-   onto the pile with the same cubic-bezier instead of bouncing vertically. */
+/* Gains drop onto the pile from above; losses restack up from the felt. */
 .score-chip-bank--gain .score-chip-layer {
-    animation: score-chip-layer-land 1s cubic-bezier(0.45, 0.05, 0.4, 1) both;
+    animation: score-chip-layer-land 0.9s cubic-bezier(0.45, 0.05, 0.4, 1) both;
     animation-delay: var(--chip-delay);
 }
 
@@ -172,27 +212,21 @@
     animation-delay: var(--chip-delay);
 }
 
+/* Busted: an ashen chip with a cracked face */
 .score-chip-bank--busted .score-chip-stack {
     --chip-base: #696865;
     --chip-edge: #282827;
-}
-
-.score-chip-bank--busted .score-chip-layer--score {
-    color: #f8e3df;
-    background:
-        linear-gradient(126deg, transparent 0 47%, #1b1615 48% 51%, transparent 52%),
-        radial-gradient(circle at 50% 50%, #8e4b46 0 38%, transparent 39%),
-        repeating-conic-gradient(#d6c9b6 0deg 15deg, #51403b 15deg 42deg);
-    border-color: #281817;
+    --chip-side: #4b4a47;
 }
 
 .score-chip-bank--busted .score-chip-layer--score::after {
-    content: '';
-    position: absolute;
-    z-index: 1;
-    inset: 0.28vh 0.88vh;
-    border-left: 0.1vh solid rgba(30, 20, 18, 0.88);
-    transform: rotate(24deg);
+    background:
+        linear-gradient(126deg, transparent 0 47%, #1b1615 48% 50.5%, transparent 51.5%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0) 48%),
+        radial-gradient(ellipse at 50% 50%, #8e6b66 0 40%, rgba(142, 107, 102, 0) 41%),
+        repeating-conic-gradient(from 8deg, #d6c9b6 0deg 14deg, #51403b 14deg 60deg);
+    border-color: #281817;
+    box-shadow: none;
 }
 
 .score-chip-bank--busted .score-chip-total {
@@ -203,26 +237,33 @@
 .score-chip-bank--unavailable .score-chip-stack {
     --chip-base: #77736c;
     --chip-edge: #403d38;
+    --chip-side: #5b5850;
     filter: grayscale(0.8);
     opacity: 0.82;
 }
 
 @keyframes score-chip-layer-land {
     0% {
-        opacity: 0.08;
+        opacity: 0;
         transform:
             translate(var(--chip-entry-x), var(--chip-entry-y))
-            rotate(calc(var(--chip-turn) + 11deg))
-            scale(1.32);
+            scale(1.25);
     }
-    72% {
+    60% {
         opacity: 1;
+        transform:
+            translate(var(--chip-settle-x), calc(var(--chip-settle-y) + 0.12vh))
+            scale(1);
+    }
+    80% {
+        transform:
+            translate(var(--chip-settle-x), calc(var(--chip-settle-y) - 0.08vh))
+            scale(1);
     }
     100% {
         opacity: 1;
         transform:
             translate(var(--chip-settle-x), var(--chip-settle-y))
-            rotate(var(--chip-turn))
             scale(1);
     }
 }
@@ -232,14 +273,12 @@
         opacity: 0.35;
         transform:
             translate(var(--chip-loss-x), var(--chip-loss-y))
-            rotate(calc(var(--chip-turn) - 8deg))
-            scale(0.82);
+            scale(0.85);
     }
     100% {
         opacity: 1;
         transform:
             translate(var(--chip-settle-x), var(--chip-settle-y))
-            rotate(var(--chip-turn))
             scale(1);
     }
 }

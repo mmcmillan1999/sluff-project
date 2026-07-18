@@ -82,21 +82,25 @@ const getScoreSizeClass = (displayScore) => {
     return '';
 };
 
+// Visual thickness of one chip edge; each layer rides this far up the stack,
+// the same straight-riser perspective the stacked card piles use.
+const CHIP_THICKNESS_VH = 0.42;
+
 const getChipLayerStyle = (stackIndex, layerIndex, isScoreLayer) => {
-    const settleX = -(layerIndex * 0.15);
-    const settleY = -(layerIndex * 0.14);
-    const turn = (((stackIndex + layerIndex) % 3) - 1) * 1.6;
+    // Tiny alternating horizontal jitter so tall stacks read hand-placed
+    // rather than machined; vertical position is strictly layer * thickness.
+    const settleX = (((stackIndex * 7 + layerIndex * 5) % 3) - 1) * 0.07;
+    const settleY = -(layerIndex * CHIP_THICKNESS_VH);
 
     return {
-        '--stack-index': stackIndex,
-        '--layer-index': layerIndex,
         '--chip-settle-x': `${settleX.toFixed(2)}vh`,
         '--chip-settle-y': `${settleY.toFixed(2)}vh`,
-        '--chip-entry-x': `${(settleX + 2.59).toFixed(2)}vh`,
-        '--chip-entry-y': `${(settleY + 1.93).toFixed(2)}vh`,
-        '--chip-loss-x': `${(settleX - 0.61).toFixed(2)}vh`,
-        '--chip-loss-y': `${(settleY - 0.50).toFixed(2)}vh`,
-        '--chip-turn': `${turn.toFixed(1)}deg`,
+        // Gains drop in from above the stack and land on top
+        '--chip-entry-x': `${(settleX + 1.2).toFixed(2)}vh`,
+        '--chip-entry-y': `${(settleY - 2.1).toFixed(2)}vh`,
+        // Losses restack from a slumped position toward the felt
+        '--chip-loss-x': `${(settleX - 0.55).toFixed(2)}vh`,
+        '--chip-loss-y': `${(settleY + 0.55).toFixed(2)}vh`,
         '--chip-delay': `${stackIndex * 35 + layerIndex * 30 + (isScoreLayer ? 120 : 0)}ms`,
         zIndex: isScoreLayer ? 40 : layerIndex + 1,
     };

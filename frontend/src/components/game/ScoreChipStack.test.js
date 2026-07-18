@@ -73,14 +73,16 @@ describe('ScoreChipStack', () => {
         expect(stacks[1].querySelectorAll('.score-chip-layer')).toHaveLength(5);
         expect(stacks[2].querySelectorAll('.score-chip-layer')).toHaveLength(3);
 
+        // Layers rise strictly by one chip thickness (0.42vh) with only a
+        // small alternating horizontal jitter — the card-pile riser look.
         const firstPileLayers = stacks[0].querySelectorAll('.score-chip-layer');
         expect(firstPileLayers[0]).toHaveStyle({
-            '--chip-settle-x': '0.00vh',
+            '--chip-settle-x': '-0.07vh',
             '--chip-settle-y': '0.00vh',
         });
         expect(firstPileLayers[1]).toHaveStyle({
-            '--chip-settle-x': '-0.15vh',
-            '--chip-settle-y': '-0.14vh',
+            '--chip-settle-x': '0.07vh',
+            '--chip-settle-y': '-0.42vh',
         });
         expect(bank.querySelector('.score-chip-total').parentElement).toHaveClass('score-chip-layer--score');
     });

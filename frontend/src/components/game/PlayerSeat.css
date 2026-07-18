@@ -172,8 +172,18 @@
     transform: translate(-50%, 50%);
 }
 
-/* Side banks intentionally inherit the PlayerSeatPositioner's rotation. This
-   keeps their long axis aligned with the rotated plaque and its puck ears. */
+/* Side banks used to inherit the PlayerSeatPositioner's rotation (fine for
+   the old flat top-down chips). The 2.5D stacks have a visible "up", so in
+   the rotated phone-layout seats the bank counter-rotates about its own
+   center — net-zero with the seat's ±90° — keeping the same anchor point
+   while the piles stand upright in screen space like the card piles. */
+.wide-mode .player-seat-wrapper > .score-chip-bank.score-chip-bank--left {
+    transform: translate(-50%, -50%) rotate(-90deg);
+}
+
+.wide-mode .player-seat-wrapper > .score-chip-bank.score-chip-bank--right {
+    transform: translate(-50%, -50%) rotate(90deg);
+}
 
 /* Team-specific pulsing animations */
 @keyframes pulsing-glow-bidder {
