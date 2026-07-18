@@ -27,9 +27,10 @@
 
 /* Dealer puck - top left corner */
 .dealer-puck-ear {
-    /* Center the puck on the upper-left plaque corner like a Mickey ear. */
+    /* Pull the puck inward by its radius so its outside edge is flush with
+       the plaque while preserving the corner-ear silhouette. */
     bottom: calc(7vh - 1.75vh);
-    left: 0;
+    left: 1.75vh;
     transform: translateX(-50%);
     
     /* Visual styling */
@@ -43,9 +44,9 @@
 /* Bidder/Trump puck - top right corner */
 .bidder-puck-ear {
     position: absolute;
-    /* Mirror the dealer puck on the upper-right plaque corner. */
+    /* Mirror the dealer puck flush against the upper-right plaque edge. */
     bottom: calc(7vh - 1.75vh);
-    right: 0;
+    right: 1.75vh;
     transform: translateX(50%);
 }
 

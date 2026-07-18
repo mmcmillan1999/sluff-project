@@ -20,10 +20,10 @@ const getDeclaration = (selector, property) => {
 };
 
 describe('player-seat ornament layout', () => {
-    test('centers the dealer and trump pucks on opposite plaque corners', () => {
-        expect(getDeclaration('.dealer-puck-ear', 'left')).toBe('0');
+    test('rests the dealer and trump pucks flush inside opposite plaque edges', () => {
+        expect(getDeclaration('.dealer-puck-ear', 'left')).toBe('1.75vh');
         expect(getDeclaration('.dealer-puck-ear', 'transform')).toBe('translateX(-50%)');
-        expect(getDeclaration('.bidder-puck-ear', 'right')).toBe('0');
+        expect(getDeclaration('.bidder-puck-ear', 'right')).toBe('1.75vh');
         expect(getDeclaration('.bidder-puck-ear', 'transform')).toBe('translateX(50%)');
         expect(getDeclaration('.dealer-puck-ear', 'bottom'))
             .toBe(getDeclaration('.bidder-puck-ear', 'bottom'));
