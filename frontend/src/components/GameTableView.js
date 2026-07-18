@@ -84,6 +84,12 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const [showInsurancePrompt, setShowInsurancePrompt] = useState(false);
     const [showStoreModal, setShowStoreModal] = useState(false);
     const [spiderRun, setSpiderRun] = useState({ id: 0, mode: 'wander' });
+    // One spider at a time: random rolls are skipped while a run is on stage.
+    const spiderBusyUntilRef = useRef(0);
+    const startSpider = useCallback((mode) => {
+        spiderBusyUntilRef.current = Date.now() + 11000;
+        setSpiderRun(run => ({ id: run.id + 1, mode }));
+    }, []);
     const { deckSkin } = useCosmetics();
     // True once the player has saved or nudged their wager this round; the
     // insurance controls stop pulsing for attention after that.
@@ -511,6 +517,30 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         const player = Object.values(currentTableState.players).find(p => p.userId === targetPlayerId);
         return player?.playerName || String(targetPlayerId);
     }, [currentTableState]);
+
+    // The widow spider triggers herself: each completed trick rolls a 10%
+    // chance for each animation — across an 11-trick round that averages one
+    // wander and one chase per player per round. Rolls are local to each
+    // client, so every player gets their own scare schedule.
+    const spiderPrevTrickRef = useRef(null);
+    useEffect(() => {
+        const count = currentTableState?.tricksPlayedCount;
+        const state = currentTableState?.state;
+        const prev = spiderPrevTrickRef.current;
+        spiderPrevTrickRef.current = Number.isFinite(count) ? count : null;
+
+        if (!Number.isFinite(count) || prev === null || count <= prev) return;
+        if (state !== 'Playing Phase' && state !== 'TrickCompleteLinger') return;
+        if (Date.now() < spiderBusyUntilRef.current) return;
+
+        const rollWander = Math.random() < 0.1;
+        const rollChase = Math.random() < 0.1;
+        if (!rollWander && !rollChase) return;
+        const mode = rollWander && rollChase
+            ? (Math.random() < 0.5 ? 'wander' : 'chase')
+            : (rollWander ? 'wander' : 'chase');
+        startSpider(mode);
+    }, [currentTableState?.tricksPlayedCount, currentTableState?.state, startSpider]);
 
     // Each new round's insurance activation re-arms the "set your wager"
     // attention pulse.
@@ -1266,7 +1296,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                     <button
                         type="button"
                         className="admin-spider-btn"
-                        onClick={() => setSpiderRun(run => ({ id: run.id + 1, mode: 'wander' }))}
+                        onClick={() => startSpider('wander')}
                         aria-label="Release the widow spider"
                         title="Widow spider — wander"
                     >
@@ -1275,7 +1305,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                     <button
                         type="button"
                         className="admin-spider-btn admin-spider-btn--chase"
-                        onClick={() => setSpiderRun(run => ({ id: run.id + 1, mode: 'chase' }))}
+                        onClick={() => startSpider('chase')}
                         aria-label="Release the widow spider in chase mode"
                         title="Widow spider — she hunts your finger"
                     >
