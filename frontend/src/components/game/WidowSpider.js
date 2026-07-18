@@ -1,18 +1,30 @@
 // frontend/src/components/game/WidowSpider.js
-// Easter egg: a black widow crawls out from under the widow pile, wanders
-// the felt for ~10 seconds (with a couple of nervous pauses), then slips
-// back under the cards. Purely visual — pointer-events none, layered below
-// played cards and piles so she genuinely emerges from beneath the widow.
-// Ordinary game-state churn doesn't touch a run in progress; only the
-// end-of-round presentation (or unmount) cancels her early.
+// Easter egg: a black widow that lives under the widow pile. Two behaviors:
+//
+// - 'wander': crawls out, ambles the felt ~10s with two nervous pauses,
+//   then slips back under the cards.
+// - 'chase': darts out and hunts the player's finger/cursor — she pursues
+//   the latest pointer position with menacing stutter-lunges, then retreats
+//   under the widow.
+//
+// She emerges from and hides beneath the pile at low z, but while she's out
+// she climbs ON TOP of everything on the table (cards, hand, chrome).
+// Purely visual — pointer-events none. Ordinary game-state churn doesn't
+// touch a run; only the end-of-round presentation (or unmount) cancels her.
 
 import React, { useEffect, useRef } from 'react';
 import './WidowSpider.css';
 
-const RUN_MS = 10000;
+const WANDER_MS = 10000;
 const EMERGE_MS = 900;
 const HIDE_MS = 800;
 const CANCEL_FADE_MS = 300;
+
+const CHASE_EMERGE_MS = 500;
+const CHASE_HUNT_MS = 6500;
+const CHASE_SPEED = 1350;          // px/s while charging
+const LUNGE_RADIUS = 70;           // "got you" distance — she jabs and shakes
+const CHASE_MAX_MS = 12000;        // hard safety cap
 
 const findWidowAnchor = () => {
     const pile = document.querySelector('.trick-pile-base.widow-base');
@@ -24,7 +36,7 @@ const findWidowAnchor = () => {
     return { x: window.innerWidth * 0.2, y: window.innerHeight * 0.16 };
 };
 
-const buildPath = (start) => {
+const buildWanderPath = (start) => {
     const w = window.innerWidth;
     const h = window.innerHeight;
     const rand = (lo, hi) => lo + Math.random() * (hi - lo);
@@ -42,14 +54,14 @@ const buildPath = (start) => {
 };
 
 const shortestArcLerp = (from, to, t) => {
-    let delta = ((to - from + 540) % 360) - 180;
+    const delta = ((to - from + 540) % 360) - 180;
     return from + delta * t;
 };
 
-const WidowSpider = ({ runId, cancelled }) => {
+const WidowSpider = ({ runId, mode = 'wander', cancelled }) => {
     const elRef = useRef(null);
     const frameRef = useRef(0);
-    const runStateRef = useRef(null);
+    const cleanupRef = useRef(null);
     const cancelledRef = useRef(false);
     cancelledRef.current = Boolean(cancelled);
 
@@ -60,112 +72,227 @@ const WidowSpider = ({ runId, cancelled }) => {
         const el = elRef.current;
         if (!el) return undefined;
 
-        const start = findWidowAnchor();
-        const points = buildPath(start);
-
-        // Constant crawl speed across the whole route, dwells excluded.
-        const segments = [];
-        let totalLength = 0;
-        let totalDwell = 0;
-        for (let i = 1; i < points.length; i += 1) {
-            const dx = points[i].x - points[i - 1].x;
-            const dy = points[i].y - points[i - 1].y;
-            const length = Math.hypot(dx, dy) || 1;
-            const angle = (Math.atan2(dy, dx) * 180) / Math.PI + 90; // sprite faces up
-            segments.push({ from: points[i - 1], to: points[i], length, angle, dwell: points[i].dwell || 0 });
-            totalLength += length;
-            totalDwell += points[i].dwell || 0;
-        }
-        const travelMs = Math.max(1000, RUN_MS - totalDwell);
-
-        // Timeline of alternating crawl/dwell intervals per segment.
-        const timeline = [];
-        let cursor = 0;
-        for (const segment of segments) {
-            const duration = (segment.length / totalLength) * travelMs;
-            timeline.push({ kind: 'crawl', segment, start: cursor, end: cursor + duration });
-            cursor += duration;
-            if (segment.dwell) {
-                timeline.push({ kind: 'dwell', segment, start: cursor, end: cursor + segment.dwell });
-                cursor += segment.dwell;
-            }
-        }
-        const totalMs = cursor;
-
-        runStateRef.current = {
-            startedAt: performance.now(),
-            heading: segments[0]?.angle ?? 0,
-            cancelAt: null,
-        };
         el.classList.add('is-active');
+        let cancelStartedAt = null;
 
-        const tick = (now) => {
-            const run = runStateRef.current;
-            if (!run) return;
+        const finish = () => {
+            el.classList.remove('is-active', 'is-walking', 'is-charging', 'is-on-top');
+            el.style.opacity = '';
+        };
 
-            if (cancelledRef.current && run.cancelAt === null) run.cancelAt = now;
-            if (run.cancelAt !== null) {
-                const fade = Math.min(1, (now - run.cancelAt) / CANCEL_FADE_MS);
-                el.style.opacity = String(1 - fade);
-                if (fade >= 1) {
-                    el.classList.remove('is-active');
-                    runStateRef.current = null;
+        const applyFrame = (x, y, heading, scale, opacity, { walking = false, charging = false, onTop = false } = {}) => {
+            el.style.opacity = String(opacity);
+            el.style.transform = `translate3d(${x}px, ${y}px, 0) rotate(${heading}deg) scale(${scale})`;
+            el.classList.toggle('is-walking', walking);
+            el.classList.toggle('is-charging', charging);
+            el.classList.toggle('is-on-top', onTop);
+        };
+
+        // Shared cancel handling: quick fade wherever she is.
+        const handleCancel = (now, tick) => {
+            if (cancelledRef.current && cancelStartedAt === null) cancelStartedAt = now;
+            if (cancelStartedAt === null) return false;
+            const fade = Math.min(1, (now - cancelStartedAt) / CANCEL_FADE_MS);
+            el.style.opacity = String(1 - fade);
+            if (fade >= 1) {
+                finish();
+                return true;
+            }
+            frameRef.current = requestAnimationFrame(tick);
+            return true;
+        };
+
+        if (mode === 'chase') {
+            // --- Chase: pursue the latest pointer position, then retreat ---
+            const anchor = findWidowAnchor();
+            const target = { x: window.innerWidth / 2, y: window.innerHeight * 0.8 };
+            const onPointer = (event) => {
+                target.x = event.clientX;
+                target.y = event.clientY;
+            };
+            window.addEventListener('pointermove', onPointer, { passive: true });
+            window.addEventListener('pointerdown', onPointer, { passive: true });
+
+            const pos = { ...anchor };
+            let heading = 180;
+            let lastNow = performance.now();
+            const startedAt = lastNow;
+            let stutterUntil = 0;
+            let nextStutterAt = startedAt + 900;
+
+            const tick = (now) => {
+                if (handleCancel(now, tick)) return;
+                const dt = Math.min(0.05, (now - lastNow) / 1000);
+                lastNow = now;
+                const elapsed = now - startedAt;
+
+                const hunting = elapsed < CHASE_EMERGE_MS + CHASE_HUNT_MS;
+                const goal = hunting ? target : anchor;
+                const dx = goal.x - pos.x;
+                const dy = goal.y - pos.y;
+                const dist = Math.hypot(dx, dy);
+
+                let scale = 1;
+                let opacity = 1;
+                let onTop = true;
+                let walking = true;
+
+                if (elapsed < CHASE_EMERGE_MS) {
+                    // Burst out from under the pile
+                    const t = elapsed / CHASE_EMERGE_MS;
+                    scale = 0.25 + 0.75 * t;
+                    opacity = Math.min(1, t * 2);
+                    onTop = false;
+                }
+
+                if (!hunting && dist < 24) {
+                    // Home: shrink back under the pile
+                    const hideStart = el.dataset.hideStart ? Number(el.dataset.hideStart) : now;
+                    el.dataset.hideStart = String(hideStart);
+                    const t = Math.min(1, (now - hideStart) / 600);
+                    applyFrame(anchor.x, anchor.y, heading, 1 - 0.75 * t, 1 - t, { onTop: false });
+                    if (t >= 1 || elapsed > CHASE_MAX_MS) {
+                        delete el.dataset.hideStart;
+                        window.removeEventListener('pointermove', onPointer);
+                        window.removeEventListener('pointerdown', onPointer);
+                        finish();
+                        return;
+                    }
+                    frameRef.current = requestAnimationFrame(tick);
+                    return;
+                }
+
+                // Menace stutter: brief freezes between bursts while hunting
+                if (hunting && now >= nextStutterAt) {
+                    stutterUntil = now + 110;
+                    nextStutterAt = now + 800 + Math.random() * 400;
+                }
+                const frozen = hunting && now < stutterUntil;
+
+                if (dist > 1 && !frozen) {
+                    const inLunge = hunting && dist < LUNGE_RADIUS;
+                    const speed = inLunge ? 420 : CHASE_SPEED;
+                    const step = Math.min(dist, speed * dt);
+                    pos.x += (dx / dist) * step;
+                    pos.y += (dy / dist) * step;
+                    const targetHeading = (Math.atan2(dy, dx) * 180) / Math.PI + 90;
+                    heading = shortestArcLerp(heading, targetHeading, 0.35);
+                    if (inLunge) {
+                        // Attack shake right at the fingertip
+                        pos.x += (Math.random() - 0.5) * 5;
+                        pos.y += (Math.random() - 0.5) * 5;
+                    }
+                } else {
+                    walking = false;
+                }
+
+                applyFrame(pos.x, pos.y, heading, scale, opacity, {
+                    walking,
+                    charging: hunting && elapsed >= CHASE_EMERGE_MS,
+                    onTop,
+                });
+
+                if (elapsed > CHASE_MAX_MS) {
+                    window.removeEventListener('pointermove', onPointer);
+                    window.removeEventListener('pointerdown', onPointer);
+                    finish();
                     return;
                 }
                 frameRef.current = requestAnimationFrame(tick);
-                return;
-            }
-
-            const elapsed = now - run.startedAt;
-            if (elapsed >= totalMs) {
-                el.classList.remove('is-active');
-                runStateRef.current = null;
-                return;
-            }
-
-            const step = timeline.find(entry => elapsed < entry.end) || timeline[timeline.length - 1];
-            let x;
-            let y;
-            let moving = false;
-            if (step.kind === 'dwell') {
-                x = step.segment.to.x;
-                y = step.segment.to.y;
-            } else {
-                const t = Math.min(1, (elapsed - step.start) / (step.end - step.start));
-                x = step.segment.from.x + (step.segment.to.x - step.segment.from.x) * t;
-                y = step.segment.from.y + (step.segment.to.y - step.segment.from.y) * t;
-                run.heading = shortestArcLerp(run.heading, step.segment.angle, 0.14);
-                moving = true;
-            }
-
-            // Emerge and hide: scale + fade at the route's ends.
-            let scale = 1;
-            let opacity = 1;
-            if (elapsed < EMERGE_MS) {
-                const t = elapsed / EMERGE_MS;
-                scale = 0.25 + 0.75 * t;
-                opacity = Math.min(1, t * 2);
-            } else if (elapsed > totalMs - HIDE_MS) {
-                const t = (totalMs - elapsed) / HIDE_MS;
-                scale = 0.25 + 0.75 * t;
-                opacity = Math.min(1, t * 2);
-            }
-
-            el.style.opacity = String(opacity);
-            el.style.transform = `translate3d(${x}px, ${y}px, 0) rotate(${run.heading}deg) scale(${scale})`;
-            el.classList.toggle('is-walking', moving);
+            };
 
             frameRef.current = requestAnimationFrame(tick);
-        };
+            cleanupRef.current = () => {
+                window.removeEventListener('pointermove', onPointer);
+                window.removeEventListener('pointerdown', onPointer);
+            };
+        } else {
+            // --- Wander: fixed randomized route, constant crawl speed ---
+            const start = findWidowAnchor();
+            const points = buildWanderPath(start);
 
-        frameRef.current = requestAnimationFrame(tick);
+            const segments = [];
+            let totalLength = 0;
+            let totalDwell = 0;
+            for (let i = 1; i < points.length; i += 1) {
+                const dx = points[i].x - points[i - 1].x;
+                const dy = points[i].y - points[i - 1].y;
+                const length = Math.hypot(dx, dy) || 1;
+                const angle = (Math.atan2(dy, dx) * 180) / Math.PI + 90; // sprite faces up
+                segments.push({ from: points[i - 1], to: points[i], length, angle, dwell: points[i].dwell || 0 });
+                totalLength += length;
+                totalDwell += points[i].dwell || 0;
+            }
+            const travelMs = Math.max(1000, WANDER_MS - totalDwell);
+
+            const timeline = [];
+            let cursor = 0;
+            for (const segment of segments) {
+                const duration = (segment.length / totalLength) * travelMs;
+                timeline.push({ kind: 'crawl', segment, start: cursor, end: cursor + duration });
+                cursor += duration;
+                if (segment.dwell) {
+                    timeline.push({ kind: 'dwell', segment, start: cursor, end: cursor + segment.dwell });
+                    cursor += segment.dwell;
+                }
+            }
+            const totalMs = cursor;
+            const startedAt = performance.now();
+            let heading = segments[0]?.angle ?? 0;
+
+            const tick = (now) => {
+                if (handleCancel(now, tick)) return;
+                const elapsed = now - startedAt;
+                if (elapsed >= totalMs) {
+                    finish();
+                    return;
+                }
+
+                const step = timeline.find(entry => elapsed < entry.end) || timeline[timeline.length - 1];
+                let x;
+                let y;
+                let moving = false;
+                if (step.kind === 'dwell') {
+                    x = step.segment.to.x;
+                    y = step.segment.to.y;
+                } else {
+                    const t = Math.min(1, (elapsed - step.start) / (step.end - step.start));
+                    x = step.segment.from.x + (step.segment.to.x - step.segment.from.x) * t;
+                    y = step.segment.from.y + (step.segment.to.y - step.segment.from.y) * t;
+                    heading = shortestArcLerp(heading, step.segment.angle, 0.14);
+                    moving = true;
+                }
+
+                let scale = 1;
+                let opacity = 1;
+                if (elapsed < EMERGE_MS) {
+                    const t = elapsed / EMERGE_MS;
+                    scale = 0.25 + 0.75 * t;
+                    opacity = Math.min(1, t * 2);
+                } else if (elapsed > totalMs - HIDE_MS) {
+                    const t = (totalMs - elapsed) / HIDE_MS;
+                    scale = 0.25 + 0.75 * t;
+                    opacity = Math.min(1, t * 2);
+                }
+
+                // On top of the table while out; under the pile at both ends.
+                const onTop = elapsed >= EMERGE_MS && elapsed <= totalMs - HIDE_MS;
+                applyFrame(x, y, heading, scale, opacity, { walking: moving, onTop });
+                frameRef.current = requestAnimationFrame(tick);
+            };
+
+            frameRef.current = requestAnimationFrame(tick);
+            cleanupRef.current = null;
+        }
 
         return () => {
             cancelAnimationFrame(frameRef.current);
-            runStateRef.current = null;
-            el.classList.remove('is-active', 'is-walking');
+            cleanupRef.current?.();
+            cleanupRef.current = null;
+            delete el.dataset.hideStart;
+            finish();
         };
-    }, [runId]);
+    }, [runId, mode]);
 
     return (
         <div className="widow-spider" ref={elRef} aria-hidden="true">

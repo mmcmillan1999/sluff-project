@@ -83,7 +83,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const [showRoundSummaryModal, setShowRoundSummaryModal] = useState(false);
     const [showInsurancePrompt, setShowInsurancePrompt] = useState(false);
     const [showStoreModal, setShowStoreModal] = useState(false);
-    const [spiderRunId, setSpiderRunId] = useState(0);
+    const [spiderRun, setSpiderRun] = useState({ id: 0, mode: 'wander' });
     const { deckSkin } = useCosmetics();
     // True once the player has saved or nudged their wager this round; the
     // insurance controls stop pulsing for attention after that.
@@ -1262,18 +1262,30 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             {/* Debug: Check admin status (log removed to avoid console spam) */}
             
             {user?.is_admin && (
-                <button
-                    type="button"
-                    className="admin-spider-btn"
-                    onClick={() => setSpiderRunId(id => id + 1)}
-                    aria-label="Release the widow spider"
-                    title="Release the widow spider"
-                >
-                    🕷
-                </button>
+                <>
+                    <button
+                        type="button"
+                        className="admin-spider-btn"
+                        onClick={() => setSpiderRun(run => ({ id: run.id + 1, mode: 'wander' }))}
+                        aria-label="Release the widow spider"
+                        title="Widow spider — wander"
+                    >
+                        🕷
+                    </button>
+                    <button
+                        type="button"
+                        className="admin-spider-btn admin-spider-btn--chase"
+                        onClick={() => setSpiderRun(run => ({ id: run.id + 1, mode: 'chase' }))}
+                        aria-label="Release the widow spider in chase mode"
+                        title="Widow spider — she hunts your finger"
+                    >
+                        🕷
+                    </button>
+                </>
             )}
             <WidowSpider
-                runId={spiderRunId}
+                runId={spiderRun.id}
+                mode={spiderRun.mode}
                 cancelled={ROUND_PRESENTATION_STATES.has(currentTableState?.state)}
             />
             {user?.is_admin && (

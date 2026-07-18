@@ -19,6 +19,12 @@
     display: block;
 }
 
+/* While she's fully out she climbs on top of everything on the table
+   (cards, hand, chrome); emerging and hiding stay under the pile. */
+.widow-spider.is-on-top {
+    z-index: 3000;
+}
+
 .widow-spider-svg {
     width: 100%;
     height: 100%;
@@ -44,6 +50,12 @@
 .widow-spider.is-walking .spider-legs--b {
     animation: spider-legs-b 0.18s linear infinite;
     transform-origin: center;
+}
+
+/* Charging: legs scrabble twice as fast */
+.widow-spider.is-charging.is-walking .spider-legs--a,
+.widow-spider.is-charging.is-walking .spider-legs--b {
+    animation-duration: 0.09s;
 }
 
 /* Tiny admin trigger, tucked right below the observer eye */
@@ -72,4 +84,11 @@
 .admin-spider-btn:focus-visible {
     color: #fff;
     border-color: rgba(200, 30, 30, 0.7);
+}
+
+/* Second trigger: chase mode, just below the wander button */
+.admin-spider-btn--chase {
+    top: calc(7vh + 78px);
+    border-color: rgba(200, 30, 30, 0.6);
+    background: rgba(46, 12, 12, 0.85);
 }
