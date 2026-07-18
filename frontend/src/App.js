@@ -17,6 +17,7 @@ import LobbyHeader from "./components/LobbyHeader.js";
 import GameHeader from "./components/GameHeader.js";
 import HowToPlayModal from "./components/HowToPlayModal.js";
 import FirstGameWelcome, { shouldShowFirstGameWelcome } from "./components/FirstGameWelcome.js";
+import OrientationScrim from "./components/OrientationScrim.js";
 import { extractInviteTableId } from "./utils/tableInvites.js";
 import { newBuildAvailable } from "./utils/clientVersion.js";
 import "./App.css";
@@ -485,6 +486,7 @@ function App() {
     if (!token || !user) {
         return (
             <div className="app-content-container no-header">
+                <OrientationScrim />
                 <AuthContainer onLoginSuccess={handleLoginSuccess} inviteTableId={pendingInviteTableId} />
             </div>
         );
@@ -511,6 +513,7 @@ function App() {
 
     return (
         <>
+            <OrientationScrim />
             {(errorMessage || connectionNotice) && (
                 <div
                     className={`app-status-toast ${errorMessage ? 'is-error' : `is-${connectionNotice.kind}`}`}

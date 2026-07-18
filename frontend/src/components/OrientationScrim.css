@@ -1,0 +1,88 @@
+/* frontend/src/components/OrientationScrim.css */
+/* Hidden everywhere except landscape phones: coarse pointer excludes desktops,
+   the height ceiling excludes iPads (shortest iPad landscape edge is 768px).
+   Sizes are rem/px on purpose — vh is unreliable in exactly the viewports
+   this scrim targets. */
+
+.orientation-scrim {
+    display: none;
+}
+
+@media (orientation: landscape) and (pointer: coarse) and (max-height: 600px) {
+    .orientation-scrim {
+        position: fixed;
+        inset: 0;
+        z-index: 100000;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 1rem;
+        text-align: center;
+        /* Same felt-and-vignette treatment as the table so it reads as part of the game */
+        background: radial-gradient(ellipse at 50% 35%, #15673a 0%, #0f4d2a 55%, #0a3a1f 100%);
+        color: #fff;
+    }
+}
+
+.orientation-scrim__phone {
+    position: relative;
+    width: 3.4rem;
+    height: 5.6rem;
+    margin-bottom: 0.9rem;
+    border: 0.22rem solid #f6cf74;
+    border-radius: 0.65rem;
+    box-shadow: 0 0.4rem 1.2rem rgba(0, 0, 0, 0.45);
+    animation: orientation-scrim-rotate 2.6s ease-in-out infinite;
+}
+
+.orientation-scrim__phone-screen {
+    position: absolute;
+    inset: 0.35rem 0.25rem 0.75rem;
+    border-radius: 0.25rem;
+    background: rgba(246, 207, 116, 0.22);
+}
+
+.orientation-scrim__phone-button {
+    position: absolute;
+    bottom: 0.22rem;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0.9rem;
+    height: 0.18rem;
+    border-radius: 0.1rem;
+    background: #f6cf74;
+}
+
+/* Start sideways (how the player is holding it), swing upright, hold, repeat */
+@keyframes orientation-scrim-rotate {
+    0%, 20%  { transform: rotate(-90deg); }
+    45%, 85% { transform: rotate(0deg); }
+    100%     { transform: rotate(-90deg); }
+}
+
+.orientation-scrim__title {
+    margin: 0;
+    font-family: 'Oswald', sans-serif;
+    font-size: 1.35rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: #f6cf74;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.orientation-scrim__copy {
+    margin: 0;
+    max-width: 26rem;
+    font-size: 0.95rem;
+    line-height: 1.35;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .orientation-scrim__phone {
+        animation: none;
+        transform: rotate(0deg);
+    }
+}
