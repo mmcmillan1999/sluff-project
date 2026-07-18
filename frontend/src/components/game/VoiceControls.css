@@ -1,31 +1,19 @@
-/* Compact table voice control. It stays immediately below the fixed brand
-   header so the self-mute action remains reachable throughout play. */
+/* Compact table voice controls live in the footer action row. Expanded voice
+   details float above the hand so they never change the footer geometry. */
 
 .voice-controls {
-    position: fixed;
-    top: calc(7.5vh + env(safe-area-inset-top, 0px) + 8px);
-    left: max(8px, env(safe-area-inset-left, 0px));
-    z-index: 1500;
+    position: relative;
+    z-index: 30;
     display: flex;
-    width: min(18rem, calc(100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 16px));
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 7px;
+    width: auto;
+    align-items: center;
     font-family: 'Oswald', sans-serif;
-    pointer-events: none;
-}
-
-.voice-controls button,
-.voice-controls input,
-.voice-controls .voice-mixer,
-.voice-controls .voice-error {
-    pointer-events: auto;
 }
 
 .voice-primary-row {
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 0.8vh;
 }
 
 .voice-self-btn,
@@ -37,6 +25,7 @@
     min-height: 44px;
     align-items: center;
     justify-content: center;
+    margin: 0;
     border: 1px solid rgba(241, 207, 140, 0.46);
     background: rgba(19, 30, 24, 0.95);
     color: #eee8dc;
@@ -48,21 +37,17 @@
 }
 
 .voice-self-btn {
-    min-width: 116px;
-    padding: 8px 13px 8px 10px;
-    gap: 7px;
-    border-radius: 999px;
-    font-size: clamp(0.78rem, 1.65vh, 0.92rem);
-    font-weight: 600;
-    letter-spacing: 0.045em;
-    text-transform: uppercase;
+    width: 44px;
+    height: 44px;
+    padding: 10px;
+    border-radius: 50%;
     transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 
 .voice-self-btn svg {
-    width: 22px;
-    height: 22px;
-    flex: 0 0 22px;
+    width: 100%;
+    height: 100%;
+    flex: 0 0 100%;
     fill: none;
     stroke: currentColor;
     stroke-width: 1.8;
@@ -116,6 +101,29 @@
     color: #f1cf8c;
 }
 
+.voice-popover-stack {
+    position: fixed;
+    bottom: calc(20vh + env(safe-area-inset-bottom, 0px) + 1.2vh);
+    left: 50%;
+    z-index: 1600;
+    display: flex;
+    width: min(18rem, calc(100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 16px));
+    transform: translateX(-50%);
+    flex-direction: column;
+    align-items: center;
+    gap: 7px;
+    font-family: 'Oswald', sans-serif;
+    pointer-events: none;
+}
+
+.voice-popover-stack:empty {
+    display: none;
+}
+
+.voice-popover-stack > * {
+    pointer-events: auto;
+}
+
 .voice-connection-status {
     padding: 3px 10px;
     border-radius: 999px;
@@ -126,7 +134,7 @@
 }
 
 .voice-error {
-    width: min(17rem, calc(100vw - 16px));
+    width: 100%;
     box-sizing: border-box;
     margin: 0;
     padding: 9px 11px;
@@ -142,7 +150,7 @@
 
 .voice-mixer {
     display: flex;
-    width: min(18rem, calc(100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 16px));
+    width: 100%;
     max-height: min(46dvh, 22rem);
     box-sizing: border-box;
     overflow-y: auto;
@@ -263,7 +271,9 @@
 }
 
 .voice-controls button:focus-visible,
-.voice-controls input:focus-visible {
+.voice-controls input:focus-visible,
+.voice-popover-stack button:focus-visible,
+.voice-popover-stack input:focus-visible {
     outline: 3px solid #f1cf8c;
     outline-offset: 3px;
 }
@@ -280,9 +290,25 @@
 }
 
 @media (max-width: 390px) {
-    .voice-self-btn {
-        min-width: 106px;
-        padding-inline: 9px 11px;
+    .voice-primary-row {
+        gap: 4px;
+    }
+
+    .button-panel .voice-self-btn,
+    .button-panel .voice-mixer-btn {
+        position: relative;
+        width: 40px;
+        height: 40px;
+        min-width: 40px;
+        min-height: 40px;
+        padding: 9px;
+    }
+
+    .button-panel .voice-self-btn::before,
+    .button-panel .voice-mixer-btn::before {
+        position: absolute;
+        inset: -2px;
+        content: '';
     }
 
     .voice-mixer {
@@ -296,10 +322,6 @@
 }
 
 @media (orientation: landscape) and (max-height: 540px) {
-    .voice-controls {
-        top: calc(7.5vh + env(safe-area-inset-top, 0px) + 4px);
-    }
-
     .voice-mixer {
         max-height: 60dvh;
     }

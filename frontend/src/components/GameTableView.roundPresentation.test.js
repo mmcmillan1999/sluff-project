@@ -60,7 +60,14 @@ vi.mock('./game/InsuranceControls', () => ({ default: () => null }));
 vi.mock('./game/InsurancePrompt', () => ({ default: () => null }));
 vi.mock('./game/BidWinnerSplash', () => ({ default: () => null }));
 vi.mock('./game/IosPwaPrompt', () => ({ default: () => null }));
-vi.mock('./game/VoiceControls', () => ({ default: () => null }));
+vi.mock('./game/VoiceControls', () => ({
+    default: () => (
+        <div role="group" aria-label="Table voice controls">
+            <button type="button" aria-label="Mute microphone" />
+            <button type="button" aria-label="Open voice settings" />
+        </div>
+    )
+}));
 
 const socket = {
     id: 'socket-1',
@@ -149,6 +156,22 @@ afterEach(() => {
 });
 
 describe('GameTableView round presentation sequence', () => {
+    test('orders compact voice controls before Chat and keeps the menu in the header layer', () => {
+        renderGame(makeState({ state: 'Playing Phase' }));
+
+        const panel = document.querySelector('.button-panel');
+        const footerButtons = within(panel).getAllByRole('button');
+        expect(footerButtons).toHaveLength(3);
+        expect(footerButtons[0]).toHaveAccessibleName('Mute microphone');
+        expect(footerButtons[1]).toHaveAccessibleName('Open voice settings');
+        expect(footerButtons[2]).toHaveAccessibleName('Chat');
+
+        const menuButton = screen.getByRole('button', { name: 'Open game menu' });
+        expect(panel).not.toContainElement(menuButton);
+        expect(menuButton).toHaveClass('game-header-menu-btn');
+        expect(menuButton.parentElement).toBe(document.body);
+    });
+
     test('portals the open game menu into the top-level overlay layer', async () => {
         const user = userEvent.setup();
         renderGame(makeState({ state: 'Playing Phase' }));

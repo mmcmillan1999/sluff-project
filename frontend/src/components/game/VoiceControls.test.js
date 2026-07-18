@@ -57,8 +57,10 @@ describe('VoiceControls', () => {
         await waitFor(() => expect(voice.setMicrophoneMuted).toHaveBeenCalledWith(false));
 
         expect(screen.getByRole('group', { name: 'Table voice controls' })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Mute microphone' })).toHaveAttribute('aria-pressed', 'false');
-        expect(screen.getByText('Mic on')).toBeInTheDocument();
+        const liveButton = screen.getByRole('button', { name: 'Mute microphone' });
+        expect(liveButton).toHaveAttribute('aria-pressed', 'false');
+        expect(liveButton.querySelector('.voice-icon-slash')).toBeNull();
+        expect(screen.queryByText(/mic on|mic muted|starting mic/i)).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /join voice|hold to talk|leave voice/i })).not.toBeInTheDocument();
 
         fireEvent.keyDown(window, { key: 'v' });
@@ -73,8 +75,10 @@ describe('VoiceControls', () => {
         const muteButton = await screen.findByRole('button', { name: 'Mute microphone' });
         await user.click(muteButton);
         await waitFor(() => expect(voice.setMicrophoneMuted).toHaveBeenLastCalledWith(true));
-        expect(screen.getByRole('button', { name: 'Unmute microphone' })).toHaveAttribute('aria-pressed', 'true');
-        expect(screen.getByText('Mic muted')).toBeInTheDocument();
+        const mutedButton = screen.getByRole('button', { name: 'Unmute microphone' });
+        expect(mutedButton).toHaveAttribute('aria-pressed', 'true');
+        expect(mutedButton.querySelector('.voice-icon-slash')).not.toBeNull();
+        expect(screen.queryByText(/mic on|mic muted|starting mic/i)).not.toBeInTheDocument();
 
         await user.click(screen.getByRole('button', { name: 'Unmute microphone' }));
         await waitFor(() => expect(voice.setMicrophoneMuted).toHaveBeenLastCalledWith(false));
@@ -184,7 +188,9 @@ describe('VoiceControls', () => {
 
         await user.click(screen.getByRole('button', { name: 'Open voice settings' }));
         expect(screen.getByRole('button', { name: 'Close voice settings' })).toHaveAttribute('aria-expanded', 'true');
-        expect(screen.getByRole('group', { name: 'Voice player volumes' })).toHaveTextContent('Ben');
+        const mixer = screen.getByRole('group', { name: 'Voice player volumes' });
+        expect(mixer).toHaveTextContent('Ben');
+        expect(mixer.closest('.voice-popover-stack').parentElement).toBe(document.body);
         expect(screen.getByText(/microphone active/i)).toBeInTheDocument();
 
         const slider = screen.getByRole('slider', { name: 'Ben volume' });

@@ -134,6 +134,12 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const selfPlayerInTable = currentTableState ? currentTableState.players[playerId] : null;
     const isSpectator = selfPlayerInTable?.isSpectator;
     const selfPlayerName = selfPlayerInTable?.playerName;
+    const tableVoiceAvailable = Boolean(
+        selfPlayerInTable
+        && !isSpectator
+        && socket
+        && currentTableState?.tableId
+    );
     const gameState = currentTableState?.state;
     const gameHasSettled = gameState === 'Game Over' || gameState === 'DrawComplete';
     const activeSeatIsHeld = Boolean(
@@ -1094,6 +1100,28 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             ref={gameViewRef}
         >
             {shareNotice && <div className="share-invite-notice">{shareNotice}</div>}
+            {!roundPresentationControlsLocked && createPortal(
+                <button
+                    className="game-menu-btn game-header-menu-btn"
+                    type="button"
+                    aria-label="Open game menu"
+                    aria-haspopup="dialog"
+                    aria-expanded={showGameMenu}
+                    aria-controls="game-menu-dialog"
+                    onClick={event => {
+                        event.currentTarget.focus();
+                        setShowGameMenu(prev => !prev);
+                    }}
+                >
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                    </svg>
+                </button>,
+                document.body
+            )}
+            {showGameMenu && !roundPresentationControlsLocked && <GameMenu />}
             {/* Card position debug overlay */}
             {false && window.cardDebugPositions && window.cardDebugPositions.length > 0 && (
                 <div style={{
@@ -1269,14 +1297,6 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 onClose={() => setProfilePlayerName(null)}
             />
 
-            {selfPlayerInTable && !isSpectator && socket && currentTableState?.tableId && (
-                <VoiceControls
-                    key={currentTableState.tableId}
-                    socket={socket}
-                    tableId={currentTableState.tableId}
-                />
-            )}
-
             <TableLayout
                 currentTableState={tableStateForDealPresentation}
                 seatAssignments={seatAssignments}
@@ -1359,34 +1379,24 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                         emitEvent={emitEvent}
                         onOpenPrompt={() => setShowInsurancePrompt(true)}
                     />
-                    {!roundPresentationControlsLocked && (
+                    {(tableVoiceAvailable || !roundPresentationControlsLocked) && (
                         <div className="button-panel">
-                            <button
-                                className="game-menu-btn"
-                                type="button"
-                                aria-label="Open game menu"
-                                aria-haspopup="dialog"
-                                aria-expanded={showGameMenu}
-                                aria-controls="game-menu-dialog"
-                                onClick={event => {
-                                    event.currentTarget.focus();
-                                    setShowGameMenu(prev => !prev);
-                                }}
-                            >
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <line x1="3" y1="12" x2="21" y2="12"></line>
-                                    <line x1="3" y1="6" x2="21" y2="6"></line>
-                                    <line x1="3" y1="18" x2="21" y2="18"></line>
-                                </svg>
-                            </button>
-                            <button className="chat-tab-button" onClick={toggleChatWindow}>
-                                <span>Chat</span>
-                                {!chatOpen && unreadChat > 0 && <span className="unread-badge">{unreadChat}</span>}
-                            </button>
+                            {tableVoiceAvailable && (
+                                <VoiceControls
+                                    key={currentTableState.tableId}
+                                    socket={socket}
+                                    tableId={currentTableState.tableId}
+                                />
+                            )}
+                            {!roundPresentationControlsLocked && (
+                                <button className="chat-tab-button" onClick={toggleChatWindow}>
+                                    <span>Chat</span>
+                                    {!chatOpen && unreadChat > 0 && <span className="unread-badge">{unreadChat}</span>}
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>
-                {showGameMenu && !roundPresentationControlsLocked && <GameMenu />}
             </footer>
 
             <DealAnimation

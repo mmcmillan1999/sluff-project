@@ -34,7 +34,7 @@
 /* In-Game Ad Container */
 .in-game-ad-container {
     position: fixed;
-    bottom: 22vh; /* Position above the player hand using vh */
+    bottom: calc(22vh + env(safe-area-inset-bottom, 0px)); /* Above the hand and home indicator */
     left: 50%;
     transform: translateX(-50%);
     z-index: 10;
@@ -56,7 +56,7 @@
     color: white;
     position: relative;
     z-index: 10; /* Lower z-index to match main branch */
-    height: 20vh; /* Fixed height to accommodate player hand + controls */
+    height: calc(20vh + env(safe-area-inset-bottom, 0px)); /* Hand, controls, and home indicator */
     box-sizing: border-box; /* Include border in height calculation */
     display: flex;
     flex-direction: column;
@@ -74,9 +74,9 @@
     align-items: center;
     gap: 1vh; /* Reduced gap */
     width: 100%;
-    padding: 0.5vh 1vh; /* Reduced padding */
+    padding: 0.5vh 1vh calc(0.5vh + env(safe-area-inset-bottom, 0px));
     box-sizing: border-box;
-    height: 7vh; /* Fixed height for controls */
+    height: calc(7vh + env(safe-area-inset-bottom, 0px));
     background-color: rgba(40, 40, 40, 0.9); /* Slightly darker than footer */
     visibility: visible !important; /* Force visibility */
     opacity: 1 !important; /* Force opacity */
@@ -121,7 +121,7 @@
 .game-view-chat-container {
     width: 35vh; /* vh-based width */
     position: absolute;
-    bottom: 22vh; /* Move higher, above player hand area (similar to menu) */
+    bottom: calc(22vh + env(safe-area-inset-bottom, 0px));
     left: 1vh;
     z-index: 120; /* Higher than player hand (110) */
     max-height: calc(100vh - 35vh); /* Adjusted for new position */
@@ -235,7 +235,7 @@
 
 .game-menu-popup {
     position: absolute;
-    bottom: calc(20vh + 1.2vh);
+    top: calc(env(safe-area-inset-top, 0px) + 7.5vh + 1.2vh);
     right: 1.2vh;
     background-color: #212121;
     border: 0.12vh solid #555;
@@ -249,7 +249,7 @@
     flex-direction: column;
     gap: 1.2vh;
     box-sizing: border-box;
-    max-height: calc(100dvh - 24vh);
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 10vh);
     overflow-y: auto;
 }
 
@@ -352,7 +352,7 @@
 /* Transient confirmation after copying an invite link */
 .share-invite-notice {
     position: fixed;
-    top: 9vh; /* just below the 7.5vh header */
+    top: calc(env(safe-area-inset-top, 0px) + 9vh); /* just below the header */
     left: 50%;
     transform: translateX(-50%);
     background-color: #198754;
@@ -421,14 +421,34 @@
     height: 2vh; /* Scaled down proportionally */
 }
 
-/* Button panel groups menu and chat buttons */
+.game-header-menu-btn {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + max(2px, calc((7.5vh - 44px) / 2)));
+    right: max(6px, env(safe-area-inset-right, 0px));
+    z-index: 2100;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    margin: 0;
+    padding: 10px;
+    border-color: rgba(241, 207, 140, 0.46);
+    background: linear-gradient(145deg, rgba(67, 67, 67, 0.98), rgba(38, 38, 38, 0.98));
+}
+
+.game-header-menu-btn svg {
+    width: 22px;
+    height: 22px;
+}
+
+/* Footer action rail: microphone, table voice mixer, then chat. */
 .button-panel {
     display: flex !important; /* Force display */
     align-items: center;
-    gap: 0.8vh; /* Match insurance container gap */
+    gap: 0.6vh;
     justify-content: center;
     flex-shrink: 0; /* Prevent shrinking */
-    padding: 0.5vh 0.8vh; /* Match insurance container padding */
+    padding: 0.4vh 0.6vh;
     background: linear-gradient(135deg, rgba(31, 41, 55, 0.8) 0%, rgba(17, 24, 39, 0.8) 100%);
     border-radius: 1vh; /* Match insurance container */
     border: 0.12vh solid rgba(255, 255, 255, 0.15); /* Match insurance container */
@@ -436,6 +456,43 @@
     visibility: visible !important; /* Force visibility */
     opacity: 1 !important; /* Force opacity */
     box-shadow: 0 0.5vh 1.5vh rgba(0, 0, 0, 0.3); /* Match insurance container shadow */
+}
+
+.button-panel .chat-tab-button {
+    margin: 0;
+}
+
+@media (max-width: 390px) and (orientation: portrait) {
+    .footer-controls-wrapper {
+        gap: 4px;
+        padding-inline: 4px;
+    }
+
+    .button-panel {
+        gap: 4px;
+        padding: 3px 4px;
+    }
+
+    .button-panel .chat-tab-button {
+        min-width: 44px;
+        padding-inline: 6px;
+    }
+}
+
+@media (orientation: landscape) and (max-height: 540px) and (pointer: fine) {
+    .game-header-menu-btn {
+        top: calc(env(safe-area-inset-top, 0px) + max(1px, calc((7.5vh - 36px) / 2)));
+        width: 36px;
+        height: 36px;
+        min-width: 36px;
+        min-height: 36px;
+        padding: 8px;
+    }
+
+    .game-header-menu-btn svg {
+        width: 20px;
+        height: 20px;
+    }
 }
 
 /* Insurance controls container */

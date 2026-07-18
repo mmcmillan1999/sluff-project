@@ -2,6 +2,7 @@
 // Table voice joins automatically. The prominent control is the player's own
 // microphone toggle; the compact mixer controls only incoming player audio.
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import VoiceChat from '../../utils/VoiceChat';
 import './VoiceControls.css';
 
@@ -201,13 +202,6 @@ const VoiceControls = ({ socket, tableId }) => {
     const microphoneStarting = microphoneState === 'starting';
     const voiceJoined = connectionState === 'joined';
     const microphoneLabel = microphoneLive ? 'Mute microphone' : 'Unmute microphone';
-    const microphoneText = connectionState === 'joining'
-        ? 'Connecting'
-        : microphoneStarting
-            ? 'Starting mic'
-            : microphoneLive
-                ? 'Mic on'
-                : 'Mic muted';
 
     const toggleMicrophone = () => {
         if (!voiceJoined || microphoneStarting) return;
@@ -231,7 +225,6 @@ const VoiceControls = ({ socket, tableId }) => {
                     aria-pressed={!microphoneLive}
                 >
                     <MicrophoneIcon muted={!microphoneLive} />
-                    <span>{microphoneText}</span>
                 </button>
 
                 <button
@@ -247,64 +240,66 @@ const VoiceControls = ({ socket, tableId }) => {
                 </button>
             </div>
 
-            {connectionState === 'joining' && (
-                <span className="voice-connection-status" role="status" aria-live="polite">
-                    Joining table voice…
-                </span>
-            )}
-            {error && <p className="voice-error" role="alert">{error}</p>}
+            {createPortal(<div className="voice-popover-stack">
+                {connectionState === 'joining' && (
+                    <span className="voice-connection-status" role="status" aria-live="polite">
+                        Joining table voice…
+                    </span>
+                )}
+                {error && <p className="voice-error" role="alert">{error}</p>}
 
-            {mixerOpen && voiceJoined && (
-                <div className="voice-mixer" id={mixerId} role="group" aria-label="Voice player volumes">
-                    <div className="voice-mixer-heading">
-                        <strong>Table voice</strong>
-                        <span>{peers.length} {peers.length === 1 ? 'player' : 'players'}</span>
-                    </div>
-                    {peers.length === 0 && (
-                        <p className="voice-mixer-empty">Waiting for other players to connect.</p>
-                    )}
-                    {peers.map((peer) => {
-                        const peerMicrophoneLive = peer.microphoneLive ?? peer.speaking;
-                        const peerStatus = connectionStatus(peer);
-                        return (
-                            <div className="voice-mixer-row" key={peer.userId}>
-                                <span className={`voice-peer-name${peerMicrophoneLive ? ' is-live' : ''}`}>
-                                    <span className="voice-peer-dot" aria-hidden="true" />
-                                    <span className="voice-peer-copy">
-                                        <span>{peer.playerName}</span>
-                                        {peerStatus && <em className="voice-peer-status">{peerStatus}</em>}
+                {mixerOpen && voiceJoined && (
+                    <div className="voice-mixer" id={mixerId} role="group" aria-label="Voice player volumes">
+                        <div className="voice-mixer-heading">
+                            <strong>Table voice</strong>
+                            <span>{peers.length} {peers.length === 1 ? 'player' : 'players'}</span>
+                        </div>
+                        {peers.length === 0 && (
+                            <p className="voice-mixer-empty">Waiting for other players to connect.</p>
+                        )}
+                        {peers.map((peer) => {
+                            const peerMicrophoneLive = peer.microphoneLive ?? peer.speaking;
+                            const peerStatus = connectionStatus(peer);
+                            return (
+                                <div className="voice-mixer-row" key={peer.userId}>
+                                    <span className={`voice-peer-name${peerMicrophoneLive ? ' is-live' : ''}`}>
+                                        <span className="voice-peer-dot" aria-hidden="true" />
+                                        <span className="voice-peer-copy">
+                                            <span>{peer.playerName}</span>
+                                            {peerStatus && <em className="voice-peer-status">{peerStatus}</em>}
+                                        </span>
+                                        {peerMicrophoneLive && (
+                                            <span className="voice-sr-only"> microphone active</span>
+                                        )}
                                     </span>
-                                    {peerMicrophoneLive && (
-                                        <span className="voice-sr-only"> microphone active</span>
-                                    )}
-                                </span>
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max="150"
-                                    value={Math.round(peer.volume * 100)}
-                                    disabled={peer.muted}
-                                    onChange={(event) => voiceRef.current?.setVolume(
-                                        peer.userId,
-                                        Number(event.target.value) / 100,
-                                    )}
-                                    aria-label={`${peer.playerName} volume`}
-                                    aria-valuetext={`${Math.round(peer.volume * 100)} percent`}
-                                />
-                                <button
-                                    type="button"
-                                    className={`voice-peer-mute${peer.muted ? ' is-muted' : ''}`}
-                                    onClick={() => voiceRef.current?.setMuted(peer.userId, !peer.muted)}
-                                    aria-label={peer.muted ? `Unmute ${peer.playerName}` : `Mute ${peer.playerName}`}
-                                    aria-pressed={peer.muted}
-                                >
-                                    <SpeakerIcon muted={peer.muted} />
-                                </button>
-                            </div>
-                        );
-                    })}
-                </div>
-            )}
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="150"
+                                        value={Math.round(peer.volume * 100)}
+                                        disabled={peer.muted}
+                                        onChange={(event) => voiceRef.current?.setVolume(
+                                            peer.userId,
+                                            Number(event.target.value) / 100,
+                                        )}
+                                        aria-label={`${peer.playerName} volume`}
+                                        aria-valuetext={`${Math.round(peer.volume * 100)} percent`}
+                                    />
+                                    <button
+                                        type="button"
+                                        className={`voice-peer-mute${peer.muted ? ' is-muted' : ''}`}
+                                        onClick={() => voiceRef.current?.setMuted(peer.userId, !peer.muted)}
+                                        aria-label={peer.muted ? `Unmute ${peer.playerName}` : `Mute ${peer.playerName}`}
+                                        aria-pressed={peer.muted}
+                                    >
+                                        <SpeakerIcon muted={peer.muted} />
+                                    </button>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>, document.body)}
         </div>
     );
 };

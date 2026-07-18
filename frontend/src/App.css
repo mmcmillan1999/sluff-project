@@ -34,8 +34,7 @@ body.allow-scroll {
 }
 
 .app-content-container.with-header {
-  padding-top: 7.5vh;
-  padding-top: 7.5dvh;
+  padding-top: calc(7.5vh + env(safe-area-inset-top, 0px));
 }
 
 .app-content-container.app-view-lobby,

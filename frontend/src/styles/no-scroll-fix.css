@@ -18,9 +18,10 @@ body.game-active * {
 
 /* 4. Fix for mobile viewport height issues (address bar) */
 .game-view {
-  height: 92.5vh !important; /* Account for 7.5vh header */
-  height: 92.5dvh !important; /* Dynamic viewport height for mobile */
-  max-height: 92.5vh !important;
+  height: calc(100vh - 7.5vh - env(safe-area-inset-top, 0px)) !important;
+  height: calc(100dvh - 7.5vh - env(safe-area-inset-top, 0px)) !important; /* Dynamic viewport height for mobile */
+  max-height: calc(100vh - 7.5vh - env(safe-area-inset-top, 0px)) !important;
+  max-height: calc(100dvh - 7.5vh - env(safe-area-inset-top, 0px)) !important;
   overflow: hidden !important;
 }
 

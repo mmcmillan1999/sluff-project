@@ -8,7 +8,8 @@
     top: 0;
     left: 0;
     width: 100%;
-    height: 7.5vh; /* Must match the layout offset in App.css .with-header */
+    height: calc(7.5vh + env(safe-area-inset-top, 0px)); /* Must match App.css .with-header */
+    padding-top: env(safe-area-inset-top, 0px);
     background-color: #1a1a1a;
     box-shadow: 0 0.12vh 0.25vh rgba(0, 0, 0, 0.25);
     z-index: 2000;
@@ -23,6 +24,24 @@
     height: 100%;
     perspective: 42vh;
     perspective-origin: 50% 50%;
+}
+
+/* The game header owns a compact action rail on the right. Keep every face of
+   the rotating cube inside the remaining width so it never passes under the
+   menu button. */
+.brand-header--game .brand-cube-viewport {
+    width: calc(100% - 56px - env(safe-area-inset-right, 0px));
+}
+
+.brand-header--game .brand-header-text {
+    min-width: 0;
+}
+
+.brand-header--game .brand-header-season,
+.brand-header--game .brand-header-tagline {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* The cube is pushed back by half its depth so whichever face is at the
