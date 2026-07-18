@@ -27,10 +27,10 @@
 
 /* Dealer puck - top left corner */
 .dealer-puck-ear {
-    /* Positioning - above the seat, relative to the anchor point */
-    bottom: calc(7vh - 1.75vh); /* Position puck center just above seat top (seat height is 7vh, puck radius is 1.75vh) */
-    left: calc(50% - 4vh); /* Left of center */
-    transform: translateX(-50%); /* Center the puck on its position */
+    /* Center the puck on the upper-left plaque corner like a Mickey ear. */
+    bottom: calc(7vh - 1.75vh);
+    left: 0;
+    transform: translateX(-50%);
     
     /* Visual styling */
     background: linear-gradient(135deg, #2c2c2c, #1a1a1a); /* Dark gray/black like widow */
@@ -43,9 +43,10 @@
 /* Bidder/Trump puck - top right corner */
 .bidder-puck-ear {
     position: absolute;
-    bottom: calc(7vh - 1.75vh); /* Position puck center just above seat top (seat height is 7vh, puck radius is 1.75vh) */
-    right: calc(50% - 4vh); /* Right of center */
-    transform: translateX(50%); /* Center the puck on its position */
+    /* Mirror the dealer puck on the upper-right plaque corner. */
+    bottom: calc(7vh - 1.75vh);
+    right: 0;
+    transform: translateX(50%);
 }
 
 /* Apply trump indicator puck styling when it's a bidder puck ear */
@@ -152,8 +153,9 @@
    toward the table without changing the seat's fixed deal-animation target. */
 .player-seat-wrapper > .score-chip-bank {
     position: absolute;
-    /* Leave one full chip diameter between the previous bank anchor and plaque. */
-    top: calc(-1.05vh - var(--score-chip-diameter, 2.75vh));
+    /* Returning about 1.2 chip diameters puts each base chip's center on the
+       plaque edge: half on the plaque and half over the table. */
+    top: -0.5vh;
     left: 50%;
     z-index: 4;
     transform: translate(-50%, -50%);
@@ -163,8 +165,9 @@
 /* The north seat has very little header clearance, so its bank hangs inward. */
 .player-seat-wrapper-top > .score-chip-bank {
     top: auto;
-    /* Mirror the same one-chip gap toward the table for the north seat. */
-    bottom: calc(-1.05vh - var(--score-chip-diameter, 2.75vh));
+    /* The north bank uses the opposing Y transform, so +0.5vh is its visual
+       mirror of the -0.5vh edge anchor used by the other seats. */
+    bottom: 0.5vh;
     transform: translate(-50%, 50%);
 }
 
