@@ -96,7 +96,7 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent, showTrum
             {/* Dealer puck - top left ear */}
             {isDealer && (
                 <div className="seat-puck dealer-puck-ear">
-                    D
+                    <span className="seat-puck-label">D</span>
                 </div>
             )}
             

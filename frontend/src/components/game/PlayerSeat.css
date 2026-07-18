@@ -8,64 +8,161 @@
     overflow: visible;
 }
 
-/* Puck "ears" that overlay on the player seat */
-.seat-puck {
+/* Puck "ears" — the dealer button and trump marker. Same 2.5D language as
+   the score chips: ::after paints the elliptical top face, ::before the
+   cylindrical edge below it, so the pucks lie on the felt like the chips. */
+.player-seat-wrapper .seat-puck {
+    --puck-d: 3.9vh;         /* face ellipse width */
+    --puck-face-h: 2.3vh;    /* face ellipse height (foreshortened) */
+    --puck-thick: 0.48vh;    /* visible edge thickness */
     position: absolute;
-    width: 3.5vh; /* Increased size to fit image better */
-    height: 3.5vh;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.2vh;
-    font-weight: bold;
-    border: 0.15vh solid rgba(0, 0, 0, 0.3);
-    box-shadow: 0 0.2vh 0.4vh rgba(0, 0, 0, 0.3);
+    width: var(--puck-d);
+    height: calc(var(--puck-face-h) + var(--puck-thick));
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
     z-index: 10; /* Above the seat but below modals */
     pointer-events: none; /* Don't interfere with seat interactions */
 }
 
-/* Dealer puck - top left corner */
-.dealer-puck-ear {
-    /* Pull the puck inward by its radius so its outside edge is flush with
-       the plaque while preserving the corner-ear silhouette. */
-    bottom: calc(7vh - 1.75vh);
-    left: 1.75vh;
-    transform: translateX(-50%);
-    
-    /* Visual styling */
-    background: linear-gradient(135deg, #2c2c2c, #1a1a1a); /* Dark gray/black like widow */
-    color: #f0f0f0; /* Light gray text */
-    font-family: 'Oswald', sans-serif;
-    border: 0.15vh solid #444; /* Darker border */
-    font-size: 1.8vh; /* Larger text for bigger puck */
+.player-seat-wrapper .seat-puck::before {
+    content: '';
+    position: absolute;
+    z-index: 0;
+    top: var(--puck-thick);
+    left: 0;
+    width: 100%;
+    height: var(--puck-face-h);
+    border-radius: 50%;
+    box-sizing: border-box;
+    border: 0.09vh solid rgba(8, 5, 2, 0.55);
+    background:
+        linear-gradient(180deg, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.35)),
+        var(--puck-side);
+    box-shadow: 0 0.18vh 0.3vh rgba(0, 0, 0, 0.4);
 }
 
-/* Bidder/Trump puck - top right corner */
+.player-seat-wrapper .seat-puck::after {
+    content: '';
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: var(--puck-face-h);
+    border-radius: 50%;
+    box-sizing: border-box;
+    border: 0.09vh solid var(--puck-edge);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 48%),
+        radial-gradient(ellipse at 50% 50%, transparent 0 64%, rgba(0, 0, 0, 0.25) 65% 71%, transparent 72%),
+        radial-gradient(ellipse at 50% 42%, var(--puck-hi), var(--puck-base) 78%);
+}
+
+/* Text label (the dealer "D") centered on the face, above the paint layers */
+.seat-puck-label {
+    position: relative;
+    z-index: 2;
+    display: block;
+    line-height: var(--puck-face-h);
+    text-align: center;
+    font-family: 'Oswald', sans-serif;
+    font-size: 1.5vh;
+    font-weight: 700;
+    text-shadow: 0 0.08vh 0.12vh rgba(0, 0, 0, 0.7);
+}
+
+/* Trump artwork foreshortened onto the face */
+.player-seat-wrapper .seat-puck .trump-puck-icon {
+    position: absolute;
+    z-index: 2;
+    top: calc(var(--puck-face-h) / 2);
+    left: 50%;
+    width: 2.9vh;
+    height: 2.9vh;
+    object-fit: contain;
+    transform: translate(-50%, -50%) scaleY(0.72);
+    filter: drop-shadow(0.1vh 0.1vh 0.2vh rgba(0, 0, 0, 0.5));
+}
+
+/* Dealer puck — dark button, anchored flush inside the lower-left plaque
+   corner: the chip bank owns the top edge, the pucks own the bottom. */
+.dealer-puck-ear {
+    --puck-base: #2c2c31;
+    --puck-hi: #4a4a52;
+    --puck-edge: #0c0c0e;
+    --puck-side: #46464e;
+    bottom: 0.1vh;
+    left: 1.95vh;
+    transform: translateX(-50%);
+    color: #f0f0f0;
+}
+
+/* Bidder/Trump puck — gold button flush inside the lower-right corner */
 .bidder-puck-ear {
     position: absolute;
-    /* Mirror the dealer puck flush against the upper-right plaque edge. */
-    bottom: calc(7vh - 1.75vh);
-    right: 1.75vh;
+    bottom: 0.1vh;
+    right: 1.95vh;
     transform: translateX(50%);
 }
 
-/* Apply trump indicator puck styling when it's a bidder puck ear */
-.bidder-puck-ear.trump-indicator-puck {
-    position: absolute !important; /* Override TableLayout.css which sets position: relative !important */
-    background: linear-gradient(135deg, #b8860b, #ffd700);
-    border: 0.15vh solid #daa520;
-    box-shadow: 0 0.2vh 0.4vh rgba(0, 0, 0, 0.3);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+/* Neutralize the on-table .trump-indicator-puck styling from TableLayout.css
+   when the puck renders as a seat ear; the ear pseudo-elements paint it. */
+.player-seat-wrapper .seat-puck.trump-indicator-puck {
+    --puck-base: #d9a936;
+    --puck-hi: #f4d77c;
+    --puck-edge: #8a5f10;
+    --puck-side: #b8860b;
+    position: absolute !important; /* TableLayout.css sets relative !important */
+    width: var(--puck-d);
+    height: calc(var(--puck-face-h) + var(--puck-thick));
+    background: none;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    font-size: 0;
 }
 
-.bidder-puck-ear .trump-puck-icon {
-    width: 90%; /* Use most of the puck space */
-    height: 90%;
-    object-fit: contain; /* Maintain aspect ratio */
-    filter: drop-shadow(0.1vh 0.1vh 0.2vh rgba(0, 0, 0, 0.5)); /* Subtle shadow for depth */
+/* The north seat's chip bank hangs below the plaque, so its pucks flip to
+   the top corners. */
+.player-seat-wrapper-top .dealer-puck-ear,
+.player-seat-wrapper-top .bidder-puck-ear {
+    bottom: auto;
+    top: 0.1vh;
+}
+
+/* Rotated phone-layout side seats: the pucks keep the plaque's table-facing
+   corners (the chip columns are centered between them) and counter-rotate
+   about their own centers — net-zero with the seat's ±90° — so the elliptical
+   faces stay lying flat on the felt in screen space. */
+.player-seat-left.wide-mode .dealer-puck-ear,
+.player-seat-right.wide-mode .dealer-puck-ear {
+    bottom: auto;
+    top: 0.1vh;
+}
+
+.player-seat-left.wide-mode .bidder-puck-ear,
+.player-seat-right.wide-mode .bidder-puck-ear {
+    bottom: auto;
+    top: 0.1vh;
+}
+
+.player-seat-left.wide-mode .dealer-puck-ear {
+    transform: translateX(-50%) rotate(-90deg);
+}
+
+.player-seat-left.wide-mode .bidder-puck-ear {
+    transform: translateX(50%) rotate(-90deg);
+}
+
+.player-seat-right.wide-mode .dealer-puck-ear {
+    transform: translateX(-50%) rotate(90deg);
+}
+
+.player-seat-right.wide-mode .bidder-puck-ear {
+    transform: translateX(50%) rotate(90deg);
 }
 
 .player-seat {

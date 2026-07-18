@@ -6,27 +6,45 @@ const stylesheet = readFileSync(
     'utf8',
 );
 
+const escapeForRegex = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Matches rules whose (possibly grouped) selector line starts with exactly
+// the requested selector, so `.dealer-puck-ear` cannot accidentally read the
+// `.player-seat-left.wide-mode .dealer-puck-ear` override. A selector may
+// appear in several rules (position group + transform override); the first
+// rule declaring the property wins.
 const getDeclaration = (selector, property) => {
-    const selectorStart = stylesheet.lastIndexOf(`${selector} {`);
-    if (selectorStart === -1) throw new Error(`Missing CSS rule for ${selector}`);
-
-    const blockStart = stylesheet.indexOf('{', selectorStart);
-    const blockEnd = stylesheet.indexOf('}', blockStart);
-    const block = stylesheet.slice(blockStart + 1, blockEnd);
-    const match = block.match(new RegExp(`${property}\\s*:\\s*([^;]+);`));
-    if (!match) throw new Error(`Missing ${property} declaration for ${selector}`);
-
-    return match[1].replace(/\s+/g, ' ').trim();
+    const rulePattern = new RegExp(`(?:^|\\n)\\s*${escapeForRegex(selector)}\\s*\\{([^}]*)\\}`, 'g');
+    let sawRule = false;
+    for (const rule of stylesheet.matchAll(rulePattern)) {
+        sawRule = true;
+        const declaration = rule[1].match(new RegExp(`${property}\\s*:\\s*([^;]+);`));
+        if (declaration) return declaration[1].replace(/\s+/g, ' ').trim();
+    }
+    if (!sawRule) throw new Error(`Missing CSS rule for ${selector}`);
+    throw new Error(`Missing ${property} declaration for ${selector}`);
 };
 
 describe('player-seat ornament layout', () => {
-    test('rests the dealer and trump pucks flush inside opposite plaque edges', () => {
-        expect(getDeclaration('.dealer-puck-ear', 'left')).toBe('1.75vh');
+    test('rests the dealer and trump pucks flush inside opposite lower plaque corners', () => {
+        // The chip bank owns the top plaque edge; the pucks own the bottom.
+        expect(getDeclaration('.dealer-puck-ear', 'left')).toBe('1.95vh');
         expect(getDeclaration('.dealer-puck-ear', 'transform')).toBe('translateX(-50%)');
-        expect(getDeclaration('.bidder-puck-ear', 'right')).toBe('1.75vh');
+        expect(getDeclaration('.bidder-puck-ear', 'right')).toBe('1.95vh');
         expect(getDeclaration('.bidder-puck-ear', 'transform')).toBe('translateX(50%)');
         expect(getDeclaration('.dealer-puck-ear', 'bottom'))
             .toBe(getDeclaration('.bidder-puck-ear', 'bottom'));
+    });
+
+    test('counter-rotates the pucks in the rotated phone-layout side seats', () => {
+        expect(getDeclaration('.player-seat-left.wide-mode .dealer-puck-ear', 'transform'))
+            .toBe('translateX(-50%) rotate(-90deg)');
+        expect(getDeclaration('.player-seat-left.wide-mode .bidder-puck-ear', 'transform'))
+            .toBe('translateX(50%) rotate(-90deg)');
+        expect(getDeclaration('.player-seat-right.wide-mode .dealer-puck-ear', 'transform'))
+            .toBe('translateX(-50%) rotate(90deg)');
+        expect(getDeclaration('.player-seat-right.wide-mode .bidder-puck-ear', 'transform'))
+            .toBe('translateX(50%) rotate(90deg)');
     });
 
     test('rests the bottom and side chip banks halfway across the plaque edge', () => {
