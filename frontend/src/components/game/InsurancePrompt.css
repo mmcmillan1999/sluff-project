@@ -1,101 +1,295 @@
-/* Insurance Prompt Modal Styles */
+/* frontend/src/components/game/InsurancePrompt.css */
+/* Insurance panel — charcoal-and-gold to match PlayerProfileModal. */
+
 .insurance-prompt-modal {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.8);
+    inset: 0;
+    /* Above footer toasts/voice notices, aligned with the other full modals */
+    z-index: 2147483200;
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
-    backdrop-filter: blur(4px);
+    padding: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+    background: rgba(7, 9, 8, 0.78);
+    -webkit-backdrop-filter: blur(5px);
+    backdrop-filter: blur(5px);
 }
 
 .insurance-prompt-content {
-    background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
-    border-radius: 16px;
-    padding: 32px;
-    max-width: 500px;
-    width: 90vw;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: white;
     position: relative;
-    max-height: 92vh;
+    box-sizing: border-box;
+    width: min(100%, 440px);
     max-height: 92dvh;
     overflow-y: auto;
-    box-sizing: border-box;
+    overscroll-behavior: contain;
+    padding: 20px 18px 16px;
+    color: #f6f0df;
+    background:
+        radial-gradient(circle at 85% 0%, rgba(213, 164, 58, 0.14), transparent 35%),
+        linear-gradient(165deg, #262826 0%, #171918 70%);
+    border: 1px solid rgba(233, 201, 119, 0.45);
+    border-radius: 18px;
+    box-shadow: 0 22px 70px rgba(0, 0, 0, 0.65), inset 0 1px rgba(255, 255, 255, 0.05);
+    font-family: 'Merriweather', serif;
+}
+
+.insurance-prompt-close {
+    position: absolute;
+    z-index: 2;
+    top: 10px;
+    right: 10px;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    color: #d9d2c3;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 50%;
+    font: 300 26px/1 'Oswald', sans-serif;
+    cursor: pointer;
+}
+
+.insurance-prompt-close:hover,
+.insurance-prompt-close:focus-visible {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.14);
+    outline: 2px solid #e2b84b;
+    outline-offset: 2px;
 }
 
 .insurance-prompt-title {
-    text-align: center;
-    font-size: 1.5em;
-    font-weight: 700;
-    margin: 0 0 24px 0;
-    color: #f9fafb;
-    font-family: 'Oswald', sans-serif;
+    margin: 0 36px 6px 0;
+    color: #fff9e9;
+    font: 600 22px/1.15 'Oswald', sans-serif;
+    letter-spacing: 0.02em;
 }
 
 .insurance-explainer {
-    margin: -10px 0 18px;
-    padding: 12px 14px;
-    border-left: 4px solid #3b82f6;
-    border-radius: 8px;
-    background: rgba(59, 130, 246, 0.12);
-    color: #dbeafe;
-    font-size: 0.9em;
+    margin: 0 0 14px;
+    color: #b9b4a6;
+    font-size: 12px;
     line-height: 1.5;
 }
 
-.insurance-explainer strong {
-    color: #fff;
+/* --- Live deal board: ASK − OFFERS = GAP --- */
+.deal-board {
+    display: flex;
+    align-items: stretch;
+    gap: 6px;
+    margin-bottom: 14px;
 }
 
-/* Current Value Display */
-.current-value-display {
+.deal-board-tile {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 3px;
+    padding: 9px 4px 7px;
     text-align: center;
-    margin-bottom: 32px;
-    padding: 20px;
-    background: rgba(0, 0, 0, 0.3);
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 11px;
 }
 
-.current-value {
-    font-size: 3em;
-    font-weight: 900;
-    font-family: 'Oswald', sans-serif;
-    display: block;
-    margin-bottom: 8px;
-    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
-    transition: all 0.3s ease;
-    animation: value-pulse 0.3s ease-out;
+.deal-board-op {
+    align-self: center;
+    color: #8b877b;
+    font: 600 16px/1 'Oswald', sans-serif;
 }
 
-@keyframes value-pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.05); }
+.tile-label {
+    color: #aeb2ad;
+    font: 600 10px/1 'Oswald', sans-serif;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.tile-value {
+    display: inline-block;
+    color: #fff;
+    font: 700 26px/1 'Oswald', sans-serif;
+}
+
+.tile-sub {
+    min-height: 12px;
+    color: #9fa59f;
+    font-size: 9.5px;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+}
+
+.gap-tile {
+    background: linear-gradient(145deg, rgba(187, 132, 34, 0.16), rgba(255, 255, 255, 0.03));
+    border-color: rgba(226, 184, 75, 0.3);
+}
+
+.gap-tile .tile-value {
+    color: #f1c65c;
+}
+
+.gap-tile.is-locked {
+    background: linear-gradient(145deg, rgba(22, 101, 52, 0.35), rgba(255, 255, 255, 0.03));
+    border-color: rgba(74, 222, 128, 0.4);
+}
+
+.gap-tile.is-locked .tile-value,
+.gap-tile.is-locked .tile-sub {
+    color: #4ade80;
+}
+
+/* Numbers on the board bounce hard when the live value changes */
+@keyframes board-value-bounce {
+    0%   { transform: scale(1); }
+    30%  { transform: scale(1.7); color: #fff; }
+    55%  { transform: scale(0.9); }
+    75%  { transform: scale(1.15); }
     100% { transform: scale(1); }
 }
 
-.current-value.value-changing {
-    animation: value-pulse 0.3s ease-out;
+.board-value-bounce {
+    animation: board-value-bounce 0.65s cubic-bezier(0.2, 1.2, 0.4, 1);
+}
+
+/* --- Locked / observer states --- */
+.deal-locked-banner {
+    margin: 4px 0 8px;
+    padding: 14px;
+    text-align: center;
+    background: rgba(22, 101, 52, 0.25);
+    border: 1px solid rgba(74, 222, 128, 0.4);
+    border-radius: 11px;
+}
+
+.deal-locked-banner strong {
+    color: #4ade80;
+    font: 700 18px/1.2 'Oswald', sans-serif;
+    letter-spacing: 0.08em;
+}
+
+.deal-locked-banner p {
+    margin: 6px 0 0;
+    color: #c8c8c0;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.insurance-observer-note {
+    margin: 4px 0 8px;
+    padding: 12px;
+    color: #c8c8c0;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px dashed rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+/* --- Your wager editor --- */
+.wager-editor {
+    padding: 12px 12px 10px;
+    background: rgba(0, 0, 0, 0.28);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 12px;
+    text-align: center;
+}
+
+.wager-editor-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.wager-editor-heading span {
+    color: #f0e7d3;
+    font: 600 13px/1.2 'Oswald', sans-serif;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.unset-hint {
+    color: #fbbf24;
+    font: 600 10px/1.2 'Oswald', sans-serif;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    animation: unset-hint-blink 1.6s ease-in-out infinite;
+}
+
+@keyframes unset-hint-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+
+.stepper-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+}
+
+.current-value {
+    min-width: 110px;
+    font: 800 44px/1 'Oswald', sans-serif;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.current-value.tone-get { color: #4ade80; }
+.current-value.tone-give { color: #f87171; }
+.current-value.tone-neutral { color: #e5e7eb; }
+
+.stepper-button {
+    flex: 0 0 auto;
+    width: 46px;
+    height: 46px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    color: #fff;
+    border-radius: 12px;
+    font: 700 26px/1 'Oswald', sans-serif;
+    cursor: pointer;
+    touch-action: manipulation;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.25);
+}
+
+.stepper-button:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.stepper-button.stepper-green {
+    background: linear-gradient(145deg, #34d399, #0d9668);
+    border: 1px solid #065f46;
+}
+
+.stepper-button.stepper-red {
+    background: linear-gradient(145deg, #f87171, #dc2626);
+    border: 1px solid #991b1b;
+}
+
+.stepper-button:not(:disabled):active {
+    transform: translateY(1px);
+    box-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.5);
 }
 
 .value-description {
-    font-size: 0.95em;
-    color: #d1d5db;
-    font-weight: 500;
+    margin-top: 8px;
+    color: #d1cdbf;
+    font-size: 12px;
     line-height: 1.4;
 }
 
 .insurance-gap-preview {
-    margin-top: 10px;
+    margin-top: 6px;
     color: #fbbf24;
-    font-size: 0.85em;
-    font-weight: 600;
+    font-size: 11.5px;
+    font-weight: 700;
     line-height: 1.35;
 }
 
@@ -103,311 +297,221 @@
     color: #4ade80;
 }
 
-/* Slider Styles */
+/* --- Slider --- */
 .slider-container {
-    margin: 24px 0;
+    margin: 14px 2px 10px;
 }
+
+.slider-zone-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 3px;
+    font: 600 9.5px/1 'Oswald', sans-serif;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.zone-get { color: #4ade80; }
+.zone-give { color: #f87171; }
 
 .slider-track-background {
     position: relative;
-    padding: 0 8px;
+}
+
+.slider-zero-tick {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 2px;
+    height: 16px;
+    background: rgba(246, 240, 223, 0.55);
+    border-radius: 1px;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
 }
 
 .insurance-slider {
+    display: block;
     width: 100%;
-    height: 8px;
+    height: 34px;
+    margin: 0;
     background: transparent;
     outline: none;
-    appearance: none;
     -webkit-appearance: none;
-    border-radius: 4px;
+    appearance: none;
     cursor: pointer;
-    transition: all 0.2s ease;
 }
 
-.insurance-slider:focus {
-    outline: 2px solid #3b82f6;
+.insurance-slider:focus-visible {
+    outline: 2px solid #e2b84b;
     outline-offset: 2px;
+    border-radius: 8px;
 }
 
-/* Webkit Slider Track */
-.insurance-slider::-webkit-slider-track {
-    width: 100%;
-    height: 8px;
-    background: linear-gradient(to right, #374151, #4b5563, #6b7280);
-    border-radius: 4px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+.insurance-slider::-webkit-slider-runnable-track {
+    height: 10px;
+    background: var(--track-gradient, linear-gradient(to right, #374151, #6b7280));
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
-/* Webkit Slider Thumb */
 .insurance-slider::-webkit-slider-thumb {
-    appearance: none;
     -webkit-appearance: none;
-    width: 28px;
-    height: 28px;
-    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    appearance: none;
+    width: 30px;
+    height: 30px;
+    margin-top: -11px;
+    background: linear-gradient(145deg, #f4d77c, #b77a1e);
+    border: 2px solid #f8e7af;
     border-radius: 50%;
     cursor: pointer;
-    border: 3px solid white;
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-    transition: all 0.2s ease;
-    transform: translateY(-50%);
-    position: relative;
-    top: 50%;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.55);
 }
 
-.insurance-slider::-webkit-slider-thumb:hover {
-    transform: translateY(-50%) scale(1.1);
-    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.6);
-}
-
-.insurance-slider::-webkit-slider-thumb:active {
-    transform: translateY(-50%) scale(0.95);
-}
-
-/* Firefox Slider */
 .insurance-slider::-moz-range-track {
-    width: 100%;
-    height: 8px;
-    background: linear-gradient(to right, #374151, #4b5563, #6b7280);
-    border-radius: 4px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    height: 10px;
+    background: var(--track-gradient, linear-gradient(to right, #374151, #6b7280));
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 .insurance-slider::-moz-range-thumb {
     width: 28px;
     height: 28px;
-    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    background: linear-gradient(145deg, #f4d77c, #b77a1e);
+    border: 2px solid #f8e7af;
     border-radius: 50%;
     cursor: pointer;
-    border: 3px solid white;
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-    transition: all 0.2s ease;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.55);
 }
 
-.insurance-slider::-moz-range-thumb:hover {
-    transform: scale(1.1);
-    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.6);
-}
-
-/* Slider Markers */
 .slider-markers {
     display: flex;
     justify-content: space-between;
-    margin-top: 8px;
-    padding: 0 14px;
+    margin-top: 2px;
 }
 
 .marker-label {
-    font-size: 0.8em;
-    color: #9ca3af;
-    font-weight: 500;
+    color: #8b877b;
+    font: 600 10.5px/1 'Oswald', sans-serif;
 }
 
-/* Quick Jump Buttons */
-.quick-jump-container {
-    margin: 24px 0;
-}
-
-.quick-jump-label {
-    font-size: 0.9em;
-    color: #d1d5db;
-    margin-bottom: 12px;
-    font-weight: 600;
-}
-
+/* --- Quick picks --- */
 .quick-jump-buttons {
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    justify-content: center;
+    gap: 6px;
+    margin-bottom: 14px;
 }
 
 .quick-jump-button {
-    padding: 8px 16px;
-    background: rgba(255, 255, 255, 0.1);
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    border-radius: 8px;
-    color: white;
-    font-weight: 600;
-    font-size: 0.9em;
+    flex: 1;
+    min-width: 0;
+    min-height: 40px;
+    padding: 6px 2px;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1.5px solid rgba(255, 255, 255, 0.22);
+    border-radius: 9px;
+    color: #e8e2d2;
+    font: 600 13px/1 'Oswald', sans-serif;
     cursor: pointer;
-    transition: all 0.2s ease;
-    min-width: 50px;
     touch-action: manipulation;
 }
 
-.quick-jump-button:hover {
-    background: rgba(255, 255, 255, 0.2);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-}
+.quick-jump-button.tone-get { border-color: rgba(74, 222, 128, 0.45); }
+.quick-jump-button.tone-give { border-color: rgba(248, 113, 113, 0.45); }
 
-.quick-jump-button:active {
-    transform: translateY(0);
-}
+.quick-jump-button.active.tone-get { background: #15803d; border-color: #4ade80; color: #fff; }
+.quick-jump-button.active.tone-give { background: #b91c1c; border-color: #f87171; color: #fff; }
+.quick-jump-button.active.tone-neutral { background: #44484f; border-color: #e5e7eb; color: #fff; }
 
-.quick-jump-button.active {
-    color: white;
-    font-weight: 700;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-    transform: translateY(-1px);
-}
-
-/* Action Buttons */
+/* --- Actions --- */
 .action-buttons {
     display: flex;
-    gap: 12px;
-    margin-top: 32px;
+    gap: 10px;
 }
 
 .submit-button {
     flex: 2;
-    padding: 16px 24px;
-    border: none;
+    min-height: 48px;
+    padding: 10px 16px;
+    color: #211b11;
+    background: linear-gradient(145deg, #f4d77c, #d9a936);
+    border: 1px solid #f8e7af;
     border-radius: 12px;
-    color: white;
-    font-weight: 700;
-    font-size: 1.1em;
+    font: 600 17px/1 'Oswald', sans-serif;
+    letter-spacing: 0.04em;
     cursor: pointer;
-    transition: all 0.2s ease;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     touch-action: manipulation;
-    font-family: 'Oswald', sans-serif;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 
 .submit-button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+    background: linear-gradient(145deg, #f8e194, #e2b84b);
 }
 
-.submit-button:active {
-    transform: translateY(0);
+/* Pulse the save button until the first wager of the round is saved */
+@keyframes save-attention-pulse {
+    0%, 100% { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35), 0 0 0 0 rgba(251, 191, 36, 0.65); }
+    50% { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35), 0 0 0 9px rgba(251, 191, 36, 0); }
+}
+
+.submit-button.attention-pulse {
+    animation: save-attention-pulse 1.5s ease-out infinite;
 }
 
 .pass-button {
     flex: 1;
-    padding: 16px 20px;
-    background: rgba(255, 255, 255, 0.1);
-    border: 2px solid rgba(255, 255, 255, 0.3);
+    min-height: 48px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.25);
     border-radius: 12px;
-    color: #d1d5db;
-    font-weight: 600;
-    font-size: 1em;
+    color: #d1cdbf;
+    font: 600 14px/1 'Oswald', sans-serif;
     cursor: pointer;
-    transition: all 0.2s ease;
     touch-action: manipulation;
 }
 
 .pass-button:hover {
-    background: rgba(255, 255, 255, 0.2);
-    color: white;
-    transform: translateY(-1px);
-}
-
-.pass-button:active {
-    transform: translateY(0);
-}
-
-/* Helper Text */
-.helper-text {
-    text-align: center;
-    font-size: 0.85em;
-    color: #9ca3af;
-    margin-top: 20px;
-    padding: 12px;
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
 }
 
 .adjustment-note {
-    font-size: 0.8em;
-    color: #6b7280;
+    margin: 12px 0 0;
+    color: #8b877b;
+    font-size: 10.5px;
     text-align: center;
-    margin: 16px 0 0 0;
-    font-style: italic;
-    line-height: 1.4;
+    line-height: 1.6;
 }
 
-/* Mobile Optimizations */
-@media (max-width: 768px) {
-    .insurance-prompt-content {
-        padding: 24px;
-        margin: 20px;
-    }
-    
-    .current-value {
-        font-size: 2.5em;
-    }
-    
-    .insurance-slider::-webkit-slider-thumb {
-        width: 32px;
-        height: 32px;
-    }
-    
-    .insurance-slider::-moz-range-thumb {
-        width: 32px;
-        height: 32px;
-    }
-    
-    .quick-jump-buttons {
-        gap: 6px;
-    }
-    
-    .quick-jump-button {
-        padding: 10px 14px;
-        min-width: 45px;
-        font-size: 0.85em;
-    }
-    
-    .action-buttons {
-        flex-direction: column;
-        gap: 8px;
-    }
-    
-    .submit-button,
-    .pass-button {
-        flex: none;
-        width: 100%;
-    }
-}
+.legend-get { color: #4ade80; }
+.legend-give { color: #f87171; }
 
-@media (max-width: 480px) {
+/* --- Small phones --- */
+@media (max-width: 380px) {
     .insurance-prompt-content {
-        padding: 20px;
-        margin: 10px;
+        padding: 16px 12px 12px;
     }
-    
+
     .current-value {
-        font-size: 2em;
+        min-width: 90px;
+        font-size: 38px;
     }
-    
-    .insurance-prompt-title {
-        font-size: 1.3em;
+
+    .tile-value {
+        font-size: 22px;
     }
-    
-    .quick-jump-buttons {
-        justify-content: space-between;
-    }
-    
+
     .quick-jump-button {
-        flex: 1;
-        min-width: auto;
-        padding: 8px 4px;
-        font-size: 0.8em;
+        font-size: 12px;
     }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .current-value,
-    .insurance-slider,
-    .insurance-slider::-webkit-slider-thumb,
-    .insurance-slider::-moz-range-thumb,
-    .quick-jump-button,
-    .submit-button,
-    .pass-button {
+    .board-value-bounce,
+    .submit-button.attention-pulse,
+    .unset-hint {
         animation: none !important;
-        transition: none !important;
     }
 }

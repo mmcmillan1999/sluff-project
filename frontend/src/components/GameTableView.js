@@ -78,6 +78,10 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const [seatAssignments, setSeatAssignments] = useState({ self: null, opponentLeft: null, opponentRight: null });
     const [showRoundSummaryModal, setShowRoundSummaryModal] = useState(false);
     const [showInsurancePrompt, setShowInsurancePrompt] = useState(false);
+    // True once the player has saved or nudged their wager this round; the
+    // insurance controls stop pulsing for attention after that.
+    const [insuranceWagerTouched, setInsuranceWagerTouched] = useState(false);
+    const insuranceWasActiveRef = useRef(false);
     const [showGameMenu, setShowGameMenu] = useState(false);
     const [showIosPwaPrompt, setShowIosPwaPrompt] = useState(false);
     const [showDrawVoteModal, setShowDrawVoteModal] = useState(false);
@@ -500,6 +504,14 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         const player = Object.values(currentTableState.players).find(p => p.userId === targetPlayerId);
         return player?.playerName || String(targetPlayerId);
     }, [currentTableState]);
+
+    // Each new round's insurance activation re-arms the "set your wager"
+    // attention pulse.
+    useEffect(() => {
+        const active = Boolean(currentTableState?.insurance?.isActive);
+        if (active && !insuranceWasActiveRef.current) setInsuranceWagerTouched(false);
+        insuranceWasActiveRef.current = active;
+    }, [currentTableState?.insurance?.isActive]);
 
     useEffect(() => {
         if (currentTableState) {
@@ -1205,6 +1217,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 selfPlayerName={selfPlayerName}
                 emitEvent={emitEvent}
                 onClose={() => setShowInsurancePrompt(false)}
+                onWagerInteract={() => setInsuranceWagerTouched(true)}
             />
 
             <DrawVoteModal
@@ -1379,6 +1392,8 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                         isSpectator={isSpectator}
                         emitEvent={emitEvent}
                         onOpenPrompt={() => setShowInsurancePrompt(true)}
+                        wagerTouched={insuranceWagerTouched}
+                        onWagerInteract={() => setInsuranceWagerTouched(true)}
                     />
                     {(tableVoiceAvailable || !roundPresentationControlsLocked) && (
                         <div className="button-panel">

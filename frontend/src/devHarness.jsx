@@ -23,6 +23,13 @@ import OrientationScrim from './components/OrientationScrim.js';
 
 const params = new URLSearchParams(window.location.search);
 const playerMode = params.get('mode') === '4' ? 4 : 3;
+// ?role=defender — Brandi holds the bid and You defend.
+const selfIsBidder = params.get('role') !== 'defender';
+// ?insurance=unset — everyone still at the server's round defaults
+// (ask 120xM, offers -60xM), which arms the attention pulse.
+const insuranceUnset = params.get('insurance') === 'unset';
+const bidderName = selfIsBidder ? 'You' : 'Brandi';
+const defenderNames = selfIsBidder ? ['Brandi', 'Elena'] : ['You', 'Elena'];
 
 const players = {
     101: { userId: 101, playerName: 'You', isSpectator: false, disconnected: false, isBot: false },
@@ -62,14 +69,14 @@ const tableState = {
         You: [[{ card: 'AH' }, { card: '6H' }, { card: '7H' }]],
         Brandi: [[{ card: '10H' }, { card: 'JH' }, { card: 'QH' }], [{ card: '8H' }, { card: '8D' }, { card: '9D' }]],
     },
-    currentHighestBidDetails: { userId: 101, playerName: 'You', bid: 'Solo' },
-    bidWinnerInfo: { userId: 101, playerName: 'You', bid: 'Solo' },
+    currentHighestBidDetails: { userId: selfIsBidder ? 101 : 102, playerName: bidderName, bid: 'Solo' },
+    bidWinnerInfo: { userId: selfIsBidder ? 101 : 102, playerName: bidderName, bid: 'Solo' },
     insurance: {
         isActive: true,
         bidMultiplier: 2,
-        bidderPlayerName: 'You',
-        bidderRequirement: 40,
-        defenderOffers: { Brandi: -20, Elena: -20 },
+        bidderPlayerName: bidderName,
+        bidderRequirement: insuranceUnset ? 240 : 40,
+        defenderOffers: Object.fromEntries(defenderNames.map(name => [name, insuranceUnset ? -120 : -20])),
         dealExecuted: false,
     },
     drawRequest: null,

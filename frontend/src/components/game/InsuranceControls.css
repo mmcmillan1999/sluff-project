@@ -217,6 +217,101 @@
     border-color: #7f1d1d;
 }
 
+/* --- Attention: this player hasn't set a wager yet this round --- */
+@keyframes insurance-attention-glow {
+    0%, 100% {
+        border-color: rgba(255, 255, 255, 0.15);
+        box-shadow: 0 0.5vh 1.5vh rgba(0, 0, 0, 0.3);
+    }
+    50% {
+        border-color: rgba(251, 191, 36, 0.9);
+        box-shadow: 0 0.5vh 1.5vh rgba(0, 0, 0, 0.3), 0 0 1.6vh 0.25vh rgba(251, 191, 36, 0.55);
+    }
+}
+
+.insurance-controls-container.needs-attention {
+    animation: insurance-attention-glow 1.6s ease-in-out infinite;
+}
+
+@keyframes wager-unset-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
+}
+
+.value-display.wager-unset .insurance-value-label {
+    color: #fbbf24;
+    animation: wager-unset-blink 1.6s ease-in-out infinite;
+}
+
+/* --- Another player moved their wager: bounce the GAP number hard --- */
+.gap-value {
+    position: relative;
+}
+
+@keyframes gap-number-bounce {
+    0%   { transform: scale(1); }
+    30%  { transform: scale(1.9); color: #fff; }
+    55%  { transform: scale(0.9); }
+    75%  { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+.gap-number {
+    display: inline-block;
+}
+
+.gap-number.gap-bounce {
+    animation: gap-number-bounce 0.65s cubic-bezier(0.2, 1.2, 0.4, 1);
+}
+
+/* Floating +N / -N chip above the gap while it changes */
+@keyframes gap-delta-float {
+    0%   { opacity: 0; transform: translate(-50%, 0.6vh) scale(0.7); }
+    20%  { opacity: 1; transform: translate(-50%, -0.4vh) scale(1.2); }
+    100% { opacity: 0; transform: translate(-50%, -2.6vh) scale(1); }
+}
+
+.gap-delta {
+    position: absolute;
+    top: -1.4vh;
+    left: 50%;
+    z-index: 5;
+    padding: 0.2vh 0.6vh;
+    border-radius: 1vh;
+    background: rgba(0, 0, 0, 0.75);
+    font-size: 1.5vh;
+    font-weight: 700;
+    font-family: 'Oswald', sans-serif;
+    line-height: 1;
+    pointer-events: none;
+    animation: gap-delta-float 1.15s ease-out forwards;
+}
+
+/* Gap shrinking = negotiation closing in on a deal */
+.gap-delta.closing {
+    color: #4ade80;
+    border: 0.12vh solid rgba(74, 222, 128, 0.6);
+}
+
+.gap-delta.widening {
+    color: #fbbf24;
+    border: 0.12vh solid rgba(251, 191, 36, 0.6);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .insurance-controls-container.needs-attention,
+    .value-display.wager-unset .insurance-value-label,
+    .gap-number.gap-bounce {
+        animation: none !important;
+    }
+
+    .gap-delta {
+        animation: none !important;
+        opacity: 1;
+        transform: translate(-50%, -1.5vh);
+    }
+}
+
 /* Preserve the compact footer in short landscape viewports. */
 
 @media (max-height: 500px) {
