@@ -1,4 +1,5 @@
 .score-chip-bank {
+    --score-chip-diameter: 2.75vh;
     --chip-cream: #f6e7b0;
     --chip-ink: #171006;
     position: relative;
@@ -51,8 +52,8 @@
     position: absolute;
     top: 0.86vh;
     left: -0.43vh;
-    width: 2.75vh;
-    height: 2.75vh;
+    width: var(--score-chip-diameter);
+    height: var(--score-chip-diameter);
     border: 0.12vh solid var(--chip-edge);
     border-radius: 50%;
     box-sizing: border-box;
