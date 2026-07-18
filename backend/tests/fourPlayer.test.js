@@ -158,20 +158,42 @@ async function runFourPlayerTests() {
 
     let res = await run({ A: 200, B: 150, C: 100, D: 30 });
     assert.strictEqual(res.gameWinnerName, 'A');
+    assert.deepStrictEqual(
+        res.tokenSettlement.entries.map(entry => entry.grossReturnCents),
+        [250, 100, 50, 0],
+        'untied returns are 2.5x / 1x / 0.5x / 0x',
+    );
     assert.ok(res.payoutDetails[1].includes('won a net'), '1st wins');
     assert.ok(res.payoutDetails[2].includes('buy-in was returned'), '2nd washes');
-    assert.ok(res.payoutDetails[3].includes('lost your buy-in'), '3rd loses');
+    assert.ok(res.payoutDetails[3].includes('recovered 0.50'), '3rd recovers half the buy-in');
     assert.ok(res.payoutDetails[4].includes('lost your buy-in'), '4th loses');
 
     res = await run({ A: 200, B: 200, C: 100, D: 30 });
     assert.strictEqual(res.gameWinnerName, 'A & B');
-    assert.ok(res.payoutDetails[1].includes('won a net'), 'tied 1st still nets a win (2 parts each)');
+    assert.deepStrictEqual(
+        res.tokenSettlement.entries.map(entry => entry.grossReturnCents),
+        [175, 175, 50, 0],
+        'a 1st-2nd tie splits their combined 3.5x return',
+    );
+    assert.ok(res.payoutDetails[1].includes('won a net'), 'tied 1st still nets a win');
     assert.ok(res.payoutDetails[2].includes('won a net'), 'both tied winners paid');
-    assert.ok(res.payoutDetails[3].includes('lost your buy-in'), '3rd loses');
+    assert.ok(res.payoutDetails[3].includes('recovered 0.50'), '3rd still recovers half the buy-in');
 
     res = await run({ A: 200, B: 150, C: 150, D: 30 });
-    assert.ok(res.payoutDetails[2].includes('recovered'), 'tie for 2nd-3rd recovers half a buy-in');
-    assert.ok(res.payoutDetails[3].includes('recovered'), 'tie for 2nd-3rd recovers half a buy-in');
+    assert.deepStrictEqual(
+        res.tokenSettlement.entries.map(entry => entry.grossReturnCents),
+        [250, 75, 75, 0],
+        'a 2nd-3rd tie splits their combined 1.5x return',
+    );
+    assert.ok(res.payoutDetails[2].includes('recovered 0.75'), '2nd-3rd tie returns three quarters each');
+    assert.ok(res.payoutDetails[3].includes('recovered 0.75'), 'both tied players receive the same return');
+
+    res = await run({ A: 200, B: 150, C: 100, D: 100 });
+    assert.deepStrictEqual(
+        res.tokenSettlement.entries.map(entry => entry.grossReturnCents),
+        [250, 100, 25, 25],
+        'a 3rd-4th tie splits the half-buy-in third-place return',
+    );
 
     res = await run({ A: 100, B: 100, C: 100, D: 100 });
     assert.ok(res.payoutDetails[1].includes('buy-in was returned'), '4-way tie washes everyone (1 part each)');

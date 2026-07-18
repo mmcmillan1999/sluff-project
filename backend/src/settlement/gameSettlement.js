@@ -212,7 +212,16 @@ function normalFundedAllocations(fundedPlayers, buyInCents) {
         return entries;
     }
     if (entries.length === 4) {
-        const rankParts = [3 * buyInCents, buyInCents, 0, 0];
+        // Four-player returns are 2.5x / 1x / 0.5x / 0x. Keep the
+        // calculation in integer cents and give any future indivisible
+        // half-cent remainder to first place so the four-buy-in pot is exact.
+        const thirdPlaceReturnCents = Math.floor(buyInCents / 2);
+        const rankParts = [
+            (3 * buyInCents) - thirdPlaceReturnCents,
+            buyInCents,
+            thirdPlaceReturnCents,
+            0,
+        ];
         let start = 0;
         while (start < entries.length) {
             let end = start;

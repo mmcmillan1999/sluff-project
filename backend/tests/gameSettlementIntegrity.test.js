@@ -136,29 +136,108 @@ function testBotNeutralExactCentPlans() {
     ));
     assert.deepEqual([1, 2, 3].map(id => payoutByUser(threeHumanBottomTie, id)), [300, 0, 0]);
 
-    const remainderTie = buildNormalGameSettlement(makeTable(
-        7,
-        [['Alice', 100], ['Bob', 100], ['Cara', 100], ['Drew', 0]],
-        [],
-        'miss-pauls-academy',
-    ));
-    assert.equal(sumPayoutCents(remainderTie), 40, 'the four-human Academy pot remains exactly 40 cents');
+    const fourPlayerCases = [
+        {
+            label: 'strict ranking',
+            scores: [100, 75, 50, 25],
+            payouts: [25, 10, 5, 0],
+            stats: ['wins', 'washes', 'losses', 'losses'],
+        },
+        {
+            label: '1st-2nd tie',
+            scores: [100, 100, 50, 25],
+            payouts: [18, 17, 5, 0],
+            stats: ['wins', 'wins', 'losses', 'losses'],
+        },
+        {
+            label: '2nd-3rd tie',
+            scores: [100, 50, 50, 25],
+            payouts: [25, 8, 7, 0],
+            stats: ['wins', 'losses', 'losses', 'losses'],
+        },
+        {
+            label: '3rd-4th tie',
+            scores: [100, 75, 25, 25],
+            payouts: [25, 10, 3, 2],
+            stats: ['wins', 'washes', 'losses', 'losses'],
+        },
+        {
+            label: 'top-three tie',
+            scores: [100, 100, 100, 25],
+            payouts: [14, 13, 13, 0],
+            stats: ['wins', 'wins', 'wins', 'losses'],
+        },
+        {
+            label: 'bottom-three tie',
+            scores: [100, 25, 25, 25],
+            payouts: [25, 5, 5, 5],
+            stats: ['wins', 'losses', 'losses', 'losses'],
+        },
+        {
+            label: 'two tied pairs',
+            scores: [100, 100, 25, 25],
+            payouts: [18, 17, 3, 2],
+            stats: ['wins', 'wins', 'losses', 'losses'],
+        },
+        {
+            label: 'four-way tie',
+            scores: [100, 100, 100, 100],
+            payouts: [10, 10, 10, 10],
+            stats: ['washes', 'washes', 'washes', 'washes'],
+        },
+    ];
+    const playerNames = ['Alice', 'Bob', 'Cara', 'Drew'];
+    const fourPlayerPlans = fourPlayerCases.map((testCase, index) => ({
+        ...testCase,
+        plan: buildNormalGameSettlement(makeTable(
+            7 + index,
+            playerNames.map((playerName, playerIndex) => [playerName, testCase.scores[playerIndex]]),
+            [],
+            'miss-pauls-academy',
+        )),
+    }));
+
+    for (const testCase of fourPlayerPlans) {
+        assert.equal(sumPayoutCents(testCase.plan), 40, `${testCase.label} conserves the four-buy-in pot`);
+        assert.deepEqual(
+            [1, 2, 3, 4].map(id => payoutByUser(testCase.plan, id)),
+            testCase.payouts,
+            `${testCase.label} uses the expected tied-place pool`,
+        );
+        assert.deepEqual(
+            testCase.plan.result.tokenSettlement.entries.map(entry => entry.grossReturnCents),
+            testCase.payouts,
+            `${testCase.label} exposes the exact committed cent allocations`,
+        );
+        assert.deepEqual(
+            [1, 2, 3, 4].map(id => statByUser(testCase.plan, id)),
+            testCase.stats,
+            `${testCase.label} records stats from each player's net result`,
+        );
+        assert.ok(
+            testCase.plan.payouts.every(payout => Number.isInteger(payout.amountCents)),
+            `${testCase.label} commits only integer-cent payouts`,
+        );
+        assert.equal(testCase.plan.result.tokenSettlement.buyInCents, 10);
+        assert.equal(testCase.plan.result.tokenSettlement.potCents, 40);
+    }
+
+    const strictFourPlayerPlan = fourPlayerPlans[0].plan;
     assert.deepEqual(
-        [1, 2, 3, 4].map(id => payoutByUser(remainderTie, id)),
-        [14, 13, 13, 0],
-        'indivisible tie cents use deterministic user-id remainder order',
+        strictFourPlayerPlan.result.tokenSettlement.entries.map(entry => entry.netChangeCents),
+        [15, 0, -5, -10],
     );
+    assert.match(strictFourPlayerPlan.result.payoutDetails[3], /recovered 0\.05 of your 0\.10 token buy-in/);
     assert.deepEqual(
-        remainderTie.result.tokenSettlement.entries.map(entry => entry.grossReturnCents),
-        [14, 13, 13, 0],
-        'the public settlement uses the exact committed cent allocations',
+        strictFourPlayerPlan.payouts.find(payout => payout.userId === 3),
+        {
+            userId: 3,
+            type: 'win_payout',
+            amountCents: 5,
+            description: 'Final 3rd payout for game #7',
+        },
+        'third place receives its half-buy-in ledger credit while retaining a loss stat',
     );
-    assert.deepEqual(
-        remainderTie.result.tokenSettlement.entries.map(entry => entry.netChangeCents),
-        [4, 3, 3, -10],
-    );
-    assert.equal(remainderTie.result.tokenSettlement.buyInCents, 10);
-    assert.equal(remainderTie.result.tokenSettlement.potCents, 40);
 
     const botForfeit = buildForfeitSettlement({
         ...makeTable(8, [['Alice', 100], ['Bob', 80]], [['Bot', 50]]),

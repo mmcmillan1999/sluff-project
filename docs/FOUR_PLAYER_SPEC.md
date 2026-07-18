@@ -39,11 +39,12 @@ requirement, no payout).
 ## Game end and payouts
 
 - Game-over conditions are unchanged from 3-player.
-- Pot = 4 buy-ins, split by final ranking **3 : 1 : 0 : 0**
-  (1st takes 3 parts, 2nd takes 1 part, 3rd and 4th get nothing).
+- Pot = 4 buy-ins, split by final ranking **2.5 : 1 : 0.5 : 0**
+  (1st receives 2.5 buy-ins, 2nd receives 1, 3rd receives half, and 4th
+  receives nothing).
 - **Ties**: players tied across ranks pool those ranks' parts and split them
-  evenly — e.g. a tie for 1st pays (3+1)/2 = 2 parts each; a tie for 2nd pays
-  ½ part each.
+  evenly — e.g. a tie for 1st-2nd splits 3.5 buy-ins, while a tie for
+  2nd-3rd splits 1.5 buy-ins.
 - 4-player draw votes include all four players (everyone has tokens at
   stake).
 
