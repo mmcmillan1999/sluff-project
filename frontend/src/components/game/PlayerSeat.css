@@ -168,15 +168,8 @@
     transform: translate(-50%, 50%);
 }
 
-/* Portrait collision mode rotates side plaques. Keep their chips readable;
-   the local top edge maps toward the table center for both side seats. */
-.player-seat-positioner.wide-mode.player-seat-left .player-seat-wrapper > .score-chip-bank {
-    transform: translate(-50%, -50%) rotate(-90deg);
-}
-
-.player-seat-positioner.wide-mode.player-seat-right .player-seat-wrapper > .score-chip-bank {
-    transform: translate(-50%, -50%) rotate(90deg);
-}
+/* Side banks intentionally inherit the PlayerSeatPositioner's rotation. This
+   keeps their long axis aligned with the rotated plaque and its puck ears. */
 
 /* Team-specific pulsing animations */
 @keyframes pulsing-glow-bidder {

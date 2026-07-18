@@ -1,12 +1,11 @@
 .score-chip-bank {
     --chip-cream: #f6e7b0;
-    --chip-ink: #271a10;
+    --chip-ink: #171006;
     position: relative;
-    width: min(10.6vh, 28vw);
-    height: 4.35vh;
+    width: min(11.66vh, 30.8vw);
+    height: 4.79vh;
     display: block;
     isolation: isolate;
-    filter: drop-shadow(0 0.24vh 0.22vh rgba(22, 13, 5, 0.32));
 }
 
 .score-chip-stage {
@@ -17,7 +16,7 @@
 
 .score-chip-stacks {
     position: absolute;
-    inset: 0.1vh 0 0;
+    inset: 0.11vh 0 0;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -30,9 +29,9 @@
     --chip-base: #b83d35;
     --chip-edge: #5f1717;
     position: relative;
-    flex: 0 0 1.72vh;
-    width: 1.72vh;
-    height: 3.25vh;
+    flex: 0 0 1.89vh;
+    width: 1.89vh;
+    height: 3.58vh;
     overflow: visible;
 }
 
@@ -50,15 +49,15 @@
    amount up and left of the layer beneath it—the dealer-deck/trick-pile view. */
 .score-chip-layer {
     position: absolute;
-    top: 0.78vh;
-    left: -0.39vh;
-    width: 2.5vh;
-    height: 2.5vh;
-    border: 0.11vh solid var(--chip-edge);
+    top: 0.86vh;
+    left: -0.43vh;
+    width: 2.75vh;
+    height: 2.75vh;
+    border: 0.12vh solid var(--chip-edge);
     border-radius: 50%;
     box-sizing: border-box;
     background:
-        radial-gradient(circle at 50% 50%, rgba(249, 234, 184, 0.98) 0 38%, transparent 39%),
+        radial-gradient(circle at 50% 50%, rgba(252, 239, 195, 0.99) 0 43%, transparent 44%),
         radial-gradient(circle at 50% 50%, transparent 0 48%, rgba(255, 255, 255, 0.34) 49% 52%, transparent 53%),
         repeating-conic-gradient(
             from 1deg,
@@ -68,8 +67,8 @@
             var(--chip-base) 52deg 70deg
         );
     box-shadow:
-        inset 0 0 0 0.1vh rgba(255, 255, 255, 0.25),
-        0.13vh 0.18vh 0.2vh rgba(28, 15, 7, 0.42);
+        inset 0 0 0 0.11vh rgba(255, 255, 255, 0.25),
+        0.14vh 0.2vh 0.22vh rgba(28, 15, 7, 0.42);
     transform:
         translate(var(--chip-settle-x), var(--chip-settle-y))
         rotate(var(--chip-turn));
@@ -80,14 +79,17 @@
 .score-chip-layer::before {
     content: '';
     position: absolute;
-    inset: 0.48vh;
-    border: 0.07vh solid rgba(69, 44, 16, 0.48);
+    inset: 0.53vh;
+    border: 0.08vh solid rgba(69, 44, 16, 0.48);
     border-radius: 50%;
-    box-shadow: inset 0 0 0 0.06vh rgba(255, 255, 255, 0.42);
+    box-shadow: inset 0 0 0 0.07vh rgba(255, 255, 255, 0.42);
 }
 
 .score-chip-layer--score {
-    filter: drop-shadow(0 0.18vh 0.2vh rgba(20, 11, 4, 0.42));
+    box-shadow:
+        inset 0 0 0 0.11vh rgba(255, 255, 255, 0.3),
+        0.14vh 0.2vh 0.22vh rgba(28, 15, 7, 0.46),
+        0 0 0.13vh rgba(246, 231, 176, 0.34);
 }
 
 /* The exact score is printed directly on the top chip of the middle pile, so
@@ -100,20 +102,25 @@
     place-items: center;
     color: var(--chip-ink);
     font-family: 'Oswald', sans-serif;
-    font-size: 1.05vh;
-    font-weight: 800;
+    font-size: 1.18vh;
+    font-weight: 700;
     font-variant-numeric: tabular-nums;
     line-height: 1;
+    letter-spacing: -0.015em;
     white-space: nowrap;
-    text-shadow: 0 0.05vh 0 rgba(255, 255, 255, 0.92);
+    -webkit-text-stroke: 0.018vh rgba(23, 16, 6, 0.45);
+    text-shadow:
+        0 0.05vh 0 rgba(255, 255, 255, 0.98),
+        0 0 0.09vh rgba(255, 248, 218, 0.95),
+        0 0.08vh 0.08vh rgba(58, 35, 10, 0.2);
 }
 
 .score-chip-total--compact {
-    font-size: 0.78vh;
+    font-size: 0.88vh;
 }
 
 .score-chip-total--tiny {
-    font-size: 0.58vh;
+    font-size: 0.68vh;
 }
 
 .score-chip-delta {
@@ -170,8 +177,8 @@
     content: '';
     position: absolute;
     z-index: 1;
-    inset: 0.25vh 0.8vh;
-    border-left: 0.09vh solid rgba(30, 20, 18, 0.88);
+    inset: 0.28vh 0.88vh;
+    border-left: 0.1vh solid rgba(30, 20, 18, 0.88);
     transform: rotate(24deg);
 }
 
@@ -229,6 +236,22 @@
     28% { opacity: 1; transform: translate(0, 0) scale(1.08); }
     76% { opacity: 1; transform: translate(-0.08vh, -0.08vh) scale(1); }
     100% { opacity: 0; transform: translate(-0.45vh, -0.45vh) scale(0.96); }
+}
+
+/* Keep exact totals readable on short portrait phones without forcing an
+   oversized label onto the much smaller chips used in landscape. */
+@media (orientation: portrait) and (max-width: 600px) {
+    .score-chip-total {
+        font-size: clamp(8px, 1.18vh, 12px);
+    }
+
+    .score-chip-total--compact {
+        font-size: clamp(6.5px, 0.88vh, 9px);
+    }
+
+    .score-chip-total--tiny {
+        font-size: clamp(5.5px, 0.68vh, 7.5px);
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {

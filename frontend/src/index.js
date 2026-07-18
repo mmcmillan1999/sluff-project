@@ -4,6 +4,7 @@ import ReactDOM from 'react-dom/client';
 import '@fontsource/oswald/400.css';
 import '@fontsource/oswald/500.css';
 import '@fontsource/oswald/600.css';
+import '@fontsource/oswald/700.css';
 import '@fontsource/merriweather/400.css';
 import '@fontsource/merriweather/700.css';
 import './index.css';

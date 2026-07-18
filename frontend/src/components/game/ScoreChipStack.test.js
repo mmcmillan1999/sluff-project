@@ -79,8 +79,8 @@ describe('ScoreChipStack', () => {
             '--chip-settle-y': '0.00vh',
         });
         expect(firstPileLayers[1]).toHaveStyle({
-            '--chip-settle-x': '-0.14vh',
-            '--chip-settle-y': '-0.13vh',
+            '--chip-settle-x': '-0.15vh',
+            '--chip-settle-y': '-0.14vh',
         });
         expect(bank.querySelector('.score-chip-total').parentElement).toHaveClass('score-chip-layer--score');
     });

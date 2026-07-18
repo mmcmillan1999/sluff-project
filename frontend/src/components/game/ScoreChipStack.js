@@ -83,8 +83,8 @@ const getScoreSizeClass = (displayScore) => {
 };
 
 const getChipLayerStyle = (stackIndex, layerIndex, isScoreLayer) => {
-    const settleX = -(layerIndex * 0.14);
-    const settleY = -(layerIndex * 0.13);
+    const settleX = -(layerIndex * 0.15);
+    const settleY = -(layerIndex * 0.14);
     const turn = (((stackIndex + layerIndex) % 3) - 1) * 1.6;
 
     return {
@@ -92,10 +92,10 @@ const getChipLayerStyle = (stackIndex, layerIndex, isScoreLayer) => {
         '--layer-index': layerIndex,
         '--chip-settle-x': `${settleX.toFixed(2)}vh`,
         '--chip-settle-y': `${settleY.toFixed(2)}vh`,
-        '--chip-entry-x': `${(settleX + 2.35).toFixed(2)}vh`,
-        '--chip-entry-y': `${(settleY + 1.75).toFixed(2)}vh`,
-        '--chip-loss-x': `${(settleX - 0.55).toFixed(2)}vh`,
-        '--chip-loss-y': `${(settleY - 0.45).toFixed(2)}vh`,
+        '--chip-entry-x': `${(settleX + 2.59).toFixed(2)}vh`,
+        '--chip-entry-y': `${(settleY + 1.93).toFixed(2)}vh`,
+        '--chip-loss-x': `${(settleX - 0.61).toFixed(2)}vh`,
+        '--chip-loss-y': `${(settleY - 0.50).toFixed(2)}vh`,
         '--chip-turn': `${turn.toFixed(1)}deg`,
         '--chip-delay': `${stackIndex * 35 + layerIndex * 30 + (isScoreLayer ? 120 : 0)}ms`,
         zIndex: isScoreLayer ? 40 : layerIndex + 1,
