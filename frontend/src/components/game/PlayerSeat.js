@@ -140,7 +140,7 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent, showTrum
                 )}
                 <div className="player-stats-line">
                     <span className="player-tokens">
-                        <img src="/Sluff_Token.png" alt="Tokens" className="token-icon-inline" />
+                        <img src="/Sluff_Token_v2.webp" alt="Tokens" className="token-icon-inline" />
                         {/* --- MODIFICATION: Simplified token display logic --- */}
                         {playerTokenCount !== undefined && playerTokenCount !== 'N/A' ? parseFloat(playerTokenCount).toFixed(2) : '...'}
                     </span>

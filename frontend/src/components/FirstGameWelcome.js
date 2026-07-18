@@ -83,7 +83,7 @@ const FirstGameWelcome = ({ activeVersion = 0, onStartGuided, onSkip }) => {
                 </div>
 
                 <p id="first-game-welcome-buy-in" className="first-game-welcome__buy-in">
-                    <img src="/Sluff_Token.png" alt="" aria-hidden="true" />
+                    <img src="/Sluff_Token_v2.webp" alt="" aria-hidden="true" />
                     <span><strong>{TUTORIAL_BUY_IN_LABEL} coin buy-in</strong> for the guided game</span>
                 </p>
 

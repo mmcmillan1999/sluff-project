@@ -254,7 +254,7 @@ const ClaudeLanding = ({ inviteTableId, onRegister, onLogin, onNavigate }) => {
                     <div className="cl-season-inner">
                         <img
                             className="cl-season-token"
-                            src="/Sluff_Token.png"
+                            src="/Sluff_Token_v2.webp"
                             alt="A Sluff game token"
                         />
                         <div className="cl-season-copy">

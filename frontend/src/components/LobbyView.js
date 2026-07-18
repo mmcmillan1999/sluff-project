@@ -317,7 +317,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
                                 aria-label="Request Free Token"
                                 title={mercyEligible ? 'Watch an ad for a Mercy Token' : 'Request Free Token'}
                             >
-                                <img src="/Sluff_Token.png" alt="Tokens" className="token-icon" />
+                                <img src="/Sluff_Token_v2.webp" alt="Tokens" className="token-icon" />
                                 <span>{parseFloat(user.tokens).toFixed(2)}</span>
                             </button>
                         );
@@ -375,7 +375,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
                                     <span className="qp-card-copy">
                                         <span className="qp-card-name">{theme.name}</span>
                                         <span className="qp-card-cost">
-                                            <img src="/Sluff_Token.png" alt="" className="tab-token-icon" /> {theme.cost}
+                                            <img src="/Sluff_Token_v2.webp" alt="" className="tab-token-icon" /> {theme.cost}
                                         </span>
                                     </span>
                                     <span className="qp-play-pill">
@@ -417,7 +417,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
                                     >
                                         <span className="lobby-tab-name">{theme.name}</span>
                                         <span className="lobby-tab-cost">
-                                            <img src="/Sluff_Token.png" alt="Token" className="tab-token-icon" /> {theme.cost}
+                                            <img src="/Sluff_Token_v2.webp" alt="Token" className="tab-token-icon" /> {theme.cost}
                                         </span>
                                     </button>
                                 ))}

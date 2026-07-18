@@ -272,7 +272,7 @@ const TokenLedgerView = ({ onReturnToLobby }) => {
                     Lobby
                 </button>
                 <div className="token-ledger-title-group">
-                    <img src="/Sluff_Token.png" alt="" aria-hidden="true" />
+                    <img src="/Sluff_Token_v2.webp" alt="" aria-hidden="true" />
                     <h1>Token Ledger</h1>
                 </div>
                 <button
@@ -291,7 +291,7 @@ const TokenLedgerView = ({ onReturnToLobby }) => {
                 <section className="token-ledger-balance" aria-labelledby="token-ledger-balance-title">
                     <span id="token-ledger-balance-title">Current balance</span>
                     <strong>
-                        <img src="/Sluff_Token.png" alt="Tokens" />
+                        <img src="/Sluff_Token_v2.webp" alt="Tokens" />
                         {formatTokenCents(currentBalanceCents)}
                     </strong>
                     <p>Use the filters below to trace every addition and deduction.</p>
@@ -332,7 +332,7 @@ const TokenLedgerView = ({ onReturnToLobby }) => {
 
                 {!isLoading && !error && entries.length === 0 && (
                     <div className="token-ledger-empty">
-                        <img src="/Sluff_Token.png" alt="" aria-hidden="true" />
+                        <img src="/Sluff_Token_v2.webp" alt="" aria-hidden="true" />
                         <h2>No token activity yet</h2>
                         <p>Your token changes will appear here.</p>
                     </div>
