@@ -31,6 +31,9 @@
 }
 
 .game-table {
+    /* Two percent of the intended portrait table, capped on wide screens so
+       the side cards retain a comfortable center gap in landscape. */
+    --played-card-side-nudge: min(2vw, 1.5vh);
     /* Keep every trick plate on one shared, mirrored horizontal rail. The
        3vw subtraction nudges the old 9vh anchors outward while the safe-area
        floor keeps plates clear of rounded/notched viewport edges. */
@@ -511,22 +514,21 @@
 
 .played-card-left { 
     top: 50%; 
-    /* Dynamic padding: grows with viewport width */
-    /* Base offset: 50% + 3.57vh (card half) + 2.5vh (avg padding) */
-    right: calc(50% + 6.07vh); 
+    /* Pull the side rail 2% inward while preserving its vh-based card gap. */
+    right: calc(50% + 6.07vh - var(--played-card-side-nudge));
     transform: translateY(-50%); 
 }
 
 .played-card-right { 
     top: 50%; 
-    /* Dynamic padding: matches left side */
-    /* Base offset: 50% + 3.57vh (card half) + 2.5vh (avg padding) */
-    left: calc(50% + 6.07vh);
+    /* Mirror the same 2% inward shift from the opposite edge. */
+    left: calc(50% + 6.07vh - var(--played-card-side-nudge));
     transform: translateY(-50%); 
 }
 
 .played-card-top {
-    top: 20%; /* Matching the test zone position */
+    /* Mirrors bottom: 30% around the side cards' 50% centerline. */
+    top: 30%;
     left: 50%;
     transform: translateX(-50%);
 }
@@ -555,20 +557,18 @@
 
 .card-drop-zone-test.left {
     top: 50%;
-    /* Match dynamic padding of played cards */
-    right: calc(50% + 6.07vh);
+    right: calc(50% + 6.07vh - var(--played-card-side-nudge));
     transform: translateY(-50%);
 }
 
 .card-drop-zone-test.right {
     top: 50%;
-    /* Match dynamic padding of played cards */
-    left: calc(50% + 6.07vh);
+    left: calc(50% + 6.07vh - var(--played-card-side-nudge));
     transform: translateY(-50%);
 }
 
 .card-drop-zone-test.top {
-    top: 20%; /* Moved up from 30% to create more separation */
+    top: 30%;
     left: 50%;
     transform: translateX(-50%);
 }
