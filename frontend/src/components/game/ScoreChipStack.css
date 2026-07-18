@@ -135,6 +135,34 @@
     box-shadow: 0 0 0.3vh rgba(246, 231, 176, 0.4);
 }
 
+/* --- Rotated phone-layout side seats --- */
+/* The bank is already counter-rotated to net-zero (PlayerSeat.css), and here
+   the piles re-flow from a row into a vertical column running along the
+   plaque's long edge. Every pile stays upright; the column pitch is shorter
+   than a tall pile, so lower piles overlap the base of the one above and the
+   column reads as a rack receding up the felt. */
+.wide-mode :is(.score-chip-bank--left, .score-chip-bank--right) .score-chip-stacks {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.wide-mode :is(.score-chip-bank--left, .score-chip-bank--right) .score-chip-stack {
+    position: relative;
+    flex: 0 0 2.7vh;
+    width: var(--score-chip-diameter);
+    height: 2.7vh;
+}
+
+/* Piles lower on screen are nearer the viewer, so they paint over the base
+   of the pile above them. */
+.wide-mode :is(.score-chip-bank--left, .score-chip-bank--right) .score-chip-stack:nth-child(1) { z-index: 1; }
+.wide-mode :is(.score-chip-bank--left, .score-chip-bank--right) .score-chip-stack:nth-child(2) { z-index: 2; }
+.wide-mode :is(.score-chip-bank--left, .score-chip-bank--right) .score-chip-stack:nth-child(3) { z-index: 3; }
+.wide-mode :is(.score-chip-bank--left, .score-chip-bank--right) .score-chip-stack:nth-child(4) { z-index: 4; }
+.wide-mode :is(.score-chip-bank--left, .score-chip-bank--right) .score-chip-stack:nth-child(5) { z-index: 5; }
+.wide-mode :is(.score-chip-bank--left, .score-chip-bank--right) .score-chip-stack:nth-child(6) { z-index: 6; }
+
 /* Exact score inlaid on the top face */
 .score-chip-total {
     position: absolute;
