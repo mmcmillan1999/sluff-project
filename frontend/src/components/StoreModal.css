@@ -1,0 +1,316 @@
+/* frontend/src/components/StoreModal.css */
+/* Sluff store — charcoal-and-gold house style (see PlayerProfileModal). */
+
+.store-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483250;
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    min-height: 100dvh;
+    padding: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+    background: rgba(7, 9, 8, 0.78);
+    -webkit-backdrop-filter: blur(5px);
+    backdrop-filter: blur(5px);
+}
+
+.store-dialog {
+    position: relative;
+    box-sizing: border-box;
+    width: min(100%, 460px);
+    max-height: calc(100dvh - 28px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 20px 18px 18px;
+    color: #f6f0df;
+    background:
+        radial-gradient(circle at 85% 0%, rgba(213, 164, 58, 0.14), transparent 35%),
+        linear-gradient(165deg, #262826 0%, #171918 70%);
+    border: 1px solid rgba(233, 201, 119, 0.45);
+    border-radius: 18px;
+    box-shadow: 0 22px 70px rgba(0, 0, 0, 0.65), inset 0 1px rgba(255, 255, 255, 0.05);
+    font-family: 'Merriweather', serif;
+}
+
+.store-dialog:focus {
+    outline: none;
+}
+
+.store-close {
+    position: absolute;
+    z-index: 2;
+    top: 10px;
+    right: 10px;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    color: #d9d2c3;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 50%;
+    font: 300 28px/1 'Oswald', sans-serif;
+    cursor: pointer;
+}
+
+.store-close:hover,
+.store-close:focus-visible {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.14);
+    outline: 2px solid #e2b84b;
+    outline-offset: 2px;
+}
+
+.store-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding-right: 40px;
+}
+
+/* Little striped shop awning as the store's mark */
+.store-awning {
+    position: relative;
+    flex: 0 0 52px;
+    width: 52px;
+    height: 40px;
+    border-radius: 6px 6px 3px 3px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0) 40%),
+        repeating-linear-gradient(90deg, #b8352b 0 10px, #f2e3b3 10px 20px);
+    border: 1px solid rgba(233, 201, 119, 0.5);
+    box-shadow: 0 5px 16px rgba(0, 0, 0, 0.4);
+}
+
+.store-awning::after {
+    content: '';
+    position: absolute;
+    left: 4px;
+    right: 4px;
+    bottom: -8px;
+    height: 8px;
+    background:
+        radial-gradient(circle at 5px 0, transparent 0 4.6px, #8a1f1f 4.8px 8px) left/10.5px 8px repeat-x;
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35));
+}
+
+.store-kicker {
+    margin: 0 0 2px;
+    color: #d7ad48;
+    font: 600 12px/1.2 'Oswald', sans-serif;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+}
+
+.store-header h2 {
+    margin: 0;
+    color: #fff9e9;
+    font: 600 26px/1.1 'Oswald', sans-serif;
+}
+
+.store-note {
+    margin: 4px 0 0;
+    color: #9fa59f;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.store-category {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.store-category-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.store-category-heading span {
+    color: #f0e7d3;
+    font: 600 15px/1.2 'Oswald', sans-serif;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.store-category-heading em {
+    color: #9fa59f;
+    font: 400 10.5px/1.3 'Merriweather', serif;
+    text-align: right;
+}
+
+.store-items {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.store-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 12px;
+}
+
+.store-item.is-equipped {
+    background: linear-gradient(145deg, rgba(187, 132, 34, 0.14), rgba(255, 255, 255, 0.03));
+    border-color: rgba(226, 184, 75, 0.35);
+}
+
+.store-item-preview {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+.store-item-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.store-item-info strong {
+    display: block;
+    color: #fff9e9;
+    font: 600 15px/1.2 'Oswald', sans-serif;
+}
+
+.store-item-info p {
+    margin: 3px 0 0;
+    color: #b9b4a6;
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.store-item-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.store-price-chip {
+    padding: 2px 9px;
+    color: #4ade80;
+    background: rgba(22, 101, 52, 0.3);
+    border: 1px solid rgba(74, 222, 128, 0.4);
+    border-radius: 999px;
+    font: 700 10px/1.3 'Oswald', sans-serif;
+    letter-spacing: 0.08em;
+}
+
+.store-use-button {
+    min-width: 92px;
+    min-height: 38px;
+    padding: 6px 12px;
+    color: #211b11;
+    background: linear-gradient(145deg, #f4d77c, #d9a936);
+    border: 1px solid #f8e7af;
+    border-radius: 9px;
+    font: 600 13px/1 'Oswald', sans-serif;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.store-use-button:disabled {
+    color: #d7ad48;
+    background: rgba(213, 164, 58, 0.12);
+    border-color: rgba(226, 184, 75, 0.4);
+    cursor: default;
+}
+
+.store-use-button:not(:disabled):hover {
+    background: linear-gradient(145deg, #f8e194, #e2b84b);
+}
+
+/* --- Previews --- */
+/* Deck previews reuse the real card-back classes at a fixed card size */
+.store-deck-preview.card-back-container {
+    width: 52px;
+    height: 73px;
+}
+
+.store-fx-preview {
+    display: grid;
+    place-items: center;
+    width: 118px;
+    height: 46px;
+    border-radius: 8px;
+    animation: store-fx-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.store-fx-mini {
+    font: 700 9.5px/1 'Oswald', sans-serif;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+}
+
+.store-fx-preview--lightning {
+    background: linear-gradient(135deg, #8b0000 0%, #dc143c 50%, #b8860b 100%);
+    border: 1.5px solid #ffd700;
+    box-shadow: 0 0 8px rgba(255, 215, 0, 0.5);
+}
+
+.store-fx-preview--lightning .store-fx-mini {
+    color: #ffd700;
+    text-shadow: 1px 1px 0 #8b0000;
+}
+
+.store-fx-preview--shatter {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, #0f2438 0%, #2e5f8a 55%, #9db8cc 100%);
+    border: 1.5px solid #dbeeff;
+    box-shadow: 0 0 8px rgba(173, 216, 240, 0.5);
+}
+
+.store-fx-preview--shatter::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(24deg, transparent 0 46%, rgba(255, 255, 255, 0.55) 46.5% 47%, transparent 47.5%),
+        linear-gradient(-38deg, transparent 0 60%, rgba(255, 255, 255, 0.45) 60.5% 61%, transparent 61.5%),
+        linear-gradient(78deg, transparent 0 28%, rgba(255, 255, 255, 0.4) 28.5% 29%, transparent 29.5%);
+}
+
+.store-fx-preview--shatter .store-fx-mini {
+    color: #eaf6ff;
+    text-shadow: 1px 1px 0 #0f2438;
+}
+
+@keyframes store-fx-pop {
+    0% { transform: scale(0.6); opacity: 0; }
+    60% { transform: scale(1.08); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+@media (max-width: 380px) {
+    .store-dialog {
+        padding-inline: 12px;
+    }
+
+    .store-fx-preview {
+        width: 96px;
+    }
+
+    .store-use-button {
+        min-width: 80px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .store-fx-preview {
+        animation: none;
+    }
+}

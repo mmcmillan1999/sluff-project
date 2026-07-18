@@ -421,6 +421,41 @@
     height: 2vh; /* Scaled down proportionally */
 }
 
+/* Storefront button sits just left of the menu button in the header strip,
+   sharing its circular styling. */
+.game-header-store-btn {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + max(2px, calc((7.5vh - 44px) / 2)));
+    right: calc(max(6px, env(safe-area-inset-right, 0px)) + 52px);
+    /* Above the BrandHeader strip (z 2000) whose centered cube reaches this
+       far in; below the game-menu popup (z 2100). */
+    z-index: 2050;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    padding: 10px;
+    box-sizing: border-box;
+    color: #f6cf74;
+    background: linear-gradient(145deg, rgba(55, 55, 55, 0.98), rgba(30, 30, 30, 0.98));
+    border: 1px solid rgba(246, 207, 116, 0.4);
+    border-radius: 50%;
+    cursor: pointer;
+    touch-action: manipulation;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+
+.game-header-store-btn:hover,
+.game-header-store-btn:focus-visible {
+    color: #ffe9ad;
+    background: linear-gradient(145deg, rgba(67, 67, 67, 0.98), rgba(38, 38, 38, 0.98));
+}
+
+.game-header-store-btn svg {
+    width: 22px;
+    height: 22px;
+}
+
 .game-header-menu-btn {
     position: fixed;
     top: calc(env(safe-area-inset-top, 0px) + max(2px, calc((7.5vh - 44px) / 2)));

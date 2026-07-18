@@ -154,6 +154,35 @@
     opacity: 0.6;
 }
 
+/* --- Deck skin: McMillan Crest --- */
+/* Dress-tartan-inspired field (gold ground, black bands, red pinstripes)
+   behind the clan crest badge. Keeps the classic gold double-border inset. */
+.card-back-container.deck-skin--mcmillan {
+    background:
+        repeating-linear-gradient(
+            0deg,
+            rgba(24, 20, 10, 0.9) 0 9%,
+            transparent 9% 38%,
+            rgba(178, 34, 34, 0.85) 38% 41%,
+            transparent 41% 50%
+        ),
+        repeating-linear-gradient(
+            90deg,
+            rgba(24, 20, 10, 0.9) 0 9%,
+            transparent 9% 38%,
+            rgba(178, 34, 34, 0.85) 38% 41%,
+            transparent 41% 50%
+        ),
+        #d9a936;
+    border-color: #3a2a10;
+}
+
+.card-back-crest {
+    width: 88%;
+    height: 88%;
+    filter: drop-shadow(0 0.25vh 0.5vh rgba(0, 0, 0, 0.55));
+}
+
 /* Trick pile containers - unified design */
 .trick-pile-container {
     position: absolute;
@@ -820,6 +849,121 @@ button.card-display:disabled {
     color: #ffff00;
     animation: lightning-pulse 1.5s ease-in-out infinite;
     filter: drop-shadow(0 0 1vh #ffff00);
+}
+
+/* --- Trump Broken effect: Shatterglass --- */
+/* An icy plate-glass banner that slams in, cracks visible across the pane,
+   with a white flash and shards bursting outward on impact. */
+.trump-fx--shatter {
+    animation: trump-shatter-slam 0.45s cubic-bezier(0.2, 0.9, 0.3, 1) forwards,
+               trump-shatter-shake 0.4s linear 0.45s,
+               trump-broken-exit 0.5s ease-in-out 2s forwards;
+}
+
+.trump-fx--shatter .trump-broken-content {
+    position: relative;
+    overflow: visible;
+    background:
+        /* crack lines across the pane */
+        linear-gradient(24deg, transparent 0 46%, rgba(255, 255, 255, 0.5) 46.4% 46.9%, transparent 47.3%),
+        linear-gradient(-38deg, transparent 0 60%, rgba(255, 255, 255, 0.42) 60.4% 60.9%, transparent 61.3%),
+        linear-gradient(64deg, transparent 0 30%, rgba(255, 255, 255, 0.38) 30.4% 30.9%, transparent 31.3%),
+        linear-gradient(135deg, #0f2438 0%, #2e5f8a 55%, #9db8cc 100%);
+    border-color: #dbeeff;
+    box-shadow:
+        0 0 2.5vh rgba(173, 216, 240, 0.6),
+        0 0 5vh rgba(173, 216, 240, 0.35),
+        inset 0 0.25vh 0.5vh rgba(255, 255, 255, 0.35);
+}
+
+.trump-fx--shatter .trump-broken-text {
+    color: #eaf6ff;
+    text-shadow:
+        0.25vh 0.25vh 0 #0f2438,
+        0 0 1.2vh rgba(173, 216, 240, 0.9),
+        0 0 2.5vh rgba(173, 216, 240, 0.6);
+}
+
+.shatter-flash {
+    position: absolute;
+    inset: -30%;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 62%);
+    animation: shatter-flash-fade 0.55s ease-out 0.4s both;
+    pointer-events: none;
+}
+
+.shatter-shard {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 2.4vh;
+    height: 3.2vh;
+    background: linear-gradient(160deg, rgba(230, 244, 255, 0.95), rgba(120, 165, 205, 0.6));
+    clip-path: polygon(50% 0, 100% 78%, 12% 100%);
+    animation: shatter-shard-fly 0.9s cubic-bezier(0.15, 0.6, 0.4, 1) 0.42s both;
+    pointer-events: none;
+}
+
+.shatter-shard--1 { --fly-x: -16vh; --fly-y: -9vh;  --fly-rot: -220deg; }
+.shatter-shard--2 { --fly-x: 15vh;  --fly-y: -11vh; --fly-rot: 260deg;  width: 1.8vh; height: 2.4vh; }
+.shatter-shard--3 { --fly-x: -19vh; --fly-y: 3vh;   --fly-rot: 300deg;  width: 2vh; height: 2.8vh; }
+.shatter-shard--4 { --fly-x: 18vh;  --fly-y: 5vh;   --fly-rot: -280deg; }
+.shatter-shard--5 { --fly-x: -9vh;  --fly-y: 10vh;  --fly-rot: 190deg;  width: 1.6vh; height: 2.2vh; }
+.shatter-shard--6 { --fly-x: 10vh;  --fly-y: 9vh;   --fly-rot: -240deg; width: 2.2vh; height: 3vh; }
+.shatter-shard--7 { --fly-x: -4vh;  --fly-y: -13vh; --fly-rot: 210deg;  width: 1.7vh; height: 2.3vh; }
+.shatter-shard--8 { --fly-x: 5vh;   --fly-y: 12vh;  --fly-rot: -190deg; width: 1.5vh; height: 2vh; }
+
+@keyframes trump-shatter-slam {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(2.6);
+    }
+    70% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(0.94);
+    }
+    100% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+@keyframes trump-shatter-shake {
+    0%, 100% { transform: translate(-50%, -50%); }
+    20% { transform: translate(calc(-50% - 0.7vh), calc(-50% + 0.4vh)); }
+    40% { transform: translate(calc(-50% + 0.6vh), calc(-50% - 0.3vh)); }
+    60% { transform: translate(calc(-50% - 0.4vh), calc(-50% - 0.3vh)); }
+    80% { transform: translate(calc(-50% + 0.3vh), calc(-50% + 0.2vh)); }
+}
+
+@keyframes shatter-flash-fade {
+    0% { opacity: 1; transform: scale(0.4); }
+    100% { opacity: 0; transform: scale(1.4); }
+}
+
+@keyframes shatter-shard-fly {
+    0% {
+        opacity: 1;
+        transform: translate(-50%, -50%) rotate(0deg);
+    }
+    100% {
+        opacity: 0;
+        transform:
+            translate(calc(-50% + var(--fly-x)), calc(-50% + var(--fly-y)))
+            rotate(var(--fly-rot));
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .trump-fx--shatter {
+        animation: trump-broken-exit 0.5s ease-in-out 2s forwards;
+    }
+
+    .shatter-shard,
+    .shatter-flash {
+        display: none;
+    }
 }
 
 /* Widow Seat - Now handled by WidowSeat component and PlayerSeatPositioner */

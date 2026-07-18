@@ -16,6 +16,7 @@ import { SUIT_SYMBOLS } from '../../constants';
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion';
 import { deriveTrickPlatePlacement } from './trickPlatePlacement';
 import { getThemePresentation } from '../../config/themePresentation';
+import { useCosmetics } from '../../utils/cosmetics';
 
 // Full deck of 36 cards (9 ranks × 4 suits)
 const FULL_DECK = [
@@ -61,6 +62,7 @@ const TableLayout = ({
     const [widowPeekVisible, setWidowPeekVisible] = useState(false);
     const widowPeekTimerRef = useRef(null);
     const [trumpBrokenAnnouncementVisible, setTrumpBrokenAnnouncementVisible] = useState(false);
+    const { trumpBrokenFx } = useCosmetics();
     const { width } = useViewport();
     const [previousTrumpBroken, setPreviousTrumpBroken] = useState(false);
     const lastTrickTimerRef = useRef(null);
@@ -636,8 +638,22 @@ const TableLayout = ({
             return null;
         }
 
+        if (trumpBrokenFx === 'shatter') {
+            return (
+                <div className="trump-broken-announcement trump-fx--shatter">
+                    <div className="trump-broken-content">
+                        <span className="shatter-flash" aria-hidden="true" />
+                        {Array.from({ length: 8 }).map((_, index) => (
+                            <span key={index} className={`shatter-shard shatter-shard--${index + 1}`} aria-hidden="true" />
+                        ))}
+                        <div className="trump-broken-text">TRUMP BROKEN!</div>
+                    </div>
+                </div>
+            );
+        }
+
         return (
-            <div className="trump-broken-announcement">
+            <div className="trump-broken-announcement trump-fx--lightning">
                 <div className="trump-broken-content">
                     <div className="trump-broken-lightning">⚡</div>
                     <div className="trump-broken-text">TRUMP BROKEN!</div>

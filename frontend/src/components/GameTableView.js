@@ -38,6 +38,9 @@ import {
 } from '../config/tutorial';
 import { getThemePresentation } from '../config/themePresentation';
 import PlayerProfileModal from './PlayerProfileModal';
+import StoreModal from './StoreModal';
+import McMillanCrest from './game/McMillanCrest';
+import { useCosmetics } from '../utils/cosmetics';
 import VoiceControls from './game/VoiceControls';
 
 const ROUND_PRESENTATION_STATES = new Set([
@@ -78,6 +81,8 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const [seatAssignments, setSeatAssignments] = useState({ self: null, opponentLeft: null, opponentRight: null });
     const [showRoundSummaryModal, setShowRoundSummaryModal] = useState(false);
     const [showInsurancePrompt, setShowInsurancePrompt] = useState(false);
+    const [showStoreModal, setShowStoreModal] = useState(false);
+    const { deckSkin } = useCosmetics();
     // True once the player has saved or nudged their wager this round; the
     // insurance controls stop pulsing for attention after that.
     const [insuranceWagerTouched, setInsuranceWagerTouched] = useState(false);
@@ -524,6 +529,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 setShowGameMenu(false);
                 setShowInsurancePrompt(false);
                 setShowIosPwaPrompt(false);
+                setShowStoreModal(false);
             }
         }
     }, [currentTableState, isSpectator]);
@@ -613,6 +619,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 setShowInsurancePrompt(false);
                 setShowIosPwaPrompt(false);
                 setShowDrawVoteModal(false);
+                setShowStoreModal(false);
             }
             const rawReadyAt = roundSummary.presentationReadyAt;
             const readyAt = Number(rawReadyAt);
@@ -890,8 +897,10 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
 
         if (isFaceDown) {
             return (
-                <div className="card-back-container" style={{ width, height, ...customStyle }}>
-                    <img src="/SluffLogo.png" alt="Card Back" className="card-back-image" />
+                <div className={`card-back-container deck-skin--${deckSkin}`} style={{ width, height, ...customStyle }}>
+                    {deckSkin === 'mcmillan'
+                        ? <McMillanCrest className="card-back-crest" />
+                        : <img src="/SluffLogo.png" alt="Card Back" className="card-back-image" />}
                 </div>
             );
         }
@@ -1113,26 +1122,44 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         >
             {shareNotice && <div className="share-invite-notice">{shareNotice}</div>}
             {!roundPresentationControlsLocked && createPortal(
-                <button
-                    className="game-menu-btn game-header-menu-btn"
-                    type="button"
-                    aria-label="Open game menu"
-                    aria-haspopup="dialog"
-                    aria-expanded={showGameMenu}
-                    aria-controls="game-menu-dialog"
-                    onClick={event => {
-                        event.currentTarget.focus();
-                        setShowGameMenu(prev => !prev);
-                    }}
-                >
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <line x1="3" y1="12" x2="21" y2="12"></line>
-                        <line x1="3" y1="6" x2="21" y2="6"></line>
-                        <line x1="3" y1="18" x2="21" y2="18"></line>
-                    </svg>
-                </button>,
+                <>
+                    <button
+                        className="game-header-store-btn"
+                        type="button"
+                        aria-label="Open store"
+                        aria-haspopup="dialog"
+                        onClick={() => setShowStoreModal(true)}
+                    >
+                        {/* Storefront: scalloped awning over a shop with a door */}
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M4 4 h16 l1.5 4.5 a2.5 2.5 0 0 1 -5 0 a2.5 2.5 0 0 1 -5 0 a2.5 2.5 0 0 1 -5 0 a2.5 2.5 0 0 1 -5 0 z" />
+                            <path d="M5 11 v9 h14 v-9" />
+                            <path d="M13.5 20 v-5.5 h3.5 V20" />
+                            <path d="M7.5 14.5 h3.5 v3 h-3.5 z" />
+                        </svg>
+                    </button>
+                    <button
+                        className="game-menu-btn game-header-menu-btn"
+                        type="button"
+                        aria-label="Open game menu"
+                        aria-haspopup="dialog"
+                        aria-expanded={showGameMenu}
+                        aria-controls="game-menu-dialog"
+                        onClick={event => {
+                            event.currentTarget.focus();
+                            setShowGameMenu(prev => !prev);
+                        }}
+                    >
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="3" y1="12" x2="21" y2="12"></line>
+                            <line x1="3" y1="6" x2="21" y2="6"></line>
+                            <line x1="3" y1="18" x2="21" y2="18"></line>
+                        </svg>
+                    </button>
+                </>,
                 document.body
             )}
+            <StoreModal show={showStoreModal} onClose={() => setShowStoreModal(false)} />
             {showGameMenu && !roundPresentationControlsLocked && <GameMenu />}
             {/* Card position debug overlay */}
             {false && window.cardDebugPositions && window.cardDebugPositions.length > 0 && (

@@ -61,7 +61,9 @@ const tableState = {
     widowCount: 3,
     originalDealtWidow: ['6D', '7D', '8D'],
     trumpSuit: 'S',
-    trumpBroken: false,
+    // ?broken=1 mounts with trump already broken, which fires the
+    // trump-broken announcement immediately — handy for FX screenshots.
+    trumpBroken: params.get('broken') === '1',
     leadSuitCurrentTrick: 'H',
     tricksPlayedCount: 3,
     currentTrickCards: [
