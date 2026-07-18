@@ -142,9 +142,24 @@
    than a tall pile, so lower piles overlap the base of the one above and the
    column reads as a rack receding up the felt. */
 .wide-mode :is(.score-chip-bank--left, .score-chip-bank--right) .score-chip-stacks {
-    flex-direction: column;
+    /* A fixed 3-pile column height makes rich banks (4-6 piles) wrap into a
+       second column instead of running the full length of the plaque. */
+    inset: auto;
+    top: 50%;
+    left: 50%;
+    height: 8.1vh; /* 3 x the 2.7vh pile pitch */
+    width: auto;
+    transform: translate(-50%, -50%);
+    flex-flow: column wrap;
     align-items: center;
+    align-content: center;
     justify-content: center;
+}
+
+/* The first column hugs the plaque; overflow piles sit toward the middle of
+   the board. Wrap direction flips with the seat's side. */
+.wide-mode .score-chip-bank--right .score-chip-stacks {
+    flex-flow: column wrap-reverse;
 }
 
 .wide-mode :is(.score-chip-bank--left, .score-chip-bank--right) .score-chip-stack {

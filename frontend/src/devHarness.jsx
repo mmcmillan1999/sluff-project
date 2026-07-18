@@ -52,7 +52,8 @@ const tableState = {
     seatingOrder: playerMode === 4 ? ['You', 'Brandi', 'Marcus', 'Elena'] : ['You', 'Brandi', 'Elena'],
     playerOrderActive: ['You', 'Brandi', 'Elena'],
     dealer: playerMode === 4 ? 104 : 103,
-    scores: { You: 108, Brandi: 126, Elena: 96, ...(playerMode === 4 ? { Marcus: 90 } : {}) },
+    // Brandi's 267 exercises the max six-pile bank; Elena's 44 the two-pile one.
+    scores: { You: 108, Brandi: 267, Elena: 44, ...(playerMode === 4 ? { Marcus: 90 } : {}) },
     hands: { You: ['AC', 'KC', 'QC', 'JC', '10C', '9C', '8S', '7S', 'AD', 'KD', 'QD'] },
     widow: ['6D', '7D', '8D'],
     widowCount: 3,
