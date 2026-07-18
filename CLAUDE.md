@@ -40,9 +40,11 @@ Debug overlay in game: `Shift+D`.
 - Game layout sizes in vh/vw only; cards keep 5:7 aspect ratio; header is 7.5vh.
 - Positioning uses wrapper components (`docs/PLAYERSEAT_POSITIONING_SYSTEM.md`).
 - 4-space indent, single quotes, CommonJS in backend, ESM in frontend.
+- **Orientation policy (July 2026)**: mobile portrait is the gold-standard layout. Phone landscape is intentionally blocked by `OrientationScrim` (landscape + coarse pointer + ≤600px tall) and `manifest.json` locks installed PWAs to portrait — don't build phone-landscape layouts. Portrait tablets get the phone layout (wide-mode threshold aspect ≥ 1.25 in `PlayerSeatPositioner.js`); desktop/tablet-landscape geometry is vh-capped via `min()`/`max()` terms that are no-ops on portrait.
+- **Layout harness**: `npm run dev` then open `/harness.html?mode=3|4` — renders the real game table with canned state, no backend needed. Use it to screenshot layout changes at any viewport.
 
 ## Known quirks
-- 11 Vitest failures in physics/spacing suites are stale Aug-2025 behavioral expectations, not regressions — don't "fix" engine behavior to satisfy them without testing real gameplay.
+- The Vitest suite is fully green as of July 2026 (the old note about 11 stale physics/spacing failures no longer applies) — treat any failure as a real regression.
 - `docs/archive/` is historical; don't treat as current.
 - Local Python tooling in `tools/legacy-agents/` is unrelated to the app (gitignored).
 
