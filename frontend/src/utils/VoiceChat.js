@@ -1,19 +1,15 @@
 // frontend/src/utils/VoiceChat.js
-// Push-to-talk voice chat for a Sluff table.
+// Always-on voice chat for a Sluff table.
 //
 // Architecture: WebRTC peer-to-peer mesh (each participant connects directly
 // to every other participant — at most 3 peers, well within mesh limits).
 // Audio never touches the game server; Socket.IO only relays the WebRTC
 // handshake (offers/answers/ICE) between players seated at the same table.
 //
-// Push-to-talk RELEASES the microphone entirely between presses and
-// re-acquires it on press via RTCRtpSender.replaceTrack (no renegotiation).
-// Holding the mic open all the time would keep the phone's audio session in
-// call mode, which ducks the game's music/effects the entire time voice is
-// joined (and players compensate with hardware volume, then get blasted when
-// the session flips modes). Releasing capture between presses keeps game
-// audio at its true level except during the moment someone is talking. The
-// price is ~100-300ms of mic spin-up on the first syllable of each press.
+// Players join the voice room with the table. One microphone stream is kept
+// for the table session and muted by toggling MediaStreamTrack.enabled. This
+// avoids the mobile cut-outs caused by repeatedly stopping, reacquiring, and
+// swapping the microphone track for every short press.
 //
 // Remote audio routes through a per-peer WebAudio GainNode, which is what
 // makes per-player volume work on iOS (media-element volume is read-only
@@ -61,14 +57,33 @@ const acquireMic = () => {
         return Promise.reject(unsupported);
     }
     return new Promise((resolve, reject) => {
+        let settled = false;
         const timer = setTimeout(() => {
+            if (settled) return;
+            settled = true;
             const timeout = new Error('Timed out waiting for microphone permission.');
             timeout.name = 'TimeoutError';
             reject(timeout);
         }, MIC_TIMEOUT_MS);
         navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS).then(
-            (stream) => { clearTimeout(timer); resolve(stream); },
-            (error) => { clearTimeout(timer); reject(error); },
+            (stream) => {
+                clearTimeout(timer);
+                // getUserMedia cannot be cancelled. If the browser resolves a
+                // dismissed prompt after our timeout, stop that late stream
+                // instead of leaving an invisible microphone capture alive.
+                if (settled) {
+                    stream.getTracks().forEach(track => track.stop());
+                    return;
+                }
+                settled = true;
+                resolve(stream);
+            },
+            (error) => {
+                clearTimeout(timer);
+                if (settled) return;
+                settled = true;
+                reject(error);
+            },
         );
     });
 };
@@ -81,47 +96,48 @@ class VoiceChat {
         this.onSpeakingChanged = onSpeakingChanged || (() => {});
         this.onError = onError || (() => {});
         this.peers = new Map(); // userId -> peer record
-        this.micStream = null;  // live only while the talk button is held
+        this.micStream = null;  // retained until the player leaves the table
+        this.microphoneMuted = true;
+        this.micRequest = null;
+        this.micRequestToken = 0;
         this.audioContext = null;
+        this.audioUnlockHandler = null;
         this.joined = false;
-        this.talking = false;
-        this.talkToken = 0;     // invalidates in-flight mic acquisitions
+        this.lifecycleToken = 0;
         this.boundHandlers = null;
     }
 
     async join() {
         if (this.joined) return;
-        // Prompt for permission up front (and fail early with a clear error),
-        // then release the device immediately — capture only runs while the
-        // talk button is held. The grant is cached for subsequent presses.
-        const probe = await acquireMic();
-        probe.getTracks().forEach(track => track.stop());
-
+        this.lifecycleToken += 1;
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
         this.audioContext = new AudioContextClass();
-        // join() runs from a user gesture, which is what iOS needs to unlock
-        // audio. Fire-and-forget: resume() can wedge in odd session states and
-        // must never hang the join.
-        if (this.audioContext.state === 'suspended') {
-            this.audioContext.resume().catch(() => {});
-        }
+        this._bindAudioUnlock();
+        this._resumeAudio();
 
         this._bindSocket();
         this.joined = true;
         console.log(`[voice] joining voice room for table ${this.tableId}`
             + ' (a voiceRoster log must follow; if it never does, the server rejected the join)');
-        this.socket.emit('voiceJoin', { tableId: this.tableId });
+        // Socket.IO buffers emits while disconnected. Let the connect handler
+        // perform the join in that case so the server never sees two joins.
+        if (this.socket.connected !== false) {
+            this.socket.emit('voiceJoin', { tableId: this.tableId });
+        }
     }
 
     leave() {
         console.log('[voice] leaving voice room');
+        this.lifecycleToken += 1;
+        this.micRequestToken += 1;
+        this.micRequest = null;
         if (this.boundHandlers) {
             for (const [event, handler] of Object.entries(this.boundHandlers)) {
                 this.socket.off(event, handler);
             }
             this.boundHandlers = null;
         }
-        this._releaseMic();
+        this._stopMicrophone();
         if (this.joined) {
             this.socket.emit('voiceLeave', { tableId: this.tableId });
         }
@@ -133,62 +149,123 @@ class VoiceChat {
             this.audioContext.close().catch(() => {});
             this.audioContext = null;
         }
+        this._unbindAudioUnlock();
         this.joined = false;
-        this.talking = false;
         this._emitPeers();
     }
 
-    // --- push-to-talk ------------------------------------------------------
+    // --- local microphone --------------------------------------------------
 
-    async setTalking(on) {
-        if (!this.joined) return;
-        if (on) {
-            this.talkToken += 1;
-            const token = this.talkToken;
-            if (this.micStream || this.talking) return;
-            this.talking = true;
-            try {
-                const stream = await acquireMic();
-                // Released (or left voice) before the mic spun up.
-                if (this.talkToken !== token || !this.talking || !this.joined) {
-                    stream.getTracks().forEach(track => track.stop());
-                    return;
-                }
-                this.micStream = stream;
-                const track = stream.getAudioTracks()[0];
-                console.log(`[voice] mic acquired — replaceTrack(mic) into ${this.peers.size} peer sender(s)`);
-                for (const peer of this.peers.values()) {
-                    if (!peer.audioSender) {
-                        console.warn(`[voice] peer ${peer.userId}: no negotiated sender yet — track will attach after negotiation`);
-                        continue;
-                    }
-                    peer.audioSender.replaceTrack(track)
-                        .catch(err => console.warn(`[voice] peer ${peer.userId}: replaceTrack failed`, err));
-                }
-                this.socket.emit('voiceSpeaking', { tableId: this.tableId, speaking: true });
-            } catch (error) {
-                this.talking = false;
-                this.onError(error);
+    async setMicrophoneMuted(muted) {
+        if (!this.joined) return false;
+        const shouldMute = Boolean(muted);
+
+        if (shouldMute) {
+            this.microphoneMuted = true;
+            this.micRequestToken += 1;
+            this.micRequest = null;
+            this._applyMicrophoneState();
+            this._broadcastMicrophoneState();
+            return true;
+        }
+
+        if (this.micStream) {
+            this.microphoneMuted = false;
+            this._applyMicrophoneState();
+            this._broadcastMicrophoneState();
+            return true;
+        }
+
+        // Duplicate unmute requests share one permission/capture request.
+        if (this.micRequest) return this.micRequest;
+
+        const lifecycleToken = this.lifecycleToken;
+        const requestToken = ++this.micRequestToken;
+        let request;
+        request = acquireMic().then((stream) => {
+            if (!this.joined || this.lifecycleToken !== lifecycleToken
+                || this.micRequestToken !== requestToken) {
+                stream.getTracks().forEach(track => track.stop());
+                return false;
             }
-        } else {
-            this.talkToken += 1;
-            if (!this.talking) return;
-            this.talking = false;
-            if (this.micStream) {
-                this.socket.emit('voiceSpeaking', { tableId: this.tableId, speaking: false });
+
+            this.micStream = stream;
+            this.microphoneMuted = false;
+            this._applyMicrophoneState();
+            const track = stream.getAudioTracks()[0];
+            console.log(`[voice] stable mic acquired — attaching to ${this.peers.size} peer sender(s)`);
+            for (const peer of this.peers.values()) {
+                if (!peer.audioSender) continue;
+                peer.audioSender.replaceTrack(track)
+                    .catch(err => console.warn(`[voice] peer ${peer.userId}: replaceTrack failed`, err));
             }
-            this._releaseMic();
+            this._broadcastMicrophoneState();
+            return true;
+        }).catch((error) => {
+            if (!this.joined || this.lifecycleToken !== lifecycleToken
+                || this.micRequestToken !== requestToken) {
+                return false;
+            }
+            this.microphoneMuted = true;
+            this.onError(error);
+            throw error;
+        }).finally(() => {
+            if (this.micRequest === request) this.micRequest = null;
+        });
+        this.micRequest = request;
+        return request;
+    }
+
+    _applyMicrophoneState() {
+        for (const track of this.micStream?.getAudioTracks?.() || []) {
+            track.enabled = !this.microphoneMuted;
         }
     }
 
-    _releaseMic() {
+    _broadcastMicrophoneState() {
+        if (!this.joined) return;
+        this.socket.emit('voiceSpeaking', {
+            tableId: this.tableId,
+            speaking: !this.microphoneMuted && Boolean(this.micStream),
+        });
+    }
+
+    _stopMicrophone() {
         if (!this.micStream) return;
-        console.log('[voice] mic released — replaceTrack(null) on all senders');
-        for (const peer of this.peers.values()) {
-            peer.audioSender?.replaceTrack(null).catch(() => {});
-        }
         this.micStream.getTracks().forEach(track => track.stop());
         this.micStream = null;
+        this.microphoneMuted = true;
+    }
+
+    // Automatic table entry is not always considered a playback gesture on
+    // mobile browsers. Keep a lightweight unlock listener for the next real
+    // interaction and for returning from a suspended/backgrounded state.
+    _bindAudioUnlock() {
+        if (this.audioUnlockHandler || typeof document === 'undefined') return;
+        this.audioUnlockHandler = () => this._resumeAudio();
+        document.addEventListener('pointerdown', this.audioUnlockHandler, { passive: true });
+        document.addEventListener('touchend', this.audioUnlockHandler, { passive: true });
+        document.addEventListener('keydown', this.audioUnlockHandler);
+    }
+
+    _unbindAudioUnlock() {
+        if (!this.audioUnlockHandler || typeof document === 'undefined') return;
+        document.removeEventListener('pointerdown', this.audioUnlockHandler);
+        document.removeEventListener('touchend', this.audioUnlockHandler);
+        document.removeEventListener('keydown', this.audioUnlockHandler);
+        this.audioUnlockHandler = null;
+    }
+
+    _resumeAudio() {
+        if (!this.audioContext) return;
+        const resume = this.audioContext.state === 'suspended'
+            ? this.audioContext.resume()
+            : Promise.resolve();
+        Promise.resolve(resume).catch(() => {}).finally(() => {
+            for (const peer of this.peers.values()) {
+                peer.audioEl?.play?.().catch(() => {});
+            }
+        });
     }
 
     // --- per-peer output controls -------------------------------------------
@@ -242,8 +319,10 @@ class VoiceChat {
                     this._createPeer(Number(peer.userId), peer.playerName, true);
                 }
                 this._emitPeers();
+                this._broadcastMicrophoneState();
             },
-            voicePeerJoined: ({ userId, playerName }) => {
+            voicePeerJoined: ({ tableId, userId, playerName }) => {
+                if (tableId && tableId !== this.tableId) return;
                 console.log(`[voice] peer joined: ${userId} (${playerName})`);
                 // A voicePeerJoined for a user we already track means that
                 // user re-joined the room (e.g. after their socket dropped):
@@ -256,18 +335,22 @@ class VoiceChat {
                 // The joiner initiates; we just prepare a record to answer with.
                 this._createPeer(Number(userId), playerName, false);
                 this._emitPeers();
+                this._broadcastMicrophoneState();
             },
-            voicePeerLeft: ({ userId }) => {
+            voicePeerLeft: ({ tableId, userId }) => {
+                if (tableId && tableId !== this.tableId) return;
                 console.log(`[voice] peer left: ${userId}`);
-                this._teardownPeer(Number(userId));
+                this._teardownPeer(Number(userId), { silent: true });
                 this._emitPeers();
             },
-            voiceSignal: ({ fromUserId, data }) => {
+            voiceSignal: ({ tableId, fromUserId, data }) => {
+                if (tableId && tableId !== this.tableId) return;
                 this._handleSignal(Number(fromUserId), data).catch(error => {
                     console.error('[voice] signal handling failed:', error);
                 });
             },
-            voiceSpeaking: ({ userId, speaking }) => {
+            voiceSpeaking: ({ tableId, userId, speaking }) => {
+                if (tableId && tableId !== this.tableId) return;
                 const peer = this.peers.get(Number(userId));
                 if (peer) peer.speaking = Boolean(speaking);
                 this.onSpeakingChanged(Number(userId), Boolean(speaking));
@@ -303,6 +386,7 @@ class VoiceChat {
             speaking: false,
             muted: false,
             volume: DEFAULT_VOLUME,
+            sourceNode: null,
             gainNode: null,
             audioEl: null,
             audioSender: null,
@@ -495,10 +579,13 @@ class VoiceChat {
         peer.audioEl.play().catch(() => {});
 
         try {
+            peer.sourceNode?.disconnect?.();
+            peer.gainNode?.disconnect?.();
             const source = this.audioContext.createMediaStreamSource(stream);
             const gainNode = this.audioContext.createGain();
             source.connect(gainNode);
             gainNode.connect(this.audioContext.destination);
+            peer.sourceNode = source;
             peer.gainNode = gainNode;
             this._applyGain(peer);
         } catch (error) {
@@ -526,6 +613,9 @@ class VoiceChat {
         if (peer.gainNode) {
             try { peer.gainNode.disconnect(); } catch (err) { /* detached */ }
         }
+        if (peer.sourceNode) {
+            try { peer.sourceNode.disconnect(); } catch (err) { /* detached */ }
+        }
         this.peers.delete(userId);
         if (!silent) this._emitPeers();
     }
@@ -537,6 +627,7 @@ class VoiceChat {
             connected: peer.connected,
             iceState: peer.iceState,
             speaking: peer.speaking,
+            microphoneLive: peer.speaking,
             muted: peer.muted,
             volume: peer.volume,
         })));

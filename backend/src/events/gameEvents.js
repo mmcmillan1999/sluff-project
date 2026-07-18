@@ -99,7 +99,31 @@ const registerGameHandlers = (io, gameService, options = {}) => {
             return;
         }
         for (const member of room.values()) {
-            io.to(member.socketId).emit('voicePeerLeft', { userId });
+            io.to(member.socketId).emit('voicePeerLeft', { tableId, userId });
+        }
+    };
+
+    const voiceMemberControlsSeat = (engine, userId, member) => {
+        if (!engine || !member) return false;
+        const player = engine.players?.[userId];
+        if (!player || player.isSpectator || player.socketId !== member.socketId) return false;
+        const memberSocket = io.sockets?.sockets?.get(member.socketId);
+        return !!memberSocket
+            && memberSocket.connected !== false
+            && String(memberSocket.user?.id) === String(userId);
+    };
+
+    // Client cleanup is best-effort. Reconcile the signaling roster against
+    // the authoritative table seat before using it so a player who left,
+    // changed tables, became a spectator, or lost control to another socket
+    // cannot remain a signaling target.
+    const pruneVoiceRoom = (tableId, engine = gameService.getEngineById(tableId)) => {
+        const room = voiceRooms.get(tableId);
+        if (!room) return;
+        for (const [userId, member] of [...room.entries()]) {
+            if (!voiceMemberControlsSeat(engine, userId, member)) {
+                leaveVoiceRoom(tableId, userId);
+            }
         }
     };
 
@@ -321,6 +345,7 @@ const registerGameHandlers = (io, gameService, options = {}) => {
             }
 
             for (const previousEngine of currentPreviousEngines) {
+                leaveVoiceRoom(previousEngine.tableId, socket.user.id);
                 previousEngine.leaveTable(socket.user.id);
                 socket.leave(previousEngine.tableId);
                 gameService.emitGameState(previousEngine.tableId);
@@ -332,6 +357,9 @@ const registerGameHandlers = (io, gameService, options = {}) => {
             engineToJoin.joinTable(socket.user, socket.id, tokens, asSpectator);
 
             const joinedPlayer = engineToJoin.players[socket.user.id];
+            if (joinedPlayer?.isSpectator) {
+                leaveVoiceRoom(tableId, socket.user.id);
+            }
             if (engineToJoin.tableType === 'quickplay'
                 && !asSpectator
                 && (!joinedPlayer || joinedPlayer.isSpectator || !engineToJoin.playerOrder.includes(socket.user.id))) {
@@ -423,6 +451,7 @@ const registerGameHandlers = (io, gameService, options = {}) => {
                 // retry response leaves the user exactly where they were.
                 for (const previousEngine of occupiedEngines) {
                     if (previousEngine === engineToJoin) continue;
+                    leaveVoiceRoom(previousEngine.tableId, socket.user.id);
                     previousEngine.leaveTable(socket.user.id);
                     socket.leave(previousEngine.tableId);
                     gameService.emitGameState(previousEngine.tableId);
@@ -448,6 +477,7 @@ const registerGameHandlers = (io, gameService, options = {}) => {
         });
 
         onTableAction("leaveTable", { allowSpectator: true }, async ({ engine: engineToLeave, payload: { tableId } }) => {
+            leaveVoiceRoom(tableId, socket.user.id);
             engineToLeave.leaveTable(socket.user.id);
             gameService.emitGameState(tableId);
             gameService.io.emit('lobbyState', gameService.getLobbyState());
@@ -475,6 +505,8 @@ const registerGameHandlers = (io, gameService, options = {}) => {
             if (existingPlayer.isSpectator) {
                 return socket.emit("notification", { message: "You are already a spectator." });
             }
+
+            leaveVoiceRoom(tableId, socket.user.id);
 
             console.log(`[ADMIN] BEFORE moveToSpectator - Player ${socket.user.username}:`);
             console.log(`[ADMIN]   - isSpectator: ${existingPlayer.isSpectator}`);
@@ -531,20 +563,28 @@ const registerGameHandlers = (io, gameService, options = {}) => {
             socket.emit("notification", { message: "You are now a spectator." });
         });
 
-        // --- Voice chat (push-to-talk) signaling ---------------------------
-        // Seated humans opt in per table. The joiner initiates WebRTC offers
-        // to everyone already in the room; the server never sees audio.
+        // --- Table voice signaling -----------------------------------------
+        // Seated players join voice with the table. The joiner initiates
+        // WebRTC offers to everyone already present; the server never sees
+        // or stores audio.
         onTableAction("voiceJoin", {}, ({ engine }) => {
+            pruneVoiceRoom(engine.tableId, engine);
             const room = voiceRoomFor(engine.tableId);
             const peers = [...room.entries()]
                 .filter(([userId]) => userId !== socket.user.id)
                 .map(([userId, member]) => ({ userId, playerName: member.playerName }));
+            const existingMember = room.get(socket.user.id);
+            if (existingMember?.socketId === socket.id) {
+                socket.emit('voiceRoster', { tableId: engine.tableId, peers });
+                return;
+            }
             room.set(socket.user.id, { socketId: socket.id, playerName: socket.user.username });
             socket.emit('voiceRoster', { tableId: engine.tableId, peers });
             for (const peer of peers) {
                 const member = room.get(peer.userId);
                 if (member) {
                     io.to(member.socketId).emit('voicePeerJoined', {
+                        tableId: engine.tableId,
                         userId: socket.user.id,
                         playerName: socket.user.username,
                     });
@@ -565,11 +605,14 @@ const registerGameHandlers = (io, gameService, options = {}) => {
                 return null;
             },
         }, ({ engine, payload }) => {
+            pruneVoiceRoom(engine.tableId, engine);
             const room = voiceRooms.get(engine.tableId);
             const self = room?.get(socket.user.id);
             const target = room?.get(Number(payload.targetUserId));
-            if (!self || self.socketId !== socket.id || !target) return;
+            if (!self || self.socketId !== socket.id || !target
+                || !voiceMemberControlsSeat(engine, Number(payload.targetUserId), target)) return;
             io.to(target.socketId).emit('voiceSignal', {
+                tableId: engine.tableId,
                 fromUserId: socket.user.id,
                 data: payload.data,
             });
@@ -578,11 +621,14 @@ const registerGameHandlers = (io, gameService, options = {}) => {
         onTableAction("voiceSpeaking", {
             validate: (payload) => (typeof payload?.speaking === 'boolean' ? null : 'Invalid speaking state.'),
         }, ({ engine, payload }) => {
+            pruneVoiceRoom(engine.tableId, engine);
             const room = voiceRooms.get(engine.tableId);
-            if (!room?.has(socket.user.id)) return;
+            const self = room?.get(socket.user.id);
+            if (!self || self.socketId !== socket.id) return;
             for (const [userId, member] of room) {
                 if (userId === socket.user.id) continue;
                 io.to(member.socketId).emit('voiceSpeaking', {
+                    tableId: engine.tableId,
                     userId: socket.user.id,
                     speaking: payload.speaking,
                 });

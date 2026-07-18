@@ -1,49 +1,47 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { getSeason, getSeasons } from '../services/api';
+import { getCurrentSeasonStandings } from '../services/api';
 import BulletinView from './BulletinView';
 
 vi.mock('../services/api', () => ({
-    getSeason: vi.fn(),
-    getSeasons: vi.fn(),
+    getCurrentSeasonStandings: vi.fn(),
 }));
 
 beforeEach(() => {
     vi.clearAllMocks();
-    getSeasons.mockResolvedValue({ seasons: [] });
+    getCurrentSeasonStandings.mockResolvedValue({
+        season: { name: 'Alpha Season 2' },
+        standings: [],
+    });
 });
 
 describe('BulletinView', () => {
-    test('keeps the pre-rollover copy provisional while celebrating McSaddle', () => {
+    test('welcomes players to Season 2 while preserving the Season 1 champion', async () => {
         render(<BulletinView onReturnToLobby={() => {}} />);
 
-        expect(screen.getByRole('heading', { name: /nearing its official close/i })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: /season 2 is live/i })).toBeInTheDocument();
         expect(screen.getByText('McSaddle')).toBeInTheDocument();
-        expect(screen.getAllByText('See archive')).toHaveLength(3);
-        expect(screen.getByText(/only after the season is safely frozen/i)).toBeInTheDocument();
-        expect(screen.getByRole('heading', { name: /nearing its official close/i })).toHaveFocus();
+        expect(await screen.findByRole('group', { name: 'Alpha Season 2 live top three' })).toBeInTheDocument();
+        expect(screen.getAllByText('Up for grabs')).toHaveLength(3);
+        expect(screen.getByRole('heading', { name: /season 2 is live/i })).toHaveFocus();
     });
 
-    test('shows finalized podium names from the archive and opens Season Recaps', async () => {
+    test('shows the live Season 2 podium and opens Season Recaps', async () => {
         const user = userEvent.setup();
         const onOpenSeasonRecaps = vi.fn();
-        getSeasons.mockResolvedValue({
-            seasons: [{ slug: 'alpha-season-1', name: 'Alpha Season 1', finalizedAt: '2026-07-16T00:00:00Z' }],
-        });
-        getSeason.mockResolvedValue({
-            season: { slug: 'alpha-season-1', name: 'Alpha Season 1', finalizedAt: '2026-07-16T00:00:00Z' },
-            podium: [
+        getCurrentSeasonStandings.mockResolvedValue({
+            season: { name: 'Alpha Season 2' },
+            standings: [
                 { rank: 1, displayName: 'McSaddle' },
                 { rank: 2, displayName: 'Lady Liberty' },
                 { rank: 3, displayName: 'Frog Baron' },
             ],
-            standings: [],
         });
 
         render(<BulletinView onReturnToLobby={() => {}} onOpenSeasonRecaps={onOpenSeasonRecaps} />);
 
-        expect(await screen.findByRole('group', { name: 'Alpha Season 1 final podium' })).toBeInTheDocument();
-        expect(screen.getByRole('heading', { name: /belongs in the history books/i })).toBeInTheDocument();
+        expect(await screen.findByRole('group', { name: 'Alpha Season 2 live top three' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: /season 2 is live/i })).toBeInTheDocument();
         expect(screen.getByText('Lady Liberty')).toBeInTheDocument();
         expect(screen.getByText('Frog Baron')).toBeInTheDocument();
         await user.click(screen.getByRole('button', { name: 'View Season Recaps' }));

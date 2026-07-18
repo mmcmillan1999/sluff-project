@@ -60,6 +60,7 @@ vi.mock('./game/InsuranceControls', () => ({ default: () => null }));
 vi.mock('./game/InsurancePrompt', () => ({ default: () => null }));
 vi.mock('./game/BidWinnerSplash', () => ({ default: () => null }));
 vi.mock('./game/IosPwaPrompt', () => ({ default: () => null }));
+vi.mock('./game/VoiceControls', () => ({ default: () => null }));
 
 const socket = {
     id: 'socket-1',

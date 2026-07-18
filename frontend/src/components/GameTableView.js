@@ -1269,8 +1269,12 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 onClose={() => setProfilePlayerName(null)}
             />
 
-            {!isSpectator && socket && currentTableState?.tableId && (
-                <VoiceControls socket={socket} tableId={currentTableState.tableId} />
+            {selfPlayerInTable && !isSpectator && socket && currentTableState?.tableId && (
+                <VoiceControls
+                    key={currentTableState.tableId}
+                    socket={socket}
+                    tableId={currentTableState.tableId}
+                />
             )}
 
             <TableLayout

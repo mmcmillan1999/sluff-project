@@ -6,14 +6,17 @@
 // every voice event between two seated humans: roster on join, peer-joined
 // notifications, bidirectional voiceSignal relay with correct fromUserId,
 // speaking broadcasts, and cleanup on voiceLeave / socket disconnect. Also
-// locks in the guard semantics: non-members are rejected and oversized
-// signal payloads are dropped without weakening membership checks.
+// locks in idempotent joins and authoritative cleanup for table switches,
+// explicit leaves, stale seat sockets, and spectator transitions. Non-members
+// are rejected and oversized signal payloads are dropped without weakening
+// membership checks.
 
 const assert = require('node:assert/strict');
 const jsonwebtoken = require('jsonwebtoken');
 const registerGameHandlers = require('../src/events/gameEvents');
 
 const TABLE_ID = 'voice-table';
+const SECOND_TABLE_ID = 'voice-table-two';
 
 function createVoicePool() {
     // users.id is SERIAL (int4), so pg returns JS numbers. The voice room is
@@ -22,7 +25,7 @@ function createVoicePool() {
     const users = new Map([
         [7, { id: 7, username: 'Anna', is_admin: false }],
         [8, { id: 8, username: 'Ben', is_admin: false }],
-        [9, { id: 9, username: 'Cara', is_admin: false }],
+        [9, { id: 9, username: 'Cara', is_admin: true }],
     ]);
     return {
         async query(text, params = []) {
@@ -49,30 +52,62 @@ function createIntervalController() {
     };
 }
 
-function createEngine() {
-    const players = {
-        7: { userId: 7, playerName: 'Anna', socketId: null, isSpectator: false },
-        8: { userId: 8, playerName: 'Ben', socketId: null, isSpectator: false },
+function createEngine(tableId, initialPlayers = []) {
+    const players = Object.fromEntries(initialPlayers.map(player => [player.userId, { ...player }]));
+    const playerOrder = {
+        count: initialPlayers.filter(player => !player.isSpectator).length,
+        allIds: initialPlayers.filter(player => !player.isSpectator).map(player => player.userId),
+        includes(id) { return this.allIds.includes(Number(id)); },
+        add(id) {
+            const normalizedId = Number(id);
+            if (!this.allIds.includes(normalizedId)) this.allIds.push(normalizedId);
+            this.count = this.allIds.length;
+        },
+        remove(id) {
+            const normalizedId = Number(id);
+            this.allIds = this.allIds.filter(playerId => playerId !== normalizedId);
+            this.count = this.allIds.length;
+        },
     };
+    const scores = Object.fromEntries(initialPlayers
+        .filter(player => !player.isSpectator)
+        .map(player => [player.playerName, 120]));
     return {
-        tableId: TABLE_ID,
+        tableId,
         tableType: 'private',
         state: 'Waiting for Players',
         gameStarted: false,
         gameStartPending: false,
         players,
-        playerOrder: {
-            count: 2,
-            allIds: [7, 8],
-            includes(id) { return this.allIds.includes(Number(id)); },
+        playerOrder,
+        scores,
+        joinTable(user, socketId, tokens, asSpectator = false) {
+            players[user.id] = {
+                userId: user.id,
+                playerName: user.username,
+                socketId,
+                tokens,
+                isSpectator: asSpectator,
+                disconnected: false,
+            };
+            if (!asSpectator) {
+                playerOrder.add(user.id);
+                scores[user.username] = 120;
+            }
+        },
+        leaveTable(userId) {
+            const player = players[userId];
+            if (!player) return;
+            delete scores[player.playerName];
+            delete players[userId];
+            playerOrder.remove(userId);
         },
         reconnectPlayer(userId, socket) {
             if (players[userId]) players[userId].socketId = socket.id;
         },
         disconnectPlayer(userId) {
-            if (players[userId]) players[userId].socketId = null;
+            this.leaveTable(userId);
         },
-        leaveTable() {},
     };
 }
 
@@ -141,13 +176,22 @@ async function runVoiceSignalingTests() {
     process.env.JWT_SECRET = 'voice-signaling-test-secret';
     try {
         const pool = createVoicePool();
-        const engine = createEngine();
+        const engine = createEngine(TABLE_ID, [
+            { userId: 7, playerName: 'Anna', socketId: null, isSpectator: false },
+            { userId: 8, playerName: 'Ben', socketId: null, isSpectator: false },
+        ]);
+        const secondEngine = createEngine(SECOND_TABLE_ID);
+        const engines = { [TABLE_ID]: engine, [SECOND_TABLE_ID]: secondEngine };
         const gameService = {
             pool,
-            getAllEngines: () => ({ [TABLE_ID]: engine }),
-            getEngineById: tableId => (tableId === TABLE_ID ? engine : undefined),
+            getAllEngines: () => engines,
+            getEngineById: tableId => engines[tableId],
             getLobbyState: () => ({ themes: [] }),
-            getStateForSocket: () => ({}),
+            getStateForSocket: currentEngine => ({
+                tableId: currentEngine.tableId,
+                players: currentEngine.players,
+                playerOrderActive: currentEngine.playerOrder.allIds,
+            }),
             emitGameState() {},
             evaluateQuickPlayTable() {},
             evaluateTerminalCleanup() {},
@@ -187,7 +231,7 @@ async function runVoiceSignalingTests() {
         );
         assert.deepEqual(
             connA.received('voicePeerJoined').at(-1).payload,
-            { userId: 8, playerName: 'Ben' },
+            { tableId: TABLE_ID, userId: 8, playerName: 'Ben' },
             'the existing member is told about the joiner (non-initiator side)',
         );
         assert.equal(connB.received('voicePeerJoined').length, 0, 'the joiner is never notified about itself');
@@ -197,12 +241,28 @@ async function runVoiceSignalingTests() {
         // voicePeerJoined and answers. Nobody waits on the other to offer.
         assert.equal(rosterA.payload.peers.length + rosterB.payload.peers.length, 1);
 
+        // Re-running always-on setup on the same live socket must be harmless.
+        // In particular it must not tell the other side to tear down a healthy
+        // RTCPeerConnection while this side keeps its existing peer record.
+        const peerJoinsAtABeforeDuplicate = connA.received('voicePeerJoined').length;
+        await connB.trigger('voiceJoin', { tableId: TABLE_ID });
+        assert.deepEqual(
+            connB.received('voiceRoster').at(-1).payload,
+            { tableId: TABLE_ID, peers: [{ userId: 7, playerName: 'Anna' }] },
+            'an idempotent same-socket join still confirms the current roster',
+        );
+        assert.equal(
+            connA.received('voicePeerJoined').length,
+            peerJoinsAtABeforeDuplicate,
+            'a duplicate same-socket join does not reset healthy peers',
+        );
+
         // --- voiceSignal relays in BOTH directions with correct fromUserId --
         const offer = { sdp: { type: 'offer', sdp: 'v=0 test-offer' } };
         await connB.trigger('voiceSignal', { tableId: TABLE_ID, targetUserId: 7, data: offer });
         assert.deepEqual(
             connA.received('voiceSignal').at(-1).payload,
-            { fromUserId: 8, data: offer },
+            { tableId: TABLE_ID, fromUserId: 8, data: offer },
             'joiner to existing member offer relays with the sender identity',
         );
 
@@ -210,7 +270,7 @@ async function runVoiceSignalingTests() {
         await connA.trigger('voiceSignal', { tableId: TABLE_ID, targetUserId: 8, data: answer });
         assert.deepEqual(
             connB.received('voiceSignal').at(-1).payload,
-            { fromUserId: 7, data: answer },
+            { tableId: TABLE_ID, fromUserId: 7, data: answer },
             'existing member to joiner answer relays with the sender identity',
         );
 
@@ -224,7 +284,7 @@ async function runVoiceSignalingTests() {
         await connA.trigger('voiceSignal', { tableId: TABLE_ID, targetUserId: '8', data: candidate });
         assert.deepEqual(
             connB.received('voiceSignal').at(-1).payload,
-            { fromUserId: 7, data: candidate },
+            { tableId: TABLE_ID, fromUserId: 7, data: candidate },
             'ICE candidates relay, and a stringified target id still resolves the numeric room key',
         );
 
@@ -236,10 +296,16 @@ async function runVoiceSignalingTests() {
 
         // --- voiceSpeaking broadcasts to everyone but the speaker -----------
         await connA.trigger('voiceSpeaking', { tableId: TABLE_ID, speaking: true });
-        assert.deepEqual(connB.received('voiceSpeaking').at(-1).payload, { userId: 7, speaking: true });
+        assert.deepEqual(
+            connB.received('voiceSpeaking').at(-1).payload,
+            { tableId: TABLE_ID, userId: 7, speaking: true },
+        );
         assert.equal(connA.received('voiceSpeaking').length, 0, 'the speaker is not echoed its own state');
         await connA.trigger('voiceSpeaking', { tableId: TABLE_ID, speaking: false });
-        assert.deepEqual(connB.received('voiceSpeaking').at(-1).payload, { userId: 7, speaking: false });
+        assert.deepEqual(
+            connB.received('voiceSpeaking').at(-1).payload,
+            { tableId: TABLE_ID, userId: 7, speaking: false },
+        );
 
         // --- non-members cannot enter or signal into the room ---------------
         await connC.trigger('voiceJoin', { tableId: TABLE_ID });
@@ -251,7 +317,7 @@ async function runVoiceSignalingTests() {
 
         // --- voiceLeave notifies the room and revokes signaling -------------
         await connA.trigger('voiceLeave', { tableId: TABLE_ID });
-        assert.deepEqual(connB.received('voicePeerLeft').at(-1).payload, { userId: 7 });
+        assert.deepEqual(connB.received('voicePeerLeft').at(-1).payload, { tableId: TABLE_ID, userId: 7 });
         const signalsAtBBefore = connB.received('voiceSignal').length;
         await connA.trigger('voiceSignal', { tableId: TABLE_ID, targetUserId: 8, data: { sdp: { type: 'offer', sdp: 'x' } } });
         assert.equal(connB.received('voiceSignal').length, signalsAtBBefore, 'members who left voice can no longer signal');
@@ -263,11 +329,96 @@ async function runVoiceSignalingTests() {
             [{ userId: 8, playerName: 'Ben' }],
             'a rejoining member sees the remaining roster and initiates again',
         );
+
+        // --- authoritative table transitions revoke the old voice seat -----
+        const peerLeavesAtBBeforeSwitch = connB.received('voicePeerLeft').length;
+        await connA.trigger('joinTable', { tableId: SECOND_TABLE_ID });
+        assert.equal(engine.players[7], undefined, 'a table switch releases the old game seat');
+        assert.equal(secondEngine.players[7]?.socketId, sockA.id, 'the same socket controls the new table seat');
+        assert.equal(connB.received('voicePeerLeft').length, peerLeavesAtBBeforeSwitch + 1);
+        assert.deepEqual(
+            connB.received('voicePeerLeft').at(-1).payload,
+            { tableId: TABLE_ID, userId: 7 },
+            'switching tables revokes voice at the old table',
+        );
+
+        const signalsAtAAfterSwitch = connA.received('voiceSignal').length;
+        await connB.trigger('voiceSignal', {
+            tableId: TABLE_ID,
+            targetUserId: 7,
+            data: { sdp: { type: 'offer', sdp: 'stale-table-offer' } },
+        });
+        assert.equal(
+            connA.received('voiceSignal').length,
+            signalsAtAAfterSwitch,
+            'the old table cannot signal a player after that player switches tables',
+        );
+
+        await connA.trigger('joinTable', { tableId: TABLE_ID });
+        await connA.trigger('voiceJoin', { tableId: TABLE_ID });
+        assert.equal(engine.players[7]?.socketId, sockA.id, 'the player can return to the original table');
+
+        const peerLeavesAtBBeforeExplicitLeave = connB.received('voicePeerLeft').length;
+        await connA.trigger('leaveTable', { tableId: TABLE_ID });
+        assert.equal(engine.players[7], undefined, 'an explicit leave releases the game seat');
+        assert.equal(connB.received('voicePeerLeft').length, peerLeavesAtBBeforeExplicitLeave + 1);
+        assert.deepEqual(
+            connB.received('voicePeerLeft').at(-1).payload,
+            { tableId: TABLE_ID, userId: 7 },
+            'an explicit table leave revokes voice without relying on client cleanup',
+        );
+
+        await connA.trigger('joinTable', { tableId: TABLE_ID });
+        await connA.trigger('voiceJoin', { tableId: TABLE_ID });
+
+        // A room entry is not enough: its socket must still control a live,
+        // non-spectator seat at this exact table before signaling is relayed.
+        const signalsAtBBeforeStaleTarget = connB.received('voiceSignal').length;
+        const peerLeavesAtABeforeStaleTarget = connA.received('voicePeerLeft').length;
+        engine.players[8].socketId = 'superseded-ben-socket';
+        await connA.trigger('voiceSignal', {
+            tableId: TABLE_ID,
+            targetUserId: 8,
+            data: { sdp: { type: 'offer', sdp: 'stale-target-offer' } },
+        });
+        assert.equal(
+            connB.received('voiceSignal').length,
+            signalsAtBBeforeStaleTarget,
+            'signaling is not relayed to a stale seat socket',
+        );
+        assert.equal(connA.received('voicePeerLeft').length, peerLeavesAtABeforeStaleTarget + 1);
+        assert.deepEqual(
+            connA.received('voicePeerLeft').at(-1).payload,
+            { tableId: TABLE_ID, userId: 8 },
+            'stale target pruning is visible to the remaining table voice members',
+        );
+
+        engine.reconnectPlayer(8, sockB);
+        await connB.trigger('voiceJoin', { tableId: TABLE_ID });
+        assert.deepEqual(
+            connA.received('voicePeerJoined').at(-1).payload,
+            { tableId: TABLE_ID, userId: 8, playerName: 'Ben' },
+            'a restored target can join voice again on its authoritative socket',
+        );
+
         await connB.trigger('disconnect');
         assert.deepEqual(
             connA.received('voicePeerLeft').at(-1).payload,
-            { userId: 8 },
+            { tableId: TABLE_ID, userId: 8 },
             'a socket disconnect removes the member and notifies the room',
+        );
+
+        // --- becoming a spectator also revokes table voice -----------------
+        await connC.trigger('joinTable', { tableId: TABLE_ID });
+        await connC.trigger('voiceJoin', { tableId: TABLE_ID });
+        const peerLeavesAtABeforeSpectator = connA.received('voicePeerLeft').length;
+        await connC.trigger('moveToSpectator', { tableId: TABLE_ID });
+        assert.equal(engine.players[9]?.isSpectator, true);
+        assert.equal(connA.received('voicePeerLeft').length, peerLeavesAtABeforeSpectator + 1);
+        assert.deepEqual(
+            connA.received('voicePeerLeft').at(-1).payload,
+            { tableId: TABLE_ID, userId: 9 },
+            'a spectator transition revokes voice without waiting for the client to leave',
         );
 
         console.log('Voice chat signaling relay tests passed.');
