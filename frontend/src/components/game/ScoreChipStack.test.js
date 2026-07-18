@@ -65,7 +65,39 @@ describe('ScoreChipStack', () => {
         expect(bank).toHaveClass('score-chip-bank--left');
         expect(bank).toHaveTextContent('120');
         expect(container.querySelector('.score-chip-stage')).toHaveAttribute('aria-hidden', 'true');
-        expect(container.querySelectorAll('.score-chip-stack')).toHaveLength(3);
+        const stacks = container.querySelectorAll('.score-chip-stack');
+        const layers = container.querySelectorAll('.score-chip-layer');
+        expect(stacks).toHaveLength(3);
+        expect(layers).toHaveLength(11);
+        expect(stacks[0].querySelectorAll('.score-chip-layer')).toHaveLength(3);
+        expect(stacks[1].querySelectorAll('.score-chip-layer')).toHaveLength(5);
+        expect(stacks[2].querySelectorAll('.score-chip-layer')).toHaveLength(3);
+
+        const firstPileLayers = stacks[0].querySelectorAll('.score-chip-layer');
+        expect(firstPileLayers[0]).toHaveStyle({
+            '--chip-settle-x': '0.00vh',
+            '--chip-settle-y': '0.00vh',
+        });
+        expect(firstPileLayers[1]).toHaveStyle({
+            '--chip-settle-x': '-0.14vh',
+            '--chip-settle-y': '-0.13vh',
+        });
+        expect(bank.querySelector('.score-chip-total').parentElement).toHaveClass('score-chip-layer--score');
+    });
+
+    test('uses the numbered top face as the single loose or busted chip', () => {
+        const { container, rerender } = render(
+            <ScoreChipStack score={29} playerName="River Ace" />,
+        );
+
+        expect(container.querySelectorAll('.score-chip-layer')).toHaveLength(1);
+        const scoreLayer = container.querySelector('.score-chip-total').parentElement;
+        expect(scoreLayer).toHaveClass('score-chip-layer--score');
+        expect(scoreLayer).toHaveStyle({ zIndex: '40' });
+
+        rerender(<ScoreChipStack score={-4} playerName="River Ace" />);
+        expect(container.querySelectorAll('.score-chip-layer')).toHaveLength(1);
+        expect(container.querySelector('.score-chip-bank')).toHaveClass('score-chip-bank--busted');
     });
 
     test('animates only real score changes and labels the signed delta', () => {
@@ -102,7 +134,7 @@ describe('ScoreChipStack', () => {
         expect(container.querySelector('.score-chip-bank')).toHaveClass('score-chip-bank--gain');
         expect(container.querySelector('.score-chip-delta')).toHaveTextContent('+12');
 
-        act(() => vi.advanceTimersByTime(1100));
+        act(() => vi.advanceTimersByTime(1450));
         expect(container.querySelector('.score-chip-delta')).not.toBeInTheDocument();
         vi.useRealTimers();
     });
@@ -174,7 +206,7 @@ describe('ScoreChipStack', () => {
         vi.useRealTimers();
     });
 
-    test('keeps a long exact score visible in an expanding score capsule', () => {
+    test('keeps a long exact score visible on the top chip', () => {
         render(<ScoreChipStack score={1234567} playerName="River Ace" />);
 
         const bank = screen.getByRole('img', { name: 'River Ace score: 1234567 points' });

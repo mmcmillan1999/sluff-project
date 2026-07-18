@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import './ScoreChipStack.css';
 
-const SCORE_CHANGE_ANIMATION_MS = 1100;
+const SCORE_CHANGE_ANIMATION_MS = 1450;
 
 const normalizeScore = (value) => {
     if (value === null || value === undefined || value === '') return null;
@@ -82,6 +82,26 @@ const getScoreSizeClass = (displayScore) => {
     return '';
 };
 
+const getChipLayerStyle = (stackIndex, layerIndex, isScoreLayer) => {
+    const settleX = -(layerIndex * 0.14);
+    const settleY = -(layerIndex * 0.13);
+    const turn = (((stackIndex + layerIndex) % 3) - 1) * 1.6;
+
+    return {
+        '--stack-index': stackIndex,
+        '--layer-index': layerIndex,
+        '--chip-settle-x': `${settleX.toFixed(2)}vh`,
+        '--chip-settle-y': `${settleY.toFixed(2)}vh`,
+        '--chip-entry-x': `${(settleX + 2.35).toFixed(2)}vh`,
+        '--chip-entry-y': `${(settleY + 1.75).toFixed(2)}vh`,
+        '--chip-loss-x': `${(settleX - 0.55).toFixed(2)}vh`,
+        '--chip-loss-y': `${(settleY - 0.45).toFixed(2)}vh`,
+        '--chip-turn': `${turn.toFixed(1)}deg`,
+        '--chip-delay': `${stackIndex * 35 + layerIndex * 30 + (isScoreLayer ? 120 : 0)}ms`,
+        zIndex: isScoreLayer ? 40 : layerIndex + 1,
+    };
+};
+
 const ScoreChipStack = ({ score, playerName, seatPosition, animationScope = null }) => {
     const layout = useMemo(() => getScoreChipLayout(score), [score]);
     const owner = playerName || 'Player';
@@ -144,6 +164,11 @@ const ScoreChipStack = ({ score, playerName, seatPosition, animationScope = null
     const motionClass = scoreChange ? `score-chip-bank--${scoreChange.direction}` : '';
     const seatClass = seatPosition ? `score-chip-bank--${seatPosition}` : '';
     const sizeClass = getScoreSizeClass(layout.displayScore);
+    // Missing scores still get one neutral face for the dash, but the public
+    // stack-count contract remains zero. All real layouts stay bounded at six
+    // piles with no more than six flat chips per pile.
+    const renderedStackLayers = layout.stackLayers.length > 0 ? layout.stackLayers : [1];
+    const scoreStackIndex = Math.floor((renderedStackLayers.length - 1) / 2);
 
     return (
         <div
@@ -159,24 +184,34 @@ const ScoreChipStack = ({ score, playerName, seatPosition, animationScope = null
                 aria-hidden="true"
             >
                 <div className="score-chip-stacks">
-                    {layout.stackLayers.map((layerCount, index) => (
+                    {renderedStackLayers.map((layerCount, stackIndex) => (
                         <span
-                            // The stack model is deliberately bounded at six.
-                            // Index is stable because score bands only append/remove.
-                            key={index}
-                            className={`score-chip-stack score-chip-stack--tone-${(index % 3) + 1}`}
-                            style={{
-                                '--chip-layers': layerCount,
-                                '--stack-index': index,
-                                '--stack-tilt': `${(index % 2 === 0 ? -1 : 1) * (1 + (index % 3))}deg`,
-                            }}
-                        />
+                            key={stackIndex}
+                            className={`score-chip-stack score-chip-stack--tone-${(stackIndex % 3) + 1}`}
+                            data-layer-count={layerCount}
+                        >
+                            {Array.from({ length: layerCount }).map((_, layerIndex) => {
+                                const isScoreLayer = stackIndex === scoreStackIndex
+                                    && layerIndex === layerCount - 1;
+
+                                return (
+                                    <span
+                                        key={layerIndex}
+                                        className={`score-chip-layer ${isScoreLayer ? 'score-chip-layer--score' : ''}`.trim()}
+                                        style={getChipLayerStyle(stackIndex, layerIndex, isScoreLayer)}
+                                        data-layer-index={layerIndex}
+                                    >
+                                        {isScoreLayer && (
+                                            <span className={`score-chip-total ${sizeClass}`.trim()}>
+                                                {layout.displayScore}
+                                            </span>
+                                        )}
+                                    </span>
+                                );
+                            })}
+                        </span>
                     ))}
                 </div>
-
-                <span className={`score-chip-total ${sizeClass}`.trim()}>
-                    <span>{layout.displayScore}</span>
-                </span>
 
                 {scoreChange && (
                     <span className={`score-chip-delta score-chip-delta--${scoreChange.direction}`}>

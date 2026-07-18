@@ -152,9 +152,8 @@
    toward the table without changing the seat's fixed deal-animation target. */
 .player-seat-wrapper > .score-chip-bank {
     position: absolute;
-    /* The bank's numbered chip hangs below its stage, so this offset leaves
-       just its rim over the plaque instead of covering the player's name. */
-    top: -3.35vh;
+    /* Let the flat pile's lower rim meet the plaque without covering the name. */
+    top: -1.05vh;
     left: 50%;
     z-index: 4;
     transform: translate(-50%, -50%);
@@ -164,9 +163,8 @@
 /* The north seat has very little header clearance, so its bank hangs inward. */
 .player-seat-wrapper-top > .score-chip-bank {
     top: auto;
-    /* Pull the bank just far enough into the lower edge of the plaque that its
-       exact-score chip clears the compact prompt corridor below the north seat. */
-    bottom: 1.4vh;
+    /* Let the flat pile meet the plaque while clearing the north prompt corridor. */
+    bottom: -1.05vh;
     transform: translate(-50%, 50%);
 }
 
