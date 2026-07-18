@@ -274,12 +274,16 @@
    the rotated phone-layout seats the bank counter-rotates about its own
    center — net-zero with the seat's ±90° — keeping the same anchor point
    while the piles stand upright in screen space like the card piles. */
+/* The 0.8vh nudge is screen-down (pre-rotation, so +x on the left seat and
+   -x on the right): piles grow upward, so dropping the whole bank slightly
+   gives the tallest pile clearance from the corner puck above it while the
+   fixed pile bottoms stay clear of the corner below. */
 .wide-mode .player-seat-wrapper > .score-chip-bank.score-chip-bank--left {
-    transform: translate(-50%, -50%) rotate(-90deg);
+    transform: translate(calc(-50% + 0.8vh), -50%) rotate(-90deg);
 }
 
 .wide-mode .player-seat-wrapper > .score-chip-bank.score-chip-bank--right {
-    transform: translate(-50%, -50%) rotate(90deg);
+    transform: translate(calc(-50% - 0.8vh), -50%) rotate(90deg);
 }
 
 /* Team-specific pulsing animations */

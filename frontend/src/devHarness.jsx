@@ -51,7 +51,9 @@ const tableState = {
     players,
     seatingOrder: playerMode === 4 ? ['You', 'Brandi', 'Marcus', 'Elena'] : ['You', 'Brandi', 'Elena'],
     playerOrderActive: ['You', 'Brandi', 'Elena'],
-    dealer: playerMode === 4 ? 104 : 103,
+    // In defender mode Brandi is dealer AND bidder: both corner pucks plus
+    // her 267 two-column bank on one rotated seat — the worst-case collision.
+    dealer: playerMode === 4 ? 104 : (selfIsBidder ? 103 : 102),
     // Brandi's 267 exercises the max six-pile bank; Elena's 44 the two-pile one.
     scores: { You: 108, Brandi: 267, Elena: 44, ...(playerMode === 4 ? { Marcus: 90 } : {}) },
     hands: { You: ['AC', 'KC', 'QC', 'JC', '10C', '9C', '8S', '7S', 'AD', 'KD', 'QD'] },
