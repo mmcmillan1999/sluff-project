@@ -1,0 +1,75 @@
+/* frontend/src/components/game/WidowSpider.css */
+
+.widow-spider {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 4.6vh;
+    height: 4.6vh;
+    margin: -2.3vh 0 0 -2.3vh; /* transform() addresses the spider's center */
+    /* Below played cards (8) and trick piles (15) so she emerges from
+       beneath the widow pile and skitters under anything on the felt. */
+    z-index: 7;
+    display: none;
+    pointer-events: none;
+    will-change: transform, opacity;
+}
+
+.widow-spider.is-active {
+    display: block;
+}
+
+.widow-spider-svg {
+    width: 100%;
+    height: 100%;
+    filter: drop-shadow(0.2vh 0.35vh 0.35vh rgba(0, 0, 0, 0.5));
+}
+
+/* Walk cycle: alternating leg pairs scrabble while she's moving */
+@keyframes spider-legs-a {
+    0%, 100% { transform: rotate(6deg); }
+    50% { transform: rotate(-6deg); }
+}
+
+@keyframes spider-legs-b {
+    0%, 100% { transform: rotate(-6deg); }
+    50% { transform: rotate(6deg); }
+}
+
+.widow-spider.is-walking .spider-legs--a {
+    animation: spider-legs-a 0.18s linear infinite;
+    transform-origin: center;
+}
+
+.widow-spider.is-walking .spider-legs--b {
+    animation: spider-legs-b 0.18s linear infinite;
+    transform-origin: center;
+}
+
+/* Tiny admin trigger, tucked right below the observer eye */
+.admin-spider-btn {
+    position: fixed;
+    top: calc(7vh + 48px);
+    left: 98vw;
+    transform: translateX(-50%);
+    z-index: 1000;
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    font-size: 13px;
+    line-height: 1;
+    color: #d9d2c3;
+    background: rgba(20, 20, 22, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+
+.admin-spider-btn:hover,
+.admin-spider-btn:focus-visible {
+    color: #fff;
+    border-color: rgba(200, 30, 30, 0.7);
+}

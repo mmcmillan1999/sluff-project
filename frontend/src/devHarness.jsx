@@ -120,7 +120,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <GameHeader />
         <div className="app-content-container with-header app-view-gameTable">
             <GameTableView
-                user={{ id: 101, username: 'You', is_admin: false }}
+                user={{ id: 101, username: 'You', is_admin: true }}
                 playerId={101}
                 currentTableState={tableState}
                 handleLeaveTable={noop}
