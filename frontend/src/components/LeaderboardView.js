@@ -49,7 +49,7 @@ const recordValue = (player, showPercent) => {
     return `${percentage(player.wins)} · ${percentage(player.losses)} · ${percentage(player.washes)}%`;
 };
 
-const LeaderboardView = ({ user, onReturnToLobby, handleShowAdmin }) => {
+const LeaderboardView = ({ user, onReturnToLobby, handleShowAdmin, onShowTokenLedger }) => {
     const [leaderboardData, setLeaderboardData] = useState([]);
     const [season, setSeason] = useState(null);
     const [isLegacyFallback, setIsLegacyFallback] = useState(false);
@@ -227,6 +227,7 @@ const LeaderboardView = ({ user, onReturnToLobby, handleShowAdmin }) => {
                 playerName={profilePlayerName}
                 currentUsername={currentUsername}
                 onClose={() => setProfilePlayerName(null)}
+                onShowTokenLedger={onShowTokenLedger}
             />
         </div>
     );

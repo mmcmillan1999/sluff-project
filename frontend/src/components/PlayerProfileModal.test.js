@@ -205,6 +205,113 @@ test('explains an empty matchup instead of displaying a misleading zero-percent 
     expect(screen.queryByText('0.0%')).not.toBeInTheDocument();
 });
 
+test("shows the profiled player's current-season record when provided", async () => {
+    getPlayerProfile.mockResolvedValue({
+        ...opponentProfile,
+        currentSeasonRecord: {
+            season: {
+                id: 2,
+                number: 2,
+                slug: 'alpha-season-2',
+                displayName: 'Alpha Season 2',
+            },
+            wins: 2,
+            losses: 1,
+            washes: 0,
+            totalGames: 3,
+            winRate: 66.7,
+        },
+    });
+
+    render(
+        <PlayerProfileModal
+            playerName="River Ace"
+            currentUsername="Me"
+            onClose={vi.fn()}
+        />,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'River Ace' })).toBeInTheDocument();
+    expect(screen.getByText('Current season')).toBeInTheDocument();
+    expect(screen.getByText('Alpha Season 2')).toBeInTheDocument();
+    expect(screen.getByText('66.7%')).toBeInTheDocument();
+    expect(screen.getByText('Career record')).toBeInTheDocument();
+});
+
+test('self profile shows the season record and routes to the token ledger', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const onShowTokenLedger = vi.fn();
+    getPlayerProfile.mockResolvedValue({
+        player: {
+            username: 'Me',
+            wins: 12,
+            losses: 6,
+            washes: 2,
+            totalGames: 20,
+            winRate: 60,
+        },
+        currentSeasonRecord: {
+            season: { id: 2, number: 2, slug: 'alpha-season-2', displayName: 'Alpha Season 2' },
+            wins: 3,
+            losses: 1,
+            washes: 0,
+            totalGames: 4,
+            winRate: 75,
+        },
+        headToHead: {
+            isSelf: true,
+            gamesPlayed: 0,
+            wins: 0,
+            losses: 0,
+            ties: 0,
+            winRate: null,
+        },
+    });
+
+    render(
+        <PlayerProfileModal
+            playerName="Me"
+            currentUsername="Me"
+            onClose={onClose}
+            onShowTokenLedger={onShowTokenLedger}
+        />,
+    );
+
+    expect(await screen.findByText('Your Sluff profile')).toBeInTheDocument();
+    expect(screen.getByText('Current season')).toBeInTheDocument();
+    expect(screen.getByText('75.0%')).toBeInTheDocument();
+    expect(screen.getByText('60.0%')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'View my token ledger' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onShowTokenLedger).toHaveBeenCalledTimes(1);
+});
+
+test('hides the ledger button without a navigation handler and for other players', async () => {
+    getPlayerProfile.mockResolvedValue({
+        player: {
+            username: 'Me',
+            wins: 1,
+            losses: 0,
+            washes: 0,
+            totalGames: 1,
+            winRate: 100,
+        },
+        headToHead: { isSelf: true, gamesPlayed: 0, wins: 0, losses: 0, ties: 0, winRate: null },
+    });
+
+    render(
+        <PlayerProfileModal
+            playerName="Me"
+            currentUsername="Me"
+            onClose={vi.fn()}
+        />,
+    );
+    expect(await screen.findByText('Your Sluff profile')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'View my token ledger' })).not.toBeInTheDocument();
+});
+
 test('offers a retry after an API error and closes with Escape', async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();

@@ -271,6 +271,31 @@
     margin: 1px 0 0;
 }
 
+.player-profile-season .player-profile-section-heading em {
+    color: #d7ad48;
+}
+
+.player-profile-ledger-button {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 44px;
+    margin-top: 12px;
+    color: #211b11;
+    background: linear-gradient(145deg, #f4d77c, #d9a936);
+    border: 1px solid #f8e7af;
+    border-radius: 10px;
+    font: 600 15px/1 'Oswald', sans-serif;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+}
+
+.player-profile-ledger-button:hover,
+.player-profile-ledger-button:focus-visible {
+    background: linear-gradient(145deg, #f8e194, #e2b84b);
+    outline: 2px solid #e2b84b;
+    outline-offset: 2px;
+}
+
 .player-profile-loading,
 .player-profile-error {
     display: flex;

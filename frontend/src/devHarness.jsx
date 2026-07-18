@@ -120,6 +120,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 socket={fakeSocket}
                 handleOpenFeedbackModal={noop}
                 soundSettings={soundSettings}
+                onShowTokenLedger={noop}
             />
         </div>
     </>

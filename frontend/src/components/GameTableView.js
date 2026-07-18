@@ -73,7 +73,7 @@ const scoresBeforeRound = (summary, fallbackScores) => {
 };
 
 
-const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, handleShowHowToPlay, emitEvent, playSound, socket, handleOpenFeedbackModal, soundSettings, tutorialState, onTutorialAction }) => {
+const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, handleShowHowToPlay, emitEvent, playSound, socket, handleOpenFeedbackModal, soundSettings, tutorialState, onTutorialAction, onShowTokenLedger }) => {
     const themePresentation = getThemePresentation(currentTableState?.theme);
     const [seatAssignments, setSeatAssignments] = useState({ self: null, opponentLeft: null, opponentRight: null });
     const [showRoundSummaryModal, setShowRoundSummaryModal] = useState(false);
@@ -1295,6 +1295,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 playerName={profilePlayerName}
                 currentUsername={user?.username}
                 onClose={() => setProfilePlayerName(null)}
+                onShowTokenLedger={onShowTokenLedger}
             />
 
             <TableLayout

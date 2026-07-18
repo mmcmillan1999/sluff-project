@@ -78,7 +78,7 @@ const MatchupRecord = ({
     );
 };
 
-const PlayerProfileModal = ({ playerName, currentUsername, onClose }) => {
+const PlayerProfileModal = ({ playerName, currentUsername, onClose, onShowTokenLedger }) => {
     const show = Boolean(playerName);
     const [profile, setProfile] = useState(null);
     const [error, setError] = useState('');
@@ -123,12 +123,17 @@ const PlayerProfileModal = ({ playerName, currentUsername, onClose }) => {
     if (!show) return null;
 
     const player = profile?.player;
+    const seasonRecord = profile?.currentSeasonRecord;
     const matchup = profile?.headToHead;
     const currentSeasonMatchup = profile?.currentSeasonHeadToHead ?? matchup?.currentSeason;
     const isSelf = matchup?.isSelf === true
         || currentSeasonMatchup?.isSelf === true
         || (player?.username && player.username === currentUsername);
     const careerGames = safeCount(player?.totalGames);
+    const seasonGames = safeCount(seasonRecord?.totalGames);
+    const seasonRecordName = typeof seasonRecord?.season?.displayName === 'string'
+        ? seasonRecord.season.displayName.trim()
+        : '';
     const currentSeasonName = typeof currentSeasonMatchup?.season?.displayName === 'string'
         ? currentSeasonMatchup.season.displayName.trim()
         : '';
@@ -181,6 +186,24 @@ const PlayerProfileModal = ({ playerName, currentUsername, onClose }) => {
                             </div>
                         </header>
 
+                        {seasonRecord && (
+                            <div className="player-profile-career player-profile-season" aria-label="Current season record">
+                                <div className="player-profile-section-heading">
+                                    <span>Current season</span>
+                                    <em>{seasonGames === 0
+                                        ? (seasonRecordName ? `${seasonRecordName} · No settled games yet` : 'No settled games yet')
+                                        : seasonRecordName}</em>
+                                </div>
+                                <div className="player-profile-stats career-stats">
+                                    <Stat label="Games" value={seasonGames} />
+                                    <Stat label="Wins" value={safeCount(seasonRecord.wins)} />
+                                    <Stat label="Losses" value={safeCount(seasonRecord.losses)} />
+                                    <Stat label="Washes" value={safeCount(seasonRecord.washes)} />
+                                    <Stat label="Win rate" value={formatRate(seasonRecord.winRate)} accent />
+                                </div>
+                            </div>
+                        )}
+
                         <div className="player-profile-career" aria-label="Career record">
                             <div className="player-profile-section-heading">
                                 <span>Career record</span>
@@ -196,10 +219,24 @@ const PlayerProfileModal = ({ playerName, currentUsername, onClose }) => {
                         </div>
 
                         {isSelf ? (
-                            <div className="player-profile-self-note">
-                                <span aria-hidden="true">♠</span>
-                                <p>This is your public table record. Keep dealing to build your legacy.</p>
-                            </div>
+                            <>
+                                <div className="player-profile-self-note">
+                                    <span aria-hidden="true">♠</span>
+                                    <p>This is your public table record. Keep dealing to build your legacy.</p>
+                                </div>
+                                {onShowTokenLedger && (
+                                    <button
+                                        type="button"
+                                        className="player-profile-ledger-button"
+                                        onClick={() => {
+                                            onClose();
+                                            onShowTokenLedger();
+                                        }}
+                                    >
+                                        View my token ledger
+                                    </button>
+                                )}
+                            </>
                         ) : (
                             <div className="player-profile-matchup" aria-label={`Your record against ${player.username}`}>
                                 <div className="player-profile-section-heading">

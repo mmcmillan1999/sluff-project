@@ -89,6 +89,14 @@ function makePool() {
                 }],
             };
         }
+        if (text === createPlayerRoutes.CURRENT_SEASON_RECORD_QUERY) {
+            const seasonRecords = new Map([
+                [77, { wins: 2, losses: 1, washes: 0 }],
+                [42, { wins: 1, losses: 2, washes: 1 }],
+            ]);
+            const record = seasonRecords.get(params[1]);
+            return { rows: record ? [record] : [] };
+        }
         if (text === createPlayerRoutes.HEAD_TO_HEAD_QUERY) {
             if (params[2] === 99) throw new Error('injected comparison failure');
             if (params[2] === 88) {
@@ -187,6 +195,19 @@ async function runPlayerProfileTests() {
                 winRate: 70,
                 tokens: '12.50',
             },
+            currentSeasonRecord: {
+                season: {
+                    id: 2,
+                    number: 2,
+                    slug: 'alpha-season-2',
+                    displayName: 'Alpha Season 2',
+                },
+                wins: 2,
+                losses: 1,
+                washes: 0,
+                totalGames: 3,
+                winRate: 66.7,
+            },
             headToHead: {
                 isSelf: false,
                 gamesPlayed: 4,
@@ -215,14 +236,16 @@ async function runPlayerProfileTests() {
         assert(!Object.prototype.hasOwnProperty.call(target.body.player, 'is_bot'));
 
         const targetCalls = pool.calls.splice(0);
-        assert.strictEqual(targetCalls.length, 7, 'A target profile uses one guarded read transaction after authentication.');
+        assert.strictEqual(targetCalls.length, 8, 'A target profile uses one guarded read transaction after authentication.');
         assert.deepStrictEqual(targetCalls[0].params, [42], 'The current DB identity, not JWT claims, authenticates the caller.');
         assert.strictEqual(targetCalls[1].text, 'BEGIN READ ONLY');
         assert.match(targetCalls[2].text, /pg_advisory_xact_lock_shared/i);
         assert.deepStrictEqual(targetCalls[3].params, ['Target Bot']);
         assert.match(targetCalls[4].text, /FROM seasons\s+WHERE status = 'active'/i);
-        assert.deepStrictEqual(targetCalls[5].params, [[42, 77], 42, 77, 2]);
-        assert.strictEqual(targetCalls[6].text, 'COMMIT');
+        assert.strictEqual(targetCalls[5].text, createPlayerRoutes.CURRENT_SEASON_RECORD_QUERY);
+        assert.deepStrictEqual(targetCalls[5].params, [2, 77], 'The season record is scoped to the active season and the profiled player.');
+        assert.deepStrictEqual(targetCalls[6].params, [[42, 77], 42, 77, 2]);
+        assert.strictEqual(targetCalls[7].text, 'COMMIT');
         assert.strictEqual(pool.releases, 1, 'The target-profile connection is released after commit.');
 
         const profileSelect = createPlayerRoutes.PUBLIC_PROFILE_QUERY.split(/\bFROM\b/i)[0];
@@ -251,6 +274,19 @@ async function runPlayerProfileTests() {
 
         const self = await getJson(`${baseUrl}/safe-player/profile`, 'valid-token');
         assert.strictEqual(self.response.status, 200);
+        assert.deepStrictEqual(self.body.currentSeasonRecord, {
+            season: {
+                id: 2,
+                number: 2,
+                slug: 'alpha-season-2',
+                displayName: 'Alpha Season 2',
+            },
+            wins: 1,
+            losses: 2,
+            washes: 1,
+            totalGames: 4,
+            winRate: 25,
+        }, 'Self profiles include the player\'s own current-season record.');
         assert.deepStrictEqual(self.body.headToHead, {
             isSelf: true,
             gamesPlayed: 0,
@@ -274,11 +310,13 @@ async function runPlayerProfileTests() {
             winRate: null,
         });
         const selfCalls = pool.calls.splice(0);
-        assert.strictEqual(selfCalls.length, 6, 'Self profiles use the guarded read transaction without manufacturing comparisons from games.');
+        assert.strictEqual(selfCalls.length, 7, 'Self profiles use the guarded read transaction without manufacturing comparisons from games.');
         assert.strictEqual(selfCalls[1].text, 'BEGIN READ ONLY');
         assert.match(selfCalls[2].text, /pg_advisory_xact_lock_shared/i);
         assert.match(selfCalls[4].text, /FROM seasons\s+WHERE status = 'active'/i);
-        assert.strictEqual(selfCalls[5].text, 'COMMIT');
+        assert.strictEqual(selfCalls[5].text, createPlayerRoutes.CURRENT_SEASON_RECORD_QUERY);
+        assert.deepStrictEqual(selfCalls[5].params, [2, 42]);
+        assert.strictEqual(selfCalls[6].text, 'COMMIT');
         assert(!selfCalls.some(call => call.text === createPlayerRoutes.HEAD_TO_HEAD_QUERY));
         assert.strictEqual(pool.releases, 2, 'The self-profile connection is released after commit.');
 
@@ -293,6 +331,19 @@ async function runPlayerProfileTests() {
                 totalGames: 0,
                 winRate: null,
                 tokens: '0.00',
+            },
+            currentSeasonRecord: {
+                season: {
+                    id: 2,
+                    number: 2,
+                    slug: 'alpha-season-2',
+                    displayName: 'Alpha Season 2',
+                },
+                wins: 0,
+                losses: 0,
+                washes: 0,
+                totalGames: 0,
+                winRate: null,
             },
             headToHead: {
                 isSelf: false,
@@ -364,6 +415,32 @@ async function runPlayerProfileTests() {
         );
         assert.strictEqual(createPlayerRoutes.percentage(1, 3), 33.3);
         assert.strictEqual(createPlayerRoutes.percentage(0, 0), null);
+        assert.deepStrictEqual(
+            createPlayerRoutes.publicCurrentSeasonRecord({
+                season_id: 2,
+                season_number: 2,
+                slug: 'alpha-season-2',
+                display_name: 'Alpha Season 2',
+            }, null),
+            {
+                season: { id: 2, number: 2, slug: 'alpha-season-2', displayName: 'Alpha Season 2' },
+                wins: 0,
+                losses: 0,
+                washes: 0,
+                totalGames: 0,
+                winRate: null,
+            },
+            'A player with no season_player_stats row reads as a zeroed season record.',
+        );
+        assert.throws(
+            () => createPlayerRoutes.publicCurrentSeasonRecord({
+                season_id: 2,
+                season_number: 2,
+                slug: 'alpha-season-2',
+                display_name: 'Alpha Season 2',
+            }, { wins: -1, losses: 0, washes: 0 }),
+            /invalid season win count/i,
+        );
         assert.throws(
             () => createPlayerRoutes.publicCurrentSeasonHeadToHead({
                 current_season_games_played: 1,

@@ -21,6 +21,18 @@ const PUBLIC_PROFILE_QUERY = `
     GROUP BY u.id, u.username, u.wins, u.losses, u.washes
 `;
 
+// Per-season records live in season_player_stats from season 2 onward; the
+// leaderboard treats season 1 as the lifetime users counters, and the profile
+// endpoint mirrors that fallback so the two surfaces never disagree.
+const CURRENT_SEASON_RECORD_QUERY = `
+    SELECT
+        COALESCE(wins, 0) AS wins,
+        COALESCE(losses, 0) AS losses,
+        COALESCE(washes, 0) AS washes
+    FROM season_player_stats
+    WHERE season_id = $1 AND user_id = $2
+`;
+
 // Game participants were historically recorded through their buy-in ledger
 // entries rather than in a separate roster table. Comparing canonical gameplay
 // returns preserves that history without parsing player names out of outcomes.
@@ -209,6 +221,33 @@ function publicCurrentSeasonHeadToHead(row, seasonRow, isSelf = false) {
     };
 }
 
+function publicCurrentSeasonRecord(seasonRow, statsRow) {
+    const seasonId = nonnegativeInteger(seasonRow?.season_id, 'season id');
+    const seasonNumber = nonnegativeInteger(seasonRow?.season_number, 'season number');
+    if (seasonId === 0 || seasonNumber === 0) {
+        throw new RangeError('Database returned an invalid active season.');
+    }
+
+    const wins = nonnegativeInteger(statsRow?.wins ?? 0, 'season win count');
+    const losses = nonnegativeInteger(statsRow?.losses ?? 0, 'season loss count');
+    const washes = nonnegativeInteger(statsRow?.washes ?? 0, 'season wash count');
+    const totalGames = wins + losses + washes;
+
+    return {
+        season: {
+            id: seasonId,
+            number: seasonNumber,
+            slug: seasonRow.slug,
+            displayName: seasonRow.display_name,
+        },
+        wins,
+        losses,
+        washes,
+        totalGames,
+        winRate: percentage(wins, totalGames),
+    };
+}
+
 module.exports = function createPlayerRoutes(pool, jwt) {
     const router = express.Router();
     const checkAuth = requireAuth(pool, jwt);
@@ -235,6 +274,19 @@ module.exports = function createPlayerRoutes(pool, jwt) {
 
             const isSelf = Number(target.id) === Number(req.user.id);
             const activeSeason = await loadActiveSeason(client);
+
+            // Season 1 predates season_player_stats; its "season" record is the
+            // lifetime counters, exactly as the leaderboard reports it.
+            let seasonStatsRow = target;
+            if (Number(activeSeason.season_number) !== 1) {
+                const seasonStatsResult = await client.query(
+                    CURRENT_SEASON_RECORD_QUERY,
+                    [activeSeason.season_id, target.id],
+                );
+                seasonStatsRow = seasonStatsResult.rows?.[0] ?? null;
+            }
+            const currentSeasonRecord = publicCurrentSeasonRecord(activeSeason, seasonStatsRow);
+
             let headToHead = publicHeadToHead(null, true);
             let currentSeasonHeadToHead = publicCurrentSeasonHeadToHead(null, activeSeason, true);
             if (!isSelf) {
@@ -254,6 +306,7 @@ module.exports = function createPlayerRoutes(pool, jwt) {
 
             return res.json({
                 player: publicProfile(target),
+                currentSeasonRecord,
                 headToHead,
                 currentSeasonHeadToHead,
             });
@@ -275,10 +328,12 @@ module.exports = function createPlayerRoutes(pool, jwt) {
     return router;
 };
 
+module.exports.CURRENT_SEASON_RECORD_QUERY = CURRENT_SEASON_RECORD_QUERY;
 module.exports.HEAD_TO_HEAD_QUERY = HEAD_TO_HEAD_QUERY;
 module.exports.PUBLIC_PROFILE_QUERY = PUBLIC_PROFILE_QUERY;
 module.exports.nonnegativeInteger = nonnegativeInteger;
 module.exports.percentage = percentage;
 module.exports.publicCurrentSeasonHeadToHead = publicCurrentSeasonHeadToHead;
+module.exports.publicCurrentSeasonRecord = publicCurrentSeasonRecord;
 module.exports.publicHeadToHead = publicHeadToHead;
 module.exports.publicProfile = publicProfile;
