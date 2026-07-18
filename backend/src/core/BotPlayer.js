@@ -172,7 +172,9 @@ class BotPlayer {
 
     submitFrogDiscards() {
         const hand = this.engine.hands[this.playerName] || [];
-        const sortedHand = [...hand].sort((a, b) => getRankValue(a) - getRankValue(b));
+        const sortedHand = hand
+            .filter(card => gameLogic.getSuit(card) !== 'H')
+            .sort((a, b) => getRankValue(a) - getRankValue(b));
         return sortedHand.slice(0, 3);
     }
 

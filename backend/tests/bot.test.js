@@ -46,6 +46,17 @@ function runBotTests() {
     const bid3 = bot3.decideBid();
     assert.strictEqual(bid3, 'Frog');
     pass('Correctly decides to bid Frog.');
+
+    const frogHand = ['6H', '7H', '8H', '9H', 'AC', '10C', 'AD', '9D', '9S', 'JS', '9C'];
+    const frogEngine = new MockEngine(frogHand);
+    const frogBot = new BotPlayer(-1, 'TestBot', frogEngine);
+    assert.strictEqual(frogBot.decideBid(), 'Frog');
+    frogEngine.hands.TestBot.push('QD', 'KS', '10S');
+    const frogDiscards = frogBot.submitFrogDiscards();
+    assert.deepStrictEqual(frogDiscards, ['9D', '9S', '9C']);
+    assert.strictEqual(new Set(frogDiscards).size, 3);
+    assert.ok(frogDiscards.every(card => !card.endsWith('H')));
+    pass('A Frog-bidding bot preserves every heart when choosing its three discards.');
     
     // Test: Bot should decide to Pass
     let hand4 = ['6H', '7H', '8H', '9H', '6D', '7D', '8D', '9D', '6C', '7C', '8C'];
