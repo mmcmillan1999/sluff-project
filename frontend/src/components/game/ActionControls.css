@@ -3,8 +3,11 @@
 .action-prompt.action-prompt-container {
     box-sizing: border-box;
     /* The north seat is anchored around 17vh. Keep prompts below that name
-       corridor instead of centering the shade over it. */
-    top: clamp(8.5rem, 20vh, 11rem);
+       corridor instead of centering the shade over it. The outer max() keeps
+       that guarantee on tall viewports (iPad/desktop) where the 11rem cap
+       would otherwise land the prompt on the north plaque; below ~1035px
+       viewport height it resolves to the original clamp. */
+    top: max(clamp(8.5rem, 20vh, 11rem), calc(17vh + 0.5rem));
     min-width: 0;
     width: auto;
     max-width: min(82vw, 25rem);

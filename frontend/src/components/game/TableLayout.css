@@ -37,13 +37,18 @@
     /* Keep every trick plate on one shared, mirrored horizontal rail. The
        3vw subtraction nudges the old 9vh anchors outward while the safe-area
        floor keeps plates clear of rounded/notched viewport edges. */
+    /* The 50vw-65vh arm only wins on wide viewports (width > 1.3x height),
+       pulling the piles in to hug the capped table oval instead of the screen
+       corners; on every portrait device it is negative and inert. */
     --trick-pile-left-inset: max(
         calc(env(safe-area-inset-left, 0px) + 1.5vw),
-        calc(9vh - 3vw)
+        calc(9vh - 3vw),
+        calc(50vw - 65vh)
     );
     --trick-pile-right-inset: max(
         calc(env(safe-area-inset-right, 0px) + 1.5vw),
-        calc(9vh - 3vw)
+        calc(9vh - 3vw),
+        calc(50vw - 65vh)
     );
     flex-grow: 1;
     position: relative;
@@ -57,7 +62,10 @@
 }
 
 .table-oval {
-    width: 100vw; /* Full viewport width - edge to edge */
+    /* Full width on phones/tablets; capped on wide screens so the felt reads
+       as an oval table instead of a full-bleed racetrack. 135vh resolves
+       above 100vw on every portrait viewport, so phones are untouched. */
+    width: min(100vw, 135vh);
     height: 100%; /* Full height of game-table container */
     /* Felt with a light-source vignette for depth */
     background: radial-gradient(ellipse at 50% 35%, #15673a 0%, #0f4d2a 55%, #0a3a1f 100%);
@@ -581,93 +589,9 @@
     text-shadow: 0 0 1vh rgba(255, 255, 0, 0.5);
 }
 
-/* Puck containers - positioned relative to player seat anchors */
-.puck-container-bottom, .puck-container-left, .puck-container-right, .puck-container-top {
-    position: absolute;
-    z-index: 9;
-    /* Removed flex display - will position pucks absolutely */
-}
-
-/* Bottom player pucks - 1vh below the 75vh anchor (normal mode) */
-.puck-container-bottom { 
-    top: 76vh; /* 75vh anchor + 1vh offset down */
-    left: 50vw; 
-    transform: translateX(-50%);
-}
-
-/* Left player pucks - 1vh below the 45vh anchor (normal mode) */
-.puck-container-left { 
-    top: 46vh; /* 45vh anchor + 1vh offset down */
-    left: 15vw; /* Matching exact anchor position */
-    transform: translateX(-50%);
-}
-
-/* Right player pucks - 1vh below the 45vh anchor (normal mode) */
-.puck-container-right { 
-    top: 46vh; /* 45vh anchor + 1vh offset down */
-    left: 85vw; /* Matching exact anchor position */
-    transform: translateX(-50%);
-}
-
-/* Top player pucks - 1vh below the 17vh anchor (for widow/4th player) */
-.puck-container-top { 
-    top: 18vh; /* 17vh anchor + 1vh offset down */
-    left: 50vw; 
-    transform: translateX(-50%);
-}
-
-/* Collision mode adjustments for puck containers */
-/* When seats move in collision mode, pucks follow */
-.wide-mode .puck-container-bottom {
-    top: 67.5vh; /* 66.5vh anchor + 1vh offset down */
-}
-
-.wide-mode .puck-container-left {
-    top: 36vh; /* 35vh anchor + 1vh offset down */
-    left: 1vw; /* Collision mode anchor */
-}
-
-.wide-mode .puck-container-right {
-    top: 36vh; /* 35vh anchor + 1vh offset down */
-    left: 99vw; /* Collision mode anchor */
-}
-
-/* Individual puck positioning */
-.puck-container-bottom .puck,
-.puck-container-left .puck,
-.puck-container-right .puck,
-.puck-container-top .puck {
-    position: absolute !important; /* Position pucks absolutely */
-    border-radius: 50%;
-    width: 3.5vh;
-    height: 3.5vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5vh;
-    font-weight: bold;
-    border: 0.12vh solid black;
-    font-family: 'Oswald', sans-serif;
-    top: 50%;
-    transform: translateY(-50%);
-}
-
-/* Dealer puck - positioned 3vw to the right */
-.dealer-puck { 
-    background-color: #4CAF50; /* Temporary green for visibility */
-    color: white; 
-    z-index: 15;
-    left: 3vw;
-    box-shadow: 0 0.3vh 0.6vh rgba(0, 0, 0, 0.5); /* Added shadow for visibility */
-}
-
-/* Bidder puck (trump indicator) - positioned 3vw to the left */
-.puck-container-bottom .trump-puck,
-.puck-container-left .trump-puck,
-.puck-container-right .trump-puck,
-.puck-container-top .trump-puck {
-    left: -3vw;
-}
+/* Puck styling now lives on the seat "ears" in PlayerSeat.css; the old
+   .puck-container-* absolute-positioning system was removed as dead code
+   (no JS has rendered those classes since pucks moved onto the plaques). */
 
 /* Last trick overlay - positioned near the clicked pile */
 .last-trick-overlay-container {

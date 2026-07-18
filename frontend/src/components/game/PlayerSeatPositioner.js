@@ -23,11 +23,15 @@ const PlayerSeatPositioner = ({
     debugMode = false // Show anchor point for debugging
 }) => {
     const [isWideMode, setIsWideMode] = useState(false);
-    
+    // Horizontal distance (vw) of the side seats from center in default mode.
+    // 35vw === the classic 15vw/85vw anchors; capped at 42vh-worth so seats
+    // stay near the felt instead of hugging the edges of wide monitors.
+    const [sideOffsetVw, setSideOffsetVw] = useState(35);
+
     // Configuration for each seat position's default anchor points
     const defaultAnchors = {
-        left: { x: 15, y: 45 },     // West position from config
-        right: { x: 85, y: 45 },    // East position from config
+        left: { x: 50 - sideOffsetVw, y: 45 },     // West position from config
+        right: { x: 50 + sideOffsetVw, y: 45 },    // East position from config
         bottom: { x: 50, y: 75 },   // South position from config
         top: { x: 50, y: 17, rotation: 0 }   // North position for widow - centered at 50vw, 17vh, no rotation
     };
@@ -41,7 +45,7 @@ const PlayerSeatPositioner = ({
         top: { x: 50, y: 17, rotation: 0 }       // North: widow stays fixed - no collision mode changes
     };
     
-    // Check if player seat width exceeds 25vw
+    // Check if player seat width exceeds the wide-mode threshold
     useEffect(() => {
         const checkSeatWidth = () => {
             // Player seat width is 17.5vh (7vh * 2.5)
@@ -50,9 +54,13 @@ const PlayerSeatPositioner = ({
             const vw = window.innerWidth / 100;
             const seatWidthInPixels = seatWidthVh * vh;
             const seatWidthInVw = seatWidthInPixels / vw;
-            
-            const shouldBeWide = seatWidthInVw > 25;
-            
+
+            // 21.875vw === aspect (H/W) > 1.25, so every portrait phone AND
+            // portrait tablet gets the rotated-nameplate layout. (The old 25vw
+            // threshold, aspect > 1.43, split the iPads: Mini fell to the
+            // desktop layout while Air got the phone one.)
+            const shouldBeWide = seatWidthInVw > 21.875;
+
             // Debug logging
             if (debugMode) {
                 console.log('[PlayerSeatPositioner] Seat width check:', {
@@ -64,8 +72,14 @@ const PlayerSeatPositioner = ({
                     seatPosition
                 });
             }
-            
+
             setIsWideMode(shouldBeWide);
+            // Default-mode side seats sit 35vw from center (15vw/85vw), but on
+            // wide viewports that strands them in dead felt far from the played
+            // cards. Cap the offset at 42vh-worth of vw; the min() only bites
+            // when width > ~1.2x height, so tablets/phones are untouched.
+            const aspectHoverW = window.innerHeight / window.innerWidth;
+            setSideOffsetVw(Math.min(35, 42 * aspectHoverW));
         };
         
         checkSeatWidth();

@@ -447,12 +447,12 @@ const PlayerHandAnchorDebug = () => {
                 vw,
                 seatWidthInPixels,
                 seatWidthInVw,
-                shouldBeWide: seatWidthInVw > 25
+                shouldBeWide: seatWidthInVw > 21.875
             });
-            
+
             setSeatWidthInfo({
                 widthVw: Math.round(seatWidthInVw * 10) / 10,
-                isWideMode: seatWidthInVw > 25
+                isWideMode: seatWidthInVw > 21.875 // keep in sync with PlayerSeatPositioner
             });
         };
 
