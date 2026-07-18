@@ -5,6 +5,7 @@ const createDbTables = require('../src/data/createTables');
 const {
     DEFAULT_BATCH_LIMIT,
     DEFAULT_GRACE_MS,
+    DEFAULT_HEARTBEAT_INTERVAL_MS,
     MANUAL_REVIEW_OUTCOME,
     MANUAL_REVIEW_STATUS,
     MIN_GRACE_HEARTBEAT_INTERVALS,
@@ -48,6 +49,8 @@ function createRecoveryPool({
             startTime: new Date(game.startTime || new Date(now).getTime() - (12 * HOUR)),
             lastActivityAt: new Date(game.lastActivityAt || game.startTime || new Date(now).getTime() - (12 * HOUR)),
             heartbeatOwnerId: game.heartbeatOwnerId || null,
+            seasonId: game.seasonId || 2,
+            seasonNumber: game.seasonNumber || 2,
             recoveryEligible: game.recoveryEligible !== false && game.recoveryEligible !== null,
             endTime: game.endTime || null,
             outcome: game.outcome || 'In Progress',
@@ -107,6 +110,7 @@ function createRecoveryPool({
             state.calls.push({ scope: 'pool', sql, params });
             if (sql.startsWith('WITH unlocked_stale_games AS')) {
                 assert.match(sql, /NOW\(\).*INTERVAL '1 millisecond'/i, 'eligibility must use database time');
+                assert.match(sql, /season_number > 1/, 'automatic recovery must exclude Alpha Season 1');
                 assert.match(
                     sql,
                     /FOR UPDATE SKIP LOCKED LIMIT \$3/,
@@ -117,6 +121,7 @@ function createRecoveryPool({
                 const rows = [...state.games.values()]
                     .filter(game => (
                         game.outcome === 'In Progress'
+                        && game.seasonNumber > 1
                         && game.recoveryEligible === true
                         && stale(game, graceMs)
                         && !excludedIds.has(game.gameId)
@@ -136,6 +141,8 @@ function createRecoveryPool({
                             table_id: game.tableId,
                             theme: game.theme,
                             player_count: game.playerCount,
+                            season_id: game.seasonId,
+                            season_number: game.seasonNumber,
                             start_time: game.startTime,
                             last_activity_at: game.lastActivityAt,
                             heartbeat_owner_id: game.heartbeatOwnerId,
@@ -200,6 +207,8 @@ function createRecoveryPool({
                                 last_activity_at: game.lastActivityAt,
                                 end_time: game.endTime,
                                 player_count: game.playerCount,
+                                season_id: game.seasonId,
+                                season_number: game.seasonNumber,
                                 heartbeat_owner_id: game.heartbeatOwnerId,
                                 recovery_eligible: game.recoveryEligible,
                                 reconciliation_status: game.reconciliationStatus,
@@ -559,6 +568,53 @@ async function testLegacyGamesAreQuarantinedWithoutRefunds() {
     );
 }
 
+async function testSeasonAndFundedBuyInGuardsAreRecheckedUnderLock() {
+    const seasonOnePool = createRecoveryPool({
+        games: [oldGame(27, { seasonId: 1, seasonNumber: 1 })],
+        users: [1],
+        transactions: [buyIn(27, 1, -1)],
+    });
+    const dryRun = await reconcileAbandonedGames(seasonOnePool, {
+        execute: false,
+        graceMs: DEFAULT_GRACE_MS,
+    });
+    assert.deepEqual(dryRun.candidates, [], 'Season 1 never enters automatic recovery');
+    const seasonOne = await reconcileAbandonedGame(seasonOnePool, 27, {
+        graceMs: DEFAULT_GRACE_MS,
+    });
+    assert.equal(seasonOne.status, 'excluded_season');
+    assert.equal(seasonOne.reason, 'season_one');
+    assert.equal(seasonOnePool.state.games.get(27).outcome, 'In Progress');
+    assert.equal(
+        seasonOnePool.state.transactions.some(row => row.type === 'abandoned_refund'),
+        false,
+    );
+
+    const emptyLedgerPool = createRecoveryPool({ games: [oldGame(28)] });
+    const emptyLedger = await reconcileAbandonedGame(emptyLedgerPool, 28, {
+        graceMs: DEFAULT_GRACE_MS,
+        expectedSeasonId: 2,
+        requireFundedBuyIn: true,
+    });
+    assert.equal(emptyLedger.status, 'not_eligible');
+    assert.equal(emptyLedger.reason, 'no_funded_buy_ins');
+    assert.equal(emptyLedgerPool.state.games.get(28).outcome, 'In Progress');
+
+    const changedSeasonPool = createRecoveryPool({
+        games: [oldGame(29, { seasonId: 2, seasonNumber: 2 })],
+        users: [1],
+        transactions: [buyIn(29, 1, -1)],
+    });
+    const changedSeason = await reconcileAbandonedGame(changedSeasonPool, 29, {
+        graceMs: DEFAULT_GRACE_MS,
+        expectedSeasonId: 3,
+        requireFundedBuyIn: true,
+    });
+    assert.equal(changedSeason.status, 'not_eligible');
+    assert.equal(changedSeason.reason, 'season_changed');
+    assert.equal(changedSeasonPool.state.games.get(29).outcome, 'In Progress');
+}
+
 async function testRollbackAndLostCommitResponseAreIdempotent() {
     const failingPool = createRecoveryPool({
         games: [oldGame(30)],
@@ -620,22 +676,31 @@ async function testMonitorHeartbeatsBeforeRecoveryAndHandlesBotsOnly() {
         'the persisted heartbeat protects a live game even from another process without the in-memory exclusion',
     );
 
-    let intervalCallback;
-    let unrefCalled = false;
-    let cleared = false;
+    pool.state.games.get(40).lastActivityAt = new Date('2026-07-09T22:00:00.000Z');
+    const heartbeat = await monitor.runHeartbeatNow();
+    assert.equal(heartbeat.updatedGameCount, 1);
+    assert.equal(pool.state.games.get(40).lastActivityAt.toISOString(), pool.state.now.toISOString());
+
+    const scheduledIntervals = [];
+    let unrefCount = 0;
+    let clearedCount = 0;
     const originalSetInterval = global.setInterval;
     const originalClearInterval = global.clearInterval;
-    global.setInterval = callback => {
-        intervalCallback = callback;
-        return { unref() { unrefCalled = true; } };
+    global.setInterval = (callback, delay) => {
+        scheduledIntervals.push({ callback, delay });
+        return { unref() { unrefCount += 1; } };
     };
-    global.clearInterval = () => { cleared = true; };
+    global.clearInterval = () => { clearedCount += 1; };
     try {
         monitor.start();
-        assert.equal(typeof intervalCallback, 'function');
-        assert.equal(unrefCalled, true);
+        assert.deepEqual(
+            scheduledIntervals.map(record => record.delay),
+            [1000, DEFAULT_HEARTBEAT_INTERVAL_MS],
+            'autonomous recovery and live heartbeats keep independent cadences',
+        );
+        assert.equal(unrefCount, 2);
         monitor.stop();
-        assert.equal(cleared, true);
+        assert.equal(clearedCount, 2);
     } finally {
         global.setInterval = originalSetInterval;
         global.clearInterval = originalClearInterval;
@@ -861,6 +926,7 @@ async function runAbandonedGameRecoveryTests() {
     await testLockedRowsDoNotBlockStartupRecovery();
     await testRecentTerminalAndSuspiciousLedgersAreSafe();
     await testLegacyGamesAreQuarantinedWithoutRefunds();
+    await testSeasonAndFundedBuyInGuardsAreRecheckedUnderLock();
     await testRollbackAndLostCommitResponseAreIdempotent();
     await testMonitorHeartbeatsBeforeRecoveryAndHandlesBotsOnly();
     testMonitorRejectsUnsafeRecoveryTiming();

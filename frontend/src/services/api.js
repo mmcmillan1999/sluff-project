@@ -409,6 +409,45 @@ export const applyAlpha2WalletReset = async ({ expectedPreviewHash, expectedSeas
     return data;
 };
 
+export const getAbandonedGameRecoveryPreview = async () => {
+    const response = await configuredFetch('/api/admin/game-recovery/preview', 'GET');
+    const data = await readJsonResponse(response);
+    if (!response.ok) {
+        throw new Error(data.message || 'Could not prepare the abandoned-game refund preview.');
+    }
+    return data;
+};
+
+export const refundAbandonedGames = async ({ gameIds, expectedPreviewHash } = {}) => {
+    const normalizedGameIds = Array.isArray(gameIds)
+        ? [...new Set(gameIds.map(Number))].sort((left, right) => left - right)
+        : [];
+    if (normalizedGameIds.length === 0
+        || normalizedGameIds.some(gameId => !Number.isSafeInteger(gameId) || gameId <= 0)) {
+        throw new Error('Select at least one valid game to refund.');
+    }
+    if (typeof expectedPreviewHash !== 'string' || !/^[a-f0-9]{64}$/i.test(expectedPreviewHash)) {
+        throw new Error('Refresh the abandoned-game preview before issuing refunds.');
+    }
+
+    const response = await configuredFetch('/api/admin/game-recovery/refund', 'POST', {
+        gameIds: normalizedGameIds,
+        expectedPreviewHash,
+    });
+    const data = await readJsonResponse(response);
+    if (!response.ok) {
+        const error = new Error(data.message || 'Could not refund the selected abandoned games.');
+        error.code = data.code || null;
+        error.status = response.status;
+        if (Number.isSafeInteger(Number(data.requestedGameCount))
+            && (Array.isArray(data.results) || Array.isArray(data.errors))) {
+            error.recoveryResult = data;
+        }
+        throw error;
+    }
+    return data;
+};
+
 export const generateSchema = async () => {
     const response = await configuredFetch('/api/admin/generate-schema', 'POST');
     const responseText = await response.text();

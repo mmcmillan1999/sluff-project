@@ -16,11 +16,21 @@ const {
   applyAlpha2WalletReset,
   previewAlpha2WalletReset,
 } = require('../services/alpha2WalletResetService');
+const {
+  AdminGameRecoveryConflictError,
+  applyAdminGameRecovery,
+  previewAdminGameRecovery,
+} = require('../services/adminGameRecoveryService');
 
 // This function creates the router and gives it the database pool
-const createAdminRoutes = (pool, jwt, io = null) => {
+const createAdminRoutes = (pool, jwt, io = null, options = {}) => {
   const router = express.Router();
   const checkAuth = requireAuth(pool, jwt);
+  const previewGameRecovery = options.previewGameRecovery || previewAdminGameRecovery;
+  const applyGameRecovery = options.applyGameRecovery || applyAdminGameRecovery;
+  const getLiveGameIds = typeof options.getLiveGameIds === 'function'
+    ? options.getLiveGameIds
+    : () => [];
 
   // A middleware to check if the user is an admin
   const isAdmin = (req, res, next) => {
@@ -162,6 +172,74 @@ const createAdminRoutes = (pool, jwt, io = null) => {
       }
       console.error('Failed to apply the Alpha Season 2 wallet reset:', error);
       return res.status(500).json({ message: 'Unable to apply the Alpha Season 2 wallet reset.' });
+    }
+  });
+
+  router.get('/game-recovery/preview', checkAuth, isAdmin, async (req, res) => {
+    try {
+      const excludeGameIds = await getLiveGameIds();
+      res.set('Cache-Control', 'no-store');
+      return res.json(await previewGameRecovery(pool, { excludeGameIds }));
+    } catch (error) {
+      console.error('Failed to preview abandoned-game refunds:', error);
+      return res.status(500).json({ message: 'Unable to prepare the abandoned-game refund preview.' });
+    }
+  });
+
+  router.post('/game-recovery/refund', checkAuth, isAdmin, async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    try {
+      const excludeGameIds = await getLiveGameIds();
+      const result = await applyGameRecovery(pool, {
+        gameIds: req.body?.gameIds,
+        expectedPreviewHash: req.body?.expectedPreviewHash,
+        excludeGameIds,
+        appliedBy: req.user,
+      });
+
+      if (result.refundedGameCount > 0 && io && typeof io.emit === 'function') {
+        try {
+          io.emit('tokenBalancesReset', {
+            reason: 'abandoned-game-refund',
+            gameIds: result.results
+              .filter(item => item.status === 'abandoned_refunded' && item.alreadyReconciled !== true)
+              .map(item => item.gameId),
+          });
+        } catch (broadcastError) {
+          console.error('Game refunds committed but balance broadcast failed:', broadcastError);
+        }
+      }
+
+      if (result.outcome === 'unknown') {
+        return res.status(503).json({
+          ...result,
+          message: 'One or more refund results are unknown. Refresh the preview and ledger before retrying.',
+        });
+      }
+      if (result.outcome === 'not_refunded') {
+        return res.status(409).json({
+          ...result,
+          message: 'One or more selected games changed. Refresh and review the remaining games.',
+        });
+      }
+      if (result.outcome === 'partial' || result.outcome === 'partial_unknown') {
+        return res.status(207).json({
+          ...result,
+          message: result.outcome === 'partial_unknown'
+            ? 'Some refunds completed and one or more results are unknown. Refresh before taking another action.'
+            : 'Some refunds completed and some selected games changed. Refresh before taking another action.',
+        });
+      }
+      return res.status(201).json(result);
+    } catch (error) {
+      if (error instanceof AdminGameRecoveryConflictError) {
+        return res.status(409).json({ code: error.code, message: error.message });
+      }
+      if (error instanceof TypeError || error instanceof RangeError) {
+        return res.status(400).json({ code: 'INVALID_RECOVERY_REQUEST', message: error.message });
+      }
+      console.error('Failed to refund abandoned games:', error);
+      return res.status(500).json({ message: 'Unable to refund the selected abandoned games.' });
     }
   });
 

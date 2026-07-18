@@ -21,6 +21,7 @@ const suites = [
     { name: 'inactive-user maintenance', file: './pruneInactiveUsers.test.js' },
     { name: 'database backup snapshot', file: './backupDatabase.test.js' },
     { name: 'abandoned-game crash recovery', file: './abandonedGameRecovery.test.js' },
+    { name: 'admin abandoned-game recovery', file: './adminGameRecovery.test.js' },
     { name: 'token accounting audit', file: './tokenAccountingAudit.test.js' },
     { name: 'viewer-safe game state', file: './gameStateSerializer.test.js' },
     { name: 'backend integrity', file: './backendIntegrity.test.js' },

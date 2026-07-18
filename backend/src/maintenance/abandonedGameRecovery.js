@@ -4,6 +4,10 @@ const { randomUUID } = require('crypto');
 
 const DEFAULT_GRACE_MS = 6 * 60 * 60 * 1000;
 const DEFAULT_INTERVAL_MS = 15 * 60 * 1000;
+// Persist live ownership often enough that the operator's ten-minute recovery
+// window remains safe even while two server revisions overlap during a deploy.
+// Autonomous reconciliation still keeps its independent six-hour grace.
+const DEFAULT_HEARTBEAT_INTERVAL_MS = 2 * 60 * 1000;
 const DEFAULT_BATCH_LIMIT = 25;
 const RECOVERY_LOCK_TIMEOUT_MS = 1000;
 const RECOVERY_STATEMENT_TIMEOUT_MS = 5000;
@@ -28,6 +32,12 @@ const candidateQuery = `
         FROM game_history candidate
         WHERE candidate.outcome = 'In Progress'
           AND candidate.recovery_eligible IS TRUE
+          AND EXISTS (
+              SELECT 1
+              FROM seasons recovery_season
+              WHERE recovery_season.season_id = candidate.season_id
+                AND recovery_season.season_number > 1
+          )
           AND COALESCE(candidate.last_activity_at, candidate.start_time)
               <= NOW() - ($1::bigint * INTERVAL '1 millisecond')
           AND NOT (candidate.game_id = ANY($2::int[]))
@@ -98,10 +108,15 @@ async function heartbeatLiveGames(pool, gameIds, { ownerId } = {}) {
 async function reconcileAbandonedGame(pool, gameId, {
     graceMs = DEFAULT_GRACE_MS,
     recoveryOwnerId = `recovery:${randomUUID()}`,
+    expectedSeasonId = null,
+    requireFundedBuyIn = false,
 } = {}) {
     const normalizedGameId = requirePositiveInteger(gameId, 'gameId');
     const normalizedGraceMs = requirePositiveInteger(graceMs, 'graceMs');
     const normalizedOwnerId = requireOwnerId(recoveryOwnerId, 'recoveryOwnerId');
+    const normalizedExpectedSeasonId = expectedSeasonId === null
+        ? null
+        : requirePositiveInteger(expectedSeasonId, 'expectedSeasonId');
     const client = await pool.connect();
     let transactionOpen = false;
 
@@ -118,6 +133,8 @@ async function reconcileAbandonedGame(pool, gameId, {
                     last_activity_at,
                     end_time,
                     player_count,
+                    game_history.season_id,
+                    recovery_season.season_number,
                     heartbeat_owner_id,
                     recovery_eligible,
                     reconciliation_status,
@@ -125,8 +142,10 @@ async function reconcileAbandonedGame(pool, gameId, {
                     COALESCE(last_activity_at, start_time)
                         <= NOW() - ($2::bigint * INTERVAL '1 millisecond') AS is_stale
              FROM game_history
+             JOIN seasons recovery_season
+               ON recovery_season.season_id = game_history.season_id
              WHERE game_id = $1
-             FOR UPDATE SKIP LOCKED`,
+             FOR UPDATE OF game_history SKIP LOCKED`,
             [normalizedGameId, normalizedGraceMs],
         );
         if (!gameResult.rows?.length) {
@@ -157,6 +176,29 @@ async function reconcileAbandonedGame(pool, gameId, {
             await client.query('COMMIT');
             transactionOpen = false;
             return { gameId: normalizedGameId, status: 'already_terminal', refunds: [] };
+        }
+
+        if (Number(game.season_number) <= 1) {
+            await client.query('COMMIT');
+            transactionOpen = false;
+            return {
+                gameId: normalizedGameId,
+                status: 'excluded_season',
+                reason: 'season_one',
+                refunds: [],
+            };
+        }
+
+        if (normalizedExpectedSeasonId !== null
+            && Number(game.season_id) !== normalizedExpectedSeasonId) {
+            await client.query('COMMIT');
+            transactionOpen = false;
+            return {
+                gameId: normalizedGameId,
+                status: 'not_eligible',
+                reason: 'season_changed',
+                refunds: [],
+            };
         }
 
         // Rows predating the hardened lifecycle cannot safely be classified.
@@ -205,7 +247,8 @@ async function reconcileAbandonedGame(pool, gameId, {
         }
 
         const ledgerResult = await client.query(
-            `SELECT transaction_id, user_id, transaction_type::text AS transaction_type, amount
+            `SELECT transaction_id, user_id, transaction_type::text AS transaction_type, amount,
+                    reverses_transaction_id
              FROM transactions
              WHERE game_id = $1
              ORDER BY transaction_id ASC
@@ -213,12 +256,24 @@ async function reconcileAbandonedGame(pool, gameId, {
             [normalizedGameId],
         );
         const ledgerRows = ledgerResult.rows || [];
+        if (requireFundedBuyIn && ledgerRows.length === 0) {
+            await client.query('COMMIT');
+            transactionOpen = false;
+            return {
+                gameId: normalizedGameId,
+                status: 'not_eligible',
+                reason: 'no_funded_buy_ins',
+                refunds: [],
+            };
+        }
         const unsafeLedgerRow = ledgerRows.find(row => (
             row.transaction_type !== 'buy_in'
             || !Number.isInteger(Number(row.user_id))
             || Number(row.user_id) <= 0
             || parseCents(row.amount) === null
             || parseCents(row.amount) >= 0
+            || (row.reverses_transaction_id !== null
+                && row.reverses_transaction_id !== undefined)
         ));
         if (unsafeLedgerRow) {
             await markManualReview(client, normalizedGameId, normalizedOwnerId);
@@ -432,6 +487,7 @@ function createAbandonedGameRecoveryMonitor({
     getLiveGameIds,
     graceMs = DEFAULT_GRACE_MS,
     intervalMs = DEFAULT_INTERVAL_MS,
+    heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS,
     limit = DEFAULT_BATCH_LIMIT,
     logger = console,
     ownerId = `server:${randomUUID()}`,
@@ -446,11 +502,31 @@ function createAbandonedGameRecoveryMonitor({
         graceMs: normalizedGraceMs,
         intervalMs: normalizedIntervalMs,
     } = validateRecoveryTiming({ graceMs, intervalMs });
+    const normalizedHeartbeatIntervalMs = requirePositiveInteger(
+        heartbeatIntervalMs,
+        'heartbeatIntervalMs',
+    );
     requirePositiveInteger(limit, 'limit');
     const normalizedOwnerId = requireOwnerId(ownerId, 'ownerId');
 
     let timer = null;
+    let heartbeatTimer = null;
     let running = false;
+    let heartbeatRunning = false;
+
+    const runHeartbeatNow = async () => {
+        if (heartbeatRunning) return { skipped: true, reason: 'heartbeat_already_running' };
+        heartbeatRunning = true;
+        try {
+            const liveGameIds = normalizeGameIds(await getLiveGameIds());
+            const updatedGameCount = await heartbeatLiveGames(pool, liveGameIds, {
+                ownerId: normalizedOwnerId,
+            });
+            return { skipped: false, liveGameIds, updatedGameCount };
+        } finally {
+            heartbeatRunning = false;
+        }
+    };
 
     const runNow = async () => {
         if (running) return { skipped: true, reason: 'cycle_already_running' };
@@ -484,21 +560,29 @@ function createAbandonedGameRecoveryMonitor({
     };
 
     const start = () => {
-        if (timer) return timer;
-        timer = setInterval(() => {
-            runNow().catch(error => logger.error?.('[RECOVERY] Scheduled cycle failed:', error));
-        }, normalizedIntervalMs);
-        timer.unref?.();
+        if (!timer) {
+            timer = setInterval(() => {
+                runNow().catch(error => logger.error?.('[RECOVERY] Scheduled cycle failed:', error));
+            }, normalizedIntervalMs);
+            timer.unref?.();
+        }
+        if (!heartbeatTimer) {
+            heartbeatTimer = setInterval(() => {
+                runHeartbeatNow().catch(error => logger.error?.('[RECOVERY] Live-game heartbeat failed:', error));
+            }, normalizedHeartbeatIntervalMs);
+            heartbeatTimer.unref?.();
+        }
         return timer;
     };
 
     const stop = () => {
-        if (!timer) return;
-        clearInterval(timer);
+        if (timer) clearInterval(timer);
+        if (heartbeatTimer) clearInterval(heartbeatTimer);
         timer = null;
+        heartbeatTimer = null;
     };
 
-    return { runNow, start, stop };
+    return { runHeartbeatNow, runNow, start, stop };
 }
 
 function validateRecoveryTiming({ graceMs, intervalMs } = {}) {
@@ -564,6 +648,7 @@ function fromCents(cents) {
 module.exports = {
     DEFAULT_BATCH_LIMIT,
     DEFAULT_GRACE_MS,
+    DEFAULT_HEARTBEAT_INTERVAL_MS,
     DEFAULT_INTERVAL_MS,
     MIN_GRACE_HEARTBEAT_INTERVALS,
     RECOVERY_LOCK_TIMEOUT_MS,

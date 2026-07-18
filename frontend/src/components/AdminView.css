@@ -104,6 +104,229 @@
     background-color: #c82333;
 }
 
+.game-recovery-card {
+    grid-column: 1 / -1;
+    border-color: rgba(93, 208, 143, 0.62);
+}
+
+.admin-action-card .game-recovery-intro {
+    flex-grow: 0;
+    margin-bottom: 14px;
+}
+
+.game-recovery-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-bottom: 18px;
+}
+
+.game-recovery-filters span {
+    padding: 6px 9px;
+    border: 1px solid rgba(93, 208, 143, 0.42);
+    border-radius: 999px;
+    background: rgba(93, 208, 143, 0.09);
+    color: #d8f8e5;
+    font-size: 0.78rem;
+    line-height: 1.2;
+}
+
+.game-recovery-preview,
+.game-recovery-success,
+.game-recovery-result-warning {
+    display: grid;
+    gap: 12px;
+}
+
+.game-recovery-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px 12px;
+    border-radius: 6px;
+    background: #242424;
+    color: #e7fff0;
+}
+
+.game-recovery-select-all,
+.game-recovery-prerequisite {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    box-sizing: border-box;
+    padding: 9px 11px;
+    border: 1px solid rgba(93, 208, 143, 0.38);
+    border-radius: 6px;
+    background: rgba(93, 208, 143, 0.07);
+    color: #dcf5e6;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.game-recovery-select-all input,
+.game-recovery-prerequisite input,
+.game-recovery-game-heading input {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    accent-color: #5dd08f;
+}
+
+.game-recovery-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+    gap: 10px;
+}
+
+.game-recovery-game {
+    overflow: hidden;
+    border: 1px solid #505050;
+    border-radius: 7px;
+    background: #292929;
+}
+
+.game-recovery-game-heading {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    min-height: 48px;
+    padding: 10px 12px;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.game-recovery-game-heading span {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+}
+
+.game-recovery-game-heading small {
+    overflow: hidden;
+    color: #aaa;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.game-recovery-game-heading b,
+.game-recovery-game li strong {
+    color: #9de7ba;
+    font-family: 'Oswald', sans-serif;
+}
+
+.game-recovery-times {
+    display: grid;
+    gap: 3px;
+    padding: 9px 12px;
+    border-top: 1px solid #444;
+    border-bottom: 1px solid #444;
+    color: #aaa;
+    font-size: 0.76rem;
+}
+
+.game-recovery-game ul {
+    display: grid;
+    gap: 5px;
+    margin: 0;
+    padding: 9px 12px;
+    list-style: none;
+}
+
+.game-recovery-game li {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.game-recovery-game li span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.game-recovery-selection,
+.game-recovery-empty {
+    padding: 11px 12px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.2);
+    color: #e5e5e5;
+}
+
+.game-recovery-prerequisite {
+    align-items: flex-start;
+    border-color: rgba(255, 193, 7, 0.42);
+    background: rgba(255, 193, 7, 0.08);
+    color: #f6e8b6;
+}
+
+.game-recovery-prerequisite input {
+    accent-color: #ffc107;
+}
+
+.game-recovery-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.game-recovery-warning,
+.game-recovery-error {
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 157, 90, 0.62);
+    border-radius: 6px;
+    background: rgba(153, 72, 20, 0.2);
+    color: #ffe0ca !important;
+}
+
+.game-recovery-error {
+    margin: 12px 0 0 !important;
+    border-color: rgba(255, 99, 99, 0.65);
+    background: rgba(140, 25, 25, 0.2);
+    color: #ffd4d4 !important;
+}
+
+.game-recovery-success,
+.game-recovery-result-warning {
+    padding: 12px;
+    border-radius: 6px;
+}
+
+.game-recovery-success {
+    border: 1px solid rgba(91, 204, 118, 0.65);
+    background: rgba(32, 122, 54, 0.18);
+    color: #d9ffe2;
+}
+
+.game-recovery-result-warning {
+    border: 1px solid rgba(255, 157, 90, 0.7);
+    background: rgba(153, 72, 20, 0.22);
+    color: #ffe5d2;
+}
+
+.game-recovery-unresolved {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 190, 145, 0.35);
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.18);
+    list-style: none;
+}
+
+.game-recovery-unresolved li {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.game-recovery-card input:focus-visible {
+    outline: 2px solid #b7f2cd;
+    outline-offset: 3px;
+}
+
 .season-rollover-card {
     border-color: rgba(255, 193, 7, 0.55);
 }
@@ -359,5 +582,28 @@
 
     .wallet-reset-target span {
         text-align: left;
+    }
+
+    .game-recovery-summary {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .game-recovery-list {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .game-recovery-game-heading {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .game-recovery-game-heading b {
+        grid-column: 2;
+    }
+
+    .game-recovery-unresolved li {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 2px;
     }
 }

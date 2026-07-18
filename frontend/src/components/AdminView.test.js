@@ -4,8 +4,10 @@ import AdminView from './AdminView';
 import {
     applyAlpha2WalletReset,
     finalizeSeasonRollover,
+    getAbandonedGameRecoveryPreview,
     getAlpha2WalletResetPreview,
     getSeasonRolloverPreview,
+    refundAbandonedGames,
 } from '../services/api';
 
 vi.mock('../services/api', () => ({
@@ -13,6 +15,8 @@ vi.mock('../services/api', () => ({
     finalizeSeasonRollover: vi.fn(),
     getAlpha2WalletResetPreview: vi.fn(),
     applyAlpha2WalletReset: vi.fn(),
+    getAbandonedGameRecoveryPreview: vi.fn(),
+    refundAbandonedGames: vi.fn(),
 }));
 
 const preview = {
@@ -53,12 +57,17 @@ describe('AdminView season rollover', () => {
         });
         getAlpha2WalletResetPreview.mockResolvedValue({});
         applyAlpha2WalletReset.mockResolvedValue({});
+        getAbandonedGameRecoveryPreview.mockResolvedValue({ candidates: [] });
+        refundAbandonedGames.mockResolvedValue({});
     });
 
     test('keeps the one-time wallet reset guarded and does not load either preview automatically', () => {
         renderAdmin();
 
         expect(screen.getByRole('heading', { name: 'Alpha Season 2 Wallet Reset' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Abandoned Game Refunds' })).toBeInTheDocument();
+        expect(getAbandonedGameRecoveryPreview).not.toHaveBeenCalled();
+        expect(refundAbandonedGames).not.toHaveBeenCalled();
         expect(screen.getByText(/season standings, career records, and archived seasons stay intact/i)).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Review Wallet Reset' })).toBeInTheDocument();
         expect(getAlpha2WalletResetPreview).not.toHaveBeenCalled();

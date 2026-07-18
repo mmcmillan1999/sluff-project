@@ -25,11 +25,15 @@ const createMetricsRoutes = require('./api/metrics');
 const createBotInsuranceStatsRoutes = require('./api/botInsuranceStats');
 const {
     DEFAULT_GRACE_MS,
+    DEFAULT_HEARTBEAT_INTERVAL_MS,
     DEFAULT_INTERVAL_MS,
     createAbandonedGameRecoveryMonitor,
     liveGameIdsFromService,
     validateRecoveryTiming,
 } = require('./maintenance/abandonedGameRecovery');
+const {
+    validateAdminRecoveryHeartbeatCadence,
+} = require('./services/adminGameRecoveryService');
 
 const app = express();
 const server = http.createServer(app);
@@ -113,6 +117,9 @@ async function initializeApplication() {
         pool,
         graceMs: recoveryTiming.graceMs,
         intervalMs: recoveryTiming.intervalMs,
+        heartbeatIntervalMs: validateAdminRecoveryHeartbeatCadence(
+            DEFAULT_HEARTBEAT_INTERVAL_MS,
+        ),
         getLiveGameIds: () => liveGameIdsFromService(gameService),
     });
 
@@ -125,7 +132,9 @@ async function initializeApplication() {
     app.use('/api/leaderboard', createLeaderboardRoutes(pool, jwt));
     app.use('/api/players', createPlayerRoutes(pool, jwt));
     app.use('/api/seasons', createSeasonRoutes(pool, jwt));
-    app.use('/api/admin', createAdminRoutes(pool, jwt, io));
+    app.use('/api/admin', createAdminRoutes(pool, jwt, io, {
+        getLiveGameIds: () => liveGameIdsFromService(gameService),
+    }));
     app.use('/api/feedback', createFeedbackRoutes(pool, jwt));
     app.use('/api/chat', createChatRoutes(pool, io, jwt));
     app.use('/api/ping', createPingRoutes());

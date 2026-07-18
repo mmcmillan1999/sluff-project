@@ -1,5 +1,6 @@
 // frontend/src/components/AdminView.js
 import React, { useState } from 'react';
+import AdminGameRecoveryCard from './AdminGameRecoveryCard';
 import BotInsuranceStats from './BotInsuranceStats';
 import Alpha2WalletResetCard from './Alpha2WalletResetCard';
 import { finalizeSeasonRollover, getSeasonRolloverPreview } from '../services/api';
@@ -101,6 +102,7 @@ const AdminView = ({ onReturnToLobby, handleHardReset }) => {
                 <button onClick={onReturnToLobby} className="admin-button back-button">Back to Lobby</button>
             </header>
             <div className="admin-actions-container">
+                <AdminGameRecoveryCard />
                 <Alpha2WalletResetCard />
                 <section className="admin-action-card season-rollover-card" aria-labelledby="season-rollover-heading">
                     <h3 id="season-rollover-heading">Season Rollover</h3>
