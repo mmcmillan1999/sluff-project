@@ -888,6 +888,7 @@ class GameEngine {
 
     _initializeNewRoundState() {
         this.roundPresentationAcknowledgements = new Set();
+        this.botBidReadyAt = null;
         this.hands = {}; this.widow = []; this.originalDealtWidow = [];
         this.biddingTurnPlayerId = null; this.currentHighestBidDetails = null; this.playersWhoPassedThisRound = [];
         this.bidWinnerInfo = null; this.trumpSuit = null; this.trumpBroken = false; this.originalFrogBidderId = null; this.soloBidMadeAfterFrog = false; this.revealedWidowForFrog = []; this.widowDiscardsForFrogBidder = [];

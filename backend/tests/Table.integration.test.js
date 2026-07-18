@@ -3,8 +3,14 @@
 const assert = require('assert');
 const GameEngine = require('../src/core/GameEngine');
 const GameService = require('../src/services/GameService');
+const { botBidActionDelay } = GameService;
 const gameLogic = require('../src/core/logic'); 
 const PlayerList = require('../src/core/PlayerList');
+const {
+    DEAL_PRESENTATION_DURATION_MS,
+    BOT_BID_AFTER_DEAL_BUFFER_MS,
+    BOT_BID_READY_DELAY_MS,
+} = require('../src/core/constants');
 const { createGameServiceWithoutHeartbeat, withControlledTimeouts } = require('./test-helpers');
 
 // --- Mocks and Helpers ---
@@ -49,18 +55,104 @@ async function testBotBiddingProcess() {
     engine.playerOrder.setTurnOrder(engine.dealer);
     engine.state = "Dealing Pending";
     const firstBidderId = engine.playerOrder.turnOrder[0];
-    console.log(`  - Human (dealer) deals cards...`);
-    await gameService.dealCards('table-1', humanId);
-    assert.strictEqual(engine.state, "Bidding Phase");
-    assert.strictEqual(engine.biddingTurnPlayerId, firstBidderId);
-    console.log("  - Triggering the bot heartbeat with a controlled action timer...");
-    await withControlledTimeouts(async ({ runNext }) => {
-        gameService._triggerBots('table-1');
-        await runNext();
-    });
+    const originalDateNow = Date.now;
+    Date.now = () => 100_000;
+    try {
+        console.log(`  - Human (dealer) deals cards...`);
+        await gameService.dealCards('table-1', humanId);
+        assert.strictEqual(engine.state, "Bidding Phase");
+        assert.strictEqual(engine.biddingTurnPlayerId, firstBidderId);
+        assert.strictEqual(engine.botBidReadyAt, 100_000 + BOT_BID_READY_DELAY_MS);
+        console.log("  - Triggering the bot heartbeat with a deal-presentation gate...");
+        await withControlledTimeouts(async ({ timers, runNext }) => {
+            gameService._triggerBots('table-1');
+            assert.strictEqual(timers.length, 1, 'the first bot bid is queued once');
+            assert.strictEqual(
+                timers[0].duration,
+                BOT_BID_READY_DELAY_MS,
+                'the initial bot bid waits for the complete deal presentation',
+            );
+            assert.strictEqual(
+                engine.playersWhoPassedThisRound.length + (engine.currentHighestBidDetails ? 1 : 0),
+                0,
+                'the bot has not bid while cards are still landing',
+            );
+            await runNext();
+        });
+    } finally {
+        Date.now = originalDateNow;
+    }
     const bidsMade = engine.playersWhoPassedThisRound.length + (engine.currentHighestBidDetails ? 1 : 0);
     assert.strictEqual(bidsMade, 1, "Expected exactly one bid to have been made by the bot.");
+    assert.strictEqual(DEAL_PRESENTATION_DURATION_MS, 4_825);
+    assert.strictEqual(BOT_BID_AFTER_DEAL_BUFFER_MS, 175);
+    assert.strictEqual(BOT_BID_READY_DELAY_MS, 5_000);
+    assert.strictEqual(
+        botBidActionDelay({ botBidReadyAt: 105_000 }, 1_000, 101_500),
+        3_500,
+        'a normal 1.5s heartbeat waits out the remainder of the five-second gate',
+    );
+    assert.strictEqual(
+        botBidActionDelay({ botBidReadyAt: 105_000 }, 1_000, 104_500),
+        1_000,
+        'a late heartbeat keeps the ordinary think delay instead of restarting the deal wait',
+    );
+    assert.strictEqual(
+        botBidActionDelay({ botBidReadyAt: 105_000 }, 1_000, 106_000),
+        1_000,
+        'later bids use the ordinary think delay after the gate expires',
+    );
     console.log("...Success! Bot bidding was triggered correctly.\n");
+}
+
+async function testBotDealerBiddingWaitsForDealPresentation() {
+    console.log("Running Test: testBotDealerBiddingWaitsForDealPresentation...");
+    const gameService = createGameServiceWithoutHeartbeat(GameService, mockIo, null);
+    const engine = gameService.getEngineById('table-1');
+    engine.joinTable({ id: 101, username: "HumanPlayer" }, "socket123");
+    const dealerBot = engine.addBotPlayer();
+    const firstBidderBot = engine.addBotPlayer();
+    engine.gameStarted = true; engine.gameId = 1; engine.playerMode = 3;
+    engine.dealer = dealerBot.userId;
+    engine.playerOrder.setTurnOrder(engine.dealer);
+    engine.state = "Dealing Pending";
+    assert.strictEqual(engine.playerOrder.turnOrder[0], firstBidderBot.userId);
+
+    const originalDateNow = Date.now;
+    Date.now = () => 200_000;
+    try {
+        await withControlledTimeouts(async ({ timers, runNext }) => {
+            gameService._triggerBots('table-1');
+            assert.strictEqual(timers.length, 1, 'the bot dealer queues the deal');
+
+            await runNext();
+            assert.strictEqual(engine.state, "Bidding Phase");
+            assert.strictEqual(engine.botBidReadyAt, 200_000 + BOT_BID_READY_DELAY_MS);
+            assert.strictEqual(timers.length, 1, 'the deal queues the bot follow-up check');
+            assert.strictEqual(timers[0].duration, 100);
+
+            await runNext();
+            assert.strictEqual(timers.length, 1, 'the first bidder queues one bid');
+            assert.strictEqual(
+                timers[0].duration,
+                BOT_BID_READY_DELAY_MS,
+                'a bot dealing the cards cannot bypass the presentation gate',
+            );
+            assert.strictEqual(
+                engine.playersWhoPassedThisRound.length + (engine.currentHighestBidDetails ? 1 : 0),
+                0,
+                'the bot bidder remains idle until the deal presentation is complete',
+            );
+
+            await runNext();
+        });
+    } finally {
+        Date.now = originalDateNow;
+    }
+
+    const bidsMade = engine.playersWhoPassedThisRound.length + (engine.currentHighestBidDetails ? 1 : 0);
+    assert.strictEqual(bidsMade, 1, 'the first bot bid proceeds after the gate');
+    console.log("...Success! Bot dealer respected the deal-presentation gate.\n");
 }
 
 async function testAllPlayersPass() {
@@ -248,6 +340,7 @@ async function testWidowAssignmentLogic() {
 async function runAllTests() {
     try {
         await testBotBiddingProcess();
+        await testBotDealerBiddingWaitsForDealPresentation();
         await testAllPlayersPass();
         await testBotHandlesFrogUpgrade();
         await testDrawRequestLifecycle();

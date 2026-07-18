@@ -3,7 +3,13 @@
     const GameEngine = require('../core/GameEngine');
     const transactionManager = require('../data/transactionManager');
     const { loadBotBalances } = require('../data/botAccounts');
-    const { THEMES, TABLE_COSTS, SERVER_VERSION, ROUND_PRESENTATION_LOCK_MS } = require('../core/constants');
+    const {
+        THEMES,
+        TABLE_COSTS,
+        SERVER_VERSION,
+        ROUND_PRESENTATION_LOCK_MS,
+        BOT_BID_READY_DELAY_MS,
+    } = require('../core/constants');
     const AdaptiveInsuranceStrategy = require('../core/bot-strategies/AdaptiveInsuranceStrategy');
 
     const MAX_SETTLEMENT_ATTEMPTS = 3;
@@ -29,6 +35,12 @@
         || TRANSIENT_SETTLEMENT_CODES.has(error?.code)
         || (typeof error?.code === 'string' && error.code.startsWith('08'))
     );
+
+    const botBidActionDelay = (engine, standardDelay, now = Date.now()) => {
+        const readyAt = engine?.botBidReadyAt;
+        if (!Number.isFinite(readyAt)) return standardDelay;
+        return Math.max(standardDelay, Math.ceil(readyAt - now));
+    };
 
     class GameService {
         constructor(io, pool, { botAccounts = [] } = {}) {
@@ -1010,7 +1022,17 @@
         }
         
         async dealCards(tableId, requestingUserId) {
-            await this._performAction(tableId, (engine) => engine.dealCards(requestingUserId));
+            await this._performAction(tableId, (engine) => {
+                const previousState = engine.state;
+                const result = engine.dealCards(requestingUserId);
+                if (previousState === 'Dealing Pending' && engine.state === 'Bidding Phase') {
+                    // The server advances immediately, while clients still have
+                    // 36 face-down card flights to present. Gate only bot bids;
+                    // all authoritative deal and bidding rules remain unchanged.
+                    engine.botBidReadyAt = Date.now() + BOT_BID_READY_DELAY_MS;
+                }
+                return result;
+            });
         }
 
         async placeBid(tableId, userId, bid) {
@@ -1605,7 +1627,12 @@
                 } else if (engine.state === 'Bidding Phase' && engine.biddingTurnPlayerId == botUserId) {
                     const bid = bot.decideBid();
                     console.log(`[BOT-BID] ${bot.playerName} is bidding: ${bid}`);
-                    scheduleTurnAction(this.placeBid, standardDelay, botUserId, bid);
+                    scheduleTurnAction(
+                        this.placeBid,
+                        botBidActionDelay(engine, standardDelay),
+                        botUserId,
+                        bid,
+                    );
                 } else if (engine.state === 'Awaiting Frog Upgrade Decision' && engine.biddingTurnPlayerId == botUserId) {
                     const bid = bot.decideFrogUpgrade();
                     scheduleTurnAction(this.placeBid, standardDelay, botUserId, bid);
@@ -1683,3 +1710,4 @@
     module.exports.TERMINAL_QUICKPLAY_DISCONNECTED_CLEANUP_DELAY_MS = TERMINAL_QUICKPLAY_DISCONNECTED_CLEANUP_DELAY_MS;
     module.exports.QUICKPLAY_FOURTH_FALLBACK_MIN_DELAY_MS = QUICKPLAY_FOURTH_FALLBACK_MIN_DELAY_MS;
     module.exports.QUICKPLAY_FOURTH_FALLBACK_MAX_DELAY_MS = QUICKPLAY_FOURTH_FALLBACK_MAX_DELAY_MS;
+    module.exports.botBidActionDelay = botBidActionDelay;

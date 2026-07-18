@@ -17,6 +17,14 @@ const ROUND_PRESENTATION_LOCK_MS = 18_000;
 // + up to 30s review + 3.55s count + 5s reading time). The base 18s lock plus
 // this grace leaves a little over five seconds of network/scheduling margin.
 const ROUND_PRESENTATION_ACK_GRACE_MS = 35_000;
+// Keep the 4.825s duration aligned with the public deal sequence in
+// frontend/src/components/game/dealSequence.js:
+//   (36 destinations - 1) * 115ms stagger + 800ms final flight.
+// A small landing cushion prevents a bot bid broadcast/audio cue from racing
+// the last card onto slower mobile browsers.
+const DEAL_PRESENTATION_DURATION_MS = 4_825;
+const BOT_BID_AFTER_DEAL_BUFFER_MS = 175;
+const BOT_BID_READY_DELAY_MS = DEAL_PRESENTATION_DURATION_MS + BOT_BID_AFTER_DEAL_BUFFER_MS;
 
 const TABLE_COSTS = {
     'miss-pauls-academy': 0.1,
@@ -52,6 +60,9 @@ module.exports = {
     PLACEHOLDER_ID,
     ROUND_PRESENTATION_LOCK_MS,
     ROUND_PRESENTATION_ACK_GRACE_MS,
+    DEAL_PRESENTATION_DURATION_MS,
+    BOT_BID_AFTER_DEAL_BUFFER_MS,
+    BOT_BID_READY_DELAY_MS,
     TABLE_COSTS,
     THEMES, // --- ADDED TO EXPORTS ---
     deck
