@@ -1,6 +1,13 @@
 // frontend/src/components/game/PlayerSeat.js
 import React from 'react';
 import './PlayerSeat.css'; // Import the CSS file
+import ScoreChipStack from './ScoreChipStack';
+
+const SCORE_ANIMATION_STATES = new Set([
+    'WidowReveal',
+    'Awaiting Next Round Trigger',
+    'Game Over',
+]);
 
 const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent, showTrumpIndicator, trumpIndicatorPuck, renderCard, seatPosition, onPlayerProfile }) => {
     if (!playerName) {
@@ -25,9 +32,7 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent, showTrum
         return null;
     }
 
-    // --- THE FIX: 'userId' was removed from this line as it was unused ---
-    const { disconnected, tokens, userId } = playerEntry; // Now getting tokens and userId from playerEntry
-    const playerTokenCount = tokens; // Use the value directly
+    const { disconnected, userId } = playerEntry;
     const isBidWinner = bidWinnerInfo?.playerName === playerName;
     const isDefender = bidWinnerInfo && !isBidWinner && playerOrderActive.includes(playerName);
     const isDealer = dealer === userId;
@@ -67,6 +72,14 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent, showTrum
     ].filter(Boolean).join(' ');
 
     const nameClasses = ['player-name', isSelf && 'is-self'].filter(Boolean).join(' ');
+    const rawScoreAnimationReadyAt = currentTableState.roundSummary?.presentationReadyAt;
+    const scoreAnimationReadyAt = Number(rawScoreAnimationReadyAt);
+    const scoreAnimationScope = SCORE_ANIMATION_STATES.has(currentTableState.state)
+        && rawScoreAnimationReadyAt !== null
+        && rawScoreAnimationReadyAt !== undefined
+        && Number.isFinite(scoreAnimationReadyAt)
+        ? `${currentTableState.tableId || 'table'}:${scoreAnimationReadyAt}`
+        : null;
 
     const handleStartTimer = () => {
         emitEvent("startTimeoutClock", { targetPlayerName: playerName });
@@ -79,7 +92,7 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent, showTrum
     };
 
     return (
-        <div className="player-seat-wrapper">
+        <div className={`player-seat-wrapper player-seat-wrapper-${seatPosition || 'unknown'}`}>
             {/* Dealer puck - top left ear */}
             {isDealer && (
                 <div className="seat-puck dealer-puck-ear">
@@ -138,16 +151,6 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent, showTrum
                 ) : (
                     <div className={nameClasses}>{playerName}</div>
                 )}
-                <div className="player-stats-line">
-                    <span className="player-tokens">
-                        <img src="/Sluff_Token_v2.webp" alt="Tokens" className="token-icon-inline" />
-                        {/* --- MODIFICATION: Simplified token display logic --- */}
-                        {playerTokenCount !== undefined && playerTokenCount !== 'N/A' ? parseFloat(playerTokenCount).toFixed(2) : '...'}
-                    </span>
-                    <span className="info-divider">|</span>
-                    <span className="player-score">Points: {scores[playerName] ?? '120'}</span>
-                </div>
-                
                 {disconnected && (
                     <div className="disconnected-controls">
                         {isTimerRunningForThisPlayer ? (
@@ -162,6 +165,12 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent, showTrum
                     </div>
                 )}
             </div>
+            <ScoreChipStack
+                score={scores?.[playerName]}
+                playerName={playerName}
+                seatPosition={seatPosition}
+                animationScope={scoreAnimationScope}
+            />
         </div>
     );
 };

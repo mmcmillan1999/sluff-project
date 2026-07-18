@@ -1,0 +1,251 @@
+.score-chip-bank {
+    --chip-cream: #f6e7b0;
+    --chip-gold: #d19a32;
+    --chip-ink: #271a10;
+    position: relative;
+    width: min(10.6vh, 28vw);
+    height: 4.35vh;
+    display: block;
+    isolation: isolate;
+    filter: drop-shadow(0 0.24vh 0.2vh rgba(22, 13, 5, 0.32));
+}
+
+.score-chip-stage {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+}
+
+.score-chip-stacks {
+    position: absolute;
+    inset: 0 0 0.55vh;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+}
+
+.score-chip-stack {
+    --chip-base: #b83d35;
+    --chip-edge: #5f1717;
+    position: relative;
+    flex: 0 0 2.08vh;
+    width: 2.08vh;
+    height: calc(0.42vh + (var(--chip-layers) * 0.29vh));
+    margin-left: -0.54vh;
+    border: 0.1vh solid rgba(40, 22, 9, 0.78);
+    border-radius: 46% 46% 34% 34% / 22% 22% 16% 16%;
+    background:
+        repeating-linear-gradient(
+            to bottom,
+            rgba(255, 255, 255, 0.82) 0 0.08vh,
+            var(--chip-base) 0.08vh 0.22vh,
+            var(--chip-edge) 0.22vh 0.29vh
+        );
+    box-shadow:
+        inset 0.17vh 0 0 rgba(255, 255, 255, 0.2),
+        inset -0.16vh 0 0 rgba(29, 14, 7, 0.2),
+        0 0.12vh 0.16vh rgba(23, 13, 5, 0.4);
+    transform: rotate(var(--stack-tilt));
+    transform-origin: 50% 100%;
+}
+
+.score-chip-stack:first-child {
+    margin-left: 0;
+}
+
+.score-chip-stack::before {
+    content: '';
+    position: absolute;
+    z-index: 1;
+    top: -0.28vh;
+    left: -0.1vh;
+    width: 2.08vh;
+    height: 0.66vh;
+    border: 0.1vh solid rgba(42, 23, 10, 0.8);
+    border-radius: 50%;
+    background:
+        radial-gradient(ellipse at center, var(--chip-base) 0 38%, transparent 39%),
+        repeating-conic-gradient(
+            var(--chip-cream) 0deg 22deg,
+            var(--chip-base) 22deg 68deg
+        );
+    box-shadow: inset 0 0 0 0.1vh rgba(255, 255, 255, 0.3);
+}
+
+.score-chip-stack--tone-2 {
+    --chip-base: #325b78;
+    --chip-edge: #172f42;
+}
+
+.score-chip-stack--tone-3 {
+    --chip-base: #397451;
+    --chip-edge: #173b28;
+}
+
+.score-chip-total {
+    position: absolute;
+    z-index: 3;
+    left: 50%;
+    bottom: 0;
+    width: 3.28vh;
+    height: 3.28vh;
+    display: grid;
+    place-items: center;
+    transform: translate(-50%, 41%);
+    border: 0.12vh solid #4b3011;
+    border-radius: 50%;
+    color: #241609;
+    background:
+        radial-gradient(circle, #f8e8ad 0 48%, transparent 49%),
+        repeating-conic-gradient(
+            #fbefc8 0deg 16deg,
+            #b77b20 16deg 38deg,
+            #35210d 38deg 48deg
+        );
+    box-shadow:
+        inset 0 0 0 0.2vh #d4a444,
+        inset 0 0 0 0.31vh #5b390f,
+        0 0.16vh 0.22vh rgba(29, 17, 5, 0.5);
+    font-family: 'Oswald', sans-serif;
+    font-size: 1.35vh;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    text-shadow: 0 0.05vh 0 rgba(255, 255, 255, 0.9);
+}
+
+.score-chip-total > span {
+    display: block;
+    white-space: nowrap;
+}
+
+.score-chip-total--compact {
+    width: auto;
+    min-width: 3.28vh;
+    padding-inline: 0.42vh;
+    border-radius: 999px;
+    box-sizing: border-box;
+    font-size: 0.88vh;
+}
+
+.score-chip-total--tiny {
+    width: auto;
+    min-width: 3.28vh;
+    padding-inline: 0.42vh;
+    border-radius: 999px;
+    box-sizing: border-box;
+    font-size: 0.7vh;
+}
+
+.score-chip-delta {
+    position: absolute;
+    z-index: 5;
+    top: -0.45vh;
+    right: -0.15vh;
+    padding: 0.14vh 0.42vh;
+    border: 0.1vh solid rgba(255, 255, 255, 0.8);
+    border-radius: 999px;
+    color: #fff;
+    background: #21733f;
+    box-shadow: 0 0.13vh 0.25vh rgba(0, 0, 0, 0.36);
+    font-family: 'Oswald', sans-serif;
+    font-size: 1.05vh;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+    white-space: nowrap;
+    animation: score-chip-delta-pop 1.1s ease-out both;
+}
+
+.score-chip-delta--loss {
+    background: #9b2c2c;
+}
+
+.score-chip-bank--gain .score-chip-stack {
+    animation: score-chip-stack-gain 0.72s cubic-bezier(0.2, 0.86, 0.28, 1.2) both;
+    animation-delay: calc(var(--stack-index) * 45ms);
+}
+
+.score-chip-bank--gain .score-chip-total {
+    animation: score-chip-total-gain 0.85s cubic-bezier(0.2, 0.86, 0.28, 1.18) both;
+}
+
+.score-chip-bank--loss .score-chip-stack {
+    animation: score-chip-stack-loss 0.78s cubic-bezier(0.55, 0, 0.8, 0.45) both;
+    animation-delay: calc(var(--stack-index) * 35ms);
+}
+
+.score-chip-bank--loss .score-chip-total {
+    animation: score-chip-total-loss 0.78s cubic-bezier(0.55, 0, 0.8, 0.45) both;
+}
+
+.score-chip-bank--busted .score-chip-stack {
+    --chip-base: #5b5b59;
+    --chip-edge: #252524;
+    transform: rotate(-12deg) translateY(0.18vh);
+    opacity: 0.85;
+}
+
+.score-chip-bank--busted .score-chip-total {
+    color: #f8e3df;
+    background:
+        linear-gradient(123deg, transparent 0 47%, #161616 48% 52%, transparent 53%),
+        radial-gradient(circle, #7a3030 0 48%, transparent 49%),
+        repeating-conic-gradient(#d6c9b6 0deg 15deg, #46302b 15deg 40deg);
+    border-color: #281817;
+    box-shadow:
+        inset 0 0 0 0.2vh #9b5f56,
+        inset 0 0 0 0.31vh #2d1a18,
+        0 0.16vh 0.22vh rgba(29, 17, 5, 0.5);
+}
+
+.score-chip-bank--unavailable .score-chip-total {
+    color: #5b5145;
+    filter: grayscale(0.82);
+    opacity: 0.82;
+}
+
+@keyframes score-chip-stack-gain {
+    0% { opacity: 0; transform: translateY(2.3vh) rotate(var(--stack-tilt)) scale(0.72); }
+    62% { opacity: 1; transform: translateY(-0.42vh) rotate(var(--stack-tilt)) scale(1.05); }
+    100% { opacity: 1; transform: translateY(0) rotate(var(--stack-tilt)) scale(1); }
+}
+
+@keyframes score-chip-total-gain {
+    0% { opacity: 0.4; transform: translate(-50%, 95%) scale(0.74) rotate(-10deg); }
+    62% { opacity: 1; transform: translate(-50%, 28%) scale(1.12) rotate(3deg); }
+    100% { opacity: 1; transform: translate(-50%, 41%) scale(1) rotate(0); }
+}
+
+@keyframes score-chip-stack-loss {
+    0% { opacity: 1; transform: translateY(-0.65vh) rotate(var(--stack-tilt)) scale(1.04); }
+    100% { opacity: 1; transform: translateY(0) rotate(var(--stack-tilt)) scale(1); }
+}
+
+@keyframes score-chip-total-loss {
+    0% { transform: translate(-50%, 12%) scale(1.08) rotate(4deg); }
+    100% { transform: translate(-50%, 41%) scale(1) rotate(0); }
+}
+
+@keyframes score-chip-delta-pop {
+    0% { opacity: 0; transform: translateY(0.65vh) scale(0.72); }
+    28% { opacity: 1; transform: translateY(0) scale(1.08); }
+    76% { opacity: 1; transform: translateY(-0.12vh) scale(1); }
+    100% { opacity: 0; transform: translateY(-0.72vh) scale(0.96); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .score-chip-bank *,
+    .score-chip-bank *::before,
+    .score-chip-bank *::after {
+        animation: none !important;
+        transition: none !important;
+    }
+
+    .score-chip-delta {
+        opacity: 1;
+    }
+}

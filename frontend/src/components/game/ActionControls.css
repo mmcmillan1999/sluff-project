@@ -148,7 +148,9 @@
 
 @media (max-width: 360px) and (orientation: portrait) {
     .action-prompt.action-prompt-container {
-        top: clamp(7.75rem, 19.5vh, 9.5rem);
+        /* Keep the prompt below the north player's overflowing score chip even
+           on tall, narrow phones where the old rem cap pulled it upward. */
+        top: clamp(7.75rem, 20vh, 10.5rem);
         max-width: 80vw;
         padding: 0.48rem 0.58rem;
     }
