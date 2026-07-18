@@ -96,6 +96,7 @@
 .token-ledger-refresh:focus-visible,
 .token-ledger-toolbar select:focus-visible,
 .token-ledger-load-more:focus-visible,
+.token-ledger-void-game:focus-visible,
 .token-ledger-error button:focus-visible,
 .token-ledger-entry-details summary:focus-visible {
     outline: 3px solid #f0c85d;
@@ -128,6 +129,7 @@
 .token-ledger-activity,
 .token-ledger-status,
 .token-ledger-empty,
+.token-ledger-success,
 .token-ledger-load-more {
     width: min(100%, 52rem);
     margin-inline: auto;
@@ -208,6 +210,30 @@
 
 .token-ledger-status {
     min-height: 0.5rem;
+}
+
+.token-ledger-success {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    margin-top: 0.85rem;
+    padding: 0.75rem 0.85rem;
+    border: 1px solid rgba(110, 231, 162, 0.45);
+    border-radius: 0.65rem;
+    background: rgba(23, 92, 57, 0.3);
+    color: #d9fbe7;
+}
+
+.token-ledger-success > span {
+    flex: 0 0 auto;
+    color: #79eba9;
+    font: 700 1rem/1.35 'Oswald', sans-serif;
+}
+
+.token-ledger-success p {
+    margin: 0;
+    font-size: 0.8rem;
+    line-height: 1.45;
 }
 
 .token-ledger-status > p {
@@ -386,6 +412,40 @@
     letter-spacing: 0.02em;
 }
 
+.token-ledger-void-game {
+    min-height: 2.75rem;
+    margin-left: auto;
+    padding: 0.55rem 0.8rem;
+    border: 1px solid rgba(243, 178, 99, 0.55);
+    border-radius: 0.55rem;
+    background: rgba(112, 45, 36, 0.82);
+    color: #fff0dc;
+    font: 600 0.82rem/1.15 'Oswald', sans-serif;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.token-ledger-void-game:disabled {
+    cursor: wait;
+    opacity: 0.56;
+}
+
+.token-ledger-game-voided {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    min-height: 1.75rem;
+    margin-left: auto;
+    padding: 0.25rem 0.55rem;
+    border: 1px solid rgba(110, 231, 162, 0.38);
+    border-radius: 999px;
+    background: rgba(37, 116, 72, 0.25);
+    color: #8df0b6;
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
 .token-ledger-entry-details {
     margin-top: 0.55rem;
     border-top: 1px solid rgba(170, 182, 175, 0.16);
@@ -491,6 +551,11 @@
 
     .token-ledger-entry-meta span {
         text-align: left;
+    }
+
+    .token-ledger-void-game {
+        width: 100%;
+        margin-left: 0;
     }
 }
 

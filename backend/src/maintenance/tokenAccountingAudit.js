@@ -9,6 +9,14 @@ const PAYOUT_TYPES = [
     'abandoned_refund',
 ];
 
+const GAME_VOID_REVERSAL_TYPE = 'game_void_reversal';
+const VOIDABLE_GAME_TRANSACTION_TYPES = [
+    'buy_in',
+    'win_payout',
+    'wash_payout',
+    'forfeit_payout',
+];
+
 const ACCOUNT_SUMMARY_QUERY = `
     SELECT
         u.id AS user_id,
@@ -169,10 +177,255 @@ const DUPLICATE_ENTRIES_QUERY = `
     FROM transactions t
     JOIN users u ON u.id = t.user_id
     WHERE t.game_id IS NOT NULL
+      AND t.transaction_type::text <> '${GAME_VOID_REVERSAL_TYPE}'
       AND ($1::text IS NULL OR LOWER(u.username) = LOWER($1))
     GROUP BY t.game_id, t.user_id, u.username, t.transaction_type
     HAVING COUNT(*) > 1
     ORDER BY duplicate_count DESC, t.game_id DESC
+    LIMIT $2
+`;
+
+// A completed void legitimately creates more than one reversal for the same
+// player and game (for example, one payout clawback and one buy-in refund).
+// Those rows are excluded from the generic duplicate report above and audited
+// against the immutable manifest written with the void. Live ledger rows are
+// account-owned and may disappear together when an inactive account is pruned;
+// that is valid only when the manifest remains complete and exact. If the user
+// still exists, both live rows must still exist and match their snapshots.
+const GAME_VOID_REVERSAL_ISSUES_QUERY = `
+    WITH manifest_rows AS (
+        SELECT
+            manifest.game_id,
+            manifest.source_transaction_id_snapshot AS source_transaction_id,
+            manifest.source_user_id_snapshot AS user_id,
+            manifest.source_username_snapshot AS username,
+            manifest.source_transaction_type,
+            manifest.source_amount,
+            manifest.reversal_transaction_id_snapshot AS reversal_transaction_id,
+            manifest.reversal_amount,
+            manifest.reversal_idempotency_key,
+            gh.reconciliation_status,
+            live_user.id AS live_user_id,
+            live_source.transaction_id AS live_source_transaction_id,
+            live_source.game_id AS live_source_game_id,
+            live_source.user_id AS live_source_user_id,
+            live_source.transaction_type::text AS live_source_transaction_type,
+            live_source.amount AS live_source_amount,
+            live_source.reverses_transaction_id AS live_source_reverses_transaction_id,
+            live_reversal.transaction_id AS live_reversal_transaction_id,
+            live_reversal.game_id AS live_reversal_game_id,
+            live_reversal.user_id AS live_reversal_user_id,
+            live_reversal.transaction_type::text AS live_reversal_transaction_type,
+            live_reversal.amount AS live_reversal_amount,
+            live_reversal.reverses_transaction_id AS live_reversal_source_id,
+            live_reversal.idempotency_key AS live_reversal_idempotency_key
+        FROM game_void_ledger_manifest manifest
+        JOIN game_voids game_void ON game_void.game_id = manifest.game_id
+        JOIN game_history gh ON gh.game_id = manifest.game_id
+        LEFT JOIN users live_user ON live_user.id = manifest.source_user_id_snapshot
+        LEFT JOIN transactions live_source
+          ON live_source.transaction_id = manifest.source_transaction_id_snapshot
+        LEFT JOIN transactions live_reversal
+          ON live_reversal.transaction_id = manifest.reversal_transaction_id_snapshot
+        WHERE ($1::text IS NULL
+               OR LOWER(manifest.source_username_snapshot) = LOWER($1))
+    ), manifest_integrity_checks AS (
+        SELECT
+            reversal_transaction_id,
+            game_id,
+            user_id,
+            username,
+            source_transaction_id,
+            source_transaction_type,
+            source_amount::numeric(12, 2) AS source_amount,
+            reversal_amount::numeric(12, 2) AS reversal_amount,
+            reconciliation_status,
+            TRUE AS has_game_void,
+            CASE
+                WHEN NOT (source_transaction_type = ANY($3::text[])) THEN 'unsupported_source_type'
+                WHEN ABS(reversal_amount + source_amount) > 0.005 THEN 'amount_not_exact_negation'
+                WHEN reversal_idempotency_key IS DISTINCT FROM
+                     ('game-void:' || game_id || ':' || source_transaction_id)
+                    THEN 'manifest_idempotency_mismatch'
+                WHEN reconciliation_status IS DISTINCT FROM 'player_voided' THEN 'game_not_marked_voided'
+                WHEN live_user_id IS NULL
+                 AND ((live_source_transaction_id IS NULL)
+                      IS DISTINCT FROM (live_reversal_transaction_id IS NULL))
+                    THEN 'pruned_live_pair_incomplete'
+                ELSE NULL
+            END AS issue
+        FROM manifest_rows
+    ), manifest_source_checks AS (
+        SELECT
+            reversal_transaction_id,
+            game_id,
+            user_id,
+            username,
+            source_transaction_id,
+            source_transaction_type,
+            source_amount::numeric(12, 2) AS source_amount,
+            reversal_amount::numeric(12, 2) AS reversal_amount,
+            reconciliation_status,
+            TRUE AS has_game_void,
+            CASE
+                WHEN live_user_id IS NOT NULL AND live_source_transaction_id IS NULL
+                    THEN 'missing_live_source'
+                WHEN live_source_transaction_id IS NOT NULL AND (
+                    live_source_game_id IS DISTINCT FROM game_id
+                    OR live_source_user_id IS DISTINCT FROM user_id
+                    OR live_source_transaction_type IS DISTINCT FROM source_transaction_type
+                    OR live_source_amount IS DISTINCT FROM source_amount
+                    OR live_source_reverses_transaction_id IS NOT NULL
+                ) THEN 'source_manifest_mismatch'
+                ELSE NULL
+            END AS issue
+        FROM manifest_rows
+    ), manifest_reversal_checks AS (
+        SELECT
+            reversal_transaction_id,
+            game_id,
+            user_id,
+            username,
+            source_transaction_id,
+            source_transaction_type,
+            source_amount::numeric(12, 2) AS source_amount,
+            reversal_amount::numeric(12, 2) AS reversal_amount,
+            reconciliation_status,
+            TRUE AS has_game_void,
+            CASE
+                WHEN live_user_id IS NOT NULL AND live_reversal_transaction_id IS NULL
+                    THEN 'missing_live_reversal'
+                WHEN live_reversal_transaction_id IS NOT NULL AND (
+                    live_reversal_game_id IS DISTINCT FROM game_id
+                    OR live_reversal_user_id IS DISTINCT FROM user_id
+                    OR live_reversal_transaction_type IS DISTINCT FROM '${GAME_VOID_REVERSAL_TYPE}'
+                    OR live_reversal_amount IS DISTINCT FROM reversal_amount
+                    OR live_reversal_source_id IS DISTINCT FROM source_transaction_id
+                    OR live_reversal_idempotency_key IS DISTINCT FROM reversal_idempotency_key
+                ) THEN 'reversal_manifest_mismatch'
+                ELSE NULL
+            END AS issue
+        FROM manifest_rows
+    ), live_sources_without_manifest AS (
+        SELECT
+            NULL::integer AS reversal_transaction_id,
+            source.game_id,
+            source.user_id,
+            u.username,
+            source.transaction_id AS source_transaction_id,
+            source.transaction_type::text AS source_transaction_type,
+            source.amount::numeric(12, 2) AS source_amount,
+            NULL::numeric(12, 2) AS reversal_amount,
+            gh.reconciliation_status,
+            TRUE AS has_game_void,
+            'missing_manifest_source'::text AS issue
+        FROM transactions source
+        JOIN game_voids game_void ON game_void.game_id = source.game_id
+        JOIN game_history gh ON gh.game_id = source.game_id
+        JOIN users u ON u.id = source.user_id
+        LEFT JOIN game_void_ledger_manifest manifest
+          ON manifest.game_id = source.game_id
+         AND manifest.source_transaction_id_snapshot = source.transaction_id
+        WHERE source.transaction_type::text = ANY($3::text[])
+          AND source.reverses_transaction_id IS NULL
+          AND manifest.source_transaction_id_snapshot IS NULL
+          AND ($1::text IS NULL OR LOWER(u.username) = LOWER($1))
+    ), live_reversals_without_manifest AS (
+        SELECT
+            reversal.transaction_id AS reversal_transaction_id,
+            reversal.game_id,
+            reversal.user_id,
+            u.username,
+            reversal.reverses_transaction_id AS source_transaction_id,
+            source.transaction_type::text AS source_transaction_type,
+            source.amount::numeric(12, 2) AS source_amount,
+            reversal.amount::numeric(12, 2) AS reversal_amount,
+            gh.reconciliation_status,
+            (game_void.game_id IS NOT NULL) AS has_game_void,
+            CASE
+                WHEN game_void.game_id IS NULL THEN 'missing_game_void'
+                ELSE 'missing_manifest_reversal'
+            END AS issue
+        FROM transactions reversal
+        LEFT JOIN transactions source
+          ON source.transaction_id = reversal.reverses_transaction_id
+        LEFT JOIN users u ON u.id = reversal.user_id
+        LEFT JOIN game_history gh ON gh.game_id = reversal.game_id
+        LEFT JOIN game_voids game_void ON game_void.game_id = reversal.game_id
+        LEFT JOIN game_void_ledger_manifest manifest
+          ON manifest.game_id = reversal.game_id
+         AND manifest.reversal_transaction_id_snapshot = reversal.transaction_id
+        WHERE reversal.transaction_type::text = '${GAME_VOID_REVERSAL_TYPE}'
+          AND manifest.reversal_transaction_id_snapshot IS NULL
+          AND ($1::text IS NULL OR LOWER(u.username) = LOWER($1))
+    ), marker_rows AS (
+        SELECT
+            game_void.game_id,
+            game_void.requested_by_user_id,
+            game_void.requested_by_username,
+            game_void.affected_player_count,
+            game_void.source_transaction_count,
+            game_void.reversal_transaction_count,
+            gh.reconciliation_status,
+            COUNT(manifest.source_transaction_id_snapshot)::integer AS manifest_count,
+            COUNT(DISTINCT manifest.source_user_id_snapshot)::integer AS manifest_player_count
+        FROM game_voids game_void
+        JOIN game_history gh ON gh.game_id = game_void.game_id
+        LEFT JOIN game_void_ledger_manifest manifest ON manifest.game_id = game_void.game_id
+        WHERE $1::text IS NULL
+           OR LOWER(game_void.requested_by_username) = LOWER($1)
+           OR EXISTS (
+                SELECT 1
+                FROM game_void_ledger_manifest selected_manifest
+                WHERE selected_manifest.game_id = game_void.game_id
+                  AND LOWER(selected_manifest.source_username_snapshot) = LOWER($1)
+           )
+        GROUP BY game_void.game_id, game_void.requested_by_user_id,
+                 game_void.requested_by_username, game_void.source_transaction_count,
+                 game_void.reversal_transaction_count, game_void.affected_player_count,
+                 gh.reconciliation_status
+    ), marker_checks AS (
+        SELECT
+            NULL::integer AS reversal_transaction_id,
+            game_id,
+            requested_by_user_id AS user_id,
+            requested_by_username AS username,
+            NULL::integer AS source_transaction_id,
+            NULL::text AS source_transaction_type,
+            NULL::numeric(12, 2) AS source_amount,
+            NULL::numeric(12, 2) AS reversal_amount,
+            reconciliation_status,
+            TRUE AS has_game_void,
+            CASE
+                WHEN reconciliation_status IS DISTINCT FROM 'player_voided'
+                    THEN 'game_not_marked_voided'
+                WHEN source_transaction_count IS DISTINCT FROM reversal_transaction_count
+                    THEN 'marker_count_mismatch'
+                WHEN source_transaction_count IS DISTINCT FROM manifest_count
+                  OR reversal_transaction_count IS DISTINCT FROM manifest_count
+                    THEN 'manifest_count_mismatch'
+                WHEN affected_player_count IS DISTINCT FROM manifest_player_count
+                    THEN 'manifest_player_count_mismatch'
+                ELSE NULL
+            END AS issue
+        FROM marker_rows
+    )
+    SELECT *
+    FROM (
+        SELECT * FROM manifest_integrity_checks WHERE issue IS NOT NULL
+        UNION ALL
+        SELECT * FROM manifest_source_checks WHERE issue IS NOT NULL
+        UNION ALL
+        SELECT * FROM manifest_reversal_checks WHERE issue IS NOT NULL
+        UNION ALL
+        SELECT * FROM live_sources_without_manifest
+        UNION ALL
+        SELECT * FROM live_reversals_without_manifest
+        UNION ALL
+        SELECT * FROM marker_checks WHERE issue IS NOT NULL
+    ) issues
+    ORDER BY game_id DESC, source_transaction_id DESC NULLS LAST,
+             reversal_transaction_id DESC NULLS LAST
     LIMIT $2
 `;
 
@@ -295,6 +548,11 @@ async function auditTokenAccounting(pool, { username = null, limit = 50 } = {}) 
         transactionOpen = true;
 
         const commonParams = [normalizedUsername, normalizedLimit, PAYOUT_TYPES];
+        const gameVoidParams = [
+            normalizedUsername,
+            normalizedLimit,
+            VOIDABLE_GAME_TRANSACTION_TYPES,
+        ];
         const accountSummary = await client.query(ACCOUNT_SUMMARY_QUERY, [normalizedUsername]);
         const typeTotals = await client.query(TYPE_TOTALS_QUERY, [normalizedUsername]);
         const abandonedRefunds = await client.query(ABANDONED_REFUNDS_QUERY, commonParams.slice(0, 2));
@@ -304,6 +562,10 @@ async function auditTokenAccounting(pool, { username = null, limit = 50 } = {}) 
         );
         const mintedGames = await client.query(MINTED_GAMES_QUERY, commonParams.slice(0, 2));
         const duplicateEntries = await client.query(DUPLICATE_ENTRIES_QUERY, commonParams.slice(0, 2));
+        const gameVoidReversalIssues = await client.query(
+            GAME_VOID_REVERSAL_ISSUES_QUERY,
+            gameVoidParams,
+        );
         const unpairedPayouts = await client.query(UNPAIRED_PAYOUTS_QUERY, commonParams);
         const invalidAmounts = await client.query(INVALID_AMOUNTS_QUERY, commonParams);
         const buyInMismatches = await client.query(BUY_IN_MISMATCHES_QUERY, commonParams.slice(0, 2));
@@ -319,6 +581,7 @@ async function auditTokenAccounting(pool, { username = null, limit = 50 } = {}) 
             quarantinedLegacyGames: quarantinedLegacyGames.rows,
             mintedGames: mintedGames.rows,
             duplicateEntries: duplicateEntries.rows,
+            gameVoidReversalIssues: gameVoidReversalIssues.rows,
             unpairedPayouts: unpairedPayouts.rows,
             invalidAmounts: invalidAmounts.rows,
             buyInMismatches: buyInMismatches.rows,
@@ -342,6 +605,8 @@ module.exports = {
     ACCOUNT_SUMMARY_QUERY,
     BUY_IN_MISMATCHES_QUERY,
     DUPLICATE_ENTRIES_QUERY,
+    GAME_VOID_REVERSAL_ISSUES_QUERY,
+    GAME_VOID_REVERSAL_TYPE,
     INVALID_AMOUNTS_QUERY,
     MINTED_GAMES_QUERY,
     PAYOUT_TYPES,
@@ -349,6 +614,7 @@ module.exports = {
     THEME_COST_VALUES_SQL,
     TYPE_TOTALS_QUERY,
     UNPAIRED_PAYOUTS_QUERY,
+    VOIDABLE_GAME_TRANSACTION_TYPES,
     auditTokenAccounting,
     buildThemeCostValuesSql,
     parseLimit,

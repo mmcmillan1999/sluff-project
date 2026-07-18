@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { getTokenLedger } from '../services/api';
+import { getTokenLedger, voidLedgerGame } from '../services/api';
+import VoidGameModal from './VoidGameModal';
 import './TokenLedgerView.css';
 
 const PAGE_SIZE = 25;
@@ -12,6 +13,7 @@ const ACTIVITY_LABELS = {
     forfeit_payout: 'Forfeit payout',
     free_token_mercy: 'Mercy token',
     abandoned_refund: 'Abandoned-game refund',
+    game_void_reversal: 'Voided-game adjustment',
     admin_adjustment: 'Account adjustment',
 };
 
@@ -58,12 +60,14 @@ const EXPECTED_CREDIT_TYPES = new Set([
     'forfeit_payout',
     'abandoned_refund',
 ]);
+const FLEXIBLE_SIGN_TYPES = new Set(['game_void_reversal']);
 const KNOWN_TYPES = new Set([...Object.keys(ACTIVITY_LABELS)]);
 
 export const isUnexpectedLedgerEntry = entry => {
     const type = String(entry?.type || '').trim().toLowerCase();
     const cents = toSafeCents(entry?.amountCents);
     if (!KNOWN_TYPES.has(type) || cents === null || cents === 0) return true;
+    if (FLEXIBLE_SIGN_TYPES.has(type)) return false;
     if (EXPECTED_DEBIT_TYPES.has(type)) return cents >= 0;
     if (EXPECTED_CREDIT_TYPES.has(type)) return cents <= 0;
     if (type === 'free_token_mercy') return cents !== 100;
@@ -92,6 +96,11 @@ export const normalizeTokenLedgerEntry = entry => ({
     gameId: entry?.gameId ?? entry?.game_id ?? null,
     gameTheme: entry?.gameTheme ?? entry?.game_theme ?? null,
     gameOutcome: entry?.gameOutcome ?? entry?.game_outcome ?? null,
+    gameStartedAt: entry?.gameStartedAt ?? entry?.game_started_at ?? null,
+    gameEndedAt: entry?.gameEndedAt ?? entry?.game_ended_at ?? null,
+    gameCanVoid: entry?.gameCanVoid === true || entry?.game_can_void === true,
+    gameVoidStatus: entry?.gameVoidStatus ?? entry?.game_void_status ?? null,
+    gameVoidedAt: entry?.gameVoidedAt ?? entry?.game_voided_at ?? null,
 });
 
 const normalizeLedgerResponse = data => {
@@ -152,6 +161,11 @@ const mergeUniqueEntries = (currentEntries, nextEntries) => {
     ];
 };
 
+const isVoidedGame = entry => {
+    const status = String(entry?.gameVoidStatus || '').trim().toLowerCase();
+    return Boolean(entry?.gameVoidedAt) || status === 'voided' || status === 'player_voided';
+};
+
 const TokenLedgerView = ({ onReturnToLobby }) => {
     const [entries, setEntries] = useState([]);
     const [currentBalanceCents, setCurrentBalanceCents] = useState(null);
@@ -161,6 +175,10 @@ const TokenLedgerView = ({ onReturnToLobby }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [error, setError] = useState('');
+    const [voidCandidate, setVoidCandidate] = useState(null);
+    const [isVoidingGame, setIsVoidingGame] = useState(false);
+    const [voidError, setVoidError] = useState('');
+    const [voidSuccess, setVoidSuccess] = useState('');
     const requestSequenceRef = useRef(0);
 
     const loadLedger = useCallback(async ({ append = false, cursor = null } = {}) => {
@@ -209,6 +227,43 @@ const TokenLedgerView = ({ onReturnToLobby }) => {
         loadLedger();
     };
 
+    const openVoidModal = entry => {
+        if (!entry?.gameCanVoid || isVoidedGame(entry) || isVoidingGame) return;
+        setVoidError('');
+        setVoidSuccess('');
+        setVoidCandidate(entry);
+    };
+
+    const closeVoidModal = () => {
+        if (isVoidingGame) return;
+        setVoidError('');
+        setVoidCandidate(null);
+    };
+
+    const confirmVoidGame = async () => {
+        const gameId = Number(voidCandidate?.gameId);
+        if (!Number.isSafeInteger(gameId) || gameId <= 0 || isVoidingGame) return;
+
+        setIsVoidingGame(true);
+        setVoidError('');
+        try {
+            const result = await voidLedgerGame(gameId);
+            setVoidCandidate(null);
+            setVoidSuccess(result?.alreadyVoided
+                ? `Game #${gameId} was already voided. Your ledger is up to date.`
+                : `Game #${gameId} was voided. Everyone’s tokens and records have been restored.`);
+            setNextCursor(null);
+            setHasMore(false);
+            await loadLedger({ append: false, cursor: null });
+        } catch (requestError) {
+            setVoidError(requestError?.message || 'Unable to void this game. Please try again.');
+        } finally {
+            setIsVoidingGame(false);
+        }
+    };
+
+    const renderedGameControls = new Set();
+
     return (
         <div className="token-ledger-view">
             <header className="token-ledger-header">
@@ -256,6 +311,13 @@ const TokenLedgerView = ({ onReturnToLobby }) => {
                     </select>
                 </div>
 
+                {voidSuccess && (
+                    <div className="token-ledger-success" role="status" aria-live="polite">
+                        <span aria-hidden="true">✓</span>
+                        <p>{voidSuccess}</p>
+                    </div>
+                )}
+
                 <div className="token-ledger-status" aria-live="polite" aria-atomic="true">
                     {isLoading && entries.length === 0 && <p>Loading token activity…</p>}
                     {error && (
@@ -285,6 +347,11 @@ const TokenLedgerView = ({ onReturnToLobby }) => {
                                     ? 'is-credit'
                                     : entry.amountCents < 0 ? 'is-debit' : 'is-neutral';
                                 const isUnexpected = isUnexpectedLedgerEntry(entry);
+                                const hasGame = entry.gameId !== null && entry.gameId !== undefined;
+                                const gameKey = hasGame ? String(entry.gameId) : null;
+                                const showGameControl = hasGame && !renderedGameControls.has(gameKey);
+                                if (showGameControl) renderedGameControls.add(gameKey);
+                                const gameIsVoided = isVoidedGame(entry);
                                 return (
                                     <article
                                         className={`token-ledger-entry${isUnexpected ? ' is-unexpected' : ''}`}
@@ -332,6 +399,23 @@ const TokenLedgerView = ({ onReturnToLobby }) => {
                                                 {entry.gameNetCents !== null && (
                                                     <span>Game net {formatTokenCents(entry.gameNetCents, { signed: true })}</span>
                                                 )}
+                                                {showGameControl && gameIsVoided && (
+                                                    <span className="token-ledger-game-voided">
+                                                        <span aria-hidden="true">✓</span>
+                                                        Voided
+                                                    </span>
+                                                )}
+                                                {showGameControl && entry.gameCanVoid && !gameIsVoided && (
+                                                    <button
+                                                        type="button"
+                                                        className="token-ledger-void-game"
+                                                        onClick={() => openVoidModal(entry)}
+                                                        disabled={isVoidingGame}
+                                                        aria-label={`Void Game #${entry.gameId}`}
+                                                    >
+                                                        Void game
+                                                    </button>
+                                                )}
                                             </div>
                                         )}
 
@@ -372,6 +456,15 @@ const TokenLedgerView = ({ onReturnToLobby }) => {
                     </button>
                 )}
             </main>
+
+            <VoidGameModal
+                show={Boolean(voidCandidate)}
+                gameId={voidCandidate?.gameId}
+                isSubmitting={isVoidingGame}
+                error={voidError}
+                onClose={closeVoidModal}
+                onConfirm={confirmVoidGame}
+            />
         </div>
     );
 };

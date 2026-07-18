@@ -242,7 +242,7 @@ function App() {
             const onGameStartFailed = ({ message }) => alert(`Game could not start:\n\n${message}`);
             const onNotification = ({ message }) => alert(message);
             const onForceLobbyReturn = () => handleLeaveTable();
-            const onTokenBalancesReset = () => socket.emit('requestUserSync');
+            const onTokenBalanceChanged = () => socket.emit('requestUserSync');
 
             socket.on('connect', onConnect);
             socket.on('disconnect', onDisconnect);
@@ -257,7 +257,8 @@ function App() {
             socket.on('gameStartFailed', onGameStartFailed);
             socket.on('notification', onNotification);
             socket.on('forceLobbyReturn', onForceLobbyReturn);
-            socket.on('tokenBalancesReset', onTokenBalancesReset);
+            socket.on('tokenBalancesReset', onTokenBalanceChanged);
+            socket.on('tokenBalanceChanged', onTokenBalanceChanged);
 
             return () => {
                 socket.off('connect', onConnect);
@@ -273,7 +274,8 @@ function App() {
                 socket.off('gameStartFailed', onGameStartFailed);
                 socket.off('notification', onNotification);
                 socket.off('forceLobbyReturn', onForceLobbyReturn);
-                socket.off('tokenBalancesReset', onTokenBalancesReset);
+                socket.off('tokenBalancesReset', onTokenBalanceChanged);
+                socket.off('tokenBalanceChanged', onTokenBalanceChanged);
                 if (errorMessageTimerRef.current) clearTimeout(errorMessageTimerRef.current);
                 if (connectionNoticeTimerRef.current) clearTimeout(connectionNoticeTimerRef.current);
             };

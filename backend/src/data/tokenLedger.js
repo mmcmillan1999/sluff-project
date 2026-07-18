@@ -13,7 +13,7 @@ const TOKEN_LEDGER_CATEGORIES = Object.freeze({
     ]),
     mercy: Object.freeze(['free_token_mercy']),
     adjustment: Object.freeze(['admin_adjustment']),
-    refund: Object.freeze(['abandoned_refund']),
+    refund: Object.freeze(['abandoned_refund', 'game_void_reversal']),
 });
 
 const LEDGER_BALANCE_QUERY = `
@@ -33,6 +33,10 @@ const LEDGER_PAGE_QUERY = `
             t.transaction_type::text AS transaction_type,
             t.description,
             t.game_id,
+            ROW_NUMBER() OVER (
+                PARTITION BY t.user_id, t.game_id
+                ORDER BY t.transaction_id DESC
+            ) AS game_entry_rank,
             (t.amount * 100)::bigint AS amount_cents,
             (
                 SUM(t.amount) OVER (
@@ -53,7 +57,9 @@ const LEDGER_PAGE_QUERY = `
                 ) THEN 'game'
                 WHEN t.transaction_type::text = 'free_token_mercy' THEN 'mercy'
                 WHEN t.transaction_type::text = 'admin_adjustment' THEN 'adjustment'
-                WHEN t.transaction_type::text = 'abandoned_refund' THEN 'refund'
+                WHEN t.transaction_type::text IN (
+                    'abandoned_refund', 'game_void_reversal'
+                ) THEN 'refund'
                 ELSE 'adjustment'
             END AS category
         FROM transactions t
@@ -72,9 +78,35 @@ const LEDGER_PAGE_QUERY = `
         game.theme AS game_theme,
         game.outcome AS game_outcome,
         game.start_time AS game_started_at,
-        game.end_time AS game_ended_at
+        game.end_time AS game_ended_at,
+        CASE
+            WHEN ledger.game_entry_rank = 1
+             AND game.end_time IS NOT NULL
+             AND game.outcome LIKE 'Game Over!%'
+             AND game.reconciliation_status IS NULL
+             AND game_season.status = 'active'
+             AND EXISTS (
+                 SELECT 1
+                 FROM transactions participant_buy_in
+                 WHERE participant_buy_in.game_id = ledger.game_id
+                   AND participant_buy_in.user_id = $1
+                   AND participant_buy_in.transaction_type = 'buy_in'
+                   AND participant_buy_in.amount < 0
+                   AND participant_buy_in.reverses_transaction_id IS NULL
+             )
+            THEN TRUE
+            ELSE FALSE
+        END AS game_can_void,
+        CASE
+            WHEN game.reconciliation_status = 'player_voided'
+            THEN game.reconciliation_status
+            ELSE NULL
+        END AS game_void_status,
+        void_record.voided_at AS game_voided_at
     FROM full_ledger ledger
     LEFT JOIN game_history game ON game.game_id = ledger.game_id
+    LEFT JOIN seasons game_season ON game_season.season_id = game.season_id
+    LEFT JOIN game_voids void_record ON void_record.game_id = ledger.game_id
     WHERE ($2::bigint IS NULL OR ledger.transaction_id < $2)
       AND ($3::text IS NULL OR ledger.category = $3)
     ORDER BY ledger.transaction_id DESC
@@ -154,6 +186,9 @@ function publicLedgerEntry(row) {
         gameOutcome: gameId === null ? null : (row.game_outcome ?? null),
         gameStartedAt: gameId === null ? null : (row.game_started_at ?? null),
         gameEndedAt: gameId === null ? null : (row.game_ended_at ?? null),
+        gameCanVoid: gameId !== null && row.game_can_void === true,
+        gameVoidStatus: gameId === null ? null : (row.game_void_status ?? null),
+        gameVoidedAt: gameId === null ? null : (row.game_voided_at ?? null),
     };
 }
 

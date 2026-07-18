@@ -22,7 +22,8 @@ const createDbTables = async (pool) => {
                     'admin_adjustment',
                     'free_token_mercy',
                     'wash_payout',
-                    'abandoned_refund'
+                    'abandoned_refund',
+                    'game_void_reversal'
                 );
             EXCEPTION
                 WHEN duplicate_object THEN null;
@@ -263,9 +264,19 @@ const createDbTables = async (pool) => {
         `);
         await pool.query("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS idempotency_key TEXT");
         await pool.query(`
+            ALTER TABLE transactions
+            ADD COLUMN IF NOT EXISTS reverses_transaction_id INTEGER
+                REFERENCES transactions(transaction_id) ON DELETE CASCADE
+        `);
+        await pool.query(`
             CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_idempotency_key
             ON transactions (idempotency_key)
             WHERE idempotency_key IS NOT NULL
+        `);
+        await pool.query(`
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_one_reversal_per_source
+            ON transactions (reverses_transaction_id)
+            WHERE reverses_transaction_id IS NOT NULL
         `);
         await pool.query(`
             CREATE INDEX IF NOT EXISTS idx_transactions_user_history
@@ -280,6 +291,111 @@ const createDbTables = async (pool) => {
             CREATE INDEX IF NOT EXISTS idx_transactions_mercy_history
             ON transactions (user_id, transaction_time DESC)
             WHERE transaction_type = 'free_token_mercy'
+        `);
+
+        // Player-requested game voids are append-only. The game record keeps
+        // its original outcome, this row records who made the sworn request,
+        // and exact compensating ledger rows point back to every source entry.
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS game_voids (
+                game_id INTEGER PRIMARY KEY
+                    REFERENCES game_history(game_id) ON DELETE RESTRICT,
+                requested_by_user_id INTEGER NOT NULL,
+                requested_by_username VARCHAR(50) NOT NULL,
+                attestation_version VARCHAR(40) NOT NULL,
+                original_outcome TEXT NOT NULL,
+                affected_player_count INTEGER NOT NULL
+                    CHECK (affected_player_count > 0),
+                source_transaction_count INTEGER NOT NULL
+                    CHECK (source_transaction_count > 0),
+                reversal_transaction_count INTEGER NOT NULL
+                    CHECK (reversal_transaction_count > 0),
+                voided_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CHECK (source_transaction_count = reversal_transaction_count)
+            )
+        `);
+        await pool.query(`
+            CREATE OR REPLACE FUNCTION reject_game_void_mutation()
+            RETURNS trigger AS $$
+            BEGIN
+                RAISE EXCEPTION 'Game void records are immutable';
+            END;
+            $$ LANGUAGE plpgsql
+        `);
+        await pool.query('DROP TRIGGER IF EXISTS trg_game_voids_immutable ON game_voids');
+        await pool.query(`
+            CREATE TRIGGER trg_game_voids_immutable
+            BEFORE UPDATE OR DELETE ON game_voids
+            FOR EACH ROW EXECUTE FUNCTION reject_game_void_mutation()
+        `);
+        // The live ledger belongs to an account and is intentionally removed
+        // when that account is pruned. This immutable manifest preserves the
+        // exact source/reversal proof without retaining a user or transaction
+        // foreign key that could block account deletion or cascade away.
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS game_void_ledger_manifest (
+                game_id INTEGER NOT NULL
+                    REFERENCES game_voids(game_id) ON DELETE RESTRICT,
+                source_transaction_id_snapshot INTEGER NOT NULL
+                    CHECK (source_transaction_id_snapshot > 0),
+                source_user_id_snapshot INTEGER NOT NULL
+                    CHECK (source_user_id_snapshot > 0),
+                source_username_snapshot VARCHAR(50) NOT NULL,
+                source_transaction_type VARCHAR(40) NOT NULL
+                    CHECK (source_transaction_type IN (
+                        'buy_in', 'win_payout', 'wash_payout', 'forfeit_payout'
+                    )),
+                source_amount DECIMAL(10, 2) NOT NULL
+                    CHECK (source_amount <> 0),
+                reversal_transaction_id_snapshot INTEGER NOT NULL
+                    CHECK (reversal_transaction_id_snapshot > 0),
+                reversal_amount DECIMAL(10, 2) NOT NULL,
+                reversal_idempotency_key TEXT NOT NULL UNIQUE,
+                PRIMARY KEY (game_id, source_transaction_id_snapshot),
+                UNIQUE (source_transaction_id_snapshot),
+                UNIQUE (reversal_transaction_id_snapshot),
+                CHECK (reversal_amount = -source_amount)
+            )
+        `);
+        // Transaction ids are global in the live ledger, so their immutable
+        // snapshots must also be globally unique. Explicit indexes upgrade a
+        // database that may have created the manifest table on an earlier
+        // deploy before these constraints were added to the table definition.
+        await pool.query(`
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_game_void_manifest_source_snapshot
+            ON game_void_ledger_manifest (source_transaction_id_snapshot)
+        `);
+        await pool.query(`
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_game_void_manifest_reversal_snapshot
+            ON game_void_ledger_manifest (reversal_transaction_id_snapshot)
+        `);
+        await pool.query(`
+            CREATE OR REPLACE FUNCTION reject_late_game_void_manifest_insert()
+            RETURNS trigger AS $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM game_history
+                    WHERE game_id = NEW.game_id
+                      AND reconciliation_status IS NULL
+                ) THEN
+                    RAISE EXCEPTION 'Completed game void manifests cannot be extended';
+                END IF;
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql
+        `);
+        await pool.query('DROP TRIGGER IF EXISTS trg_game_void_manifest_insert_guard ON game_void_ledger_manifest');
+        await pool.query(`
+            CREATE TRIGGER trg_game_void_manifest_insert_guard
+            BEFORE INSERT ON game_void_ledger_manifest
+            FOR EACH ROW EXECUTE FUNCTION reject_late_game_void_manifest_insert()
+        `);
+        await pool.query('DROP TRIGGER IF EXISTS trg_game_void_manifest_immutable ON game_void_ledger_manifest');
+        await pool.query(`
+            CREATE TRIGGER trg_game_void_manifest_immutable
+            BEFORE UPDATE OR DELETE ON game_void_ledger_manifest
+            FOR EACH ROW EXECUTE FUNCTION reject_game_void_mutation()
         `);
 
         // Records the one authoritative opening-wallet baseline for a season.
@@ -514,6 +630,7 @@ const createDbTables = async (pool) => {
         // it can be used. This idempotent upgrade therefore runs after the
         // schema transaction and before recovery can insert refund records.
         await pool.query("ALTER TYPE transaction_type_enum ADD VALUE IF NOT EXISTS 'abandoned_refund'");
+        await pool.query("ALTER TYPE transaction_type_enum ADD VALUE IF NOT EXISTS 'game_void_reversal'");
         console.log("✅ Tables checked/created/altered successfully.");
     } catch (err) {
         if (transactionOpen) await pool.query('ROLLBACK');

@@ -7,12 +7,14 @@ const {
     ACCOUNT_SUMMARY_QUERY,
     BUY_IN_MISMATCHES_QUERY,
     DUPLICATE_ENTRIES_QUERY,
+    GAME_VOID_REVERSAL_ISSUES_QUERY,
     INVALID_AMOUNTS_QUERY,
     MINTED_GAMES_QUERY,
     QUARANTINED_LEGACY_GAMES_QUERY,
     THEME_COST_VALUES_SQL,
     TYPE_TOTALS_QUERY,
     UNPAIRED_PAYOUTS_QUERY,
+    VOIDABLE_GAME_TRANSACTION_TYPES,
     auditTokenAccounting,
     buildThemeCostValuesSql,
     parseLimit,
@@ -48,6 +50,19 @@ function makeAuditPool({ failOn = null } = {}) {
         }]],
         [MINTED_GAMES_QUERY, [{ game_id: 9, net_created: '2.00' }]],
         [DUPLICATE_ENTRIES_QUERY, []],
+        [GAME_VOID_REVERSAL_ISSUES_QUERY, [{
+            reversal_transaction_id: 102,
+            game_id: 21,
+            user_id: 13,
+            username: 'Mcsaddle',
+            source_transaction_id: 88,
+            source_transaction_type: 'win_payout',
+            source_amount: '3.00',
+            reversal_amount: '-2.00',
+            reconciliation_status: 'player_voided',
+            has_game_void: true,
+            issue: 'amount_not_exact_negation',
+        }]],
         [UNPAIRED_PAYOUTS_QUERY, []],
         [INVALID_AMOUNTS_QUERY, []],
         [BUY_IN_MISMATCHES_QUERY, []],
@@ -78,6 +93,7 @@ async function testAuditIsReadOnlyAndScoped() {
     assert.equal(report.abandonedRefunds[0].transaction_id, 81);
     assert.equal(report.quarantinedLegacyGames[0].game_id, 19);
     assert.equal(report.mintedGames[0].game_id, 9);
+    assert.equal(report.gameVoidReversalIssues[0].issue, 'amount_not_exact_negation');
     assert.equal(pool.calls[0].text, 'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
     assert.equal(pool.calls.at(-1).text, 'COMMIT');
     assert.ok(pool.calls.slice(1, -1).every(call => /^\s*SELECT|^\s*WITH/.test(call.text)));
@@ -93,9 +109,55 @@ async function testAuditIsReadOnlyAndScoped() {
         pool.calls.find(call => call.text === MINTED_GAMES_QUERY).params,
         ['Mcsaddle', 25],
     );
+    assert.deepEqual(
+        pool.calls.find(call => call.text === GAME_VOID_REVERSAL_ISSUES_QUERY).params,
+        ['Mcsaddle', 25, VOIDABLE_GAME_TRANSACTION_TYPES],
+    );
     assert.match(MINTED_GAMES_QUERY, /COUNT\(DISTINCT t\.user_id\) FILTER/);
     assert.match(MINTED_GAMES_QUERY, /t\.transaction_type = 'buy_in' AND t\.amount < 0/);
     assert.match(BUY_IN_MISMATCHES_QUERY, /LEFT JOIN theme_costs/);
+    assert.match(DUPLICATE_ENTRIES_QUERY, /transaction_type::text <> 'game_void_reversal'/);
+    assert.match(GAME_VOID_REVERSAL_ISSUES_QUERY, /FROM game_void_ledger_manifest manifest/);
+    assert.match(GAME_VOID_REVERSAL_ISSUES_QUERY, /LEFT JOIN game_voids game_void/);
+    assert.match(
+        GAME_VOID_REVERSAL_ISSUES_QUERY,
+        /live_source\.transaction_id = manifest\.source_transaction_id_snapshot/,
+    );
+    assert.match(
+        GAME_VOID_REVERSAL_ISSUES_QUERY,
+        /ABS\(reversal_amount \+ source_amount\) > 0\.005/,
+    );
+    assert.match(GAME_VOID_REVERSAL_ISSUES_QUERY, /'missing_live_source'/);
+    assert.match(GAME_VOID_REVERSAL_ISSUES_QUERY, /'missing_live_reversal'/);
+    assert.match(GAME_VOID_REVERSAL_ISSUES_QUERY, /'source_manifest_mismatch'/);
+    assert.match(GAME_VOID_REVERSAL_ISSUES_QUERY, /'reversal_manifest_mismatch'/);
+    assert.match(GAME_VOID_REVERSAL_ISSUES_QUERY, /'missing_manifest_source'::text/);
+    assert.match(GAME_VOID_REVERSAL_ISSUES_QUERY, /'missing_manifest_reversal'/);
+    assert.match(GAME_VOID_REVERSAL_ISSUES_QUERY, /'manifest_idempotency_mismatch'/);
+    assert.match(GAME_VOID_REVERSAL_ISSUES_QUERY, /'pruned_live_pair_incomplete'/);
+    assert.match(
+        GAME_VOID_REVERSAL_ISSUES_QUERY,
+        /live_user_id IS NOT NULL AND live_source_transaction_id IS NULL/,
+    );
+    assert.match(
+        GAME_VOID_REVERSAL_ISSUES_QUERY,
+        /live_user_id IS NOT NULL AND live_reversal_transaction_id IS NULL/,
+    );
+    assert.match(
+        GAME_VOID_REVERSAL_ISSUES_QUERY,
+        /live_user_id IS NULL\s+AND \(\(live_source_transaction_id IS NULL\)\s+IS DISTINCT FROM \(live_reversal_transaction_id IS NULL\)\)/,
+    );
+    assert.match(GAME_VOID_REVERSAL_ISSUES_QUERY, /IS DISTINCT FROM 'player_voided'/);
+    assert.match(GAME_VOID_REVERSAL_ISSUES_QUERY, /game_void\.affected_player_count/);
+    assert.match(GAME_VOID_REVERSAL_ISSUES_QUERY, /'marker_count_mismatch'/);
+    assert.match(GAME_VOID_REVERSAL_ISSUES_QUERY, /'manifest_count_mismatch'/);
+    assert.match(GAME_VOID_REVERSAL_ISSUES_QUERY, /'manifest_player_count_mismatch'/);
+    assert.deepEqual(VOIDABLE_GAME_TRANSACTION_TYPES, [
+        'buy_in',
+        'win_payout',
+        'wash_payout',
+        'forfeit_payout',
+    ]);
     assert.match(BUY_IN_MISMATCHES_QUERY, /theme_costs\.expected_cost IS NULL/);
     assert.match(ABANDONED_REFUNDS_QUERY, /to_jsonb\(gh\)->>'recovery_eligible'/);
     assert.match(QUARANTINED_LEGACY_GAMES_QUERY, /gh\.outcome = 'In Progress'/);
@@ -154,6 +216,7 @@ async function testCliContract() {
         quarantinedLegacyGames: [],
         mintedGames: [],
         duplicateEntries: [],
+        gameVoidReversalIssues: [],
         unpairedPayouts: [],
         invalidAmounts: [],
         buyInMismatches: [],
@@ -203,6 +266,16 @@ async function testCliContract() {
             actual_amount: '-1.00',
             expected_amount: null,
         }],
+        gameVoidReversalIssues: [{
+            reversal_transaction_id: 102,
+            game_id: 21,
+            user_id: 13,
+            username: 'Mcsaddle',
+            source_transaction_id: 88,
+            source_amount: '3.00',
+            reversal_amount: '-2.00',
+            issue: 'amount_not_exact_negation',
+        }],
     }, { log: line => reportLines.push(line) });
     const renderedReport = reportLines.join('\n');
     assert.match(renderedReport, /Abandoned-game refunds: 1/);
@@ -212,6 +285,9 @@ async function testCliContract() {
     assert.match(renderedReport, /game #19 fort-creek/);
     assert.match(renderedReport, /funded-tokens=\+1.00/);
     assert.match(renderedReport, /expected=UNKNOWN THEME/);
+    assert.match(renderedReport, /Invalid game-void reversals: 1/);
+    assert.match(renderedReport, /amount_not_exact_negation/);
+    assert.match(renderedReport, /reversal=#102 source=#88/);
 }
 
 async function runTokenAccountingAuditTests() {

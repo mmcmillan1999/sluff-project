@@ -322,6 +322,24 @@ export const getTokenLedger = async ({ limit = 25, cursor = null, category = 'al
     return data;
 };
 
+export const voidLedgerGame = async (gameId) => {
+    const normalizedGameId = Number(gameId);
+    if (!Number.isSafeInteger(normalizedGameId) || normalizedGameId <= 0) {
+        throw new Error('A valid game is required.');
+    }
+
+    const response = await configuredFetch(
+        `/api/auth/token-ledger/games/${normalizedGameId}/void`,
+        'POST',
+        { attestation: 'scouts_honor' },
+    );
+    const data = await readJsonResponse(response);
+    if (!response.ok) {
+        throw new Error(data.message || 'Unable to void this game.');
+    }
+    return data;
+};
+
 // --- First-game tutorial calls ---
 
 const TUTORIAL_ACTIONS = new Set(['start', 'complete', 'skip', 'reset']);

@@ -89,6 +89,17 @@ function printReport(report, output = console) {
         + `${row.duplicate_count} rows totaling ${money(row.total_amount)} `
         + `[${row.transaction_ids.join(', ')}]`
     ));
+    printSection(output, 'Invalid game-void reversals', report.gameVoidReversalIssues || [], row => (
+        `game #${row.game_id ?? 'unknown'}, ${row.username || `user #${row.user_id ?? 'unknown'}`}: `
+        + `${row.issue} reversal=#${row.reversal_transaction_id ?? 'missing'} `
+        + `source=#${row.source_transaction_id ?? 'missing'} `
+        + `source-amount=${row.source_amount === null || row.source_amount === undefined
+            ? 'unknown'
+            : money(row.source_amount)} `
+        + `reversal-amount=${row.reversal_amount === null || row.reversal_amount === undefined
+            ? 'unknown'
+            : money(row.reversal_amount)}`
+    ));
     printSection(output, 'Payouts without a matching buy-in', report.unpairedPayouts, row => (
         `transaction #${row.transaction_id}, game #${row.game_id}, ${row.username}: `
         + `${row.transaction_type} ${money(row.amount)}`

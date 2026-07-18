@@ -48,6 +48,9 @@ function createLedgerPool() {
             game_outcome: 'Game Over! Winner: Safe Player',
             game_started_at: '2026-07-11T12:00:00.000Z',
             game_ended_at: '2026-07-11T12:30:00.000Z',
+            game_can_void: true,
+            game_void_status: null,
+            game_voided_at: null,
         },
         {
             transaction_id: 91,
@@ -172,6 +175,9 @@ async function testAuthenticatedLedgerEndpoint() {
                     gameOutcome: 'Game Over! Winner: Safe Player',
                     gameStartedAt: '2026-07-11T12:00:00.000Z',
                     gameEndedAt: '2026-07-11T12:30:00.000Z',
+                    gameCanVoid: true,
+                    gameVoidStatus: null,
+                    gameVoidedAt: null,
                 },
                 {
                     id: 91,
@@ -187,6 +193,9 @@ async function testAuthenticatedLedgerEndpoint() {
                     gameOutcome: 'Game Over! Winner: Safe Player',
                     gameStartedAt: '2026-07-11T12:00:00.000Z',
                     gameEndedAt: '2026-07-11T12:30:00.000Z',
+                    gameCanVoid: false,
+                    gameVoidStatus: null,
+                    gameVoidedAt: null,
                 },
             ],
             nextCursor: 91,
@@ -267,6 +276,9 @@ function testQueryValidationAndWindowOrder() {
     assert.ok(categoryFilterIndex > fullLedgerConsumerIndex);
     assert.match(LEDGER_PAGE_QUERY, /ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW/);
     assert.match(LEDGER_PAGE_QUERY, /PARTITION BY t\.user_id, t\.game_id/);
+    assert.match(LEDGER_PAGE_QUERY, /ROW_NUMBER\(\) OVER/);
+    assert.match(LEDGER_PAGE_QUERY, /game\.reconciliation_status = 'player_voided'/);
+    assert.match(LEDGER_PAGE_QUERY, /game_season\.status = 'active'/);
 }
 
 async function testLedgerIndexesAreMigrated() {
@@ -290,6 +302,28 @@ async function testLedgerIndexesAreMigrated() {
     assert.ok(queries.some(query => query.includes('idx_transactions_user_history')));
     assert.ok(queries.some(query => query.includes('idx_transactions_game_history')));
     assert.ok(queries.some(query => query.includes('idx_transactions_mercy_history')));
+    const reversalReference = queries.find(query => query.includes('reverses_transaction_id INTEGER'));
+    assert.ok(reversalReference);
+    assert.match(reversalReference, /ON DELETE CASCADE/);
+    assert.ok(queries.some(query => query.includes('idx_transactions_one_reversal_per_source')));
+    assert.ok(queries.some(query => query.includes('CREATE TABLE IF NOT EXISTS game_voids')));
+    assert.ok(queries.some(query => query.includes('trg_game_voids_immutable')));
+    const manifestTable = queries.find(query => (
+        query.includes('CREATE TABLE IF NOT EXISTS game_void_ledger_manifest')
+    ));
+    assert.ok(manifestTable);
+    assert.match(manifestTable, /UNIQUE \(source_transaction_id_snapshot\)/);
+    assert.match(manifestTable, /UNIQUE \(reversal_transaction_id_snapshot\)/);
+    assert.ok(queries.some(query => query.includes('idx_game_void_manifest_source_snapshot')));
+    assert.ok(queries.some(query => query.includes('idx_game_void_manifest_reversal_snapshot')));
+    const manifestInsertGuard = queries.find(query => (
+        query.includes('CREATE OR REPLACE FUNCTION reject_late_game_void_manifest_insert')
+    ));
+    assert.ok(manifestInsertGuard);
+    assert.match(manifestInsertGuard, /reconciliation_status IS NULL/);
+    assert.ok(queries.some(query => query.includes('trg_game_void_manifest_insert_guard')));
+    assert.ok(queries.some(query => query.includes('trg_game_void_manifest_immutable')));
+    assert.ok(queries.some(query => query.includes("ADD VALUE IF NOT EXISTS 'game_void_reversal'")));
 }
 
 async function runTokenLedgerTests() {

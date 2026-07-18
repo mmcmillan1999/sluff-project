@@ -240,6 +240,21 @@ describe('App Component and Game Flow', () => {
         expect(mockSocket.emit).toHaveBeenCalledWith('requestUserSync');
     });
 
+    test('refreshes an affected online player after a game changes their token balance', async () => {
+        const { unmount } = render(<App />);
+        await waitFor(() => expect(socketEventHandlers.tokenBalanceChanged).toEqual(expect.any(Function)));
+        const balanceChangedHandler = socketEventHandlers.tokenBalanceChanged;
+        mockSocket.emit.mockClear();
+
+        act(() => balanceChangedHandler());
+
+        expect(mockSocket.emit).toHaveBeenCalledTimes(1);
+        expect(mockSocket.emit).toHaveBeenCalledWith('requestUserSync');
+
+        unmount();
+        expect(mockSocket.off).toHaveBeenCalledWith('tokenBalanceChanged', balanceChangedHandler);
+    });
+
     test('opens the bulletin from the lobby ticker and returns to Quick Play', async () => {
         const user = userEvent.setup();
         render(<App />);

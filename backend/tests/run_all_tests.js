@@ -17,6 +17,7 @@ const suites = [
     { name: 'Alpha Season 2 wallet reset', file: './alpha2WalletReset.test.js' },
     { name: 'player profiles', file: './playerProfiles.test.js' },
     { name: 'token ledger', file: './tokenLedger.test.js' },
+    { name: 'player-requested game voids', file: './gameVoid.test.js' },
     { name: 'inactive-user maintenance', file: './pruneInactiveUsers.test.js' },
     { name: 'database backup snapshot', file: './backupDatabase.test.js' },
     { name: 'abandoned-game crash recovery', file: './abandonedGameRecovery.test.js' },

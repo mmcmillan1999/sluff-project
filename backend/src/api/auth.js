@@ -13,6 +13,10 @@ const {
     parseLedgerPageOptions,
     readTokenLedgerPage,
 } = require('../data/tokenLedger');
+const {
+    GameVoidError,
+    voidGame,
+} = require('../data/gameVoid');
 
 const PROFILE_COLUMNS = `
     id, username, email, created_at, wins, losses, washes,
@@ -38,6 +42,30 @@ function publicUserProfile(user, tokens) {
         is_vip: user.is_vip === true,
         ...playerProgressFields(user),
     };
+}
+
+function notifyParticipantTokenBalances(io, affectedUserIds) {
+    const participantIds = new Set((affectedUserIds || [])
+        .map(Number)
+        .filter(userId => Number.isSafeInteger(userId) && userId > 0));
+    const connectedSockets = io?.sockets?.sockets;
+    if (participantIds.size === 0 || typeof connectedSockets?.values !== 'function') return;
+
+    for (const socket of connectedSockets.values()) {
+        const userId = Number(socket?.user?.id);
+        if (!participantIds.has(userId)
+            || socket?.user?.is_bot === true
+            || socket?.connected === false
+            || typeof socket?.emit !== 'function') continue;
+        try {
+            socket.emit('tokenBalanceChanged');
+        } catch (error) {
+            // The database commit is already authoritative. One stale socket
+            // must not turn a completed void into an HTTP failure or prompt a
+            // dangerous retry; that client can refresh on its next reconnect.
+            console.error(`[VOID] Failed to notify participant ${userId}:`, error);
+        }
+    }
 }
 
 // Per-IP limits on the abuse-prone auth routes. Registration mints starting
@@ -253,6 +281,29 @@ module.exports = function(pool, bcrypt, jwt, io) {
             }
             console.error('Token-ledger load error:', error);
             return res.status(500).json({ message: 'Unable to load token history.' });
+        }
+    });
+
+    router.post('/token-ledger/games/:gameId/void', checkAuth, async (req, res) => {
+        res.set('Cache-Control', 'private, no-store');
+        try {
+            const result = await voidGame(pool, {
+                gameId: req.params.gameId,
+                requester: req.user,
+                attestation: req.body?.attestation,
+            });
+            const { affectedUserIds, ...requesterSafeResult } = result;
+            notifyParticipantTokenBalances(io, affectedUserIds);
+            return res.json(requesterSafeResult);
+        } catch (error) {
+            if (error instanceof GameVoidError) {
+                return res.status(error.statusCode).json({
+                    message: error.message,
+                    code: error.code,
+                });
+            }
+            console.error('Game-void error:', error);
+            return res.status(500).json({ message: 'Unable to void this game.' });
         }
     });
 

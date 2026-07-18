@@ -1,7 +1,7 @@
 import React from 'react';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { getTokenLedger } from '../services/api';
+import { getTokenLedger, voidLedgerGame } from '../services/api';
 import TokenLedgerView, {
     formatTokenCents,
     isUnexpectedLedgerEntry,
@@ -11,6 +11,7 @@ import TokenLedgerView, {
 
 vi.mock('../services/api', () => ({
     getTokenLedger: vi.fn(),
+    voidLedgerGame: vi.fn(),
 }));
 
 const firstPage = {
@@ -28,6 +29,9 @@ const firstPage = {
             gameNetCents: 20,
             gameTheme: 'Low Stakes',
             gameOutcome: 'Complete',
+            gameCanVoid: true,
+            gameVoidStatus: 'eligible',
+            gameVoidedAt: null,
         },
         {
             id: 32,
@@ -41,6 +45,9 @@ const firstPage = {
             gameNetCents: 20,
             gameTheme: 'Low Stakes',
             gameOutcome: 'Complete',
+            gameCanVoid: true,
+            gameVoidStatus: 'eligible',
+            gameVoidedAt: null,
         },
     ],
     nextCursor: 32,
@@ -50,6 +57,7 @@ const firstPage = {
 beforeEach(() => {
     vi.clearAllMocks();
     getTokenLedger.mockResolvedValue(firstPage);
+    voidLedgerGame.mockResolvedValue({ gameId: 901, voided: true, alreadyVoided: false });
 });
 
 describe('TokenLedgerView formatting', () => {
@@ -66,6 +74,7 @@ describe('TokenLedgerView formatting', () => {
         expect(tokenActivityLabel('forfeit_payout')).toBe('Forfeit payout');
         expect(tokenActivityLabel('free_token_mercy')).toBe('Mercy token');
         expect(tokenActivityLabel('abandoned_refund')).toBe('Abandoned-game refund');
+        expect(tokenActivityLabel('game_void_reversal')).toBe('Voided-game adjustment');
         expect(tokenActivityLabel('admin_adjustment')).toBe('Account adjustment');
         expect(tokenActivityLabel('future_type')).toBe('Token activity');
         expect(isUnexpectedLedgerEntry({ type: 'buy_in', amountCents: -100 })).toBe(false);
@@ -73,6 +82,8 @@ describe('TokenLedgerView formatting', () => {
         expect(isUnexpectedLedgerEntry({ type: 'forfeit_loss', amountCents: 0 })).toBe(true);
         expect(isUnexpectedLedgerEntry({ type: 'free_token_mercy', amountCents: 100 })).toBe(false);
         expect(isUnexpectedLedgerEntry({ type: 'free_token_mercy', amountCents: 700 })).toBe(true);
+        expect(isUnexpectedLedgerEntry({ type: 'game_void_reversal', amountCents: 100 })).toBe(false);
+        expect(isUnexpectedLedgerEntry({ type: 'game_void_reversal', amountCents: -200 })).toBe(false);
     });
 
     test('normalizes legacy decimal fields without leaking NaN into the UI', () => {
@@ -82,12 +93,16 @@ describe('TokenLedgerView formatting', () => {
             amount: '-0.10',
             balance_after: '8.40',
             game_net: '0.20',
+            game_can_void: true,
+            game_void_status: 'eligible',
         })).toEqual(expect.objectContaining({
             id: 7,
             type: 'buy_in',
             amountCents: -10,
             balanceAfterCents: 840,
             gameNetCents: 20,
+            gameCanVoid: true,
+            gameVoidStatus: 'eligible',
         }));
     });
 
@@ -232,5 +247,90 @@ describe('TokenLedgerView', () => {
         await user.click(screen.getByRole('button', { name: 'Refresh token ledger' }));
         expect(await screen.findByText('13.00')).toBeInTheDocument();
         expect(screen.queryByRole('heading', { name: 'Game payout' })).not.toBeInTheDocument();
+    });
+
+    test('offers one per-game action, explains the oath, and supports cancel and Escape', async () => {
+        const user = userEvent.setup();
+        render(<TokenLedgerView onReturnToLobby={vi.fn()} />);
+
+        const voidButtons = await screen.findAllByRole('button', { name: 'Void Game #901' });
+        expect(voidButtons).toHaveLength(1);
+
+        await user.click(voidButtons[0]);
+        let dialog = screen.getByRole('dialog', { name: 'Scout’s honor?' });
+        expect(within(dialog).getByText('I do solemnly swear that Game #901 should not count.')).toBeInTheDocument();
+        expect(within(dialog).getByText(/Every buy-in will be returned, every payout will be taken back/i)).toBeInTheDocument();
+        expect(within(dialog).getByText(/season and lifetime result will be removed for everyone/i)).toBeInTheDocument();
+        expect(within(dialog).getByText(/This cannot be undone/i)).toBeInTheDocument();
+        await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Keep the game' })).toHaveFocus());
+
+        await user.click(within(dialog).getByRole('button', { name: 'Keep the game' }));
+        expect(screen.queryByRole('dialog', { name: 'Scout’s honor?' })).not.toBeInTheDocument();
+        expect(voidLedgerGame).not.toHaveBeenCalled();
+
+        await user.click(screen.getByRole('button', { name: 'Void Game #901' }));
+        dialog = screen.getByRole('dialog', { name: 'Scout’s honor?' });
+        await user.keyboard('{Escape}');
+        expect(dialog).not.toBeInTheDocument();
+        expect(voidLedgerGame).not.toHaveBeenCalled();
+    });
+
+    test('keeps the modal open on an API error and prevents a duplicate submission', async () => {
+        const user = userEvent.setup();
+        let rejectVoid;
+        voidLedgerGame.mockImplementationOnce(() => new Promise((_resolve, reject) => {
+            rejectVoid = reject;
+        }));
+        render(<TokenLedgerView onReturnToLobby={vi.fn()} />);
+
+        await user.click(await screen.findByRole('button', { name: 'Void Game #901' }));
+        const confirmButton = screen.getByRole('button', { name: 'Scout’s honor — void it.' });
+        await user.click(confirmButton);
+
+        expect(confirmButton).toBeDisabled();
+        await user.click(confirmButton);
+        expect(voidLedgerGame).toHaveBeenCalledTimes(1);
+        expect(voidLedgerGame).toHaveBeenCalledWith(901);
+
+        await act(async () => {
+            rejectVoid(new Error('The table record is temporarily locked.'));
+        });
+        expect(await screen.findByRole('alert')).toHaveTextContent('The table record is temporarily locked.');
+        expect(screen.getByRole('dialog', { name: 'Scout’s honor?' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Scout’s honor — void it.' })).toBeEnabled();
+    });
+
+    test('refreshes the first page after success and shows one durable Voided status', async () => {
+        const user = userEvent.setup();
+        const voidedPage = {
+            ...firstPage,
+            currentBalanceCents: 1220,
+            entries: firstPage.entries.map(entry => ({
+                ...entry,
+                gameCanVoid: false,
+                gameVoidStatus: 'voided',
+                gameVoidedAt: '2026-07-11T19:00:00.000Z',
+            })),
+        };
+        getTokenLedger
+            .mockResolvedValueOnce(firstPage)
+            .mockResolvedValueOnce(voidedPage);
+        render(<TokenLedgerView onReturnToLobby={vi.fn()} />);
+
+        await user.click(await screen.findByRole('button', { name: 'Void Game #901' }));
+        await user.click(screen.getByRole('button', { name: 'Scout’s honor — void it.' }));
+
+        await waitFor(() => expect(voidLedgerGame).toHaveBeenCalledWith(901));
+        expect(await screen.findByRole('status')).toHaveTextContent(
+            'Game #901 was voided. Everyone’s tokens and records have been restored.',
+        );
+        await waitFor(() => expect(getTokenLedger).toHaveBeenLastCalledWith({
+            limit: 25,
+            cursor: null,
+            category: 'all',
+        }));
+        expect(screen.getAllByText('Voided')).toHaveLength(1);
+        expect(screen.queryByRole('button', { name: 'Void Game #901' })).not.toBeInTheDocument();
+        expect(screen.getByText('12.20')).toBeInTheDocument();
     });
 });
