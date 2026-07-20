@@ -222,7 +222,7 @@ function calculateRoundScoreDetails(table) {
         bidMultiplier: currentBidMultiplier, playerMode, sittingOutDealerName,
     });
 
-    const insuranceHindsight = calculateInsuranceHindsight(table, pointChanges);
+    const insuranceHindsight = calculateInsuranceHindsight(table, pointChanges, cardPointChanges);
 
     const finalBidderPoints = bidderTotalCardPoints;
     const finalDefenderPoints = 120 - finalBidderPoints;
@@ -345,7 +345,7 @@ async function handleDrawGameOver(table, outcome, transactionFn, statUpdateFn) {
 }
 
 
-function calculateInsuranceHindsight(table, pointChanges) {
+function calculateInsuranceHindsight(table, pointChanges, cardPointChanges) {
     if (table.playerMode !== 3 && table.playerMode !== 4) return null;
 
     const { bidWinnerInfo, insurance, players } = table;
@@ -361,20 +361,11 @@ function calculateInsuranceHindsight(table, pointChanges) {
 
     if (insurance.dealExecuted) {
         // Hindsight is what would have happened if they played it out.
-        // The "actual" points are from the deal, "potential" are from the cards.
+        // The "actual" points are from the deal, "potential" are from the
+        // canonical card-only calculation above. Reusing that result matters
+        // on a failed bid: the bidder also funds the widow/dealer share.
         const actualPointsFromDeal = pointChanges;
-        const potentialPointsFromCards = {};
-        
-        const scoreDifferenceFrom60 = table.bidderCardPoints - 60;
-        const exchangeValue = Math.abs(scoreDifferenceFrom60) * insurance.bidMultiplier;
-        
-        if (scoreDifferenceFrom60 > 0) { // Bidder would have succeeded
-            potentialPointsFromCards[bidWinnerName] = exchangeValue * 2;
-            defenders.forEach(def => potentialPointsFromCards[def] = -exchangeValue);
-        } else { // Bidder would have failed
-            potentialPointsFromCards[bidWinnerName] = -(exchangeValue * 2);
-            defenders.forEach(def => potentialPointsFromCards[def] = exchangeValue);
-        }
+        const potentialPointsFromCards = cardPointChanges || {};
 
         [bidWinnerName, ...defenders].forEach(pName => {
             hindsight[pName] = {

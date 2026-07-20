@@ -140,6 +140,9 @@ function calculateRoundScores(engine) {
         finalBidderPoints: roundData.finalBidderPoints,
         finalDefenderPoints: roundData.finalDefenderPoints,
         pointChanges: roundData.pointChanges,
+        // Preserve the card-only result beside the applied deal so every
+        // client grades Saved/Wasted/Broke even from the same scoring source.
+        cardPointChanges: roundData.cardPointChanges,
         widowPointsValue: roundData.widowPointsValue,
         bidType: roundData.bidType,
         lastCompletedTrick: engine.lastCompletedTrick,

@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import RoundSummaryModal, { computeNoDealRecap } from './RoundSummaryModal';
+import RoundSummaryModal, { computeExecutedDealRecap, computeNoDealRecap } from './RoundSummaryModal';
 
 const baseProps = {
     showModal: true,
@@ -174,6 +174,125 @@ describe('computeNoDealRecap (approved compact grades v2)', () => {
     });
 });
 
+describe('computeExecutedDealRecap', () => {
+    const recapOf = (overrides = {}) => computeExecutedDealRecap({
+        agreement: {
+            bidderPlayerName: 'Alice',
+            bidderRequirement: 20,
+            bidderSettlement: 20,
+            defenderOffers: { Bob: 10, Cara: 10 },
+        },
+        bidderName: 'Alice',
+        defenderNames: ['Bob', 'Cara'],
+        pointChanges: { Alice: 20, Bob: -10, Cara: -10 },
+        cardPointChanges: { Alice: 24, Bob: -12, Cara: -12 },
+        finalBidderPoints: 72,
+        bidMultiplier: 1,
+        ...overrides,
+    });
+
+    test('grades every participant against the card outcome after a winning bid', () => {
+        const recap = recapOf();
+
+        expect(recap.rows.map(row => [
+            row.name,
+            row.dealOutcome,
+            row.cardOutcome,
+            row.verdict.text,
+            row.verdict.cls,
+        ])).toEqual([
+            ['Alice', 20, 24, 'Wasted 4', 'verdict-bad'],
+            ['Bob', -10, -12, 'Saved 2', 'verdict-good'],
+            ['Cara', -10, -12, 'Saved 2', 'verdict-good'],
+        ]);
+    });
+
+    test('includes the full widow/dealer share when a Solo bidder would have failed', () => {
+        const recap = recapOf({
+            agreement: {
+                bidderPlayerName: 'Alice',
+                bidderRequirement: 20,
+                bidderSettlement: 20,
+                defenderOffers: { Bob: 8, Cara: 12 },
+            },
+            pointChanges: { Alice: 20, Bob: -8, Cara: -12, ScoreAbsorber: 20 },
+            cardPointChanges: undefined,
+            insuranceHindsight: undefined,
+            finalBidderPoints: 50,
+            bidMultiplier: 2,
+        });
+
+        expect(recap.rows.map(row => [row.name, row.cardOutcome, row.verdict.text])).toEqual([
+            ['Alice', -60, 'Saved 80'],
+            ['Bob', 20, 'Wasted 28'],
+            ['Cara', 20, 'Wasted 32'],
+        ]);
+    });
+
+    test('uses Broke even for zero in all three rows', () => {
+        const recap = recapOf({
+            pointChanges: { Alice: 20, Bob: -10, Cara: -10 },
+            cardPointChanges: { Alice: 20, Bob: -10, Cara: -10 },
+            finalBidderPoints: 70,
+        });
+
+        expect(recap.rows.map(row => row.verdict)).toEqual([
+            { text: 'Broke even', cls: 'verdict-muted' },
+            { text: 'Broke even', cls: 'verdict-muted' },
+            { text: 'Broke even', cls: 'verdict-muted' },
+        ]);
+    });
+
+    test('preserves negative and mixed deal positions without grading the absorber', () => {
+        const recap = recapOf({
+            agreement: {
+                bidderPlayerName: 'Alice',
+                bidderRequirement: 10,
+                bidderSettlement: 10,
+                defenderOffers: { Bob: -20, Cara: 30 },
+            },
+            pointChanges: { Alice: 10, Bob: 20, Cara: -30, Dave: 0 },
+            cardPointChanges: { Alice: 10, Bob: -5, Cara: -5, Dave: 0 },
+            defenderNames: ['Bob', 'Cara'],
+        });
+
+        expect(recap.rows.map(row => [row.name, row.posText, row.verdict.text])).toEqual([
+            ['Alice', 'Asked 10', 'Broke even'],
+            ['Bob', 'Asked +20', 'Saved 25'],
+            ['Cara', 'Offered 30', 'Wasted 25'],
+        ]);
+    });
+
+    test('shows the locked settlement rather than a lower ask when offers overshoot', () => {
+        const recap = recapOf({
+            agreement: {
+                bidderPlayerName: 'Alice',
+                bidderRequirement: 50,
+                bidderSettlement: 60,
+                defenderOffers: { Bob: 30, Cara: 30 },
+            },
+            pointChanges: { Alice: 60, Bob: -30, Cara: -30 },
+            cardPointChanges: { Alice: 60, Bob: -30, Cara: -30 },
+        });
+
+        expect(recap.settlement).toBe(60);
+        expect(recap.rows.map(row => row.verdict.text)).toEqual([
+            'Broke even',
+            'Broke even',
+            'Broke even',
+        ]);
+    });
+
+    test('fails closed instead of showing a partial or non-numeric comparison', () => {
+        expect(recapOf({
+            pointChanges: { Alice: 20, Bob: -8 },
+            finalBidderPoints: null,
+            cardPointChanges: null,
+            insuranceHindsight: null,
+        })).toBeNull();
+    });
+});
+
 describe('RoundSummaryModal no-deal verdict panel', () => {
     const noDealProps = (overrides = {}) => makeTimedPreviewProps(vi.fn(), {
         scoreStage: 'complete',
@@ -259,6 +378,78 @@ describe('RoundSummaryModal no-deal verdict panel', () => {
         })} />);
 
         expect(screen.queryByText('Widow')).not.toBeInTheDocument();
+    });
+});
+
+describe('RoundSummaryModal executed-deal verdict panel', () => {
+    const tricks = count => Array.from({ length: count }, (_, index) => ({
+        trickNumber: index + 1,
+        cards: [],
+    }));
+    const executedDealProps = (overrides = {}) => makeTimedPreviewProps(vi.fn(), {
+        scoreStage: 'complete',
+        insurance: null,
+        summaryData: {
+            ...makeTimedPreviewSummary(),
+            finalScores: { Alice: 140, Bob: 110, Cara: 110 },
+            pointChanges: { Alice: 20, Bob: -10, Cara: -10 },
+            cardPointChanges: { Alice: 24, Bob: -12, Cara: -12 },
+            insuranceDealWasMade: true,
+            insuranceDetails: {
+                agreement: {
+                    bidderPlayerName: 'Alice',
+                    bidderRequirement: 20,
+                    bidderSettlement: 20,
+                    defenderOffers: { Bob: 10, Cara: 10 },
+                },
+            },
+            allTricks: {
+                Alice: tricks(7),
+                Bob: tricks(2),
+                Cara: tricks(2),
+            },
+        },
+        ...overrides,
+    });
+
+    test('matches the no-deal table format and keeps cards and tricks visible', () => {
+        render(<RoundSummaryModal {...executedDealProps()} />);
+
+        expect(screen.getByText('Insurance · Deal Executed')).toBeInTheDocument();
+        expect(screen.getByText('Deal +20')).toBeInTheDocument();
+        expect(screen.getByText(/card points 72–48 · tricks 7–4/)).toBeInTheDocument();
+        expect(screen.getByText('Trick Point Recap')).toBeInTheDocument();
+        expect(screen.getByText('72 pts')).toBeInTheDocument();
+        expect(screen.getByText('48 pts')).toBeInTheDocument();
+
+        const table = screen.getByRole('table', { name: 'Insurance deal grades' });
+        expect(within(table).getAllByRole('row')).toHaveLength(4);
+        const aliceRow = within(table).getByRole('rowheader', { name: 'Alice' }).closest('tr');
+        const bobRow = within(table).getByRole('rowheader', { name: 'Bob' }).closest('tr');
+        expect(aliceRow).toHaveTextContent('AliceAsked 20Wasted 4');
+        expect(bobRow).toHaveTextContent('BobOffered 10Saved 2');
+        expect(within(table).getAllByText('Saved 2')).toHaveLength(2);
+        expect(screen.queryByText(/by taking deal|required 20/i)).not.toBeInTheDocument();
+    });
+
+    test('keeps the recap safe when only legacy settlement fields are available', () => {
+        render(<RoundSummaryModal {...executedDealProps({
+            summaryData: {
+                ...makeTimedPreviewSummary(),
+                finalScores: { Alice: 140, Bob: 110, Cara: 110 },
+                pointChanges: { Alice: 20, Bob: -10, Cara: -10 },
+                insuranceDealWasMade: true,
+                insuranceDetails: null,
+                cardPointChanges: null,
+            },
+        })} />);
+
+        expect(screen.getByText('Insurance · Deal Executed')).toBeInTheDocument();
+        expect(screen.getByText('Deal executed.')).toBeInTheDocument();
+        expect(screen.getByText(/card points 72–48/)).toBeInTheDocument();
+        expect(screen.queryByRole('table', { name: 'Insurance deal grades' })).not.toBeInTheDocument();
+        expect(screen.getByText('New Total')).toBeInTheDocument();
+        expect(screen.queryByText(/NaN|Infinity/)).not.toBeInTheDocument();
     });
 });
 

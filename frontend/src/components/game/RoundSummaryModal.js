@@ -86,6 +86,143 @@ export const computeNoDealRecap = ({ bidderRequirement, defenderOffers, bidMulti
     return { neverNegotiated, offerSum, gap: ask - offerSum, ask, zone, header, rows };
 };
 
+const finiteNumber = (value) => {
+    if (value === null || value === undefined || value === '') return null;
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) ? numericValue : null;
+};
+
+const roundedRecapValue = (value) => {
+    const rounded = Math.round(value * 100) / 100;
+    return Object.is(rounded, -0) ? 0 : rounded;
+};
+
+// Display-only comparison for an executed insurance deal. Applied scores are
+// compared with the authoritative card-only outcome that would have happened
+// had the players declined the deal.
+export const computeExecutedDealRecap = ({
+    agreement,
+    bidderName,
+    defenderNames,
+    pointChanges,
+    cardPointChanges,
+    insuranceHindsight,
+    finalBidderPoints,
+    bidMultiplier,
+}) => {
+    if (!agreement || typeof agreement !== 'object' || Array.isArray(agreement)) return null;
+
+    const agreementBidder = typeof agreement.bidderPlayerName === 'string'
+        && agreement.bidderPlayerName.trim()
+        ? agreement.bidderPlayerName
+        : bidderName;
+    const offers = agreement.defenderOffers;
+    if (!agreementBidder || !offers || typeof offers !== 'object' || Array.isArray(offers)) return null;
+
+    const offerEntries = Object.entries(offers);
+    if (offerEntries.length !== 2) return null;
+
+    const orderedDefenders = [];
+    for (const name of Array.isArray(defenderNames) ? defenderNames : []) {
+        if (name !== agreementBidder
+            && Object.prototype.hasOwnProperty.call(offers, name)
+            && !orderedDefenders.includes(name)) {
+            orderedDefenders.push(name);
+        }
+    }
+    for (const [name] of offerEntries) {
+        if (name !== agreementBidder && !orderedDefenders.includes(name)) {
+            orderedDefenders.push(name);
+        }
+    }
+    if (orderedDefenders.length !== 2) return null;
+
+    const ask = finiteNumber(agreement.bidderRequirement);
+    const normalizedOffers = {};
+    for (const defenderName of orderedDefenders) {
+        const offer = finiteNumber(offers[defenderName]);
+        if (offer === null) return null;
+        normalizedOffers[defenderName] = offer;
+    }
+    if (ask === null) return null;
+
+    const participants = [agreementBidder, ...orderedDefenders];
+    const dealOutcomes = {};
+    for (const name of participants) {
+        const outcome = finiteNumber(pointChanges?.[name]);
+        if (outcome === null) return null;
+        dealOutcomes[name] = outcome;
+    }
+
+    let cardOutcomes = null;
+    if (participants.every(name => finiteNumber(cardPointChanges?.[name]) !== null)) {
+        cardOutcomes = Object.fromEntries(participants.map(name => [
+            name,
+            finiteNumber(cardPointChanges[name]),
+        ]));
+    } else {
+        // Compatibility for summaries created before cardPointChanges was
+        // carried to the client. Three players are active in both table modes;
+        // a failed bidder also pays the widow or sitting dealer's share.
+        const bidderCardPoints = finiteNumber(finalBidderPoints);
+        const multiplier = finiteNumber(bidMultiplier);
+        if (bidderCardPoints !== null && multiplier !== null && multiplier > 0) {
+            const exchange = Math.abs(bidderCardPoints - 60) * multiplier;
+            cardOutcomes = {};
+            if (bidderCardPoints > 60) {
+                cardOutcomes[agreementBidder] = exchange * 2;
+                orderedDefenders.forEach(name => { cardOutcomes[name] = -exchange; });
+            } else if (bidderCardPoints < 60) {
+                cardOutcomes[agreementBidder] = -(exchange * 3);
+                orderedDefenders.forEach(name => { cardOutcomes[name] = exchange; });
+            } else {
+                participants.forEach(name => { cardOutcomes[name] = 0; });
+            }
+        } else if (participants.every(name => finiteNumber(insuranceHindsight?.[name]?.hindsightValue) !== null)) {
+            cardOutcomes = Object.fromEntries(participants.map(name => [
+                name,
+                dealOutcomes[name] - finiteNumber(insuranceHindsight[name].hindsightValue),
+            ]));
+        }
+    }
+    if (!cardOutcomes) return null;
+
+    const grade = (difference) => {
+        const value = roundedRecapValue(difference);
+        if (value > 0) return { text: `Saved ${value}`, cls: 'verdict-good' };
+        if (value < 0) return { text: `Wasted ${-value}`, cls: 'verdict-bad' };
+        return { text: 'Broke even', cls: 'verdict-muted' };
+    };
+
+    const offerSum = roundedRecapValue(Object.values(normalizedOffers)
+        .reduce((sum, offer) => sum + offer, 0));
+    const recordedSettlement = finiteNumber(agreement.bidderSettlement);
+    const settlement = recordedSettlement === null ? offerSum : recordedSettlement;
+
+    const rows = participants.map((name) => {
+        const isBidder = name === agreementBidder;
+        const stanceValue = isBidder ? ask : normalizedOffers[name];
+        const dealOutcome = roundedRecapValue(dealOutcomes[name]);
+        const cardOutcome = roundedRecapValue(cardOutcomes[name]);
+        return {
+            name,
+            posText: isBidder
+                ? (stanceValue < 0 ? `Offered ${-stanceValue}` : `Asked ${stanceValue}`)
+                : (stanceValue < 0 ? `Asked +${-stanceValue}` : `Offered ${stanceValue}`),
+            dealOutcome,
+            cardOutcome,
+            verdict: grade(dealOutcome - cardOutcome),
+        };
+    });
+
+    return {
+        bidderName: agreementBidder,
+        defenderNames: orderedDefenders,
+        settlement: roundedRecapValue(settlement),
+        rows,
+    };
+};
+
 const RoundSummaryModal = ({
     summaryData,
     showModal,
@@ -228,11 +365,13 @@ const RoundSummaryModal = ({
         finalBidderPoints,
         finalDefenderPoints,
         pointChanges,
+        cardPointChanges,
         widowPointsValue,
         bidType,
         drawOutcome,
         lastCompletedTrick,
         insuranceDealWasMade,
+        insuranceDetails,
         finalScores
     } = summaryData;
 
@@ -315,8 +454,37 @@ const RoundSummaryModal = ({
         );
     }
     
-    const bidderName = bidWinnerInfo?.playerName || 'Bidder';
-    const defenderNames = playerOrderActive?.filter(name => name !== bidderName) || ['Defenders'];
+    const summaryAgreement = insuranceDetails?.agreement
+        && typeof insuranceDetails.agreement === 'object'
+        ? insuranceDetails.agreement
+        : null;
+    const liveExecutedAgreement = insurance?.executedDetails?.agreement
+        && typeof insurance.executedDetails.agreement === 'object'
+        ? insurance.executedDetails.agreement
+        : null;
+    const liveAgreementFallback = insuranceDealWasMade
+        && insurance?.defenderOffers
+        && typeof insurance.defenderOffers === 'object'
+        ? {
+            bidderPlayerName: bidWinnerInfo?.playerName,
+            bidderRequirement: insurance.bidderRequirement,
+            defenderOffers: insurance.defenderOffers,
+        }
+        : null;
+    // The settled summary wins over mutable live controls, especially after a
+    // reconnect or a late table-state broadcast.
+    const executedAgreement = summaryAgreement || liveExecutedAgreement || liveAgreementFallback;
+    const bidderName = executedAgreement?.bidderPlayerName || bidWinnerInfo?.playerName || 'Bidder';
+    const activeDefenderNames = Array.isArray(playerOrderActive)
+        ? playerOrderActive.filter(name => name !== bidderName)
+        : [];
+    const agreementDefenderNames = executedAgreement?.defenderOffers
+        && typeof executedAgreement.defenderOffers === 'object'
+        ? Object.keys(executedAgreement.defenderOffers).filter(name => name !== bidderName)
+        : [];
+    const defenderNames = activeDefenderNames.length > 0
+        ? activeDefenderNames
+        : (agreementDefenderNames.length > 0 ? agreementDefenderNames : ['Defenders']);
 
     const calculateCardPoints = (cards) => {
         if (!cards || cards.length === 0) return 0;
@@ -443,22 +611,11 @@ const RoundSummaryModal = ({
     };
 
     const renderInsuranceRecapPanel = () => {
-        if (!insurance || !insurance.bidMultiplier) {
-            // Settlement presentation must not depend on the live insurance
-            // controls surviving a reconnect or late state refresh. The round
-            // summary is authoritative, so always keep its score count mounted.
-            return insuranceDealWasMade ? (
-                <div className="insurance-recap-panel">
-                    <h4>Insurance Deal Executed</h4>
-                    {renderScoreTotals()}
-                </div>
-            ) : null;
-        }
-        
         // No deal: the compact verdict panel (see computeNoDealRecap / the
-        // Insurance Recap Spec artifact). Deal-executed rendering below is
-        // deliberately untouched.
+        // Insurance Recap Spec artifact).
         if (!insuranceDealWasMade) {
+            if (!insurance || !insurance.bidMultiplier) return null;
+
             const defenderEntries = insurance.defenderOffers
                 && typeof insurance.defenderOffers === 'object'
                 ? Object.entries(insurance.defenderOffers)
@@ -486,7 +643,7 @@ const RoundSummaryModal = ({
             });
 
             return (
-                <div className="insurance-recap-panel insurance-recap-panel--no-deal">
+                <div className="insurance-recap-panel insurance-recap-panel--compact insurance-recap-panel--no-deal">
                     <h4>Insurance · No Deal</h4>
                     {recap.neverNegotiated ? (
                         <p className="insurance-no-negotiation">
@@ -524,30 +681,82 @@ const RoundSummaryModal = ({
             );
         }
 
-        const dealStatusText = "by taking deal";
-        const bidderGainedPoints = pointChanges[bidderName] > 0;
+        const recap = computeExecutedDealRecap({
+            agreement: executedAgreement,
+            bidderName,
+            defenderNames,
+            pointChanges,
+            cardPointChanges,
+            insuranceHindsight,
+            finalBidderPoints,
+            bidMultiplier,
+        });
 
-        const panelClasses = ['insurance-recap-panel'];
+        const recapDefenders = recap?.defenderNames || agreementDefenderNames;
+        const trickParticipants = [recap?.bidderName || bidderName, ...recapDefenders];
+        const hasTrickReference = Boolean(allTricks)
+            && trickParticipants.length === 3
+            && trickParticipants.every(name => Array.isArray(allTricks?.[name]));
+        const bidderTricks = hasTrickReference
+            ? allTricks[trickParticipants[0]].length
+            : null;
+        const defenderTricks = hasTrickReference
+            ? trickParticipants.slice(1).reduce((total, name) => total + allTricks[name].length, 0)
+            : null;
+        const bidderCardPointReference = finiteNumber(finalBidderPoints);
+        const defenderCardPointReference = finiteNumber(finalDefenderPoints);
+        const hasCardPointReference = bidderCardPointReference !== null
+            && defenderCardPointReference !== null;
+        const bidderGainedPoints = Number(pointChanges?.[bidderName]) > 0;
+
+        const panelClasses = [
+            'insurance-recap-panel',
+            'insurance-recap-panel--compact',
+            'insurance-recap-panel--deal',
+        ];
         panelClasses.push(bidderGainedPoints ? 'pulsating-gold' : 'pulsating-blue');
 
         return (
             <div className={panelClasses.join(' ')}>
-                <h4>Insurance Deal Executed</h4>
-                <div className="insurance-narrative">
-                    {Object.entries(insuranceHindsight || {}).map(([pName, data]) => {
-                        const isBidder = pName === bidderName;
-                        const actionText = isBidder ? `required ${insurance.bidderRequirement}` : `offered ${insurance.defenderOffers[pName]}`;
-                        const outcomeValue = data.hindsightValue >= 0 ? data.hindsightValue : Math.abs(data.hindsightValue);
-                        const outcomeWord = data.hindsightValue >= 0 ? "Saved" : "Wasted";
-                        const outcomeClass = data.hindsightValue >= 0 ? "saved-text" : "wasted-text";
-
-                        return (
-                            <p key={pName} className={isBidder ? 'bidder-text' : 'defender-text'}>
-                                <strong>{pName}</strong> {actionText}, <strong className={outcomeClass}>{outcomeWord} {outcomeValue} pts</strong> {dealStatusText}.
-                            </p>
-                        );
-                    })}
-                </div>
+                <h4>Insurance · Deal Executed</h4>
+                {(recap || hasCardPointReference) && (
+                    <p className="insurance-verdict-strip">
+                        <strong>
+                            {recap
+                                ? `Deal ${recap.settlement > 0 ? '+' : ''}${recap.settlement}`
+                                : 'Deal executed.'}
+                        </strong>
+                        {hasCardPointReference && (
+                            <span
+                                className="insurance-verdict-numbers"
+                                aria-label={`Card points ${bidderCardPointReference} to ${defenderCardPointReference}${hasTrickReference ? `; tricks won ${bidderTricks} to ${defenderTricks}` : ''}`}
+                            >
+                                card points {bidderCardPointReference}–{defenderCardPointReference}
+                                {hasTrickReference && ` · tricks ${bidderTricks}–${defenderTricks}`}
+                            </span>
+                        )}
+                    </p>
+                )}
+                {recap && (
+                    <table className="insurance-verdict-table" aria-label="Insurance deal grades">
+                        <thead>
+                            <tr>
+                                <th scope="col">Player</th>
+                                <th scope="col">Stance</th>
+                                <th scope="col">Grade</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {recap.rows.map(row => (
+                                <tr key={row.name}>
+                                    <th scope="row" className="verdict-name" title={row.name}>{row.name}</th>
+                                    <td className="verdict-pos">{row.posText}</td>
+                                    <td className={`verdict-out ${row.verdict.cls}`}>{row.verdict.text}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                )}
                 {renderScoreTotals()}
             </div>
         );

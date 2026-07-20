@@ -139,6 +139,35 @@ function runGameLogicTests() {
     assert.strictEqual(dealCounterfactual.pointChanges['Alice'], 20, 'Deal applied: bidder settlement incorrect.');
     assert.strictEqual(dealCounterfactual.cardPointChanges['Alice'], -60, 'Deal counterfactual: cards would have cost the bidder 60.');
     assert.strictEqual(dealCounterfactual.cardPointChanges['Bob'], 20, 'Deal counterfactual: cards would have paid the defender 20.');
+    assert.strictEqual(dealCounterfactual.insuranceHindsight['Alice'].hindsightValue, 80, 'Deal hindsight: bidder saved the settlement plus the full failed-bid cost.');
+    assert.strictEqual(dealCounterfactual.insuranceHindsight['Bob'].hindsightValue, -28, 'Deal hindsight: first defender compares the deal cost with the card win.');
+    assert.strictEqual(dealCounterfactual.insuranceHindsight['Carol'].hindsightValue, -32, 'Deal hindsight: second defender compares the deal cost with the card win.');
+    for (const playerName of ['Alice', 'Bob', 'Carol']) {
+        assert.strictEqual(
+            dealCounterfactual.insuranceHindsight[playerName].hindsightValue,
+            dealCounterfactual.pointChanges[playerName] - dealCounterfactual.cardPointChanges[playerName],
+            `Deal hindsight for ${playerName} must equal applied deal minus card counterfactual.`
+        );
+    }
+    const fourPlayerDealCounterfactual = gameLogic.calculateRoundScoreDetails({
+        ...mockScoringTable,
+        playerMode: 4,
+        players: {
+            ...mockScoringTable.players,
+            4: { playerName: 'Dave' },
+        },
+        dealer: 4,
+        insurance: {
+            dealExecuted: true,
+            defenderOffers: { Bob: 8, Carol: 12 },
+            executedDetails: { agreement: { bidderPlayerName: 'Alice', bidderRequirement: 20, bidderSettlement: 20, defenderOffers: { Bob: 8, Carol: 12 } } },
+        },
+        bidWinnerInfo: { playerName: 'Alice', bid: 'Solo' },
+        bidderTotalCardPoints: 50,
+    });
+    assert.strictEqual(fourPlayerDealCounterfactual.cardPointChanges['Dave'], 20, '4-player counterfactual: the sitting dealer receives the failed-bid share.');
+    assert.strictEqual(fourPlayerDealCounterfactual.insuranceHindsight['Alice'].hindsightValue, 80, '4-player deal hindsight includes the sitting dealer share in bidder savings.');
+    assert.strictEqual(fourPlayerDealCounterfactual.insuranceHindsight['Dave'], undefined, 'The sitting dealer did not negotiate the deal and is not graded.');
     pass('Under a deal, cardPointChanges reports the card counterfactual.');
 
     console.log('\n  âœ” All gameLogic.js tests passed!');

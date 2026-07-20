@@ -120,13 +120,13 @@
     background-color: #f7f9ff;
 }
 
-.insurance-recap-panel--no-deal {
+.insurance-recap-panel--compact {
     padding: 10px 11px;
     margin-bottom: 10px;
     text-align: left;
 }
 
-.insurance-recap-panel--no-deal h4 {
+.insurance-recap-panel--compact h4 {
     margin: 0 0 6px;
     text-align: center;
 }
@@ -211,11 +211,11 @@
 }
 
 @media (max-width: 480px) {
-    .insurance-recap-panel--no-deal .insurance-verdict-strip {
+    .insurance-recap-panel--compact .insurance-verdict-strip {
         font-size: 0.84rem;
     }
 
-    .insurance-recap-panel--no-deal .insurance-verdict-numbers {
+    .insurance-recap-panel--compact .insurance-verdict-numbers {
         font-size: 0.74rem;
     }
 
@@ -285,6 +285,11 @@
 .insurance-recap-panel .summary-totals-panel {
     margin: 15px -15px -15px -15px;
     border-top: 1px solid #ddd;
+}
+
+.insurance-recap-panel.insurance-recap-panel--compact .summary-totals-panel {
+    margin: 8px -11px -10px;
+    padding: 10px 11px;
 }
 
 .insurance-recap-panel h4 {
