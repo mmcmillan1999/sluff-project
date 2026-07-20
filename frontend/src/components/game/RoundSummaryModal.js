@@ -159,7 +159,6 @@ const RoundSummaryModal = ({
         drawOutcome,
         lastCompletedTrick,
         insuranceDealWasMade,
-        insuranceDetails,
         finalScores
     } = summaryData;
 
@@ -356,22 +355,7 @@ const RoundSummaryModal = ({
     };
 
     const renderInsuranceRecapPanel = () => {
-        // Prefer the summary's negotiation snapshot (survives reconnects and
-        // the next round's insurance reset); fall back to the live insurance
-        // state for servers that predate the snapshot.
-        const liveOffers = insurance?.defenderOffers || {};
-        const details = insuranceDetails?.bidMultiplier ? insuranceDetails : (
-            insurance?.bidMultiplier ? {
-                bidderPlayerName: bidderName,
-                bidderRequirement: insurance.bidderRequirement,
-                defenderOffers: liveOffers,
-                sumOfOffers: Object.values(liveOffers).reduce((sum, offer) => sum + (Number(offer) || 0), 0),
-                neverNegotiated: false,
-                agreement: null,
-            } : null
-        );
-
-        if (!details) {
+        if (!insurance || !insurance.bidMultiplier) {
             // Settlement presentation must not depend on the live insurance
             // controls surviving a reconnect or late state refresh. The round
             // summary is authoritative, so always keep its score count mounted.
@@ -382,82 +366,34 @@ const RoundSummaryModal = ({
                 </div>
             ) : null;
         }
-
-        const recapBidderName = details.bidderPlayerName || bidderName;
-        const gapToDeal = Number.isFinite(details.gapToDeal)
-            ? details.gapToDeal
-            : (Number(details.bidderRequirement) || 0) - (Number(details.sumOfOffers) || 0);
-
-        // A negative offer means the defender was asking to be paid.
-        const offerPhrase = (offer) => (
-            offer >= 0 ? `offered ${offer}` : `asked the bidder for ${Math.abs(offer)}`
-        );
-
-        // Hindsight is "your result minus the alternative": positive means the
-        // path taken was the better one, whichever path that was.
-        const renderVerdict = (hindsightValue, tookDeal) => {
-            if (!hindsightValue) return <strong>broke even</strong>;
-            const cameOutAhead = hindsightValue > 0;
-            const amount = Math.abs(hindsightValue);
-            const text = tookDeal
-                ? (cameOutAhead ? `the deal saved ${amount} pts` : `the deal cost ${amount} pts`)
-                : (cameOutAhead ? `playing it out saved ${amount} pts` : `the deal would have been ${amount} pts better`);
-            return <strong className={cameOutAhead ? 'saved-text' : 'wasted-text'}>{text}</strong>;
-        };
-
-        const renderNarrative = (positionTextFor, tookDeal) => (
-            <div className="insurance-narrative">
-                {Object.entries(insuranceHindsight || {}).map(([pName, data]) => (
-                    <p key={pName} className={pName === recapBidderName ? 'bidder-text' : 'defender-text'}>
-                        <strong>{pName}</strong> {positionTextFor(pName)} — {renderVerdict(data.hindsightValue, tookDeal)}.
-                    </p>
-                ))}
-            </div>
-        );
-
-        if (!insuranceDealWasMade) {
-            return (
-                <div className="insurance-recap-panel">
-                    <h4>Insurance Recap (No Deal)</h4>
-                    {details.neverNegotiated ? (
-                        <p className="insurance-no-negotiation">
-                            Insurance was never seriously negotiated this round.
-                        </p>
-                    ) : (
-                        <>
-                            <p className="insurance-gap-headline">
-                                No deal closed — final ask <strong>{details.bidderRequirement}</strong> vs
-                                offers <strong>{details.sumOfOffers}</strong> (gap <strong>{gapToDeal}</strong>).
-                            </p>
-                            {renderNarrative(
-                                pName => (pName === recapBidderName
-                                    ? `declined offers totaling ${details.sumOfOffers}`
-                                    : offerPhrase(Number(details.defenderOffers?.[pName]) || 0)),
-                                false,
-                            )}
-                        </>
-                    )}
-                </div>
-            );
-        }
-
-        // Deal executed: recap against the terms actually locked in.
-        const agreement = details.agreement;
-        const executedAsk = Number(agreement?.bidderRequirement ?? details.bidderRequirement);
-        const executedOffers = agreement?.defenderOffers || details.defenderOffers || {};
+        
+        const dealStatusText = insuranceDealWasMade ? "by taking deal" : "by not taking deal";
         const bidderGainedPoints = pointChanges[bidderName] > 0;
-        const panelClasses = ['insurance-recap-panel', bidderGainedPoints ? 'pulsating-gold' : 'pulsating-blue'];
+
+        const panelClasses = ['insurance-recap-panel'];
+        if (insuranceDealWasMade) {
+            panelClasses.push(bidderGainedPoints ? 'pulsating-gold' : 'pulsating-blue');
+        }
 
         return (
             <div className={panelClasses.join(' ')}>
-                <h4>Insurance Deal Executed</h4>
-                {renderNarrative(
-                    pName => (pName === recapBidderName
-                        ? `asked ${executedAsk}`
-                        : offerPhrase(Number(executedOffers?.[pName]) || 0)),
-                    true,
-                )}
-                {renderScoreTotals()}
+                <h4>{insuranceDealWasMade ? "Insurance Deal Executed" : "Insurance Recap (No Deal)"}</h4>
+                <div className="insurance-narrative">
+                    {Object.entries(insuranceHindsight || {}).map(([pName, data]) => {
+                        const isBidder = pName === bidderName;
+                        const actionText = isBidder ? `required ${insurance.bidderRequirement}` : `offered ${insurance.defenderOffers[pName]}`;
+                        const outcomeValue = data.hindsightValue >= 0 ? data.hindsightValue : Math.abs(data.hindsightValue);
+                        const outcomeWord = data.hindsightValue >= 0 ? "Saved" : "Wasted";
+                        const outcomeClass = data.hindsightValue >= 0 ? "saved-text" : "wasted-text";
+                        
+                        return (
+                            <p key={pName} className={isBidder ? 'bidder-text' : 'defender-text'}>
+                                <strong>{pName}</strong> {actionText}, <strong className={outcomeClass}>{outcomeWord} {outcomeValue} pts</strong> {dealStatusText}.
+                            </p>
+                        );
+                    })}
+                </div>
+                {insuranceDealWasMade && renderScoreTotals()}
             </div>
         );
     };

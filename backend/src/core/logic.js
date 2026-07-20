@@ -340,22 +340,15 @@ function calculateInsuranceHindsight(table, pointChanges) {
         // The "actual" points are from the deal, "potential" are from the cards.
         const actualPointsFromDeal = pointChanges;
         const potentialPointsFromCards = {};
-
+        
         const scoreDifferenceFrom60 = table.bidderCardPoints - 60;
         const exchangeValue = Math.abs(scoreDifferenceFrom60) * insurance.bidMultiplier;
-
+        
         if (scoreDifferenceFrom60 > 0) { // Bidder would have succeeded
-            potentialPointsFromCards[bidWinnerName] = exchangeValue * defenders.length;
+            potentialPointsFromCards[bidWinnerName] = exchangeValue * 2;
             defenders.forEach(def => potentialPointsFromCards[def] = -exchangeValue);
-        } else if (scoreDifferenceFrom60 === 0) { // Exactly 60: nothing changes hands
-            potentialPointsFromCards[bidWinnerName] = 0;
-            defenders.forEach(def => potentialPointsFromCards[def] = 0);
-        } else {
-            // Bidder would have failed — and a failed bid also pays the
-            // widow/absorber share (placeholder in 3-player, sitting-out
-            // dealer in 4-player), so the bidder's downside is one exchange
-            // unit deeper than the defenders' combined upside.
-            potentialPointsFromCards[bidWinnerName] = -(exchangeValue * (defenders.length + 1));
+        } else { // Bidder would have failed
+            potentialPointsFromCards[bidWinnerName] = -(exchangeValue * 2);
             defenders.forEach(def => potentialPointsFromCards[def] = exchangeValue);
         }
 
@@ -366,23 +359,24 @@ function calculateInsuranceHindsight(table, pointChanges) {
         });
 
     } else {
-        // No deal was struck, so hindsight compares the cards against the
-        // deal that was actually ON THE TABLE when the round ended: each
-        // defender bound by their own final offer, the bidder receiving the
-        // sum of those offers — exactly how deals execute. (The bidder's ask
-        // is context, not money: no deal at those terms ever existed.)
+        // --- THIS IS THE CORRECTED LOGIC ---
+        // Hindsight is what would have happened if they took a forced deal.
+        // The "actual" points are from the cards, "potential" are from a hypothetical deal.
         const actualPointsFromCards = pointChanges;
         const potentialPointsFromDeal = {};
+        const bidderRequirement = insurance.bidderRequirement;
+        
+        // Bidder's potential is what they asked for.
+        potentialPointsFromDeal[bidWinnerName] = bidderRequirement;
 
-        const sumOfOffers = defenders.reduce(
-            (sum, def) => sum + (Number(insurance.defenderOffers?.[def]) || 0),
-            0,
-        );
-        potentialPointsFromDeal[bidWinnerName] = sumOfOffers;
-        defenders.forEach(def => {
-            potentialPointsFromDeal[def] = -(Number(insurance.defenderOffers?.[def]) || 0);
-        });
-
+        // Defenders' potential is the cost of the bidder's ask, split evenly.
+        if (defenders.length > 0) {
+            const costPerDefender = bidderRequirement / defenders.length;
+            defenders.forEach(def => {
+                potentialPointsFromDeal[def] = -costPerDefender;
+            });
+        }
+        
         [bidWinnerName, ...defenders].forEach(pName => {
             hindsight[pName] = {
                 hindsightValue: (actualPointsFromCards[pName] || 0) - (potentialPointsFromDeal[pName] || 0)
