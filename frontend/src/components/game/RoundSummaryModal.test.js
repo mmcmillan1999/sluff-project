@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import RoundSummaryModal from './RoundSummaryModal';
+import RoundSummaryModal, { computeNoDealRecap } from './RoundSummaryModal';
 
 const baseProps = {
     showModal: true,
@@ -91,6 +91,123 @@ describe.each(cases)('RoundSummaryModal $label summary', ({ playerId, forfeit, w
         expect(within(scoreTable).getByRole('cell', { name: '105' })).toBeInTheDocument();
         expect(screen.queryByText('Trick Point Recap')).not.toBeInTheDocument();
         expect(screen.queryByText(/Insurance Recap/)).not.toBeInTheDocument();
+    });
+});
+
+describe('computeNoDealRecap (spec scenarios)', () => {
+    const recapOf = (ask, offers, changes) => computeNoDealRecap({
+        bidderRequirement: ask,
+        defenderOffers: offers,
+        bidMultiplier: 2,
+        pointChanges: changes,
+        bidderName: 'Alice',
+    });
+    const row = (recap, name) => recap.rows.find(r => r.name === name);
+
+    test('scenario 1: win in the gap — bidder saved vs offers, defenders vs their own price', () => {
+        const recap = recapOf(74, { Bob: 10, Cara: 20 }, { Alice: 40, Bob: -20, Cara: -20 });
+        expect(recap.zone).toBe('gap');
+        expect(recap.gap).toBe(44);
+        expect(row(recap, 'Alice')).toMatchObject({ posCls: 'verdict-warn', verdict: { text: 'saved 10' } });
+        expect(row(recap, 'Bob')).toMatchObject({ posText: 'Offered 10', posCls: 'verdict-bad', verdict: { text: 'wasted 10' } });
+        expect(row(recap, 'Cara')).toMatchObject({ posCls: 'verdict-good', verdict: { text: 'broke even' } });
+    });
+
+    test('scenario 2: rich offers — bidder overreached and wasted 15', () => {
+        const recap = recapOf(74, { Bob: 25, Cara: 30 }, { Alice: 40, Bob: -20, Cara: -20 });
+        expect(recap.zone).toBe('overreach');
+        expect(recap.header).toMatch(/Bidder overreached/);
+        expect(row(recap, 'Alice')).toMatchObject({ posCls: 'verdict-bad', verdict: { text: 'wasted 15' } });
+        expect(row(recap, 'Bob').verdict.text).toBe('saved 5');
+        expect(row(recap, 'Cara').verdict.text).toBe('saved 10');
+    });
+
+    test('scenario 3: bidder collapse — wasted vs the declined offers, ×3 ledger', () => {
+        const recap = recapOf(40, { Bob: 10, Cara: 15 }, { Alice: -60, Bob: 20, Cara: 20, ScoreAbsorber: 20 });
+        expect(recap.zone).toBe('overreach');
+        expect(row(recap, 'Alice').verdict.text).toBe('wasted 85');
+        expect(row(recap, 'Bob')).toMatchObject({ posCls: 'verdict-good', verdict: { text: 'saved 30' } });
+    });
+
+    test('scenario 5: cards covered the ask — defenders lowballed and wasted', () => {
+        const recap = recapOf(30, { Bob: 10, Cara: 15 }, { Alice: 80, Bob: -40, Cara: -40 });
+        expect(recap.zone).toBe('lowball');
+        expect(recap.header).toMatch(/Defenders lowballed/);
+        expect(row(recap, 'Alice')).toMatchObject({ posCls: 'verdict-good', verdict: { text: 'saved 55' } });
+        expect(row(recap, 'Bob')).toMatchObject({ posCls: 'verdict-bad', verdict: { text: 'wasted 30' } });
+    });
+
+    test('scenario 6: negative ask — the conceding bidder shows green, demands show red', () => {
+        const recap = recapOf(-20, { Bob: -25, Cara: -20 }, { Alice: -15, Bob: 5, Cara: 5, ScoreAbsorber: 5 });
+        expect(recap.zone).toBe('lowball');
+        expect(row(recap, 'Alice')).toMatchObject({ posText: "Req'd -20", posCls: 'verdict-good', verdict: { text: 'saved 30' } });
+        expect(row(recap, 'Bob')).toMatchObject({ posText: 'Asked +25', posCls: 'verdict-bad', verdict: { text: 'wasted 20' } });
+    });
+
+    test('flags a round where everyone stayed on the defaults', () => {
+        const recap = recapOf(240, { Bob: -120, Cara: -120 }, { Alice: 40, Bob: -20, Cara: -20 });
+        expect(recap.neverNegotiated).toBe(true);
+    });
+});
+
+describe('RoundSummaryModal no-deal verdict panel', () => {
+    const noDealProps = (overrides = {}) => makeTimedPreviewProps(vi.fn(), {
+        scoreStage: 'complete',
+        insurance: { bidMultiplier: 2, bidderRequirement: 74, defenderOffers: { Bob: 10, Cara: 20 } },
+        summaryData: {
+            ...makeTimedPreviewSummary(),
+            pointChanges: { Alice: 40, Bob: -20, Cara: -20 },
+        },
+        ...overrides
+    });
+
+    test('renders the header verdict, positions, and own-anchor outcomes', () => {
+        render(<RoundSummaryModal {...noDealProps()} />);
+
+        expect(screen.getByText('Insurance Recap (No Deal)')).toBeInTheDocument();
+        expect(screen.getByText(/No one blinked/)).toBeInTheDocument();
+        expect(screen.getByText(/ask 74 · offers 30 · gap 44/)).toBeInTheDocument();
+        expect(screen.getByText("Req'd 74")).toHaveClass('verdict-warn');
+        expect(screen.getByText('saved 10')).toHaveClass('verdict-good');
+        expect(screen.getByText('Offered 10')).toHaveClass('verdict-bad');
+        expect(screen.getByText('wasted 10')).toHaveClass('verdict-bad');
+        expect(screen.getByText('broke even')).toHaveClass('verdict-muted');
+    });
+
+    test('suppresses verdicts when insurance was never negotiated', () => {
+        render(<RoundSummaryModal {...noDealProps({
+            insurance: { bidMultiplier: 2, bidderRequirement: 240, defenderOffers: { Bob: -120, Cara: -120 } },
+        })} />);
+
+        expect(screen.getByText('Insurance was never seriously negotiated this round.')).toBeInTheDocument();
+        expect(screen.queryByText(/No one blinked|overreached|lowballed/)).not.toBeInTheDocument();
+    });
+
+    test('shows the widow share as a muted netting row in the totals', () => {
+        render(<RoundSummaryModal {...noDealProps({
+            insurance: { bidMultiplier: 2, bidderRequirement: 40, defenderOffers: { Bob: 10, Cara: 15 } },
+            summaryData: {
+                ...makeTimedPreviewSummary(),
+                pointChanges: { Alice: -60, Bob: 20, Cara: 20, ScoreAbsorber: 20 },
+            },
+        })} />);
+
+        const widowRow = screen.getByText('Widow').closest('tr');
+        expect(widowRow).toHaveClass('widow-share-row');
+        expect(widowRow).toHaveTextContent('+20');
+        expect(widowRow).toHaveTextContent('—');
+        // -60 + 20 + 20 + 20 nets to zero on screen
+    });
+
+    test('keeps the widow row hidden when the share is zero', () => {
+        render(<RoundSummaryModal {...noDealProps({
+            summaryData: {
+                ...makeTimedPreviewSummary(),
+                pointChanges: { Alice: 40, Bob: -20, Cara: -20, ScoreAbsorber: 0 },
+            },
+        })} />);
+
+        expect(screen.queryByText('Widow')).not.toBeInTheDocument();
     });
 });
 
