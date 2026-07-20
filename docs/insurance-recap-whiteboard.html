@@ -1,0 +1,2175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light">
+    <title>Sluff Insurance Recap Whiteboard</title>
+    <style>
+        :root {
+            --ink: #1f2933;
+            --muted: #67717e;
+            --paper: #f7f3e8;
+            --paper-deep: #e8dfca;
+            --navy: #17232d;
+            --navy-soft: #263846;
+            --gold: #d9a936;
+            --gold-deep: #8a6417;
+            --green: #15803d;
+            --green-soft: #eaf6ee;
+            --red: #b91c1c;
+            --red-soft: #fff0f0;
+            --amber: #b45309;
+            --amber-soft: #fff7e8;
+            --blue: #2563eb;
+            --blue-soft: #eef4ff;
+            --line: #ccd2d8;
+            --shadow: 0 18px 50px rgba(16, 24, 32, 0.2);
+            --heading: "Arial Narrow", "Roboto Condensed", Impact, sans-serif;
+            --body: Georgia, "Times New Roman", serif;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+            max-width: 100%;
+            overflow-x: hidden;
+        }
+
+        body {
+            margin: 0;
+            max-width: 100%;
+            overflow-x: hidden;
+            color: var(--ink);
+            background:
+                radial-gradient(circle at 10% 0%, rgba(217, 169, 54, 0.14), transparent 25rem),
+                linear-gradient(180deg, #edf0ec 0, #f7f4eb 24rem, #efe9dc 100%);
+            font-family: var(--body);
+            min-height: 100vh;
+        }
+
+        button,
+        input,
+        select,
+        textarea {
+            font: inherit;
+        }
+
+        button {
+            cursor: pointer;
+        }
+
+        .hero {
+            color: #fff;
+            background:
+                linear-gradient(115deg, rgba(19, 31, 39, 0.98), rgba(36, 56, 68, 0.96)),
+                repeating-linear-gradient(45deg, transparent 0 12px, rgba(255,255,255,0.03) 12px 13px);
+            border-bottom: 4px solid var(--gold);
+            padding: 28px clamp(18px, 5vw, 64px) 24px;
+        }
+
+        .hero-inner {
+            max-width: 1240px;
+            margin: 0 auto;
+        }
+
+        .eyebrow,
+        .formula-badge,
+        .section-kicker,
+        .specimen-label,
+        .fact-label,
+        .scenario-number,
+        .review-choice,
+        .rail-status {
+            font-family: var(--heading);
+            font-weight: 700;
+            letter-spacing: 0.09em;
+            text-transform: uppercase;
+        }
+
+        .eyebrow {
+            color: #f4d581;
+            font-size: 0.76rem;
+        }
+
+        .hero h1 {
+            margin: 7px 0 8px;
+            font: 700 clamp(2rem, 6vw, 4rem)/0.98 var(--heading);
+            letter-spacing: 0.02em;
+        }
+
+        .hero p {
+            max-width: 780px;
+            margin: 0;
+            color: #e2e8ec;
+            line-height: 1.55;
+        }
+
+        .hero-meta {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+            margin-top: 18px;
+        }
+
+        .formula-badge {
+            display: inline-flex;
+            align-items: center;
+            min-height: 30px;
+            padding: 5px 10px;
+            color: #251b06;
+            background: #f4d581;
+            border-radius: 999px;
+            font-size: 0.67rem;
+        }
+
+        .privacy-note {
+            color: #bcc8ce;
+            font-size: 0.78rem;
+        }
+
+        .page {
+            width: min(1320px, calc(100% - 24px));
+            margin: 22px auto 50px;
+        }
+
+        .model-note {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+
+        .model-card {
+            padding: 16px 18px;
+            background: rgba(255,255,255,0.85);
+            border: 1px solid #d7d9d5;
+            border-radius: 14px;
+            box-shadow: 0 8px 24px rgba(35, 42, 44, 0.06);
+        }
+
+        .model-card.current {
+            border-top: 4px solid #6b7280;
+        }
+
+        .model-card.proposed {
+            border-top: 4px solid var(--gold);
+        }
+
+        .model-card h2 {
+            margin: 0 0 6px;
+            font: 700 1.05rem var(--heading);
+            letter-spacing: 0.04em;
+        }
+
+        .model-card p {
+            margin: 0;
+            color: #505a64;
+            font-size: 0.88rem;
+            line-height: 1.48;
+        }
+
+        .workspace {
+            display: grid;
+            grid-template-columns: 260px minmax(0, 1fr);
+            gap: 20px;
+            align-items: start;
+        }
+
+        .scenario-rail {
+            position: sticky;
+            top: 12px;
+            max-height: calc(100vh - 24px);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            color: #fff;
+            background: var(--navy);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+        }
+
+        .rail-head {
+            padding: 16px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .rail-head h2 {
+            margin: 0 0 4px;
+            font: 700 1.15rem var(--heading);
+        }
+
+        .rail-status {
+            color: #aebdc6;
+            font-size: 0.65rem;
+        }
+
+        .scenario-list {
+            margin: 0;
+            padding: 8px;
+            list-style: none;
+            overflow-y: auto;
+        }
+
+        .scenario-button {
+            width: 100%;
+            display: grid;
+            grid-template-columns: 28px minmax(0, 1fr) auto;
+            gap: 8px;
+            align-items: center;
+            min-height: 48px;
+            padding: 8px 9px;
+            color: #dfe7eb;
+            text-align: left;
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 9px;
+        }
+
+        .scenario-button:hover {
+            background: rgba(255,255,255,0.07);
+        }
+
+        .scenario-button.active {
+            color: #fff;
+            background: rgba(217,169,54,0.15);
+            border-color: rgba(244,213,129,0.45);
+        }
+
+        .scenario-number {
+            color: #f4d581;
+            font-size: 0.64rem;
+        }
+
+        .scenario-button-title {
+            overflow-wrap: anywhere;
+            font-size: 0.78rem;
+            line-height: 1.2;
+        }
+
+        .review-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: #596873;
+        }
+
+        .review-dot.current { background: #aab3ba; }
+        .review-dot.proposed { background: #4ade80; }
+        .review-dot.another { background: #fbbf24; }
+
+        .review-stage {
+            min-width: 0;
+        }
+
+        .scenario-heading {
+            position: relative;
+            padding: 20px;
+            background: rgba(255,255,255,0.88);
+            border: 1px solid #d8d8d0;
+            border-radius: 16px;
+            box-shadow: 0 10px 28px rgba(31, 41, 51, 0.08);
+        }
+
+        .scenario-heading-row {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .scenario-heading h2 {
+            margin: 4px 0 6px;
+            font: 700 clamp(1.55rem, 4vw, 2.35rem)/1.05 var(--heading);
+        }
+
+        .scenario-heading p {
+            margin: 0;
+            color: #56616c;
+            line-height: 1.48;
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 7px;
+            flex: 0 0 auto;
+        }
+
+        .icon-button,
+        .small-button,
+        .export-button,
+        .builder-button {
+            min-height: 40px;
+            padding: 8px 12px;
+            color: #26323a;
+            background: #fff;
+            border: 1px solid #aeb6bd;
+            border-radius: 8px;
+            font-family: var(--heading);
+            font-weight: 700;
+        }
+
+        .icon-button {
+            width: 42px;
+            padding: 0;
+            font-size: 1.2rem;
+        }
+
+        .icon-button:hover,
+        .small-button:hover,
+        .export-button:hover,
+        .builder-button:hover {
+            border-color: var(--gold-deep);
+            box-shadow: 0 0 0 2px rgba(217,169,54,0.18);
+        }
+
+        .facts {
+            display: grid;
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .fact {
+            min-width: 0;
+            padding: 9px 10px;
+            background: #f4f1e8;
+            border: 1px solid #ded8c9;
+            border-radius: 9px;
+        }
+
+        .fact-label {
+            display: block;
+            color: #7a6d50;
+            font-size: 0.58rem;
+        }
+
+        .fact-value {
+            display: block;
+            margin-top: 2px;
+            overflow-wrap: anywhere;
+            font-family: var(--heading);
+            font-size: 0.92rem;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .custom-builder {
+            margin-top: 14px;
+            background: #fffaf0;
+            border: 1px solid #dbc98e;
+            border-radius: 12px;
+        }
+
+        .custom-builder summary {
+            padding: 12px 14px;
+            cursor: pointer;
+            font-family: var(--heading);
+            font-weight: 700;
+        }
+
+        .builder-body {
+            padding: 0 14px 14px;
+        }
+
+        .input-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(110px, 1fr));
+            gap: 10px;
+        }
+
+        .input-grid label {
+            color: #4f5961;
+            font-size: 0.76rem;
+        }
+
+        .input-grid input,
+        .input-grid select {
+            width: 100%;
+            min-height: 40px;
+            margin-top: 4px;
+            padding: 7px 8px;
+            color: var(--ink);
+            background: #fff;
+            border: 1px solid #aeb6bd;
+            border-radius: 7px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .builder-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .builder-button.primary {
+            color: #fff;
+            background: var(--navy-soft);
+            border-color: var(--navy);
+        }
+
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(320px, 390px));
+            justify-content: center;
+            gap: 22px;
+            margin-top: 22px;
+        }
+
+        .specimen {
+            width: 100%;
+            min-width: 0;
+        }
+
+        .specimen-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 0 5px 7px;
+            color: #46515a;
+            font-size: 0.72rem;
+        }
+
+        .specimen-label span:last-child {
+            color: #7b858d;
+            font-size: 0.58rem;
+        }
+
+        .phone-frame {
+            width: 100%;
+            max-width: 100%;
+            height: 844px;
+            padding: 8px;
+            background: #111517;
+            border: 1px solid #000;
+            border-radius: 36px;
+            box-shadow:
+                0 22px 45px rgba(17, 24, 29, 0.28),
+                inset 0 0 0 1px rgba(255,255,255,0.1);
+        }
+
+        .phone-stage {
+            position: relative;
+            height: 100%;
+            overflow: hidden;
+            background:
+                radial-gradient(ellipse at 20% 20%, #e7ddca 0 9%, transparent 10%),
+                radial-gradient(ellipse at 78% 70%, #2c211b 0 13%, transparent 14%),
+                radial-gradient(ellipse at 65% 18%, #9e7651 0 12%, transparent 13%),
+                repeating-linear-gradient(135deg, rgba(65,43,28,0.24) 0 16px, rgba(218,196,160,0.2) 16px 32px),
+                #7d5b3c;
+            border-radius: 28px;
+        }
+
+        .phone-notch {
+            position: absolute;
+            z-index: 5;
+            top: 7px;
+            left: 50%;
+            width: 92px;
+            height: 19px;
+            transform: translateX(-50%);
+            background: #111517;
+            border-radius: 999px;
+        }
+
+        .mock-seat {
+            position: absolute;
+            width: 112px;
+            height: 34px;
+            display: grid;
+            place-items: center;
+            color: #3b2e1e;
+            background: linear-gradient(#f5e8c8, #cdb98d);
+            border: 2px solid #7b6338;
+            border-radius: 9px;
+            font: 700 11px var(--heading);
+            box-shadow: 0 3px 7px rgba(0,0,0,0.35);
+        }
+
+        .mock-seat.top { top: 42px; left: 50%; transform: translateX(-50%); }
+        .mock-seat.left { top: 45%; left: -35px; transform: rotate(90deg); }
+        .mock-seat.right { top: 45%; right: -35px; transform: rotate(-90deg); }
+        .mock-seat.bottom { bottom: 34px; left: 50%; transform: translateX(-50%); }
+
+        .mock-overlay {
+            position: absolute;
+            z-index: 3;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 30px 0 16px;
+            background: rgba(0,0,0,0.6);
+        }
+
+        .summary-modal {
+            width: 90%;
+            max-height: 90%;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            color: #343a40;
+            text-align: center;
+            background: #f8f9fa;
+            border-radius: 12px;
+            box-shadow: 0 12px 35px rgba(0,0,0,0.44);
+            font-family: var(--body);
+        }
+
+        .summary-main {
+            min-height: 0;
+            padding: 15px 16px;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+        }
+
+        .summary-main h2 {
+            margin: 0 0 9px;
+            color: #343a40;
+            font: 700 1.55rem var(--heading);
+        }
+
+        .points-section {
+            margin-bottom: 11px;
+            padding: 11px 11px 0;
+            background: #f0f0f0;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+        }
+
+        .points-section h4,
+        .insurance-panel h4 {
+            margin: 0 0 8px;
+            color: #111;
+            font: 700 1rem var(--heading);
+        }
+
+        .point-bar {
+            height: 21px;
+            display: flex;
+            overflow: hidden;
+            border: 1px solid #9aa3aa;
+            border-radius: 999px;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
+        }
+
+        .point-bar-bidder,
+        .point-bar-defenders {
+            display: grid;
+            place-items: center;
+            min-width: 0;
+            color: #fff;
+            font: 700 0.64rem var(--heading);
+            text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+        }
+
+        .point-bar-bidder { background: linear-gradient(90deg, #b78616, #e1b83f); }
+        .point-bar-defenders { background: linear-gradient(90deg, #4174c7, #224c96); }
+
+        .point-formula {
+            margin: 7px 0 9px;
+            color: #59636d;
+            font-size: 0.71rem;
+            line-height: 1.3;
+        }
+
+        .score-table {
+            width: calc(100% + 22px);
+            margin-left: -11px;
+            border-collapse: collapse;
+            background: #e9ecef;
+            font-size: 0.72rem;
+        }
+
+        .score-table th,
+        .score-table td {
+            padding: 5px 7px;
+            text-align: left;
+            border-top: 1px solid #d4d8dc;
+        }
+
+        .score-table th:nth-child(n+2),
+        .score-table td:nth-child(n+2) {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .positive { color: var(--green); font-weight: 700; }
+        .negative { color: var(--red); font-weight: 700; }
+
+        .insurance-panel {
+            padding: 12px;
+            text-align: left;
+            background: #f7f9ff;
+            border: 2px solid #adb5bd;
+            border-radius: 8px;
+        }
+
+        .verdict-strip {
+            margin: 0 0 9px;
+            padding: 7px 9px;
+            background: rgba(185,138,30,0.1);
+            border-left: 3px solid var(--gold);
+            border-radius: 4px;
+            font-size: 0.75rem;
+            line-height: 1.35;
+        }
+
+        .verdict-numbers {
+            display: block;
+            margin-top: 2px;
+            color: #5b6472;
+            font-size: 0.68rem;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .current-rows {
+            display: grid;
+            grid-template-columns: auto auto minmax(0, 1fr);
+            gap: 5px 8px;
+            align-items: baseline;
+            font-size: 0.72rem;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .current-name {
+            overflow-wrap: anywhere;
+            font-weight: 700;
+        }
+
+        .current-position {
+            white-space: nowrap;
+        }
+
+        .current-outcome {
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .good { color: var(--green); font-weight: 700; }
+        .bad { color: var(--red); font-weight: 700; }
+        .warn { color: var(--amber); font-weight: 700; }
+        .muted { color: #6b7280; }
+
+        .proposed-rows {
+            overflow: hidden;
+            background: rgba(255,255,255,0.74);
+            border: 1px solid #dbe0e5;
+            border-radius: 7px;
+        }
+
+        .proposed-row {
+            min-height: 35px;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto auto;
+            gap: 8px;
+            align-items: center;
+            padding: 7px 9px;
+            border-bottom: 1px solid #e1e5e8;
+        }
+
+        .proposed-row:last-child {
+            border-bottom: 0;
+        }
+
+        .proposed-name {
+            overflow-wrap: anywhere;
+            font-size: 0.76rem;
+            font-weight: 700;
+        }
+
+        .proposed-position {
+            color: #69737c;
+            white-space: nowrap;
+            font-size: 0.66rem;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .proposed-result {
+            text-align: right;
+            white-space: nowrap;
+            font-size: 0.74rem;
+            font-weight: 700;
+        }
+
+        .no-negotiation,
+        .invalid-panel {
+            margin: 0;
+            color: #6b7280;
+            text-align: center;
+            font-size: 0.76rem;
+            font-style: italic;
+            line-height: 1.45;
+        }
+
+        .invalid-panel {
+            color: #7c4a03;
+            padding: 10px;
+            background: #fff5d8;
+            border: 1px solid #e5c46a;
+            border-radius: 7px;
+        }
+
+        .summary-details {
+            padding: 8px 10px;
+            background: #dee2e6;
+        }
+
+        .details-button {
+            width: 100%;
+            min-height: 34px;
+            color: #495057;
+            background: transparent;
+            border: 1px solid #6c757d;
+            border-radius: 5px;
+            font: 700 0.72rem var(--heading);
+        }
+
+        .summary-actions {
+            margin-top: auto;
+            padding: 10px;
+            background: #e9ecef;
+            border-top: 1px solid #ced4da;
+        }
+
+        .timed-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 7px;
+        }
+
+        .count-button,
+        .add-button {
+            min-height: 43px;
+            color: #fff;
+            border: 1px solid #263a7e;
+            border-radius: 6px;
+            font: 700 0.76rem var(--heading);
+        }
+
+        .count-button {
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(#5c6bc0, #3f51b5);
+        }
+
+        .count-button::before {
+            content: "";
+            position: absolute;
+            inset: 0 25% 0 0;
+            background: linear-gradient(90deg, rgba(253,224,71,0.5), rgba(251,191,36,0.23));
+        }
+
+        .count-button span {
+            position: relative;
+        }
+
+        .add-button {
+            min-width: 58px;
+            color: #fff8dc;
+            background: linear-gradient(#7c6732, #59461f);
+            border-color: #453616;
+        }
+
+        .math-drawer,
+        .review-card,
+        .matrix-card {
+            margin-top: 20px;
+            background: rgba(255,255,255,0.9);
+            border: 1px solid #d5d6d1;
+            border-radius: 15px;
+            box-shadow: 0 10px 28px rgba(31,41,51,0.07);
+        }
+
+        .math-drawer summary {
+            padding: 15px 18px;
+            cursor: pointer;
+            font-family: var(--heading);
+            font-weight: 700;
+        }
+
+        .math-content {
+            padding: 0 18px 18px;
+            overflow-x: auto;
+        }
+
+        .math-table,
+        .scenario-matrix {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.79rem;
+        }
+
+        .math-table th,
+        .math-table td,
+        .scenario-matrix th,
+        .scenario-matrix td {
+            padding: 8px 9px;
+            text-align: left;
+            vertical-align: top;
+            border-bottom: 1px solid #e1e2df;
+        }
+
+        .math-table th,
+        .scenario-matrix th {
+            color: #5d6670;
+            background: #f1f2ef;
+            font: 700 0.67rem var(--heading);
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .formula {
+            font-family: Consolas, "Courier New", monospace;
+            font-size: 0.76rem;
+            white-space: nowrap;
+        }
+
+        .review-card {
+            padding: 18px;
+        }
+
+        .review-card h2,
+        .matrix-card h2 {
+            margin: 0 0 5px;
+            font: 700 1.45rem var(--heading);
+        }
+
+        .review-intro,
+        .matrix-intro {
+            margin: 0 0 14px;
+            color: #64707a;
+            font-size: 0.84rem;
+            line-height: 1.4;
+        }
+
+        .choice-row {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .choice-button {
+            min-height: 46px;
+            padding: 7px;
+            color: #46515a;
+            background: #f8f8f6;
+            border: 1px solid #b9c0c5;
+            border-radius: 8px;
+        }
+
+        .choice-button[aria-pressed="true"] {
+            color: #fff;
+            background: var(--navy-soft);
+            border-color: var(--navy);
+            box-shadow: 0 0 0 3px rgba(217,169,54,0.26);
+        }
+
+        .review-choice {
+            display: block;
+            font-size: 0.63rem;
+        }
+
+        .choice-help {
+            display: block;
+            margin-top: 2px;
+            font-size: 0.66rem;
+            opacity: 0.78;
+        }
+
+        .review-card label[for="reviewComment"] {
+            display: block;
+            margin: 14px 0 5px;
+            font-family: var(--heading);
+            font-weight: 700;
+        }
+
+        #reviewComment {
+            width: 100%;
+            min-height: 120px;
+            resize: vertical;
+            padding: 11px 12px;
+            color: var(--ink);
+            background: #fff;
+            border: 1px solid #aeb6bd;
+            border-radius: 8px;
+            line-height: 1.45;
+        }
+
+        #reviewComment:focus {
+            outline: 3px solid rgba(217,169,54,0.28);
+            border-color: var(--gold-deep);
+        }
+
+        .review-footer {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .save-status {
+            margin-right: auto;
+            color: #66727b;
+            font-size: 0.75rem;
+        }
+
+        .save-status.warning {
+            color: #9a5605;
+            font-weight: 700;
+        }
+
+        .export-button.primary {
+            color: #fff;
+            background: var(--navy-soft);
+            border-color: var(--navy);
+        }
+
+        .matrix-card {
+            padding: 18px;
+            overflow: hidden;
+        }
+
+        .matrix-scroll {
+            overflow-x: auto;
+        }
+
+        .scenario-link {
+            padding: 0;
+            color: #1f4c77;
+            text-align: left;
+            background: transparent;
+            border: 0;
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
+
+        .matrix-choice {
+            white-space: nowrap;
+            font-family: var(--heading);
+            font-size: 0.68rem;
+            text-transform: uppercase;
+        }
+
+        .matrix-choice.proposed { color: var(--green); }
+        .matrix-choice.current { color: #58636d; }
+        .matrix-choice.another { color: var(--amber); }
+
+        .page-footer {
+            margin: 26px 0 0;
+            color: #707981;
+            text-align: center;
+            font-size: 0.75rem;
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        @media (max-width: 1060px) {
+            .workspace {
+                grid-template-columns: 1fr;
+            }
+
+            .scenario-rail {
+                position: static;
+                max-height: none;
+            }
+
+            .scenario-list {
+                display: flex;
+                gap: 6px;
+                overflow-x: auto;
+            }
+
+            .scenario-list li {
+                flex: 0 0 220px;
+            }
+        }
+
+        @media (max-width: 880px) {
+            .comparison-grid {
+                grid-template-columns: minmax(300px, 390px);
+            }
+
+            .model-note {
+                grid-template-columns: 1fr;
+            }
+
+            .facts {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+
+            .input-grid {
+                grid-template-columns: repeat(2, minmax(120px, 1fr));
+            }
+        }
+
+        @media (max-width: 520px) {
+            .page {
+                width: min(100% - 12px, 1320px);
+                margin-top: 10px;
+            }
+
+            .hero {
+                padding-inline: 16px;
+            }
+
+            .scenario-heading,
+            .review-card,
+            .matrix-card {
+                padding: 14px;
+            }
+
+            .scenario-heading-row {
+                display: block;
+            }
+
+            .nav-buttons {
+                margin-top: 11px;
+            }
+
+            .facts {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .comparison-grid {
+                grid-template-columns: minmax(0, 390px);
+                gap: 17px;
+            }
+
+            .phone-frame { border-radius: 28px; }
+
+            .phone-stage {
+                border-radius: 21px;
+            }
+
+            .choice-row {
+                grid-template-columns: 1fr;
+            }
+
+            .input-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media print {
+            body {
+                background: #fff;
+            }
+
+            .hero,
+            .scenario-rail,
+            .custom-builder,
+            .nav-buttons,
+            .review-footer,
+            .page-footer {
+                display: none !important;
+            }
+
+            .page {
+                width: 100%;
+                margin: 0;
+            }
+
+            .workspace {
+                display: block;
+            }
+
+            .phone-frame {
+                box-shadow: none;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                scroll-behavior: auto !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="hero">
+        <div class="hero-inner">
+            <span class="eyebrow">Sluff scoring workshop</span>
+            <h1>Insurance Recap Whiteboard</h1>
+            <p>
+                Compare today's recap with a shorter player-by-player report built from your
+                first review. This file changes no game rules or scoring.
+            </p>
+            <div class="hero-meta">
+                <span class="formula-badge">Compact player grades v2</span>
+                <span class="privacy-note">Comments stay in this browser. Nothing is uploaded.</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="page">
+        <section class="model-note" aria-label="Model comparison">
+            <article class="model-card current">
+                <h2>Current recap</h2>
+                <p>
+                    The bidder is compared with the combined offers. Each defender is compared
+                    with their own final offer, even when that offer could not have closed a deal.
+                </p>
+            </article>
+            <article class="model-card proposed">
+                <h2>Proposed recap</h2>
+                <p>
+                    Keep the punchy headline. Grade the bidder Saved or Wasted, defenders Lucky
+                    or Greedy, and exact results Perfect bid. No extra explanation in the recap.
+                </p>
+            </article>
+        </section>
+
+        <div class="workspace">
+            <aside class="scenario-rail" aria-label="Scenario navigation">
+                <div class="rail-head">
+                    <h2>Scenarios</h2>
+                    <div class="rail-status" id="railStatus">0 of 0 reviewed</div>
+                </div>
+                <ol class="scenario-list" id="scenarioList"></ol>
+            </aside>
+
+            <div class="review-stage">
+                <section class="scenario-heading" aria-labelledby="scenarioTitle">
+                    <div class="scenario-heading-row">
+                        <div>
+                            <span class="section-kicker" id="scenarioKicker">Scenario</span>
+                            <h2 id="scenarioTitle">Loading scenario...</h2>
+                            <p id="scenarioDescription"></p>
+                        </div>
+                        <div class="nav-buttons" aria-label="Move between scenarios">
+                            <button class="icon-button" id="previousScenario" type="button" aria-label="Previous scenario">&larr;</button>
+                            <button class="icon-button" id="nextScenario" type="button" aria-label="Next scenario">&rarr;</button>
+                        </div>
+                    </div>
+                    <div class="facts" id="scenarioFacts"></div>
+
+                    <details class="custom-builder" id="customBuilder">
+                        <summary>Try your own numbers</summary>
+                        <div class="builder-body">
+                            <div class="input-grid">
+                                <label>
+                                    Bid
+                                    <select id="customMultiplier">
+                                        <option value="1">Frog (x1)</option>
+                                        <option value="2">Solo (x2)</option>
+                                        <option value="3">Heart Solo (x3)</option>
+                                    </select>
+                                </label>
+                                <label>
+                                    Bidder card points
+                                    <input id="customCardPoints" type="number" min="0" max="120" step="1" value="66">
+                                </label>
+                                <label>
+                                    Bidder ask
+                                    <input id="customAsk" type="number" min="-120" max="120" step="1" value="40">
+                                </label>
+                                <label>
+                                    Bob's offer
+                                    <input id="customOfferOne" type="number" min="-60" max="60" step="1" value="-30">
+                                </label>
+                                <label>
+                                    Cara's offer
+                                    <input id="customOfferTwo" type="number" min="-60" max="60" step="1" value="20">
+                                </label>
+                            </div>
+                            <div class="builder-actions">
+                                <button class="builder-button primary" id="previewCustom" type="button">Preview these numbers</button>
+                                <button class="builder-button" id="resetCustom" type="button">Reset example</button>
+                            </div>
+                        </div>
+                    </details>
+                </section>
+
+                <section class="comparison-grid" aria-label="Current and proposed round recaps">
+                    <article class="specimen">
+                        <div class="specimen-label">
+                            <span>Current report</span>
+                            <span>Production logic</span>
+                        </div>
+                        <div id="currentPhone"></div>
+                    </article>
+                    <article class="specimen">
+                        <div class="specimen-label">
+                            <span>Proposed report</span>
+                            <span>Whiteboard logic</span>
+                        </div>
+                        <div id="proposedPhone"></div>
+                    </article>
+                </section>
+
+                <details class="math-drawer">
+                    <summary>Show the math behind this scenario</summary>
+                    <div class="math-content" id="mathContent"></div>
+                </details>
+
+                <section class="review-card" aria-labelledby="reviewTitle">
+                    <h2 id="reviewTitle">Your call on this scenario</h2>
+                    <p class="review-intro">
+                        Pick the version that tells the fairest story, then leave any wording or math changes you want.
+                    </p>
+                    <div class="choice-row" role="group" aria-label="Preferred recap model">
+                        <button class="choice-button" type="button" data-choice="current" aria-pressed="false">
+                            <span class="review-choice">Prefer current</span>
+                            <span class="choice-help">Own-offer comparison</span>
+                        </button>
+                        <button class="choice-button" type="button" data-choice="proposed" aria-pressed="false">
+                            <span class="review-choice">Prefer proposed</span>
+                            <span class="choice-help">Short player grades</span>
+                        </button>
+                        <button class="choice-button" type="button" data-choice="another" aria-pressed="false">
+                            <span class="review-choice">Something else</span>
+                            <span class="choice-help">Describe it below</span>
+                        </button>
+                    </div>
+                    <label for="reviewComment">Comments for this scenario</label>
+                    <textarea id="reviewComment" placeholder="Example: Bob should say Lucky 8."></textarea>
+                    <div class="review-footer">
+                        <span class="save-status" id="saveStatus">Saved locally as you type.</span>
+                        <button class="small-button" id="clearReview" type="button">Clear this review</button>
+                        <button class="export-button" id="copyReview" type="button">Copy review</button>
+                        <button class="export-button primary" id="downloadReview" type="button">Download .md</button>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <section class="matrix-card" aria-labelledby="matrixTitle">
+            <h2 id="matrixTitle">All scenario map</h2>
+            <p class="matrix-intro">
+                Every preset is a legal no-deal state. Select a row to reopen its full phone comparison.
+            </p>
+            <div class="matrix-scroll">
+                <table class="scenario-matrix">
+                    <thead>
+                        <tr>
+                            <th>Scenario</th>
+                            <th>Cards</th>
+                            <th>Ask / offers</th>
+                            <th>Current headline</th>
+                            <th>Proposed grades</th>
+                            <th>Review</th>
+                        </tr>
+                    </thead>
+                    <tbody id="scenarioMatrix"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <p class="page-footer">
+            Standalone design artifact. No network calls, no live game mutations, no accepted-deal scoring changes.
+        </p>
+    </main>
+
+    <script>
+        (function () {
+            "use strict";
+
+            var STORAGE_KEY = "sluff.insuranceRecapWhiteboard.v2";
+            var FORMULA_VERSION = "compact-player-grades-v2";
+            var DEFAULT_CUSTOM = {
+                bidType: "Frog",
+                multiplier: 1,
+                cardPoints: 66,
+                ask: 40,
+                offers: [-30, 20]
+            };
+
+            var scenarios = [
+                {
+                    id: "reported-wasted-42",
+                    title: "Reported: wasted 42 or saved 8?",
+                    description: "A Frog bidder wins by 12 card points. Bob demanded 30 from the bidder while Cara offered 20.",
+                    input: { bidType: "Frog", multiplier: 1, cardPoints: 72, ask: 40, offers: [-30, 20] }
+                },
+                {
+                    id: "backed-ask-near-lock",
+                    title: "Backed ask, one point from a deal",
+                    description: "The cards clear the ask, but the two defenders finish just one combined point short of locking it.",
+                    input: { bidType: "Frog", multiplier: 1, cardPoints: 90, ask: 40, offers: [19, 20] }
+                },
+                {
+                    id: "cards-equal-ask",
+                    title: "Cards exactly match the ask",
+                    description: "The ask was accurate. The offers miss by one, exposing the equality wording at the ask boundary.",
+                    input: { bidType: "Frog", multiplier: 1, cardPoints: 70, ask: 20, offers: [9, 10] }
+                },
+                {
+                    id: "ambitious-but-correct",
+                    title: "Ambitious ask, correct holdout",
+                    description: "The bidder misses the ask but still earns more from the cards than the combined offers.",
+                    input: { bidType: "Frog", multiplier: 1, cardPoints: 80, ask: 60, offers: [10, 20] }
+                },
+                {
+                    id: "winning-overreach",
+                    title: "Winning bidder still overreached",
+                    description: "The bidder wins the cards, but the declined offers would have paid more than the card result.",
+                    input: { bidType: "Frog", multiplier: 1, cardPoints: 72, ask: 40, offers: [10, 20] }
+                },
+                {
+                    id: "bidder-collapse",
+                    title: "Bidder loses after rejecting offers",
+                    description: "The failed bid pays a third share to the widow or sitting dealer, making the bidder's regret much larger.",
+                    input: { bidType: "Frog", multiplier: 1, cardPoints: 50, ask: 40, offers: [10, 20] }
+                },
+                {
+                    id: "exact-sixty",
+                    title: "Exactly 60: no card exchange",
+                    description: "Cards change no scores and exactly match the zero combined offers, while the bidder had asked for 20.",
+                    input: { bidType: "Frog", multiplier: 1, cardPoints: 60, ask: 20, offers: [0, 0] }
+                },
+                {
+                    id: "one-sided-capacity",
+                    title: "Only one defender can close",
+                    description: "The generous defender has already hit a position where closing alone would exceed the legal maximum.",
+                    input: { bidType: "Frog", multiplier: 1, cardPoints: 85, ask: 80, offers: [50, 0] }
+                },
+                {
+                    id: "neither-can-close",
+                    title: "Neither defender can close alone",
+                    description: "An even split would have helped both defenders, but either player would need an illegal 80-point offer.",
+                    input: { bidType: "Frog", multiplier: 1, cardPoints: 120, ask: 100, offers: [20, 20] }
+                },
+                {
+                    id: "maximum-close",
+                    title: "Closing exactly at the legal maximum",
+                    description: "Each defender could close by moving to 60. This verifies that the maximum is actionable, not unavailable.",
+                    input: { bidType: "Frog", multiplier: 1, cardPoints: 90, ask: 80, offers: [20, 20] }
+                },
+                {
+                    id: "negative-ask",
+                    title: "Negative ask and payment demands",
+                    description: "The bidder offered to pay 20, but both defenders asked to receive even more, so no agreement locked.",
+                    input: { bidType: "Frog", multiplier: 1, cardPoints: 55, ask: -20, offers: [-15, -10] }
+                },
+                {
+                    id: "untouched-defaults",
+                    title: "Nobody moved off the defaults",
+                    description: "The opening ask and offers were untouched. Both models should suppress performance judgments.",
+                    input: { bidType: "Frog", multiplier: 1, cardPoints: 72, ask: 120, offers: [-60, -60] }
+                },
+                {
+                    id: "mixed-signs",
+                    title: "Mixed signs at exactly 60",
+                    description: "Bob asks to be paid while Cara offers to pay. The even-share result is identical, but closing power is not.",
+                    input: { bidType: "Frog", multiplier: 1, cardPoints: 60, ask: 20, offers: [-20, 30] }
+                },
+                {
+                    id: "odd-ask",
+                    title: "Odd ask and a half-point benchmark",
+                    description: "An ask of 25 creates a theoretical 12.5-point even share even though submitted offers are integers.",
+                    input: { bidType: "Frog", multiplier: 1, cardPoints: 68, ask: 25, offers: [10, 14] }
+                },
+                {
+                    id: "solo-failure",
+                    title: "Solo failure and the third share",
+                    description: "The same failed-bid geometry at a Solo multiplier confirms that the widow or dealer share remains visible.",
+                    input: { bidType: "Solo", multiplier: 2, cardPoints: 50, ask: 40, offers: [10, 15] }
+                },
+                {
+                    id: "heart-solo-win",
+                    title: "Heart Solo scaling check",
+                    description: "A Heart Solo win scales each card-point margin by three while preserving the same no-deal comparisons.",
+                    input: { bidType: "Heart Solo", multiplier: 3, cardPoints: 68, ask: 60, offers: [20, 30] }
+                },
+                {
+                    id: "custom",
+                    title: "Custom scenario",
+                    description: "Use the controls above to test any legal bid, card result, ask, and pair of defender offers.",
+                    custom: true,
+                    input: copyInput(DEFAULT_CUSTOM)
+                }
+            ];
+
+            var state = loadState();
+            var activeId = state.activeId || "reported-wasted-42";
+            var customInput = state.customInput ? copyInput(state.customInput) : copyInput(DEFAULT_CUSTOM);
+            var latestEvaluation = null;
+
+            var scenarioList = document.getElementById("scenarioList");
+            var scenarioMatrix = document.getElementById("scenarioMatrix");
+            var reviewComment = document.getElementById("reviewComment");
+            var saveStatus = document.getElementById("saveStatus");
+
+            function copyInput(input) {
+                return {
+                    bidType: input.bidType,
+                    multiplier: Number(input.multiplier),
+                    cardPoints: Number(input.cardPoints),
+                    ask: Number(input.ask),
+                    offers: [Number(input.offers[0]), Number(input.offers[1])]
+                };
+            }
+
+            function loadState() {
+                try {
+                    var parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+                    return {
+                        activeId: parsed.activeId,
+                        customInput: parsed.customInput,
+                        reviews: parsed.reviews || {}
+                    };
+                } catch (error) {
+                    return { reviews: {} };
+                }
+            }
+
+            function saveState() {
+                state.activeId = activeId;
+                state.customInput = copyInput(customInput);
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+                } catch (error) {
+                    saveStatus.textContent = "Browser storage is unavailable; export before closing.";
+                    saveStatus.classList.add("warning");
+                }
+            }
+
+            function cleanNumber(value) {
+                var number = Number(value);
+                if (!Number.isFinite(number)) return null;
+                if (Object.is(number, -0)) return 0;
+                return number;
+            }
+
+            function formatNumber(value, signed) {
+                var number = cleanNumber(value);
+                if (number === null) return "unavailable";
+                var rounded = Math.round((number + Number.EPSILON) * 100) / 100;
+                var text = Number.isInteger(rounded) ? String(rounded) : String(rounded).replace(/0+$/, "").replace(/\.$/, "");
+                if (signed && rounded > 0) return "+" + text;
+                return text;
+            }
+
+            function absText(value) {
+                return formatNumber(Math.abs(value), false);
+            }
+
+            function verdict(value) {
+                if (value === 0) return { text: "broke even", cls: "muted" };
+                if (value > 0) return { text: "saved " + formatNumber(value, false), cls: "good" };
+                return { text: "wasted " + formatNumber(Math.abs(value), false), cls: "bad" };
+            }
+
+            function offerPosition(offer) {
+                if (offer > 0) return "Offered " + formatNumber(offer, false);
+                if (offer < 0) return "Asked +" + absText(offer);
+                return "Offered 0";
+            }
+
+            function bidderPosition(ask) {
+                if (ask < 0) return "Offered " + absText(ask);
+                return "Asked " + formatNumber(ask, false);
+            }
+
+            function gradeFromDelta(value, positiveWord, negativeWord, evenWord, formula) {
+                if (value > 0) {
+                    return { text: positiveWord + " " + absText(value), cls: "good", value: value, formula: formula };
+                }
+                if (value < 0) {
+                    return { text: negativeWord + " " + absText(value), cls: "bad", value: value, formula: formula };
+                }
+                return { text: evenWord, cls: "muted", value: 0, formula: formula };
+            }
+
+            function bidderGrade(input, bidderChange, offerSum) {
+                if (bidderChange === 0 && offerSum === 0) {
+                    return {
+                        text: "Nice try",
+                        cls: "muted",
+                        value: 0,
+                        formula: "actual = combined offers = 0"
+                    };
+                }
+
+                if (input.ask < 0 || bidderChange === offerSum) {
+                    return gradeFromDelta(
+                        bidderChange - input.ask,
+                        "Lucky",
+                        "Greedy",
+                        "Perfect bid",
+                        "actual - ask"
+                    );
+                }
+
+                return gradeFromDelta(
+                    bidderChange - offerSum,
+                    "Saved",
+                    "Wasted",
+                    "Perfect bid",
+                    "actual - combined offers"
+                );
+            }
+
+            function defenderGrade(defenderChange, offer) {
+                return gradeFromDelta(
+                    defenderChange + offer,
+                    "Lucky",
+                    "Greedy",
+                    "Perfect bid",
+                    "actual + own offer"
+                );
+            }
+
+            function compactHeadline(bidderChange, offerSum, ask) {
+                if (bidderChange < offerSum) return "Bidder overreached.";
+                if (bidderChange >= ask) return "Defenders lowballed.";
+                if (bidderChange === offerSum) return "Cards matched the offers.";
+                return "No one blinked.";
+            }
+
+            function validateInput(input) {
+                var values = [input.multiplier, input.cardPoints, input.ask, input.offers[0], input.offers[1]];
+                if (!values.every(Number.isFinite) || !values.every(Number.isInteger)) {
+                    return "All scenario inputs must be whole numbers.";
+                }
+                if (![1, 2, 3].includes(input.multiplier)) return "Bid multiplier must be 1, 2, or 3.";
+                if (input.cardPoints < 0 || input.cardPoints > 120) return "Bidder card points must be between 0 and 120.";
+                if (input.ask < -120 * input.multiplier || input.ask > 120 * input.multiplier) {
+                    return "Bidder ask is outside the legal range.";
+                }
+                var offerLimit = 60 * input.multiplier;
+                if (input.offers.some(function (offer) { return offer < -offerLimit || offer > offerLimit; })) {
+                    return "A defender offer is outside the legal range.";
+                }
+                return null;
+            }
+
+            function evaluateScenario(input) {
+                var safe = copyInput(input);
+                var error = validateInput(safe);
+                var margin = safe.cardPoints - 60;
+                var exchange = Math.abs(margin) * safe.multiplier;
+                var bidderChange = margin > 0 ? exchange * 2 : (margin < 0 ? -exchange * 3 : 0);
+                var defenderChange = margin > 0 ? -exchange : (margin < 0 ? exchange : 0);
+                var absorberChange = margin < 0 ? exchange : 0;
+                var offerSum = safe.offers[0] + safe.offers[1];
+                var gap = safe.ask - offerSum;
+                var dealWouldExecute = !error && gap <= 0;
+                var neverNegotiated = safe.ask === 120 * safe.multiplier
+                    && safe.offers.every(function (offer) { return offer === -60 * safe.multiplier; });
+
+                var zone = bidderChange <= offerSum ? "overreach" : (bidderChange >= safe.ask ? "lowball" : "gap");
+                var headers = {
+                    overreach: "Bidder overreached - even the offers beat the cards.",
+                    lowball: "Defenders lowballed - the cards covered the ask.",
+                    gap: "No one blinked - the cards landed in the gap."
+                };
+
+                var currentRows = [
+                    {
+                        name: "Alice",
+                        position: "Req'd " + formatNumber(safe.ask, false),
+                        positionClass: zone === "lowball" ? "good" : (zone === "overreach" ? "bad" : "warn"),
+                        result: verdict(bidderChange - offerSum)
+                    }
+                ];
+
+                ["Bob", "Cara"].forEach(function (name, index) {
+                    var offer = safe.offers[index];
+                    currentRows.push({
+                        name: name,
+                        position: offerPosition(offer),
+                        positionClass: offer >= -defenderChange ? "good" : "bad",
+                        result: verdict(defenderChange + offer)
+                    });
+                });
+
+                var bidderDecision = bidderChange - offerSum;
+                var aliceGrade = bidderGrade(safe, bidderChange, offerSum);
+
+                var defenders = ["Bob", "Cara"].map(function (name, index) {
+                    var offer = safe.offers[index];
+                    return {
+                        name: name,
+                        offer: offer,
+                        position: offerPosition(offer),
+                        grade: defenderGrade(defenderChange, offer)
+                    };
+                });
+
+                var proposedRows = [
+                    {
+                        name: "Alice",
+                        position: bidderPosition(safe.ask),
+                        grade: aliceGrade
+                    }
+                ].concat(defenders);
+
+                return {
+                    input: safe,
+                    error: error,
+                    margin: margin,
+                    exchange: exchange,
+                    bidderChange: bidderChange,
+                    defenderChange: defenderChange,
+                    absorberChange: absorberChange,
+                    offerSum: offerSum,
+                    gap: gap,
+                    dealWouldExecute: dealWouldExecute,
+                    neverNegotiated: neverNegotiated,
+                    zone: zone,
+                    currentHeader: headers[zone],
+                    currentRows: currentRows,
+                    bidderDecision: bidderDecision,
+                    bidderGrade: aliceGrade,
+                    proposedHeader: compactHeadline(bidderChange, offerSum, safe.ask),
+                    proposedRows: proposedRows,
+                    defenders: defenders
+                };
+            }
+
+            function activeScenario() {
+                var found = scenarios.find(function (scenario) { return scenario.id === activeId; }) || scenarios[0];
+                if (found.custom) {
+                    return {
+                        id: found.id,
+                        title: found.title,
+                        description: found.description,
+                        custom: true,
+                        input: copyInput(customInput)
+                    };
+                }
+                return found;
+            }
+
+            function scenarioSignature(input) {
+                return [
+                    input.bidType,
+                    input.multiplier,
+                    input.cardPoints,
+                    input.ask,
+                    input.offers[0],
+                    input.offers[1]
+                ].join("|");
+            }
+
+            function formatResultClass(value) {
+                return value > 0 ? "positive" : (value < 0 ? "negative" : "");
+            }
+
+            function scoreRows(evaluation) {
+                var rows = [
+                    ["Alice", evaluation.bidderChange],
+                    ["Bob", evaluation.defenderChange],
+                    ["Cara", evaluation.defenderChange]
+                ];
+                if (evaluation.absorberChange) rows.push(["Widow / dealer", evaluation.absorberChange]);
+                return rows.map(function (row) {
+                    return "<tr><td>" + row[0] + "</td><td class=\"" + formatResultClass(row[1]) + "\">"
+                        + formatNumber(row[1], true) + "</td><td class=\"muted\">-</td></tr>";
+                }).join("");
+            }
+
+            function pointsSection(evaluation) {
+                var bidderPercent = Math.max(0, Math.min(100, evaluation.input.cardPoints / 120 * 100));
+                var defenderPoints = 120 - evaluation.input.cardPoints;
+                return [
+                    "<section class=\"points-section\">",
+                    "<h4>Trick Point Recap</h4>",
+                    "<div class=\"point-bar\" aria-label=\"Bidder " + evaluation.input.cardPoints + " card points, defenders " + defenderPoints + "\">",
+                    "<div class=\"point-bar-bidder\" style=\"width:" + bidderPercent + "%\">"
+                        + (bidderPercent >= 16 ? evaluation.input.cardPoints : "") + "</div>",
+                    "<div class=\"point-bar-defenders\" style=\"width:" + (100 - bidderPercent) + "%\">"
+                        + ((100 - bidderPercent) >= 16 ? defenderPoints : "") + "</div>",
+                    "</div>",
+                    "<p class=\"point-formula\">Delta 60: " + absText(evaluation.margin) + " pts x "
+                        + evaluation.input.multiplier + " (" + evaluation.input.bidType + ") = "
+                        + formatNumber(evaluation.exchange, false) + " pts per share</p>",
+                    "<table class=\"score-table\"><thead><tr><th>Player</th><th>Round</th><th>New total</th></tr></thead><tbody>",
+                    scoreRows(evaluation),
+                    "</tbody></table>",
+                    "</section>"
+                ].join("");
+            }
+
+            function invalidInsurancePanel(evaluation) {
+                var message = evaluation.error
+                    ? evaluation.error
+                    : "These offers total " + formatNumber(evaluation.offerSum, false)
+                        + " against an ask of " + formatNumber(evaluation.input.ask, false)
+                        + ". The deal would execute, so a no-deal recap is impossible.";
+                return [
+                    "<section class=\"insurance-panel\">",
+                    "<h4>Insurance validation</h4>",
+                    "<p class=\"invalid-panel\">" + message + "</p>",
+                    "</section>"
+                ].join("");
+            }
+
+            function currentInsurancePanel(evaluation) {
+                if (evaluation.error || evaluation.dealWouldExecute) return invalidInsurancePanel(evaluation);
+                if (evaluation.neverNegotiated) {
+                    return [
+                        "<section class=\"insurance-panel\">",
+                        "<h4>Insurance Recap (No Deal)</h4>",
+                        "<p class=\"no-negotiation\">Insurance was never seriously negotiated this round.</p>",
+                        "</section>"
+                    ].join("");
+                }
+                var rows = evaluation.currentRows.map(function (row) {
+                    return [
+                        "<span class=\"current-name\">" + row.name + "</span>",
+                        "<span class=\"current-position " + row.positionClass + "\">" + row.position + "</span>",
+                        "<span class=\"current-outcome " + row.result.cls + "\">" + row.result.text + "</span>"
+                    ].join("");
+                }).join("");
+                return [
+                    "<section class=\"insurance-panel\">",
+                    "<h4>Insurance Recap (No Deal)</h4>",
+                    "<p class=\"verdict-strip\"><strong>" + evaluation.currentHeader + "</strong>",
+                    "<span class=\"verdict-numbers\">ask " + formatNumber(evaluation.input.ask, false)
+                        + " &middot; offers " + formatNumber(evaluation.offerSum, false)
+                        + " &middot; gap " + formatNumber(evaluation.gap, false) + "</span></p>",
+                    "<div class=\"current-rows\">", rows, "</div>",
+                    "</section>"
+                ].join("");
+            }
+
+            function proposedInsurancePanel(evaluation) {
+                if (evaluation.error || evaluation.dealWouldExecute) return invalidInsurancePanel(evaluation);
+                if (evaluation.neverNegotiated) {
+                    return [
+                        "<section class=\"insurance-panel\">",
+                        "<h4>Insurance &middot; No Deal</h4>",
+                        "<p class=\"no-negotiation\">No grade this round.</p>",
+                        "</section>"
+                    ].join("");
+                }
+
+                var rows = evaluation.proposedRows.map(function (row) {
+                    return [
+                        "<div class=\"proposed-row\">",
+                        "<span class=\"proposed-name\">" + row.name + "</span>",
+                        "<span class=\"proposed-position\">" + row.position + "</span>",
+                        "<span class=\"proposed-result " + row.grade.cls + "\">" + row.grade.text + "</span>",
+                        "</div>"
+                    ].join("");
+                }).join("");
+
+                return [
+                    "<section class=\"insurance-panel\">",
+                    "<h4>Insurance &middot; No Deal</h4>",
+                    "<p class=\"verdict-strip\"><strong>" + evaluation.proposedHeader + "</strong>",
+                    "<span class=\"verdict-numbers\">ask " + formatNumber(evaluation.input.ask, false)
+                        + " &middot; offers " + formatNumber(evaluation.offerSum, false)
+                        + " &middot; gap " + formatNumber(evaluation.gap, false) + "</span></p>",
+                    "<div class=\"proposed-rows\">", rows, "</div>",
+                    "</section>"
+                ].join("");
+            }
+
+            function phoneMarkup(mode, evaluation) {
+                var insurancePanel = mode === "current"
+                    ? currentInsurancePanel(evaluation)
+                    : proposedInsurancePanel(evaluation);
+                var actionLabel = evaluation.bidderChange >= 0 ? "Collect Points" : "Hand Over Points";
+                return [
+                    "<div class=\"phone-frame\">",
+                    "<div class=\"phone-stage\">",
+                    "<div class=\"phone-notch\" aria-hidden=\"true\"></div>",
+                    "<div class=\"mock-seat top\">Cara</div>",
+                    "<div class=\"mock-seat left\">Bob</div>",
+                    "<div class=\"mock-seat right\">Widow</div>",
+                    "<div class=\"mock-seat bottom\">Alice</div>",
+                    "<div class=\"mock-overlay\">",
+                    "<article class=\"summary-modal\" aria-label=\"" + (mode === "current" ? "Current" : "Proposed") + " round recap\">",
+                    "<div class=\"summary-main\"><h2>Round Recap</h2>",
+                    pointsSection(evaluation),
+                    insurancePanel,
+                    "</div>",
+                    "<div class=\"summary-details\"><button class=\"details-button\" type=\"button\" tabindex=\"-1\">Show Trick Breakdown</button></div>",
+                    "<div class=\"summary-actions\"><div class=\"timed-row\">",
+                    "<button class=\"count-button\" type=\"button\" tabindex=\"-1\"><span>" + actionLabel + " &middot; 10s</span></button>",
+                    "<button class=\"add-button\" type=\"button\" tabindex=\"-1\">+10s</button>",
+                    "</div></div>",
+                    "</article>",
+                    "</div></div></div>"
+                ].join("");
+            }
+
+            function renderFacts(evaluation) {
+                var facts = [
+                    ["Bid", evaluation.input.bidType + " x" + evaluation.input.multiplier],
+                    ["Cards", "Alice " + evaluation.input.cardPoints + " / defenders " + (120 - evaluation.input.cardPoints)],
+                    ["Ask", formatNumber(evaluation.input.ask, false)],
+                    ["Offers", formatNumber(evaluation.input.offers[0], false) + " / " + formatNumber(evaluation.input.offers[1], false)],
+                    ["Gap", formatNumber(evaluation.gap, false)],
+                    ["Actual changes", formatNumber(evaluation.bidderChange, true) + " / " + formatNumber(evaluation.defenderChange, true)]
+                ];
+                document.getElementById("scenarioFacts").innerHTML = facts.map(function (fact) {
+                    return "<div class=\"fact\"><span class=\"fact-label\">" + fact[0]
+                        + "</span><span class=\"fact-value\">" + fact[1] + "</span></div>";
+                }).join("");
+            }
+
+            function renderMath(evaluation) {
+                var rows = [
+                    ["Card margin", "P - 60", formatNumber(evaluation.margin, true)],
+                    ["Per-share exchange", "|P - 60| x M", formatNumber(evaluation.exchange, false)],
+                    ["Actual bidder change", evaluation.margin < 0 ? "-3 x exchange" : (evaluation.margin > 0 ? "+2 x exchange" : "0"), formatNumber(evaluation.bidderChange, true)],
+                    ["Actual defender change", evaluation.margin < 0 ? "+exchange" : (evaluation.margin > 0 ? "-exchange" : "0"), formatNumber(evaluation.defenderChange, true)],
+                    ["Combined offers", "o1 + o2", formatNumber(evaluation.offerSum, false)],
+                    ["Gap to deal", "ask - combined offers", formatNumber(evaluation.gap, false)],
+                    ["Alice proposed grade", evaluation.bidderGrade.formula,
+                        evaluation.bidderGrade.text + " (" + formatNumber(evaluation.bidderGrade.value, true) + ")"]
+                ];
+                evaluation.defenders.forEach(function (defender) {
+                    rows.push([
+                        defender.name + " proposed grade",
+                        defender.grade.formula,
+                        defender.grade.text + " (" + formatNumber(defender.grade.value, true) + ")"
+                    ]);
+                });
+
+                document.getElementById("mathContent").innerHTML = [
+                    "<table class=\"math-table\"><thead><tr><th>Measure</th><th>Formula</th><th>Result</th></tr></thead><tbody>",
+                    rows.map(function (row) {
+                        return "<tr><td>" + row[0] + "</td><td class=\"formula\">" + row[1]
+                            + "</td><td class=\"formula\">" + row[2] + "</td></tr>";
+                    }).join(""),
+                    "</tbody></table>"
+                ].join("");
+            }
+
+            function currentSummary(evaluation) {
+                if (evaluation.error) return "Invalid input";
+                if (evaluation.dealWouldExecute) return "Deal would execute";
+                if (evaluation.neverNegotiated) return "Suppressed defaults";
+                return evaluation.currentHeader;
+            }
+
+            function proposedSummary(evaluation) {
+                if (evaluation.error) return "Invalid input";
+                if (evaluation.dealWouldExecute) return "Deal would execute";
+                if (evaluation.neverNegotiated) return "No grade";
+                return evaluation.proposedRows.map(function (row) {
+                    return row.name + " " + row.grade.text;
+                }).join(" · ");
+            }
+
+            function reviewFor(id) {
+                state.reviews = state.reviews || {};
+                return state.reviews[id] || { choice: "", comment: "", signature: "" };
+            }
+
+            function renderNavigation() {
+                var reviewed = scenarios.filter(function (scenario) {
+                    var review = reviewFor(scenario.id);
+                    return Boolean(review.choice || review.comment);
+                }).length;
+                document.getElementById("railStatus").textContent = reviewed + " of " + scenarios.length + " reviewed";
+                scenarioList.innerHTML = scenarios.map(function (scenario, index) {
+                    var review = reviewFor(scenario.id);
+                    var dotClass = review.choice ? " " + review.choice : "";
+                    return [
+                        "<li><button class=\"scenario-button" + (scenario.id === activeId ? " active" : "") + "\"",
+                        " type=\"button\" data-scenario-id=\"" + scenario.id + "\">",
+                        "<span class=\"scenario-number\">" + String(index + 1).padStart(2, "0") + "</span>",
+                        "<span class=\"scenario-button-title\">" + scenario.title + "</span>",
+                        "<span class=\"review-dot" + dotClass + "\" aria-hidden=\"true\"></span>",
+                        "</button></li>"
+                    ].join("");
+                }).join("");
+            }
+
+            function renderMatrix() {
+                scenarioMatrix.innerHTML = scenarios.map(function (scenario) {
+                    var input = scenario.custom ? customInput : scenario.input;
+                    var evaluation = evaluateScenario(input);
+                    var review = reviewFor(scenario.id);
+                    var choice = review.choice || "not reviewed";
+                    return [
+                        "<tr>",
+                        "<td><button class=\"scenario-link\" type=\"button\" data-scenario-id=\"" + scenario.id + "\">"
+                            + scenario.title + "</button></td>",
+                        "<td>" + input.bidType + " " + input.cardPoints + "</td>",
+                        "<td>" + formatNumber(input.ask, false) + " / "
+                            + formatNumber(input.offers[0], false) + ", " + formatNumber(input.offers[1], false) + "</td>",
+                        "<td>" + currentSummary(evaluation) + "</td>",
+                        "<td>" + proposedSummary(evaluation) + "</td>",
+                        "<td><span class=\"matrix-choice " + review.choice + "\">" + choice + "</span></td>",
+                        "</tr>"
+                    ].join("");
+                }).join("");
+            }
+
+            function renderReview(scenario, evaluation) {
+                var review = reviewFor(scenario.id);
+                reviewComment.value = review.comment || "";
+                document.querySelectorAll(".choice-button").forEach(function (button) {
+                    button.setAttribute("aria-pressed", String(button.getAttribute("data-choice") === review.choice));
+                });
+                var currentSignature = scenarioSignature(evaluation.input);
+                if (review.signature && review.signature !== currentSignature) {
+                    saveStatus.textContent = "The numbers changed after this note was saved. Review it again.";
+                    saveStatus.classList.add("warning");
+                } else {
+                    saveStatus.textContent = "Saved locally as you type.";
+                    saveStatus.classList.remove("warning");
+                }
+            }
+
+            function renderBuilderValues() {
+                document.getElementById("customMultiplier").value = String(customInput.multiplier);
+                document.getElementById("customCardPoints").value = String(customInput.cardPoints);
+                document.getElementById("customAsk").value = String(customInput.ask);
+                document.getElementById("customOfferOne").value = String(customInput.offers[0]);
+                document.getElementById("customOfferTwo").value = String(customInput.offers[1]);
+                updateBuilderLimits();
+            }
+
+            function updateBuilderLimits() {
+                var multiplier = Number(document.getElementById("customMultiplier").value) || 1;
+                var askLimit = 120 * multiplier;
+                var offerLimit = 60 * multiplier;
+                var askInput = document.getElementById("customAsk");
+                askInput.min = String(-askLimit);
+                askInput.max = String(askLimit);
+                ["customOfferOne", "customOfferTwo"].forEach(function (id) {
+                    var input = document.getElementById(id);
+                    input.min = String(-offerLimit);
+                    input.max = String(offerLimit);
+                });
+            }
+
+            function render() {
+                var scenario = activeScenario();
+                var evaluation = evaluateScenario(scenario.input);
+                latestEvaluation = evaluation;
+
+                document.getElementById("scenarioKicker").textContent = scenario.custom
+                    ? "Custom calculator"
+                    : "Scenario " + (scenarios.findIndex(function (item) { return item.id === scenario.id; }) + 1)
+                        + " of " + scenarios.length;
+                document.getElementById("scenarioTitle").textContent = scenario.title;
+                document.getElementById("scenarioDescription").textContent = scenario.description;
+                renderFacts(evaluation);
+                document.getElementById("currentPhone").innerHTML = phoneMarkup("current", evaluation);
+                document.getElementById("proposedPhone").innerHTML = phoneMarkup("proposed", evaluation);
+                renderMath(evaluation);
+                renderNavigation();
+                renderMatrix();
+                renderReview(scenario, evaluation);
+                renderBuilderValues();
+                if (scenario.custom) document.getElementById("customBuilder").open = true;
+                saveState();
+            }
+
+            function setActive(id) {
+                if (!scenarios.some(function (scenario) { return scenario.id === id; })) return;
+                activeId = id;
+                render();
+                document.querySelector(".scenario-heading").scrollIntoView({ behavior: "smooth", block: "start" });
+            }
+
+            function moveScenario(direction) {
+                var index = scenarios.findIndex(function (scenario) { return scenario.id === activeId; });
+                var next = (index + direction + scenarios.length) % scenarios.length;
+                setActive(scenarios[next].id);
+            }
+
+            function saveCurrentReview(partial) {
+                var scenario = activeScenario();
+                var review = reviewFor(scenario.id);
+                state.reviews[scenario.id] = {
+                    choice: partial.choice !== undefined ? partial.choice : review.choice,
+                    comment: partial.comment !== undefined ? partial.comment : review.comment,
+                    signature: scenarioSignature(latestEvaluation.input),
+                    updatedAt: new Date().toISOString()
+                };
+                saveState();
+                renderNavigation();
+                renderMatrix();
+                renderReview(scenario, latestEvaluation);
+            }
+
+            function preferenceLabel(choice) {
+                return {
+                    current: "Prefer current",
+                    proposed: "Prefer proposed",
+                    another: "Something else"
+                }[choice] || "Not selected";
+            }
+
+            function exportMarkdown() {
+                var lines = [
+                    "# Sluff Insurance Recap Review",
+                    "",
+                    "- Formula version: " + FORMULA_VERSION,
+                    "- Exported: " + new Date().toISOString(),
+                    "- Reviews remain advisory; no game scoring was changed by the whiteboard.",
+                    ""
+                ];
+
+                scenarios.forEach(function (scenario, index) {
+                    var review = reviewFor(scenario.id);
+                    if (!review.choice && !review.comment) return;
+                    var input = scenario.custom ? customInput : scenario.input;
+                    var evaluation = evaluateScenario(input);
+                    lines.push("## " + String(index + 1).padStart(2, "0") + ". " + scenario.title);
+                    lines.push("");
+                    lines.push("- Preference: " + preferenceLabel(review.choice));
+                    lines.push("- Input: " + input.bidType + " x" + input.multiplier
+                        + "; card points " + input.cardPoints
+                        + "; ask " + input.ask
+                        + "; offers " + input.offers.join(" / "));
+                    lines.push("- Actual changes: bidder " + formatNumber(evaluation.bidderChange, true)
+                        + "; each defender " + formatNumber(evaluation.defenderChange, true));
+                    lines.push("- Current: " + currentSummary(evaluation));
+                    lines.push("- Proposed: " + proposedSummary(evaluation));
+                    if (review.comment) {
+                        lines.push("");
+                        lines.push("Comment:");
+                        lines.push("");
+                        lines.push(review.comment);
+                    }
+                    lines.push("");
+                });
+
+                if (lines.length === 6) {
+                    lines.push("No scenarios have been reviewed yet.");
+                    lines.push("");
+                }
+                return lines.join("\n");
+            }
+
+            function copyText(text) {
+                if (navigator.clipboard && window.isSecureContext) {
+                    return navigator.clipboard.writeText(text);
+                }
+                return new Promise(function (resolve, reject) {
+                    var helper = document.createElement("textarea");
+                    helper.value = text;
+                    helper.setAttribute("readonly", "");
+                    helper.style.position = "fixed";
+                    helper.style.opacity = "0";
+                    document.body.appendChild(helper);
+                    helper.select();
+                    try {
+                        document.execCommand("copy") ? resolve() : reject(new Error("Copy failed"));
+                    } catch (error) {
+                        reject(error);
+                    } finally {
+                        helper.remove();
+                    }
+                });
+            }
+
+            function downloadText(filename, text) {
+                var blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+                var url = URL.createObjectURL(blob);
+                var anchor = document.createElement("a");
+                anchor.href = url;
+                anchor.download = filename;
+                document.body.appendChild(anchor);
+                anchor.click();
+                anchor.remove();
+                window.setTimeout(function () { URL.revokeObjectURL(url); }, 0);
+            }
+
+            scenarioList.addEventListener("click", function (event) {
+                var button = event.target.closest("[data-scenario-id]");
+                if (button) setActive(button.getAttribute("data-scenario-id"));
+            });
+
+            scenarioMatrix.addEventListener("click", function (event) {
+                var button = event.target.closest("[data-scenario-id]");
+                if (button) setActive(button.getAttribute("data-scenario-id"));
+            });
+
+            document.getElementById("previousScenario").addEventListener("click", function () { moveScenario(-1); });
+            document.getElementById("nextScenario").addEventListener("click", function () { moveScenario(1); });
+
+            document.querySelectorAll(".choice-button").forEach(function (button) {
+                button.addEventListener("click", function () {
+                    saveCurrentReview({ choice: button.getAttribute("data-choice") });
+                });
+            });
+
+            reviewComment.addEventListener("input", function () {
+                var scenario = activeScenario();
+                var review = reviewFor(scenario.id);
+                state.reviews[scenario.id] = {
+                    choice: review.choice,
+                    comment: reviewComment.value,
+                    signature: scenarioSignature(latestEvaluation.input),
+                    updatedAt: new Date().toISOString()
+                };
+                saveState();
+                renderNavigation();
+                renderMatrix();
+                saveStatus.textContent = "Saved locally as you type.";
+                saveStatus.classList.remove("warning");
+            });
+
+            document.getElementById("clearReview").addEventListener("click", function () {
+                var scenario = activeScenario();
+                if (!window.confirm("Clear the saved preference and comment for this scenario?")) return;
+                delete state.reviews[scenario.id];
+                saveState();
+                render();
+            });
+
+            document.getElementById("customMultiplier").addEventListener("change", updateBuilderLimits);
+
+            document.getElementById("previewCustom").addEventListener("click", function () {
+                var multiplier = Number(document.getElementById("customMultiplier").value);
+                customInput = {
+                    bidType: { 1: "Frog", 2: "Solo", 3: "Heart Solo" }[multiplier] || "Frog",
+                    multiplier: multiplier,
+                    cardPoints: Number(document.getElementById("customCardPoints").value),
+                    ask: Number(document.getElementById("customAsk").value),
+                    offers: [
+                        Number(document.getElementById("customOfferOne").value),
+                        Number(document.getElementById("customOfferTwo").value)
+                    ]
+                };
+                activeId = "custom";
+                render();
+            });
+
+            document.getElementById("resetCustom").addEventListener("click", function () {
+                customInput = copyInput(DEFAULT_CUSTOM);
+                activeId = "custom";
+                render();
+            });
+
+            document.getElementById("copyReview").addEventListener("click", function () {
+                copyText(exportMarkdown()).then(function () {
+                    saveStatus.textContent = "Review copied to the clipboard.";
+                    saveStatus.classList.remove("warning");
+                }).catch(function () {
+                    saveStatus.textContent = "Copy was blocked. Use Download .md instead.";
+                    saveStatus.classList.add("warning");
+                });
+            });
+
+            document.getElementById("downloadReview").addEventListener("click", function () {
+                downloadText("sluff-insurance-recap-review.md", exportMarkdown());
+                saveStatus.textContent = "Review downloaded.";
+                saveStatus.classList.remove("warning");
+            });
+
+            render();
+        }());
+    </script>
+</body>
+</html>

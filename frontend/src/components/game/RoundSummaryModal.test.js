@@ -94,84 +94,113 @@ describe.each(cases)('RoundSummaryModal $label summary', ({ playerId, forfeit, w
     });
 });
 
-describe('computeNoDealRecap (spec scenarios)', () => {
-    const recapOf = (ask, offers, changes) => computeNoDealRecap({
+describe('computeNoDealRecap (approved compact grades v2)', () => {
+    const recapOf = ({ ask, offers, changes, multiplier = 1 }) => computeNoDealRecap({
         bidderRequirement: ask,
         defenderOffers: offers,
-        bidMultiplier: 2,
+        bidMultiplier: multiplier,
         pointChanges: changes,
         bidderName: 'Alice',
     });
-    const row = (recap, name) => recap.rows.find(r => r.name === name);
 
-    test('scenario 1: win in the gap — bidder saved vs offers, defenders vs their own price', () => {
-        const recap = recapOf(74, { Bob: 10, Cara: 20 }, { Alice: 40, Bob: -20, Cara: -20 });
-        expect(recap.zone).toBe('gap');
-        expect(recap.gap).toBe(44);
-        expect(row(recap, 'Alice')).toMatchObject({ posCls: 'verdict-warn', verdict: { text: 'saved 10' } });
-        expect(row(recap, 'Bob')).toMatchObject({ posText: 'Offered 10', posCls: 'verdict-bad', verdict: { text: 'wasted 10' } });
-        expect(row(recap, 'Cara')).toMatchObject({ posCls: 'verdict-good', verdict: { text: 'broke even' } });
+    const cases = [
+        ['01 reported case', 40, { Bob: -30, Cara: 20 }, { Alice: 24, Bob: -12, Cara: -12 }, 1, 'gap', 'No one blinked.', ['Saved 34', 'Greedy 42', 'Lucky 8']],
+        ['02 backed ask', 40, { Bob: 19, Cara: 20 }, { Alice: 60, Bob: -30, Cara: -30 }, 1, 'lowball', 'Defenders lowballed.', ['Saved 21', 'Greedy 11', 'Greedy 10']],
+        ['03 cards match ask', 20, { Bob: 9, Cara: 10 }, { Alice: 20, Bob: -10, Cara: -10 }, 1, 'lowball', 'Defenders lowballed.', ['Saved 1', 'Greedy 1', 'Perfect bid']],
+        ['04 correct holdout', 60, { Bob: 10, Cara: 20 }, { Alice: 40, Bob: -20, Cara: -20 }, 1, 'gap', 'No one blinked.', ['Saved 10', 'Greedy 10', 'Perfect bid']],
+        ['05 winning overreach', 40, { Bob: 10, Cara: 20 }, { Alice: 24, Bob: -12, Cara: -12 }, 1, 'overreach', 'Bidder overreached.', ['Wasted 6', 'Greedy 2', 'Lucky 8']],
+        ['06 bidder loses', 40, { Bob: 10, Cara: 20 }, { Alice: -30, Bob: 10, Cara: 10, ScoreAbsorber: 10 }, 1, 'overreach', 'Bidder overreached.', ['Wasted 60', 'Lucky 20', 'Lucky 30']],
+        ['07 exact sixty', 20, { Bob: 0, Cara: 0 }, { Alice: 0, Bob: 0, Cara: 0 }, 1, 'match', 'Cards matched the offers.', ['Nice try', 'Perfect bid', 'Perfect bid']],
+        ['08 one defender can close', 80, { Bob: 50, Cara: 0 }, { Alice: 50, Bob: -25, Cara: -25 }, 1, 'match', 'Cards matched the offers.', ['Greedy 30', 'Lucky 25', 'Greedy 25']],
+        ['09 neither can close', 100, { Bob: 20, Cara: 20 }, { Alice: 120, Bob: -60, Cara: -60 }, 1, 'lowball', 'Defenders lowballed.', ['Saved 80', 'Greedy 40', 'Greedy 40']],
+        ['10 maximum close', 80, { Bob: 20, Cara: 20 }, { Alice: 60, Bob: -30, Cara: -30 }, 1, 'gap', 'No one blinked.', ['Saved 20', 'Greedy 10', 'Greedy 10']],
+        ['11 negative ask', -20, { Bob: -15, Cara: -10 }, { Alice: -15, Bob: 5, Cara: 5, ScoreAbsorber: 5 }, 1, 'lowball', 'Defenders lowballed.', ['Lucky 5', 'Greedy 10', 'Greedy 5']],
+        ['13 mixed signs', 20, { Bob: -20, Cara: 30 }, { Alice: 0, Bob: 0, Cara: 0 }, 1, 'overreach', 'Bidder overreached.', ['Wasted 10', 'Greedy 20', 'Lucky 30']],
+        ['14 odd ask', 25, { Bob: 10, Cara: 14 }, { Alice: 16, Bob: -8, Cara: -8 }, 1, 'overreach', 'Bidder overreached.', ['Wasted 8', 'Lucky 2', 'Lucky 6']],
+        ['15 Solo failure', 40, { Bob: 10, Cara: 15 }, { Alice: -60, Bob: 20, Cara: 20, ScoreAbsorber: 20 }, 2, 'overreach', 'Bidder overreached.', ['Wasted 85', 'Lucky 30', 'Lucky 35']],
+        ['16 Heart Solo', 60, { Bob: 20, Cara: 30 }, { Alice: 48, Bob: -24, Cara: -24 }, 3, 'overreach', 'Bidder overreached.', ['Wasted 2', 'Greedy 4', 'Lucky 6']],
+        ['17 reviewed custom', 40, { Bob: -30, Cara: 20 }, { Alice: 12, Bob: -6, Cara: -6 }, 1, 'gap', 'No one blinked.', ['Saved 22', 'Greedy 36', 'Lucky 14']],
+    ];
+
+    test.each(cases)('%s', (_label, ask, offers, changes, multiplier, zone, header, expectedGrades) => {
+        const recap = recapOf({ ask, offers, changes, multiplier });
+
+        expect(recap).toMatchObject({
+            neverNegotiated: false,
+            ask,
+            offerSum: offers.Bob + offers.Cara,
+            gap: ask - offers.Bob - offers.Cara,
+            zone,
+            header,
+        });
+        expect(recap.rows.map(row => row.name)).toEqual(['Alice', 'Bob', 'Cara']);
+        expect(recap.rows.map(row => row.verdict.text)).toEqual(expectedGrades);
+        expect(recap.rows.map(row => row.verdict.cls)).toEqual(expectedGrades.map(text => (
+            /^(Saved|Lucky)/.test(text)
+                ? 'verdict-good'
+                : /^(Wasted|Greedy)/.test(text)
+                    ? 'verdict-bad'
+                    : 'verdict-muted'
+        )));
     });
 
-    test('scenario 2: rich offers — bidder overreached and wasted 15', () => {
-        const recap = recapOf(74, { Bob: 25, Cara: 30 }, { Alice: 40, Bob: -20, Cara: -20 });
-        expect(recap.zone).toBe('overreach');
-        expect(recap.header).toMatch(/Bidder overreached/);
-        expect(row(recap, 'Alice')).toMatchObject({ posCls: 'verdict-bad', verdict: { text: 'wasted 15' } });
-        expect(row(recap, 'Bob').verdict.text).toBe('saved 5');
-        expect(row(recap, 'Cara').verdict.text).toBe('saved 10');
+    test('12 untouched defaults suppress every grade', () => {
+        const recap = recapOf({
+            ask: 120,
+            offers: { Bob: -60, Cara: -60 },
+            changes: { Alice: 24, Bob: -12, Cara: -12 },
+        });
+
+        expect(recap).toMatchObject({
+            neverNegotiated: true,
+            zone: null,
+            header: null,
+            rows: [],
+        });
     });
 
-    test('scenario 3: bidder collapse — wasted vs the declined offers, ×3 ledger', () => {
-        const recap = recapOf(40, { Bob: 10, Cara: 15 }, { Alice: -60, Bob: 20, Cara: 20, ScoreAbsorber: 20 });
-        expect(recap.zone).toBe('overreach');
-        expect(row(recap, 'Alice').verdict.text).toBe('wasted 85');
-        expect(row(recap, 'Bob')).toMatchObject({ posCls: 'verdict-good', verdict: { text: 'saved 30' } });
-    });
+    test('normalizes finite numeric strings without grading the score absorber', () => {
+        const recap = recapOf({
+            ask: '40',
+            offers: { Bob: '-30', Cara: '20' },
+            changes: { Alice: '24', Bob: '-12', Cara: '-12', ScoreAbsorber: '12' },
+        });
 
-    test('scenario 5: cards covered the ask — defenders lowballed and wasted', () => {
-        const recap = recapOf(30, { Bob: 10, Cara: 15 }, { Alice: 80, Bob: -40, Cara: -40 });
-        expect(recap.zone).toBe('lowball');
-        expect(recap.header).toMatch(/Defenders lowballed/);
-        expect(row(recap, 'Alice')).toMatchObject({ posCls: 'verdict-good', verdict: { text: 'saved 55' } });
-        expect(row(recap, 'Bob')).toMatchObject({ posCls: 'verdict-bad', verdict: { text: 'wasted 30' } });
-    });
-
-    test('scenario 6: negative ask — the conceding bidder shows green, demands show red', () => {
-        const recap = recapOf(-20, { Bob: -25, Cara: -20 }, { Alice: -15, Bob: 5, Cara: 5, ScoreAbsorber: 5 });
-        expect(recap.zone).toBe('lowball');
-        expect(row(recap, 'Alice')).toMatchObject({ posText: "Req'd -20", posCls: 'verdict-good', verdict: { text: 'saved 30' } });
-        expect(row(recap, 'Bob')).toMatchObject({ posText: 'Asked +25', posCls: 'verdict-bad', verdict: { text: 'wasted 20' } });
-    });
-
-    test('flags a round where everyone stayed on the defaults', () => {
-        const recap = recapOf(240, { Bob: -120, Cara: -120 }, { Alice: 40, Bob: -20, Cara: -20 });
-        expect(recap.neverNegotiated).toBe(true);
+        expect(recap.rows.map(row => [row.name, row.verdict.text])).toEqual([
+            ['Alice', 'Saved 34'],
+            ['Bob', 'Greedy 42'],
+            ['Cara', 'Lucky 8'],
+        ]);
     });
 });
 
 describe('RoundSummaryModal no-deal verdict panel', () => {
     const noDealProps = (overrides = {}) => makeTimedPreviewProps(vi.fn(), {
         scoreStage: 'complete',
-        insurance: { bidMultiplier: 2, bidderRequirement: 74, defenderOffers: { Bob: 10, Cara: 20 } },
+        insurance: { bidMultiplier: 1, bidderRequirement: 40, defenderOffers: { Bob: -30, Cara: 20 } },
         summaryData: {
             ...makeTimedPreviewSummary(),
-            pointChanges: { Alice: 40, Bob: -20, Cara: -20 },
+            pointChanges: { Alice: 24, Bob: -12, Cara: -12 },
         },
         ...overrides
     });
 
-    test('renders the header verdict, positions, and own-anchor outcomes', () => {
+    test('renders the approved compact headline, stances, and player grades', () => {
         render(<RoundSummaryModal {...noDealProps()} />);
 
-        expect(screen.getByText('Insurance Recap (No Deal)')).toBeInTheDocument();
-        expect(screen.getByText(/No one blinked/)).toBeInTheDocument();
-        expect(screen.getByText(/ask 74 · offers 30 · gap 44/)).toBeInTheDocument();
-        expect(screen.getByText("Req'd 74")).toHaveClass('verdict-warn');
-        expect(screen.getByText('saved 10')).toHaveClass('verdict-good');
-        expect(screen.getByText('Offered 10')).toHaveClass('verdict-bad');
-        expect(screen.getByText('wasted 10')).toHaveClass('verdict-bad');
-        expect(screen.getByText('broke even')).toHaveClass('verdict-muted');
+        expect(screen.getByText('Insurance · No Deal')).toBeInTheDocument();
+        expect(screen.getByText('No one blinked.')).toBeInTheDocument();
+        expect(screen.getByText(/ask 40 · offers -10 · gap 50/)).toBeInTheDocument();
+        expect(screen.getByText('Asked 40')).toBeInTheDocument();
+        expect(screen.getByText('Asked +30')).toBeInTheDocument();
+        expect(screen.getByText('Offered 20')).toBeInTheDocument();
+        expect(screen.getByText('Saved 34')).toHaveClass('verdict-good');
+        expect(screen.getByText('Greedy 42')).toHaveClass('verdict-bad');
+        expect(screen.getByText('Lucky 8')).toHaveClass('verdict-good');
+
+        const table = screen.getByRole('table', { name: 'Insurance grades' });
+        expect(within(table).getAllByRole('row')).toHaveLength(4);
+        expect(screen.queryByText(/Decision check|Close check|even share|broke even/i)).not.toBeInTheDocument();
     });
 
     test('suppresses verdicts when insurance was never negotiated', () => {
@@ -179,8 +208,30 @@ describe('RoundSummaryModal no-deal verdict panel', () => {
             insurance: { bidMultiplier: 2, bidderRequirement: 240, defenderOffers: { Bob: -120, Cara: -120 } },
         })} />);
 
-        expect(screen.getByText('Insurance was never seriously negotiated this round.')).toBeInTheDocument();
+        expect(screen.getByText('No grade this round.')).toBeInTheDocument();
         expect(screen.queryByText(/No one blinked|overreached|lowballed/)).not.toBeInTheDocument();
+        expect(screen.queryByRole('table', { name: 'Insurance grades' })).not.toBeInTheDocument();
+    });
+
+    test.each([
+        ['one defender offer', {
+            insurance: { bidMultiplier: 1, bidderRequirement: 40, defenderOffers: { Bob: -30 } },
+        }],
+        ['a missing player score', {
+            summaryData: {
+                ...makeTimedPreviewSummary(),
+                pointChanges: { Alice: 24, Bob: -12 },
+            },
+        }],
+        ['a non-numeric ask', {
+            insurance: { bidMultiplier: 1, bidderRequirement: 'unknown', defenderOffers: { Bob: -30, Cara: 20 } },
+        }],
+    ])('omits a no-deal grade when legacy data has %s', (_label, overrides) => {
+        render(<RoundSummaryModal {...noDealProps(overrides)} />);
+
+        expect(screen.getByText('Trick Point Recap')).toBeInTheDocument();
+        expect(screen.queryByText('Insurance · No Deal')).not.toBeInTheDocument();
+        expect(screen.queryByRole('table', { name: 'Insurance grades' })).not.toBeInTheDocument();
     });
 
     test('shows the widow share as a muted netting row in the totals', () => {

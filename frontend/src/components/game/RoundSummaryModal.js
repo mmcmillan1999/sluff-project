@@ -12,13 +12,8 @@ import {
 
 const SCORE_ACTION_TICK_MS = 100;
 
-// Display-only verdict commentary for rounds where no insurance deal locked.
-// Spec: the "Insurance Recap Spec" artifact (July 2026). The header verdict
-// comes from where the cards' actual result landed relative to the offers→ask
-// gap; every player's saved/wasted is anchored on their OWN position — the
-// bidder against the offers he declined, each defender against their own
-// offer. Pure function over data already in the round payload; it never
-// touches applied scores.
+// Display-only grades for rounds where no insurance deal locked. This is pure
+// recap math over the settled round payload; it never changes applied scores.
 export const computeNoDealRecap = ({ bidderRequirement, defenderOffers, bidMultiplier, pointChanges, bidderName }) => {
     const offers = defenderOffers || {};
     const offerValues = Object.values(offers).map(value => Number(value) || 0);
@@ -26,35 +21,56 @@ export const computeNoDealRecap = ({ bidderRequirement, defenderOffers, bidMulti
     const ask = Number(bidderRequirement) || 0;
     const actual = Number(pointChanges?.[bidderName]) || 0;
 
-    // Everyone still on the server's round defaults (ask 120×M, offers −60×M)
-    // means no position was ever really taken — suppress the verdicts.
+    // Everyone still on the server defaults means no position was taken.
     const neverNegotiated = Boolean(bidMultiplier)
         && ask === 120 * bidMultiplier
         && offerValues.length > 0
         && offerValues.every(value => value === -60 * bidMultiplier);
 
     let zone;
-    if (actual <= offerSum) zone = 'overreach';
+    if (actual < offerSum) zone = 'overreach';
     else if (actual >= ask) zone = 'lowball';
+    else if (actual === offerSum) zone = 'match';
     else zone = 'gap';
 
     const header = {
-        overreach: 'Bidder overreached — even the offers beat the cards.',
-        lowball: 'Defenders lowballed — the cards covered the ask.',
-        gap: 'No one blinked — the cards landed in the gap.',
+        overreach: 'Bidder overreached.',
+        lowball: 'Defenders lowballed.',
+        match: 'Cards matched the offers.',
+        gap: 'No one blinked.',
     }[zone];
 
-    const verdict = value => (value === 0
-        ? { text: 'broke even', cls: 'verdict-muted' }
+    if (neverNegotiated) {
+        return {
+            neverNegotiated,
+            offerSum,
+            gap: ask - offerSum,
+            ask,
+            zone: null,
+            header: null,
+            rows: [],
+        };
+    }
+
+    const grade = (value, positiveWord, negativeWord, evenWord) => (value === 0
+        ? { text: evenWord, cls: 'verdict-muted' }
         : value > 0
-            ? { text: `saved ${value}`, cls: 'verdict-good' }
-            : { text: `wasted ${-value}`, cls: 'verdict-bad' });
+            ? { text: `${positiveWord} ${value}`, cls: 'verdict-good' }
+            : { text: `${negativeWord} ${-value}`, cls: 'verdict-bad' });
+
+    let bidderVerdict;
+    if (actual === 0 && offerSum === 0) {
+        bidderVerdict = { text: 'Nice try', cls: 'verdict-muted' };
+    } else if (ask < 0 || actual === offerSum) {
+        bidderVerdict = grade(actual - ask, 'Lucky', 'Greedy', 'Perfect bid');
+    } else {
+        bidderVerdict = grade(actual - offerSum, 'Saved', 'Wasted', 'Perfect bid');
+    }
 
     const rows = [{
         name: bidderName,
-        posText: `Req'd ${ask}`,
-        posCls: zone === 'lowball' ? 'verdict-good' : (zone === 'overreach' ? 'verdict-bad' : 'verdict-warn'),
-        verdict: verdict(actual - offerSum),
+        posText: ask < 0 ? `Offered ${-ask}` : `Asked ${ask}`,
+        verdict: bidderVerdict,
     }];
     for (const [name, rawOffer] of Object.entries(offers)) {
         const offer = Number(rawOffer) || 0;
@@ -63,9 +79,7 @@ export const computeNoDealRecap = ({ bidderRequirement, defenderOffers, bidMulti
             name,
             // A negative offer means the defender was demanding payment.
             posText: offer >= 0 ? `Offered ${offer}` : `Asked +${-offer}`,
-            // Green when their offer covered what they actually ended up paying.
-            posCls: offer >= -change ? 'verdict-good' : 'verdict-bad',
-            verdict: verdict(change + offer),
+            verdict: grade(change + offer, 'Lucky', 'Greedy', 'Perfect bid'),
         });
     }
 
@@ -445,6 +459,24 @@ const RoundSummaryModal = ({
         // Insurance Recap Spec artifact). Deal-executed rendering below is
         // deliberately untouched.
         if (!insuranceDealWasMade) {
+            const defenderEntries = insurance.defenderOffers
+                && typeof insurance.defenderOffers === 'object'
+                ? Object.entries(insurance.defenderOffers)
+                : [];
+            const scoredNames = [bidderName, ...defenderEntries.map(([name]) => name)];
+            const hasCompleteInsuranceRecap = Number.isFinite(Number(insurance.bidMultiplier))
+                && Number(insurance.bidMultiplier) > 0
+                && insurance.bidderRequirement !== null
+                && insurance.bidderRequirement !== undefined
+                && Number.isFinite(Number(insurance.bidderRequirement))
+                && defenderEntries.length === 2
+                && defenderEntries.every(([, value]) => value !== null && Number.isFinite(Number(value)))
+                && scoredNames.every(name => pointChanges?.[name] !== null
+                    && pointChanges?.[name] !== undefined
+                    && Number.isFinite(Number(pointChanges[name])));
+
+            if (!hasCompleteInsuranceRecap) return null;
+
             const recap = computeNoDealRecap({
                 bidderRequirement: insurance.bidderRequirement,
                 defenderOffers: insurance.defenderOffers,
@@ -454,11 +486,11 @@ const RoundSummaryModal = ({
             });
 
             return (
-                <div className="insurance-recap-panel">
-                    <h4>Insurance Recap (No Deal)</h4>
+                <div className="insurance-recap-panel insurance-recap-panel--no-deal">
+                    <h4>Insurance · No Deal</h4>
                     {recap.neverNegotiated ? (
                         <p className="insurance-no-negotiation">
-                            Insurance was never seriously negotiated this round.
+                            No grade this round.
                         </p>
                     ) : (
                         <>
@@ -468,15 +500,24 @@ const RoundSummaryModal = ({
                                     ask {recap.ask} · offers {recap.offerSum} · gap {recap.gap}
                                 </span>
                             </p>
-                            <div className="insurance-verdict-rows">
-                                {recap.rows.map(row => (
-                                    <React.Fragment key={row.name}>
-                                        <span className="verdict-name">{row.name}</span>
-                                        <span className={`verdict-pos ${row.posCls}`}>{row.posText}</span>
-                                        <span className={`verdict-out ${row.verdict.cls}`}>{row.verdict.text}</span>
-                                    </React.Fragment>
-                                ))}
-                            </div>
+                            <table className="insurance-verdict-table" aria-label="Insurance grades">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Player</th>
+                                        <th scope="col">Stance</th>
+                                        <th scope="col">Grade</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {recap.rows.map(row => (
+                                        <tr key={row.name}>
+                                            <th scope="row" className="verdict-name" title={row.name}>{row.name}</th>
+                                            <td className="verdict-pos">{row.posText}</td>
+                                            <td className={`verdict-out ${row.verdict.cls}`}>{row.verdict.text}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </>
                     )}
                 </div>
