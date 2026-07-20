@@ -6,11 +6,20 @@ import React, { useState, useEffect } from 'react';
 import './PlayerSeatPositioner.css';
 
 // In iPad/iPhone BROWSERS, vh measures the large viewport (URL bar collapsed)
-// while the app shell lays out in dvh (the visible area) — near the bottom
-// edge that gap shoved the south plaque underneath the player hand. Anchor
-// the seats in dvh where the browser supports it; desktop and the Capacitor
-// shell are unaffected (vh === dvh there).
-const VERTICAL_UNIT = (typeof CSS !== 'undefined' && CSS.supports?.('top', '1dvh')) ? 'dvh' : 'vh';
+// while the app shell lays out in dvh (the visible area). The tuned phone
+// look was built against vh, so anchors STAY in vh — but the bottom seat
+// gets a dvh ceiling so browser chrome can never shove the plaque under the
+// player hand (seen on iPad landscape). The cap = visible height minus the
+// 20vh footer block minus 1.5vh of clearance; anywhere vh === dvh (desktop,
+// installed PWA, Capacitor) the cap sits above every anchor and is inert.
+const DVH_SUPPORTED = typeof CSS !== 'undefined' && CSS.supports?.('top', '1dvh');
+
+const anchorTopValue = (y, seatPosition) => {
+    if (seatPosition === 'bottom' && DVH_SUPPORTED) {
+        return `min(${y}vh, calc(100dvh - 21.5vh))`;
+    }
+    return `${y}vh`;
+};
 
 const PlayerSeatPositioner = ({ 
     playerName, 
@@ -112,7 +121,7 @@ const PlayerSeatPositioner = ({
             effectiveAnchorY !== null && effectiveAnchorY !== undefined) {
             style.position = 'fixed';
             style.left = `${effectiveAnchorX}vw`;
-            style.top = `${effectiveAnchorY}${VERTICAL_UNIT}`;
+            style.top = anchorTopValue(effectiveAnchorY, seatPosition);
             // Remove any default positioning
             style.right = 'auto';
             style.bottom = 'auto';
