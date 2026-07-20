@@ -76,6 +76,12 @@ const scoresBeforeRound = (summary, fallbackScores) => {
     }));
 };
 
+const stableScoreMapSignature = (scoreMap) => JSON.stringify(
+    Object.entries(scoreMap || {}).sort(([leftName], [rightName]) => (
+        leftName.localeCompare(rightName)
+    ))
+);
+
 
 const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, handleShowHowToPlay, emitEvent, playSound, socket, handleOpenFeedbackModal, soundSettings, tutorialState, onTutorialAction, onShowTokenLedger }) => {
     const themePresentation = getThemePresentation(currentTableState?.theme);
@@ -113,6 +119,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const gameMenuRef = useModalFocus(showGameMenu, '.game-menu-button:not(:disabled)');
     const [quickPlayDecisionRejectionNonce, setQuickPlayDecisionRejectionNonce] = useState(0);
     const [roundPresentationPhase, setRoundPresentationPhase] = useState('idle');
+    const [roundScoreFrame, setRoundScoreFrame] = useState(null);
     const [dealPresentation, setDealPresentation] = useState({
         active: false,
         animationKey: 0,
@@ -287,6 +294,23 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         && !isObserverMode
     );
     const roundSummary = currentTableState?.roundSummary;
+    const roundScorePresentationKey = [
+        currentTableState?.tableId || 'table',
+        roundSummary?.presentationReadyAt ?? 'legacy',
+        roundSummary?.dealerOfRoundId ?? 'dealer',
+        stableScoreMapSignature(roundSummary?.pointChanges),
+        stableScoreMapSignature(roundSummary?.finalScores),
+    ].join(':');
+    const handleRoundScoreFrame = useCallback((frame) => {
+        const candidateScores = frame?.scores && typeof frame.scores === 'object'
+            ? frame.scores
+            : frame;
+        if (!candidateScores || typeof candidateScores !== 'object' || Array.isArray(candidateScores)) return;
+        setRoundScoreFrame({
+            key: roundScorePresentationKey,
+            scores: { ...candidateScores },
+        });
+    }, [roundScorePresentationKey]);
     const rawPresentationReadyAt = roundSummary?.presentationReadyAt;
     const presentationReadyAt = Number(rawPresentationReadyAt);
     const hasSharedPresentationClock = rawPresentationReadyAt !== null
@@ -342,11 +366,17 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             && hasSharedPresentationClock
             && currentTableState?.settlement?.status !== 'pending')
     );
+    const progressiveRoundScores = roundPresentationPhase === 'scoring'
+        && roundScoreFrame?.key === roundScorePresentationKey
+        ? roundScoreFrame.scores
+        : null;
     const tableStateForPresentation = useMemo(() => (
-        shouldHoldTableScores && previousRoundScores
-            ? { ...currentTableState, scores: previousRoundScores }
-            : currentTableState
-    ), [currentTableState, previousRoundScores, shouldHoldTableScores]);
+        progressiveRoundScores
+            ? { ...currentTableState, scores: progressiveRoundScores }
+            : (shouldHoldTableScores && previousRoundScores
+                ? { ...currentTableState, scores: previousRoundScores }
+                : currentTableState)
+    ), [currentTableState, previousRoundScores, progressiveRoundScores, shouldHoldTableScores]);
     const tableStateForDealPresentation = useMemo(() => (
         dealPresentation.active
             ? {
@@ -711,12 +741,18 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
 
     const handleRoundRecapContinue = useCallback(() => {
         if (hasRoundScoreChanges && !roundSummary?.forfeit) {
+            if (previousRoundScores) {
+                setRoundScoreFrame({
+                    key: roundScorePresentationKey,
+                    scores: { ...previousRoundScores },
+                });
+            }
             setRoundPresentationPhase('scoring');
             return;
         }
         setShowRoundSummaryModal(false);
         setRoundPresentationPhase(roundSummary?.isGameOver ? 'podium' : 'settled');
-    }, [hasRoundScoreChanges, roundSummary]);
+    }, [hasRoundScoreChanges, previousRoundScores, roundScorePresentationKey, roundSummary]);
 
     const handleScoreCeremonyComplete = useCallback(() => {
         // Start the reading window only after the score animation finishes.
@@ -1364,7 +1400,9 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                     ? 'counting'
                     : (roundPresentationPhase === 'score-settled-waiting' ? 'complete' : 'preview')}
                 playerOrder={currentTableState.seatingOrder || currentTableState.playerOrderActive}
+                tableId={currentTableState.tableId}
                 playSound={playSound}
+                onScoreFrame={handleRoundScoreFrame}
                 onScoreComplete={handleScoreCeremonyComplete}
                 prefersReducedMotion={prefersReducedMotion}
                 scoreActionTimerMs={hasRoundScoreChanges && !roundSummary?.forfeit

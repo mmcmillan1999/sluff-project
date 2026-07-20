@@ -833,7 +833,11 @@ const TableLayout = ({
                 aria-label={dealerCanPeek ? 'Widow pile. Reveal if you are the sitting dealer' : 'Widow pile'}
                 style={dealerCanPeek ? { cursor: 'pointer', pointerEvents: 'auto' } : undefined}
             >
-                <div className="trick-pile-base widow-base" data-deal-target="widow">
+                <div
+                    className="trick-pile-base widow-base"
+                    data-deal-target="widow"
+                    data-score-transfer-anchor="widow"
+                >
                     <div className="trick-pile">
                         <div className="trick-pile-content-wrapper">
                             <div className="trick-pile-cards">
@@ -874,7 +878,11 @@ const TableLayout = ({
     };
 
     return (
-        <main className="game-table" data-table-theme={tableThemeId}>
+        <main
+            className="game-table"
+            data-table-theme={tableThemeId}
+            data-score-transfer-table={currentTableState.tableId || 'table'}
+        >
             <div className="table-oval">
                 <div ref={dropZoneRef} className="card-drop-zone-hitbox">
                     <div className="card-drop-zone-visual"></div>

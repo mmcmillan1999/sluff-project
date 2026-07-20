@@ -62,6 +62,7 @@ describe('ScoreChipStack', () => {
 
         const bank = screen.getByRole('img', { name: 'River Ace score: 120 points' });
         expect(bank).toHaveAttribute('data-stack-count', '3');
+        expect(bank).toHaveAttribute('data-score-chip-player', 'River Ace');
         expect(bank).toHaveClass('score-chip-bank--left');
         expect(bank).toHaveTextContent('120');
         expect(container.querySelector('.score-chip-stage')).toHaveAttribute('aria-hidden', 'true');
@@ -84,7 +85,10 @@ describe('ScoreChipStack', () => {
             '--chip-settle-x': '0.07vh',
             '--chip-settle-y': '-0.42vh',
         });
-        expect(bank.querySelector('.score-chip-total').parentElement).toHaveClass('score-chip-layer--score');
+        const scoreAnchor = bank.querySelector('.score-chip-total').parentElement;
+        expect(scoreAnchor).toHaveClass('score-chip-layer--score');
+        expect(scoreAnchor).toHaveAttribute('data-score-chip-anchor', 'true');
+        expect(bank.querySelectorAll('[data-score-chip-anchor="true"]')).toHaveLength(1);
     });
 
     test('uses the numbered top face as the single loose or busted chip', () => {

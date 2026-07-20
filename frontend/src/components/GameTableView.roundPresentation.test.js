@@ -21,13 +21,21 @@ vi.mock('../hooks/useBidWinnerSplash', () => ({
 }));
 
 vi.mock('./game/RoundSummaryModal', () => ({
-    default: ({ showModal, continueLabel, onContinue, scoreStage, onScoreComplete }) => {
+    default: ({ showModal, continueLabel, onContinue, scoreStage, onScoreFrame, onScoreComplete }) => {
         if (!showModal) return null;
         if (scoreStage === 'counting') {
             return (
-                <button type="button" onClick={() => onScoreComplete({ skipped: false, rows: [] })}>
-                    Finish Score Ceremony
-                </button>
+                <>
+                    <button
+                        type="button"
+                        onClick={() => onScoreFrame({ scores: { Alice: 126, Bob: 114, Cara: 120 } })}
+                    >
+                        Advance Score Transfer
+                    </button>
+                    <button type="button" onClick={() => onScoreComplete({ skipped: false, rows: [] })}>
+                        Finish Score Ceremony
+                    </button>
+                </>
             );
         }
         if (scoreStage === 'complete') return <div>Score Totals Complete</div>;
@@ -49,6 +57,7 @@ vi.mock('./game/TableLayout', () => ({
     default: ({ currentTableState, roundPresentationComplete }) => (
         <div>
             <span data-testid="alice-table-score">{currentTableState.scores.Alice}</span>
+            <span data-testid="bob-table-score">{currentTableState.scores.Bob}</span>
             <span data-testid="round-presentation-complete">{String(roundPresentationComplete)}</span>
         </div>
     )
@@ -543,14 +552,41 @@ describe('GameTableView round presentation sequence', () => {
 
     test('holds pre-round totals through recap and ceremony, then reveals final totals and dealer control', () => {
         vi.useFakeTimers();
-        renderGame(makeState());
+        const state = makeState();
+        const { rerender, props } = renderGame(state);
 
         expect(screen.getByTestId('alice-table-score')).toHaveTextContent('120');
         expect(screen.queryByRole('button', { name: 'Chat' })).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Collect Points' }));
 
         expect(screen.getByTestId('alice-table-score')).toHaveTextContent('120');
+        expect(screen.getByTestId('bob-table-score')).toHaveTextContent('120');
         expect(screen.getByTestId('round-presentation-complete')).toHaveTextContent('false');
+        fireEvent.click(screen.getByRole('button', { name: 'Advance Score Transfer' }));
+
+        expect(screen.getByTestId('alice-table-score')).toHaveTextContent('126');
+        expect(screen.getByTestId('bob-table-score')).toHaveTextContent('114');
+
+        // Equivalent socket payloads may arrive with a different object-key
+        // order. They must not discard the progressive table snapshot.
+        rerender(
+            <React.StrictMode>
+                <GameTableView
+                    {...props}
+                    currentTableState={{
+                        ...state,
+                        roundSummary: {
+                            ...state.roundSummary,
+                            pointChanges: { Cara: -6, Alice: 12, Bob: -6 },
+                            finalScores: { Cara: 114, Alice: 132, Bob: 114 },
+                        },
+                    }}
+                />
+            </React.StrictMode>
+        );
+        expect(screen.getByTestId('alice-table-score')).toHaveTextContent('126');
+        expect(screen.getByTestId('bob-table-score')).toHaveTextContent('114');
+
         fireEvent.click(screen.getByRole('button', { name: 'Finish Score Ceremony' }));
 
         expect(screen.getByTestId('alice-table-score')).toHaveTextContent('132');

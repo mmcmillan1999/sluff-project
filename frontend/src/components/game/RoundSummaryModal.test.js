@@ -649,47 +649,70 @@ describe('RoundSummaryModal staged presentation', () => {
         });
     });
 
-    test('runs the score count inside the recap without adding a nested modal', () => {
+    test('docks a transparent settlement tray inside the recap and forwards table score frames', () => {
         vi.useFakeTimers();
         const onScoreComplete = vi.fn();
-        render(
+        const onScoreFrame = vi.fn();
+        const props = {
+            ...baseProps,
+            playerId: 1,
+            title: 'Round Recap',
+            onContinue: vi.fn(),
+            scoreStage: 'counting',
+            tableId: 'table-42',
+            onScoreFrame,
+            onScoreComplete,
+            prefersReducedMotion: false,
+            insurance: {},
+            bidWinnerInfo: { playerName: 'Alice' },
+            playerOrderActive: ['Alice', 'Bob', 'Cara'],
+            playerOrder: ['Bob', 'Alice', 'Cara'],
+            summaryData: {
+                isGameOver: false,
+                dealerOfRoundId: 1,
+                finalScores: { Alice: 132, Bob: 114, Cara: 114 },
+                pointChanges: { Alice: 12, Bob: -6, Cara: -6 },
+                finalBidderPoints: 72,
+                finalDefenderPoints: 48,
+                bidType: 'Frog',
+                insuranceDealWasMade: false,
+                insuranceHindsight: {},
+                widowForReveal: [],
+                widowPointsValue: 0
+            }
+        };
+        const { rerender } = render(
             <RoundSummaryModal
-                {...baseProps}
-                playerId={1}
-                title="Round Recap"
-                onContinue={vi.fn()}
-                scoreStage="counting"
-                onScoreComplete={onScoreComplete}
-                prefersReducedMotion={false}
-                insurance={{}}
-                bidWinnerInfo={{ playerName: 'Alice' }}
-                playerOrderActive={['Alice', 'Bob', 'Cara']}
-                playerOrder={['Bob', 'Alice', 'Cara']}
-                summaryData={{
-                    isGameOver: false,
-                    dealerOfRoundId: 1,
-                    finalScores: { Alice: 132, Bob: 114, Cara: 114 },
-                    pointChanges: { Alice: 12, Bob: -6, Cara: -6 },
-                    finalBidderPoints: 72,
-                    finalDefenderPoints: 48,
-                    bidType: 'Frog',
-                    insuranceDealWasMade: false,
-                    insuranceHindsight: {},
-                    widowForReveal: [],
-                    widowPointsValue: 0
-                }}
+                {...props}
             />
         );
 
         const recap = screen.getByRole('dialog', { name: 'Round Recap' });
-        expect(within(recap).getByLabelText('Counting round score')).toBeInTheDocument();
+        const overlay = recap.closest('.modal-overlay');
+        const tray = within(recap).getByLabelText('Settling round points');
+        expect(tray).toHaveAttribute('data-table-id', 'table-42');
         expect(within(recap).queryByRole('dialog')).not.toBeInTheDocument();
-        expect(screen.getByText('+12')).toHaveAttribute('aria-hidden', 'false');
+        expect(overlay).toHaveClass('summary-modal-overlay--counting');
+        expect(recap).toHaveClass('summary-modal-content--counting');
+        expect(recap.querySelector('.summary-main-area')).toHaveClass('summary-main-area--counting');
+        expect(screen.queryByRole('heading', { name: 'Trick Point Recap' })).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Count the Score' })).not.toBeInTheDocument();
 
         act(() => vi.runAllTimers());
-        expect(screen.getByLabelText('Alice score')).toHaveTextContent('132');
+        expect(onScoreFrame.mock.lastCall?.[0]).toEqual({ Alice: 132, Bob: 114, Cara: 114 });
         expect(onScoreComplete).toHaveBeenCalledTimes(1);
+
+        // Completion does not expand the recap itself. GameTableView owns the
+        // existing five-second reading hold, then advances the stage.
+        expect(screen.getByLabelText('Settling round points')).toBeInTheDocument();
+        expect(overlay).toHaveClass('summary-modal-overlay--counting');
+
+        rerender(<RoundSummaryModal {...props} scoreStage="complete" />);
+        expect(screen.queryByLabelText('Settling round points')).not.toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Trick Point Recap' })).toBeInTheDocument();
+        expect(screen.getByLabelText('Alice new total 132')).toHaveTextContent('132');
+        expect(recap).not.toHaveClass('summary-modal-content--counting');
+        expect(overlay).not.toHaveClass('summary-modal-overlay--counting');
         vi.useRealTimers();
     });
 
@@ -725,11 +748,11 @@ describe('RoundSummaryModal staged presentation', () => {
         };
         const { rerender } = render(<RoundSummaryModal {...props} summaryData={makeSummary()} />);
 
-        const ceremonyNode = screen.getByLabelText('Counting round score');
+        const ceremonyNode = screen.getByLabelText('Settling round points');
         act(() => vi.advanceTimersByTime(600));
         rerender(<RoundSummaryModal {...props} summaryData={makeSummary()} />);
 
-        expect(screen.getByLabelText('Counting round score')).toBe(ceremonyNode);
+        expect(screen.getByLabelText('Settling round points')).toBe(ceremonyNode);
         act(() => vi.runAllTimers());
         expect(onScoreComplete).toHaveBeenCalledTimes(1);
         vi.useRealTimers();
@@ -773,7 +796,7 @@ describe('RoundSummaryModal staged presentation', () => {
         expect(screen.getByRole('button', { name: 'Hide Trick Breakdown' })).toBeInTheDocument();
 
         rerender(<RoundSummaryModal {...props} scoreStage="counting" />);
-        expect(screen.getByLabelText('Counting round score')).toBeInTheDocument();
+        expect(screen.getByLabelText('Settling round points')).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Show Trick Breakdown' })).not.toBeInTheDocument();
 
         act(() => vi.runAllTimers());
@@ -811,7 +834,7 @@ describe('RoundSummaryModal staged presentation', () => {
             />
         );
 
-        expect(screen.getByLabelText('Counting round score')).toBeInTheDocument();
+        expect(screen.getByLabelText('Settling round points')).toBeInTheDocument();
         act(() => vi.runAllTimers());
         expect(onScoreComplete).toHaveBeenCalledTimes(1);
         vi.useRealTimers();

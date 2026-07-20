@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import './RoundSummaryModal.css';
 import { CARD_POINT_VALUES, BID_MULTIPLIERS, PLACEHOLDER_ID_CLIENT } from '../../constants';
 import PointsBreakdownBar from './PointsBreakdownBar';
-import RoundScoreCeremony from './RoundScoreCeremony';
+import ScoreChipTransferCeremony from './ScoreChipTransferCeremony';
 import { useModalFocus } from '../../hooks/useModalFocus';
 import {
     ROUND_RECAP_EXTENSION_MS,
@@ -240,7 +240,9 @@ const RoundSummaryModal = ({
     onContinue,
     scoreStage = 'complete',
     playerOrder,
+    tableId,
     playSound,
+    onScoreFrame,
     onScoreComplete,
     prefersReducedMotion,
     tutorialHint = null,
@@ -563,30 +565,27 @@ const RoundSummaryModal = ({
     const scoreRowsOrder = playerOrder || [bidderName, ...defenderNames];
     const renderScoreTotals = () => {
         if (!showScoreTotals) return null;
-        if (normalizedScoreStage === 'counting') {
-            return (
-                <div className="summary-totals-panel summary-totals-panel--counting">
-                    <RoundScoreCeremony
-                        embedded
-                        finalScores={finalScores}
-                        pointChanges={pointChanges}
-                        playerOrder={scoreRowsOrder}
-                        playSound={playSound}
-                        onComplete={onScoreComplete}
-                        prefersReducedMotion={prefersReducedMotion}
-                        title="Counting round score"
-                    />
-                </div>
-            );
-        }
         return renderTotalsTable(pointChanges, finalScores, {
             concealTotals: normalizedScoreStage === 'preview'
         });
     };
 
+    const scoreTransferTray = normalizedScoreStage === 'counting' && showScoreTotals ? (
+        <ScoreChipTransferCeremony
+            finalScores={finalScores}
+            pointChanges={pointChanges}
+            playerOrder={scoreRowsOrder}
+            tableId={tableId}
+            playSound={playSound}
+            onScoreFrame={onScoreFrame}
+            onComplete={onScoreComplete}
+            prefersReducedMotion={prefersReducedMotion}
+        />
+    ) : null;
+
     // These panels are plain render helpers, not component types: defining a
     // component inside render would give it a new identity every re-render,
-    // remounting the embedded RoundScoreCeremony and restarting its count
+    // remounting the score ceremony and restarting its count
     // whenever a table-state broadcast lands mid-ceremony.
     const renderTrickPointRecapPanel = () => {
         const bidderWonPoints = pointChanges[bidderName] > 0;
@@ -802,20 +801,30 @@ const RoundSummaryModal = ({
     };
     
     return (
-        <div className="modal-overlay">
-            <div ref={dialogRef} className="summary-modal-content" role="dialog" aria-modal="true" aria-label={modalTitle} tabIndex={-1}>
-                <div className="summary-main-area">
-                    <h2>{modalTitle}</h2>
-                    {tutorialHintPanel}
-                    {isGameOver && message && message !== 'Game Over!' && (
-                        <div className="settlement-status-banner" role="status">
-                            {message}
-                        </div>
-                    )}
-                    
-                    {renderTrickPointRecapPanel()}
-                    {!detailsVisible && renderInsuranceRecapPanel()}
+        <div className={`modal-overlay summary-modal-overlay${normalizedScoreStage === 'counting' ? ' summary-modal-overlay--counting' : ''}`}>
+            <div
+                ref={dialogRef}
+                className={`summary-modal-content${normalizedScoreStage === 'counting' ? ' summary-modal-content--counting' : ''}`}
+                role="dialog"
+                aria-modal="true"
+                aria-label={modalTitle}
+                tabIndex={-1}
+            >
+                <div className={`summary-main-area${normalizedScoreStage === 'counting' ? ' summary-main-area--counting' : ''}`}>
+                    {normalizedScoreStage === 'counting' ? scoreTransferTray : (
+                        <>
+                            <h2>{modalTitle}</h2>
+                            {tutorialHintPanel}
+                            {isGameOver && message && message !== 'Game Over!' && (
+                                <div className="settlement-status-banner" role="status">
+                                    {message}
+                                </div>
+                            )}
 
+                            {renderTrickPointRecapPanel()}
+                            {!detailsVisible && renderInsuranceRecapPanel()}
+                        </>
+                    )}
                 </div>
 
                 {!drawOutcome && normalizedScoreStage !== 'counting' && (

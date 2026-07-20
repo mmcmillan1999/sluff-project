@@ -179,6 +179,7 @@ const ScoreChipStack = ({ score, playerName, seatPosition, animationScope = null
             className={`score-chip-bank score-chip-bank--${layout.state} ${motionClass} ${seatClass}`.trim()}
             role="img"
             aria-label={accessibleScore}
+            data-score-chip-player={owner}
             data-stack-count={layout.stackCount}
             data-score-state={layout.state}
         >
@@ -204,6 +205,7 @@ const ScoreChipStack = ({ score, playerName, seatPosition, animationScope = null
                                         className={`score-chip-layer ${isScoreLayer ? 'score-chip-layer--score' : ''}`.trim()}
                                         style={getChipLayerStyle(stackIndex, layerIndex, isScoreLayer)}
                                         data-layer-index={layerIndex}
+                                        data-score-chip-anchor={isScoreLayer ? 'true' : undefined}
                                     >
                                         {isScoreLayer && (
                                             <span className={`score-chip-total ${sizeClass}`.trim()}>

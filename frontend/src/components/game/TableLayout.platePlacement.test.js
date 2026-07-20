@@ -94,8 +94,10 @@ describe('TableLayout plate lifecycle and placement', () => {
         const { container } = render(layout(makeState()));
 
         expect(container.querySelector('.game-table')).toHaveAttribute('data-table-theme', 'fort-creek');
+        expect(container.querySelector('.game-table')).toHaveAttribute('data-score-transfer-table', 'plate-test');
         expect(container.querySelector('[data-deal-source="deck"]')).toHaveClass('dealer-deck-pile');
         expect(container.querySelector('[data-deal-target="widow"]')).toHaveClass('widow-base');
+        expect(container.querySelector('[data-score-transfer-anchor="widow"]')).toHaveClass('widow-base');
         expect([...container.querySelectorAll('[data-deal-player]')].map(node => node.dataset.dealPlayer))
             .toEqual(['Left', 'Right', 'Bottom']);
     });

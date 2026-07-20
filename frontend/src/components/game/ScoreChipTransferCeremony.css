@@ -1,0 +1,249 @@
+.score-chip-transfer-ceremony {
+    position: relative;
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.65rem 0.8rem;
+    width: 100%;
+    max-width: 30rem;
+    margin: 0 auto;
+    padding: 0.72rem 0.82rem;
+    overflow: hidden;
+    color: #f9f3df;
+    background:
+        radial-gradient(circle at 14% -45%, rgba(246, 207, 116, 0.22), transparent 54%),
+        linear-gradient(145deg, rgba(38, 34, 27, 0.98), rgba(12, 16, 14, 0.98));
+    border: 1px solid rgba(246, 207, 116, 0.34);
+    border-radius: 0.82rem;
+    box-shadow: 0 0.8rem 2rem rgba(0, 0, 0, 0.34), inset 0 1px rgba(255, 255, 255, 0.06);
+    font-family: 'Merriweather', serif;
+}
+
+.score-chip-transfer-ceremony__copy {
+    min-width: 0;
+}
+
+.score-chip-transfer-ceremony__eyebrow {
+    display: block;
+    margin-bottom: 0.05rem;
+    color: #d9b861;
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.57rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.score-chip-transfer-ceremony h3 {
+    margin: 0;
+    overflow: hidden;
+    color: #fff4cf;
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(0.94rem, 3.6vw, 1.12rem);
+    font-weight: 600;
+    letter-spacing: 0.025em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.score-chip-transfer-ceremony__docket {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.12rem 0.55rem;
+    min-width: 0;
+    padding: 0.46rem 0.58rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.56rem;
+    background: rgba(255, 255, 255, 0.045);
+}
+
+.score-chip-transfer-ceremony__route {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 0.34rem;
+    overflow: hidden;
+    color: rgba(255, 255, 255, 0.84);
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.8rem;
+    letter-spacing: 0.015em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.score-chip-transfer-ceremony__route strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.score-chip-transfer-ceremony__route span {
+    flex: 0 0 auto;
+    color: #d9b861;
+}
+
+.score-chip-transfer-ceremony__amount {
+    color: #ffe091;
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.score-chip-transfer-ceremony__docket small {
+    grid-column: 1 / -1;
+    color: rgba(255, 255, 255, 0.5);
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.58rem;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+}
+
+.score-chip-transfer-ceremony__skip {
+    align-self: center;
+    min-height: 2rem;
+    padding: 0.35rem 0.62rem;
+    color: #f6d77f;
+    background: rgba(0, 0, 0, 0.28);
+    border: 1px solid rgba(246, 207, 116, 0.35);
+    border-radius: 999px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.025em;
+    cursor: pointer;
+    transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+
+.score-chip-transfer-ceremony__skip:hover,
+.score-chip-transfer-ceremony__skip:focus-visible {
+    background: rgba(246, 207, 116, 0.13);
+    border-color: rgba(246, 207, 116, 0.7);
+}
+
+.score-chip-transfer-ceremony__skip:active {
+    transform: translateY(1px);
+}
+
+.score-chip-transfer-ceremony__live {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.score-chip-flight {
+    position: fixed;
+    z-index: 999;
+    top: 0;
+    left: 0;
+    width: 2.55rem;
+    height: 2.55rem;
+    pointer-events: none;
+    will-change: transform;
+    animation: score-chip-flight var(--chip-flight-ms) cubic-bezier(0.24, 0.72, 0.28, 1) both;
+}
+
+.score-chip-flight__bundle {
+    position: relative;
+    display: block;
+    width: 2.55rem;
+    height: 2.55rem;
+    filter: drop-shadow(0 0.28rem 0.24rem rgba(0, 0, 0, 0.42));
+    animation: score-chip-bundle-turn var(--chip-flight-ms) ease-in-out both;
+}
+
+.score-chip-flight__chip {
+    position: absolute;
+    box-sizing: border-box;
+    width: 2.4rem;
+    height: 2.4rem;
+    border: 0.16rem dashed rgba(255, 255, 255, 0.84);
+    border-radius: 50%;
+    background:
+        radial-gradient(circle at 42% 38%, rgba(255, 255, 255, 0.3), transparent 23%),
+        radial-gradient(circle, #b62d2d 0 54%, #771a1a 56% 72%, #d7b35f 74% 78%, #651313 80%);
+    box-shadow: inset 0 0 0 0.11rem rgba(30, 8, 7, 0.52), 0 0.1rem 0 rgba(56, 10, 10, 0.9);
+}
+
+.score-chip-flight__chip--2 {
+    filter: hue-rotate(20deg) saturate(0.92);
+}
+
+.score-chip-flight__chip--3 {
+    filter: brightness(1.06);
+}
+
+.score-chip-flight__amount {
+    position: absolute;
+    z-index: 8;
+    top: 50%;
+    left: 50%;
+    min-width: 1.38rem;
+    padding: 0.08rem 0.16rem;
+    color: #fff9dd;
+    background: rgba(43, 10, 9, 0.82);
+    border: 1px solid rgba(255, 225, 145, 0.82);
+    border-radius: 999px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.68rem;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+    text-align: center;
+    text-shadow: 0 1px 1px #000;
+    transform: translate(-50%, -50%);
+}
+
+@keyframes score-chip-flight {
+    0% {
+        transform: translate3d(var(--chip-from-x), var(--chip-from-y), 0) translate(-50%, -50%) scale(0.86);
+        opacity: 0;
+    }
+    7% { opacity: 1; }
+    48% {
+        transform: translate3d(var(--chip-mid-x), var(--chip-mid-y), 0) translate(-50%, -50%) scale(1.06);
+        opacity: 1;
+    }
+    92% { opacity: 1; }
+    100% {
+        transform: translate3d(var(--chip-to-x), var(--chip-to-y), 0) translate(-50%, -50%) scale(0.9);
+        opacity: 0.88;
+    }
+}
+
+@keyframes score-chip-bundle-turn {
+    0% { transform: rotate(-8deg); }
+    52% { transform: rotate(13deg); }
+    100% { transform: rotate(3deg); }
+}
+
+@media (min-width: 760px) and (min-aspect-ratio: 1 / 1) {
+    .score-chip-transfer-ceremony {
+        grid-template-columns: minmax(0, 1fr) auto;
+        max-width: none;
+    }
+}
+
+@media (max-width: 380px) {
+    .score-chip-transfer-ceremony {
+        padding: 0.62rem 0.67rem;
+    }
+
+    .score-chip-transfer-ceremony__eyebrow {
+        display: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .score-chip-flight,
+    .score-chip-flight__bundle {
+        animation: none;
+    }
+}

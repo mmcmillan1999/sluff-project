@@ -34,6 +34,61 @@
     overflow-y: auto; 
 }
 
+/* Counting keeps the table visible while this full-screen layer continues to
+   shield it from accidental play. Only the compact settlement tray remains
+   inside the existing recap dialog/focus trap. */
+.modal-overlay.summary-modal-overlay--counting {
+    box-sizing: border-box;
+    align-items: flex-end;
+    justify-content: center;
+    padding:
+        0.65rem
+        max(0.65rem, env(safe-area-inset-right, 0px))
+        max(0.65rem, env(safe-area-inset-bottom, 0px))
+        max(0.65rem, env(safe-area-inset-left, 0px));
+    background-color: transparent;
+    pointer-events: auto;
+}
+
+.summary-modal-content--counting {
+    width: min(100%, 34rem);
+    max-width: 34rem;
+    max-height: none;
+    overflow: visible;
+    background: transparent;
+    border-radius: 0;
+}
+
+.summary-main-area--counting {
+    padding: 0;
+    overflow: visible;
+}
+
+@media (min-width: 1600px) and (min-aspect-ratio: 16 / 9) {
+    .modal-overlay.summary-modal-overlay--counting {
+        align-items: center;
+        justify-content: flex-end;
+        padding:
+            max(0.75rem, env(safe-area-inset-top, 0px))
+            max(0.75rem, env(safe-area-inset-right, 0px))
+            max(0.75rem, env(safe-area-inset-bottom, 0px))
+            0.75rem;
+    }
+
+    .summary-modal-content--counting {
+        width: clamp(11rem, calc(50vw - 67.5vh - 1rem), 15rem);
+        max-width: 15rem;
+    }
+
+    .summary-modal-content--counting .score-chip-transfer-ceremony {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .summary-modal-content--counting .score-chip-transfer-ceremony__skip {
+        justify-self: start;
+    }
+}
+
 .summary-main-area h2 {
     font-family: 'Oswald', sans-serif;
     color: #343a40;
