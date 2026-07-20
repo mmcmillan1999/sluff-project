@@ -107,6 +107,40 @@ function runGameLogicTests() {
     assert.strictEqual(frogResult.finalBidderPoints, 65, 'Frog: Bidder points incorrect.');
     pass('Frog Bid: Bidder gets points from their discarded cards.');
     
+    // --- Card point-change helper (analytics counterfactual) ---
+    // It must equal the applied no-deal pointChanges (one source of truth).
+    const cardArgs = {
+        activePlayerNames: ['Alice', 'Bob', 'Carol'],
+        bidWinnerName: 'Alice',
+        bidMultiplier: 2,
+        playerMode: 3,
+        sittingOutDealerName: null,
+    };
+    const failCards = gameLogic.calculateCardPointChanges({ ...cardArgs, bidderTotalCardPoints: 50 });
+    assert.strictEqual(failCards['Alice'], -60, 'Card helper: failed-bid bidder incorrect.');
+    assert.strictEqual(failCards['Bob'], 20, 'Card helper: failed-bid defender incorrect.');
+    assert.strictEqual(failCards['ScoreAbsorber'], 20, 'Card helper: failed-bid widow share incorrect.');
+    const appliedFail = gameLogic.calculateRoundScoreDetails({ ...mockScoringTable, bidWinnerInfo: { playerName: 'Alice', bid: 'Solo' }, bidderTotalCardPoints: 50 });
+    assert.deepStrictEqual(failCards, appliedFail.pointChanges, 'Card helper must match applied no-deal pointChanges.');
+    assert.deepStrictEqual(appliedFail.cardPointChanges, appliedFail.pointChanges, 'No-deal: cardPointChanges must equal applied pointChanges.');
+    pass('Card point-change helper equals the applied no-deal scoring.');
+
+    // Under a deal, cardPointChanges is the counterfactual, not the applied deal.
+    const dealCounterfactual = gameLogic.calculateRoundScoreDetails({
+        ...mockScoringTable,
+        insurance: {
+            dealExecuted: true,
+            defenderOffers: { Bob: 8, Carol: 12 },
+            executedDetails: { agreement: { bidderPlayerName: 'Alice', bidderRequirement: 20, bidderSettlement: 20, defenderOffers: { Bob: 8, Carol: 12 } } },
+        },
+        bidWinnerInfo: { playerName: 'Alice', bid: 'Solo' },
+        bidderTotalCardPoints: 50,
+    });
+    assert.strictEqual(dealCounterfactual.pointChanges['Alice'], 20, 'Deal applied: bidder settlement incorrect.');
+    assert.strictEqual(dealCounterfactual.cardPointChanges['Alice'], -60, 'Deal counterfactual: cards would have cost the bidder 60.');
+    assert.strictEqual(dealCounterfactual.cardPointChanges['Bob'], 20, 'Deal counterfactual: cards would have paid the defender 20.');
+    pass('Under a deal, cardPointChanges reports the card counterfactual.');
+
     console.log('\n  âœ” All gameLogic.js tests passed!');
 }
 

@@ -123,6 +123,41 @@ function calculateDrawSplitPayout(table) {
 }
 
 
+// The pure card-based point exchange for a round, ignoring insurance. This is
+// what actually applies when no deal is struck, and the counterfactual we log
+// alongside an executed deal ("what the cards would have paid"). Extracted so
+// the applied no-deal path and the analytics counterfactual share one source
+// of truth.
+function calculateCardPointChanges({ activePlayerNames, bidWinnerName, bidderTotalCardPoints, bidMultiplier, playerMode, sittingOutDealerName }) {
+    const changes = {};
+    activePlayerNames.forEach(name => { changes[name] = 0; });
+    if (playerMode === 3) changes[PLACEHOLDER_ID] = 0;
+    if (sittingOutDealerName) changes[sittingOutDealerName] = 0;
+
+    const scoreDifferenceFrom60 = bidderTotalCardPoints - 60;
+    const exchangeValue = Math.abs(scoreDifferenceFrom60) * bidMultiplier;
+    if (scoreDifferenceFrom60 === 0) return changes;
+
+    if (bidderTotalCardPoints > 60) {
+        let gained = 0;
+        activePlayerNames.forEach(name => {
+            if (name !== bidWinnerName) { changes[name] -= exchangeValue; gained += exchangeValue; }
+        });
+        changes[bidWinnerName] += gained;
+    } else {
+        let lost = 0;
+        const opponents = activePlayerNames.filter(name => name !== bidWinnerName);
+        opponents.forEach(name => { changes[name] += exchangeValue; lost += exchangeValue; });
+        if (playerMode === 3) { changes[PLACEHOLDER_ID] += exchangeValue; lost += exchangeValue; }
+        else if (playerMode === 4 && sittingOutDealerName
+            && !opponents.includes(sittingOutDealerName) && sittingOutDealerName !== bidWinnerName) {
+            changes[sittingOutDealerName] += exchangeValue; lost += exchangeValue;
+        }
+        changes[bidWinnerName] -= lost;
+    }
+    return changes;
+}
+
 function calculateRoundScoreDetails(table) {
     const { bidWinnerInfo, playerOrderActive, playerMode, capturedTricks, widowDiscardsForFrogBidder, originalDealtWidow, insurance, players, bidderTotalCardPoints } = table;
     const bidWinnerName = bidWinnerInfo.playerName;
@@ -162,43 +197,31 @@ function calculateRoundScoreDetails(table) {
         }
         roundMessage = `Insurance deal executed. Points exchanged based on agreement.`;
     } else {
-        const scoreDifferenceFrom60 = bidderTotalCardPoints - 60;
-        const exchangeValue = Math.abs(scoreDifferenceFrom60) * currentBidMultiplier;
-        if (scoreDifferenceFrom60 === 0) { 
-            roundMessage = `${bidWinnerName} scored exactly 60. No points exchanged.`; 
+        // Card-based exchange (shared helper — see calculateCardPointChanges).
+        const cardChanges = calculateCardPointChanges({
+            activePlayerNames, bidWinnerName, bidderTotalCardPoints,
+            bidMultiplier: currentBidMultiplier, playerMode, sittingOutDealerName,
+        });
+        for (const name in cardChanges) pointChanges[name] = cardChanges[name];
+
+        const bidderChange = pointChanges[bidWinnerName] || 0;
+        if (bidderTotalCardPoints === 60) {
+            roundMessage = `${bidWinnerName} scored exactly 60. No points exchanged.`;
         } else if (bidderTotalCardPoints > 60) {
-            let totalPointsGained = 0;
-            activePlayerNames.forEach(pName => { 
-                if (pName !== bidWinnerName) { 
-                    pointChanges[pName] -= exchangeValue;
-                    totalPointsGained += exchangeValue; 
-                } 
-            });
-            pointChanges[bidWinnerName] += totalPointsGained;
-            roundMessage = `${bidWinnerName} succeeded! Gains ${totalPointsGained} points.`;
-        } else { // Bidder failed
-            let totalPointsLost = 0;
-            const activeOpponents = activePlayerNames.filter(pName => pName !== bidWinnerName);
-            activeOpponents.forEach(oppName => { 
-                pointChanges[oppName] += exchangeValue; 
-                totalPointsLost += exchangeValue; 
-            });
-            if (playerMode === 3) { 
-                pointChanges[PLACEHOLDER_ID] += exchangeValue; 
-                totalPointsLost += exchangeValue; 
-            }
-            else if (playerMode === 4) { 
-                const dealerName = table.players[table.dealer]?.playerName;
-                if(dealerName && !activeOpponents.includes(dealerName) && dealerName !== bidWinnerName) {
-                    pointChanges[dealerName] += exchangeValue; 
-                    totalPointsLost += exchangeValue;
-                }
-            }
-            pointChanges[bidWinnerName] -= totalPointsLost;
-            roundMessage = `${bidWinnerName} failed. Loses ${totalPointsLost} points.`;
+            roundMessage = `${bidWinnerName} succeeded! Gains ${bidderChange} points.`;
+        } else {
+            roundMessage = `${bidWinnerName} failed. Loses ${Math.abs(bidderChange)} points.`;
         }
     }
-    
+
+    // Always compute the pure card outcome for analytics — when a deal
+    // executes this is the "what the cards would have paid" counterfactual;
+    // with no deal it equals the applied pointChanges above.
+    const cardPointChanges = calculateCardPointChanges({
+        activePlayerNames, bidWinnerName, bidderTotalCardPoints,
+        bidMultiplier: currentBidMultiplier, playerMode, sittingOutDealerName,
+    });
+
     const insuranceHindsight = calculateInsuranceHindsight(table, pointChanges);
 
     const finalBidderPoints = bidderTotalCardPoints;
@@ -206,6 +229,7 @@ function calculateRoundScoreDetails(table) {
 
     return {
         pointChanges,
+        cardPointChanges,
         roundMessage,
         widowForReveal,
         insuranceHindsight,
@@ -401,5 +425,6 @@ module.exports = {
     handleDrawGameOver,
     calculateForfeitPayout,
     calculateDrawSplitPayout,
-    calculateCardPoints
+    calculateCardPoints,
+    calculateCardPointChanges
 };

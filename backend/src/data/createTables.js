@@ -527,9 +527,14 @@ const createDbTables = async (pool) => {
                 bidder_requirement INTEGER,
                 defender_offers JSONB,
                 point_changes JSONB,
+                player_results JSONB,
                 all_human BOOLEAN NOT NULL DEFAULT FALSE,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             );
+        `);
+        // Backfill the column for databases created before it existed.
+        await pool.query(`
+            ALTER TABLE round_results ADD COLUMN IF NOT EXISTS player_results JSONB;
         `);
         await pool.query(`
             CREATE INDEX IF NOT EXISTS idx_round_results_bid_type

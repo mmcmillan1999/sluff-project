@@ -76,6 +76,34 @@ function calculateRoundScores(engine) {
     };
     engine.roundHistory.push(roundEntry);
     if (engine.gameId) {
+        // Per-player breakdown for analytics: each seat's insurance stance,
+        // the card-only outcome (counterfactual when a deal executed), the
+        // insurance outcome (the deal, if any), and what actually applied.
+        const dealExecuted = roundEntry.dealExecuted;
+        const offers = engine.insurance?.defenderOffers || {};
+        const cardChanges = roundData.cardPointChanges || {};
+        const playerResults = activePlayers.map(p => {
+            const name = p.playerName;
+            const isBidder = name === bidderName;
+            const cardOutcome = Number(cardChanges[name]) || 0;
+            const finalChange = Number(roundData.pointChanges[name]) || 0;
+            return {
+                name,
+                userId: Number.isInteger(p.userId) ? p.userId : null,
+                isBot: Boolean(p.isBot),
+                isBidder,
+                // The bidder's stance is their ask; a defender's is their offer.
+                insurancePosition: isBidder
+                    ? (engine.insurance?.bidderRequirement ?? null)
+                    : (Number(offers[name]) || 0),
+                cardOutcome,
+                // The deal's contribution is what applied minus the cards; null
+                // when no deal so downstream can tell "no deal" from "deal ±0".
+                insuranceOutcome: dealExecuted ? finalChange : null,
+                finalChange,
+            };
+        });
+
         effects.push({
             type: 'LOG_ROUND_RESULT',
             payload: {
@@ -88,10 +116,11 @@ function calculateRoundScores(engine) {
                 bidderUserId: Number.isInteger(bidderPlayer?.userId) ? bidderPlayer.userId : null,
                 bidderIsBot: Boolean(bidderPlayer?.isBot),
                 bidderCardPoints: roundData.finalBidderPoints,
-                dealExecuted: roundEntry.dealExecuted,
+                dealExecuted,
                 bidderRequirement: engine.insurance?.bidderRequirement ?? null,
-                defenderOffers: { ...(engine.insurance?.defenderOffers || {}) },
+                defenderOffers: { ...offers },
                 pointChanges: roundEntry.pointChanges,
+                playerResults,
                 allHuman: activePlayers.length > 0 && activePlayers.every(p => !p.isBot),
             },
         });

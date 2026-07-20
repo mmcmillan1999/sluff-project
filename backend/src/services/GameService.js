@@ -1403,8 +1403,8 @@
                             `INSERT INTO round_results
                              (game_id, round_number, player_mode, bid_type, bid_multiplier,
                               bidder_user_id, bidder_is_bot, bidder_card_points, deal_executed,
-                              bidder_requirement, defender_offers, point_changes, all_human)
-                             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+                              bidder_requirement, defender_offers, point_changes, player_results, all_human)
+                             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
                             [
                                 effect.payload.gameId,
                                 effect.payload.roundNumber,
@@ -1418,6 +1418,7 @@
                                 effect.payload.bidderRequirement,
                                 JSON.stringify(effect.payload.defenderOffers || {}),
                                 JSON.stringify(effect.payload.pointChanges || {}),
+                                JSON.stringify(effect.payload.playerResults || []),
                                 effect.payload.allHuman,
                             ],
                         ).catch(err => console.error('[ROUND-LOG] insert failed:', err.message));
