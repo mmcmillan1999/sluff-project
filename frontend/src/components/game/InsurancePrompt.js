@@ -43,13 +43,19 @@ const InsurancePrompt = ({ show, insuranceState, selfPlayerName, emitEvent, onCl
 
     const config = useMemo(() => {
         if (!insuranceState) return null;
+        // Quick picks are tuned to real outcomes, not the theoretical range
+        // (the slider still covers that). From ~2,700 logged bot rounds
+        // (bot_insurance_logs, Aug 2025–Jul 2026), per multiplier unit:
+        // bidder round outcome μ≈-1 σ≈37 (p10..p90 = -45..+46); defender
+        // outcome σ≈16.5 with fair offers centred ≈ +6. Buttons sit at
+        // ~σ-sized steps across those bands.
         if (isBidder) {
             return {
                 roleLabel: 'Ask',
                 settingType: 'bidderRequirement',
                 minValue: -120 * multiplier,
                 maxValue: 120 * multiplier,
-                quickJumpValues: [-120, -60, 0, 40, 80, 120].map(v => v * multiplier),
+                quickJumpValues: [-40, -20, 0, 20, 40, 60].map(v => v * multiplier),
                 // For the bidder, higher = defenders pay you (green to the right)
                 trackGradient: 'linear-gradient(to right, #b91c1c, #52525b 50%, #15803d)',
                 untouchedValue: 120 * multiplier,
@@ -60,7 +66,7 @@ const InsurancePrompt = ({ show, insuranceState, selfPlayerName, emitEvent, onCl
             settingType: 'defenderOffer',
             minValue: -60 * multiplier,
             maxValue: 60 * multiplier,
-            quickJumpValues: [-60, -30, 0, 20, 40, 60].map(v => v * multiplier),
+            quickJumpValues: [-20, -10, 0, 10, 20, 30].map(v => v * multiplier),
             // For a defender, lower = the bidder pays you (green to the left)
             trackGradient: 'linear-gradient(to right, #15803d, #52525b 50%, #b91c1c)',
             untouchedValue: -60 * multiplier,

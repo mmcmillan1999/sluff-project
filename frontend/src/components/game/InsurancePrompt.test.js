@@ -52,7 +52,7 @@ describe('InsurancePrompt deal-gap preview', () => {
 });
 
 describe('InsurancePrompt range coverage', () => {
-    test('defender slider and quick picks span the full server range (±60 × multiplier)', async () => {
+    test('defender slider spans the full server range; quick picks hug real outcomes', async () => {
         render(
             <InsurancePrompt
                 show
@@ -67,11 +67,13 @@ describe('InsurancePrompt range coverage', () => {
         expect(slider).toHaveAttribute('min', '-120');
         expect(slider).toHaveAttribute('max', '120');
         expect(slider).toHaveAttribute('step', '2');
-        expect(screen.getByRole('button', { name: 'Set offer to -120' })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Set offer to 120' })).toBeInTheDocument();
+        // Data-tuned picks (±σ band × multiplier 2), not the theoretical extremes
+        expect(screen.getByRole('button', { name: 'Set offer to -40' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Set offer to 60' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Set offer to -120' })).not.toBeInTheDocument();
     });
 
-    test('bidder slider covers the full server range including negative asks', async () => {
+    test('bidder slider covers the full server range; quick picks hug real outcomes', async () => {
         render(
             <InsurancePrompt
                 show
@@ -85,8 +87,9 @@ describe('InsurancePrompt range coverage', () => {
         const slider = await screen.findByRole('slider', { name: 'Insurance ask' });
         expect(slider).toHaveAttribute('min', '-120');
         expect(slider).toHaveAttribute('max', '120');
-        expect(screen.getByRole('button', { name: 'Set ask to -120' })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Set ask to 120' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Set ask to -40' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Set ask to 60' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Set ask to 120' })).not.toBeInTheDocument();
     });
 });
 
