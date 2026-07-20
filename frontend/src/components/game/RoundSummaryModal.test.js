@@ -94,6 +94,85 @@ describe.each(cases)('RoundSummaryModal $label summary', ({ playerId, forfeit, w
     });
 });
 
+describe('RoundSummaryModal no-deal insurance recap', () => {
+    const noDealProps = (detailsOverrides = {}, hindsight = {}) => makeTimedPreviewProps(vi.fn(), {
+        scoreStage: 'complete',
+        insurance: {},
+        summaryData: {
+            ...makeTimedPreviewSummary(),
+            insuranceHindsight: hindsight,
+            insuranceDetails: {
+                bidMultiplier: 2,
+                bidderPlayerName: 'Alice',
+                bidderRequirement: 40,
+                defenderOffers: { Bob: 10, Cara: -15 },
+                sumOfOffers: -5,
+                gapToDeal: 45,
+                neverNegotiated: false,
+                agreement: null,
+                ...detailsOverrides
+            }
+        }
+    });
+
+    test('leads with the failed negotiation and scores against the deal on the table', () => {
+        render(
+            <RoundSummaryModal
+                {...noDealProps({}, {
+                    Alice: { hindsightValue: 7 },
+                    Bob: { hindsightValue: -6 },
+                    Cara: { hindsightValue: 0 }
+                })}
+            />
+        );
+
+        expect(screen.getByText('Insurance Recap (No Deal)')).toBeInTheDocument();
+        const headline = screen.getByText(/No deal closed/).closest('p');
+        expect(headline).toHaveTextContent('final ask 40');
+        expect(headline).toHaveTextContent('offers -5');
+        expect(headline).toHaveTextContent('gap 45');
+
+        expect(screen.getByText(/declined offers totaling -5/).closest('p')).toHaveTextContent('Alice declined offers totaling -5 — playing it out saved 7 pts');
+        expect(screen.getByText(/offered 10/).closest('p')).toHaveTextContent('Bob offered 10 — the deal would have been 6 pts better');
+        // Negative offers phrase as a request for payment, not a raw negative
+        expect(screen.getByText(/asked the bidder for 15/).closest('p')).toHaveTextContent('Cara asked the bidder for 15 — broke even');
+    });
+
+    test('soft-suppresses hindsight when nobody moved off the round defaults', () => {
+        render(
+            <RoundSummaryModal
+                {...noDealProps({
+                    bidderRequirement: 240,
+                    defenderOffers: { Bob: -120, Cara: -120 },
+                    sumOfOffers: -240,
+                    gapToDeal: 480,
+                    neverNegotiated: true
+                }, {
+                    Alice: { hindsightValue: 272 },
+                    Bob: { hindsightValue: -136 },
+                    Cara: { hindsightValue: -136 }
+                })}
+            />
+        );
+
+        expect(screen.getByText('Insurance was never seriously negotiated this round.')).toBeInTheDocument();
+        expect(screen.queryByText(/No deal closed/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/declined offers/)).not.toBeInTheDocument();
+    });
+
+    test('renders from the summary snapshot even when live insurance is gone', () => {
+        render(
+            <RoundSummaryModal
+                {...noDealProps({}, { Alice: { hindsightValue: 7 } })}
+                insurance={null}
+            />
+        );
+
+        expect(screen.getByText('Insurance Recap (No Deal)')).toBeInTheDocument();
+        expect(screen.getByText(/No deal closed/)).toBeInTheDocument();
+    });
+});
+
 describe('RoundSummaryModal staged presentation', () => {
     test('shows round changes, conceals new totals, and supports a personalized score action', async () => {
         const user = userEvent.setup();

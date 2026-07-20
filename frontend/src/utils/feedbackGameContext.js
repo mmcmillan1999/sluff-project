@@ -95,16 +95,29 @@ const sanitizePlayers = players => Object.fromEntries(
 );
 
 const sanitizeInsuranceDetails = details => {
-    const result = {};
-    if (!isRecord(details?.agreement)) return result;
-
-    result.agreement = copyScalarFields(details.agreement, [
+    // Negotiation snapshot fields (July 2026 shape) plus the executed
+    // agreement when present; older payloads that were only {agreement}
+    // still sanitize the same way.
+    const result = copyScalarFields(details, [
+        'bidMultiplier',
         'bidderPlayerName',
         'bidderRequirement',
-        'bidderSettlement',
+        'sumOfOffers',
+        'gapToDeal',
+        'neverNegotiated',
     ]) || {};
-    const defenderOffers = copyScalarMap(details.agreement.defenderOffers);
-    if (defenderOffers) result.agreement.defenderOffers = defenderOffers;
+    const defenderOffers = copyScalarMap(details?.defenderOffers);
+    if (defenderOffers) result.defenderOffers = defenderOffers;
+
+    if (isRecord(details?.agreement)) {
+        result.agreement = copyScalarFields(details.agreement, [
+            'bidderPlayerName',
+            'bidderRequirement',
+            'bidderSettlement',
+        ]) || {};
+        const agreementOffers = copyScalarMap(details.agreement.defenderOffers);
+        if (agreementOffers) result.agreement.defenderOffers = agreementOffers;
+    }
     return result;
 };
 

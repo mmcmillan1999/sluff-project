@@ -106,7 +106,75 @@ function runGameLogicTests() {
     let frogResult = gameLogic.calculateRoundScoreDetails(frogTable);
     assert.strictEqual(frogResult.finalBidderPoints, 65, 'Frog: Bidder points incorrect.');
     pass('Frog Bid: Bidder gets points from their discarded cards.');
-    
+
+    // --- Insurance Hindsight Tests ---
+    // No deal: hindsight compares the cards against the deal that was on the
+    // table (each defender's own final offer; the bidder receives their sum),
+    // NOT an even split of the bidder's ask.
+    // Solo (x2), ask 40, Bob offered 10, Cara... Carol offered 15 (sum 25,
+    // gap 15). Bidder plays it out and wins 68 (+8 diff, exchange 16):
+    // Alice +32, Bob -16, Carol -16.
+    const noDealTable = {
+        ...mockScoringTable,
+        insurance: {
+            dealExecuted: false,
+            isActive: true,
+            bidMultiplier: 2,
+            bidderPlayerName: 'Alice',
+            bidderRequirement: 40,
+            defenderOffers: { Bob: 10, Carol: 15 },
+        },
+        bidWinnerInfo: { playerName: 'Alice', bid: 'Solo' },
+        bidderTotalCardPoints: 68,
+        bidderCardPoints: 68,
+    };
+    let noDealResult = gameLogic.calculateRoundScoreDetails(noDealTable);
+    assert.strictEqual(noDealResult.pointChanges['Alice'], 32, 'No-deal: bidder actual points incorrect.');
+    // Alice: actual +32 vs declined offers of 25 -> playing on earned +7.
+    assert.strictEqual(noDealResult.insuranceHindsight['Alice'].hindsightValue, 7, 'No-deal: bidder hindsight must compare against the sum of offers.');
+    pass('Insurance hindsight (no deal): bidder measured against the declined offers.');
+    // Bob: actual -16 vs his own offer of -10 -> the deal would have saved 6.
+    assert.strictEqual(noDealResult.insuranceHindsight['Bob'].hindsightValue, -6, 'No-deal: Bob hindsight must use his own offer.');
+    // Carol: actual -16 vs her offer of -15 -> the deal would have saved 1.
+    assert.strictEqual(noDealResult.insuranceHindsight['Carol'].hindsightValue, -1, 'No-deal: Carol hindsight must use her own offer.');
+    pass('Insurance hindsight (no deal): defenders measured against their own offers, not an even split.');
+
+    // Deal executed, bidder would have FAILED: the played-out downside for the
+    // bidder includes the widow/absorber share (3x exchange in 3-player).
+    // Deal: Alice settles for 20 (Bob 8, Carol 12). Cards would have scored
+    // bidder 50 (-10 diff, exchange 20): Alice would be -60, defenders +20.
+    const dealMadeTable = {
+        ...mockScoringTable,
+        insurance: {
+            dealExecuted: true,
+            isActive: true,
+            bidMultiplier: 2,
+            bidderPlayerName: 'Alice',
+            bidderRequirement: 20,
+            defenderOffers: { Bob: 8, Carol: 12 },
+            executedDetails: {
+                agreement: {
+                    bidderPlayerName: 'Alice',
+                    bidderRequirement: 20,
+                    bidderSettlement: 20,
+                    defenderOffers: { Bob: 8, Carol: 12 },
+                },
+            },
+        },
+        bidWinnerInfo: { playerName: 'Alice', bid: 'Solo' },
+        bidderTotalCardPoints: 50,
+        bidderCardPoints: 50,
+    };
+    let dealMadeResult = gameLogic.calculateRoundScoreDetails(dealMadeTable);
+    assert.strictEqual(dealMadeResult.pointChanges['Alice'], 20, 'Deal-made: bidder settlement incorrect.');
+    // Alice: deal +20 vs playing out -60 (2 defenders + absorber at 20 each)
+    // -> the deal saved 80.
+    assert.strictEqual(dealMadeResult.insuranceHindsight['Alice'].hindsightValue, 80, 'Deal-made: bidder failure potential must include the absorber share (3x exchange).');
+    pass('Insurance hindsight (deal made): failed-bid potential includes the widow/absorber share.');
+    // Bob: deal -8 vs playing out +20 -> the deal cost him 28.
+    assert.strictEqual(dealMadeResult.insuranceHindsight['Bob'].hindsightValue, -28, 'Deal-made: defender hindsight incorrect.');
+    pass('Insurance hindsight (deal made): defender comparison correct.');
+
     console.log('\n  âœ” All gameLogic.js tests passed!');
 }
 

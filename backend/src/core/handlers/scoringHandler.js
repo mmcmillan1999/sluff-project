@@ -3,6 +3,30 @@
 const gameLogic = require('../logic');
 const { ROUND_PRESENTATION_LOCK_MS } = require('../constants');
 
+// Snapshot the whole negotiation for the round recap. neverNegotiated means
+// everyone was still on the server's round defaults (ask 120xM, offers -60xM)
+// — the recap soft-suppresses hindsight rather than judging positions nobody
+// actually took.
+function buildInsuranceDetails(insurance) {
+    if (!insurance?.isActive || !insurance.bidMultiplier) return null;
+    const defenderOffers = { ...insurance.defenderOffers };
+    const offerValues = Object.values(defenderOffers).map(offer => Number(offer) || 0);
+    const sumOfOffers = offerValues.reduce((sum, offer) => sum + offer, 0);
+    const untouchedAsk = insurance.bidderRequirement === 120 * insurance.bidMultiplier;
+    const untouchedOffers = offerValues.length > 0
+        && offerValues.every(offer => offer === -60 * insurance.bidMultiplier);
+    return {
+        bidMultiplier: insurance.bidMultiplier,
+        bidderPlayerName: insurance.bidderPlayerName,
+        bidderRequirement: insurance.bidderRequirement,
+        defenderOffers,
+        sumOfOffers,
+        gapToDeal: insurance.bidderRequirement - sumOfOffers,
+        neverNegotiated: untouchedAsk && untouchedOffers,
+        agreement: insurance.dealExecuted ? (insurance.executedDetails?.agreement ?? null) : null,
+    };
+}
+
 function calculateRoundScores(engine) {
     const effects = [];
     
@@ -67,7 +91,9 @@ function calculateRoundScores(engine) {
         dealerOfRoundId: engine.dealer,
         widowForReveal: roundData.widowForReveal,
         insuranceDealWasMade: engine.insurance.dealExecuted,
-        insuranceDetails: engine.insurance.dealExecuted ? engine.insurance.executedDetails : null,
+        // Full negotiation snapshot: the recap must not depend on the live
+        // insurance state surviving a reconnect or the next round's reset.
+        insuranceDetails: buildInsuranceDetails(engine.insurance),
         insuranceHindsight: roundData.insuranceHindsight,
         allTricks: engine.capturedTricks,
         finalBidderPoints: roundData.finalBidderPoints,
