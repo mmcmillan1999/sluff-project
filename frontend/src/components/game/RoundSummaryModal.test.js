@@ -285,18 +285,20 @@ describe('RoundSummaryModal staged presentation', () => {
             expect(onContinue).toHaveBeenCalledTimes(1);
         });
 
-        test('allows two ten-second extensions and caps the total wait at thirty seconds', () => {
+        test('allows four ten-second extensions and caps the total wait at fifty seconds', () => {
             vi.useFakeTimers();
             const onContinue = vi.fn();
             render(<RoundSummaryModal {...makeTimedPreviewProps(onContinue)} />);
 
             const extendButton = screen.getByRole('button', { name: '+10 seconds' });
             fireEvent.click(extendButton);
+            fireEvent.click(extendButton);
+            fireEvent.click(extendButton);
             expect(extendButton).toBeEnabled();
             fireEvent.click(extendButton);
             expect(extendButton).toBeDisabled();
 
-            act(() => vi.advanceTimersByTime(29999));
+            act(() => vi.advanceTimersByTime(49999));
             expect(onContinue).not.toHaveBeenCalled();
             act(() => vi.advanceTimersByTime(1));
             expect(onContinue).toHaveBeenCalledTimes(1);
@@ -349,7 +351,7 @@ describe('RoundSummaryModal staged presentation', () => {
             expect(onContinue).toHaveBeenCalledTimes(1);
         });
 
-        test('gives every later round a fresh countdown and two fresh extensions', () => {
+        test('gives every later round a fresh countdown and four fresh extensions', () => {
             vi.useFakeTimers();
             const onContinue = vi.fn();
             const props = makeTimedPreviewProps(onContinue);
@@ -378,9 +380,11 @@ describe('RoundSummaryModal staged presentation', () => {
             const extendButton = screen.getByRole('button', { name: '+10 seconds' });
             fireEvent.click(extendButton);
             fireEvent.click(extendButton);
+            fireEvent.click(extendButton);
+            fireEvent.click(extendButton);
             expect(extendButton).toBeDisabled();
 
-            act(() => vi.advanceTimersByTime(29999));
+            act(() => vi.advanceTimersByTime(49999));
             expect(onContinue).toHaveBeenCalledTimes(1);
             act(() => vi.advanceTimersByTime(1));
             expect(onContinue).toHaveBeenCalledTimes(2);

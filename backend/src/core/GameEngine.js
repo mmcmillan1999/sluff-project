@@ -61,6 +61,7 @@ class GameEngine {
         this.settlement = this._newSettlementState();
         this.gameId = null;
         this.playerMode = null;
+        this.roundHistory = [];
         this.dealer = null;
         this.internalTimers = {};
         this.bots = {};
@@ -533,6 +534,9 @@ class GameEngine {
                 console.log(`[GAME-ENGINE] Setting gameId to: ${gameId}`);
                 this.gameId = gameId;
                 this.gameStarted = true;
+                // Per-game recap: one compact public entry per settled round
+                // (see scoringHandler). Shown at the podium.
+                this.roundHistory = [];
                 startRoster.forEach(({ userId, playerName }) => {
                     if (this.scores[playerName] === undefined) this.scores[playerName] = 120;
                     const livePlayer = this.players[userId];
@@ -703,6 +707,7 @@ class GameEngine {
         this.settlement = this._newSettlementState();
         this.gameId = null;
         this.playerMode = null;
+        this.roundHistory = [];
         // A fallback bot belongs only to the completed/failed match that
         // authorized it. It never carries into a rematch decision.
         if (this.tableType === 'quickplay' && this.qpFallbackBot) {
@@ -1039,6 +1044,8 @@ class GameEngine {
             bidderCardPoints: this.bidderCardPoints, defenderCardPoints: this.defenderCardPoints,
             drawCountdown: this.drawCountdown,
             settlement: this.settlement,
+            // Public per-round recap for the podium (names/points only).
+            roundHistory: this.roundHistory || [],
         };
         state.biddingTurnPlayerName = this.players[this.biddingTurnPlayerId]?.playerName;
         state.trickTurnPlayerName = this.players[this.trickTurnPlayerId]?.playerName;

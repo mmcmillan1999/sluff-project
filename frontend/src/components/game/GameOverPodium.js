@@ -283,6 +283,8 @@ const Confetti = () => (
     </div>
 );
 
+const BID_ABBR = { Frog: 'Frog', Solo: 'Solo', 'Heart Solo': 'H.Solo' };
+
 const GameOverPodium = ({
     show = true,
     gameWinner,
@@ -294,13 +296,16 @@ const GameOverPodium = ({
     lobbyLabel = 'Lobby',
     statusMessage = null,
     actionsDisabled = false,
-    tokenSettlement = null
+    tokenSettlement = null,
+    roundHistory = null
 }) => {
     const headingId = useId();
     const detailId = useId();
     const tokenSettlementHeadingId = useId();
+    const roundHistoryHeadingId = useId();
     const dialogRef = useModalFocus(show, 'button:not(:disabled)');
     const [submitted, setSubmitted] = useState(false);
+    const [historyOpen, setHistoryOpen] = useState(false);
 
     useEffect(() => {
         if (!show) return;
@@ -311,6 +316,9 @@ const GameOverPodium = ({
 
     const entries = rankPodiumPlayers({ gameWinner, finalScores, forfeit });
     const outcome = outcomeCopy(entries, forfeit, gameWinner);
+    const rounds = Array.isArray(roundHistory) ? roundHistory : [];
+    // Column order follows the podium standings so a player can scan one row.
+    const historyPlayers = entries.map(e => e.name).filter(name => name !== PLACEHOLDER_ID_CLIENT);
     const normalizedTokenSettlement = normalizeTokenSettlement(tokenSettlement);
     const podiumCount = Math.min(4, Math.max(3, entries.length || 3));
     const invokeAction = (callback, { requiresReady = false } = {}) => {
@@ -435,6 +443,64 @@ const GameOverPodium = ({
                             <p className="game-over-podium__settlement-unavailable" role="status">
                                 Token settlement details are unavailable.
                             </p>
+                        )}
+                    </section>
+                )}
+
+                {rounds.length > 0 && historyPlayers.length > 0 && (
+                    <section className="game-over-podium__history" aria-labelledby={roundHistoryHeadingId}>
+                        <button
+                            type="button"
+                            className="game-over-podium__history-toggle"
+                            aria-expanded={historyOpen}
+                            onClick={() => setHistoryOpen(open => !open)}
+                        >
+                            <h2 id={roundHistoryHeadingId}>Round-by-round</h2>
+                            <span className="game-over-podium__history-chevron" aria-hidden="true">
+                                {historyOpen ? '▲' : '▼'}
+                            </span>
+                        </button>
+                        {historyOpen && (
+                            <div className="game-over-podium__history-scroll">
+                                <table className="game-over-podium__history-table">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">Rd</th>
+                                            <th scope="col">Bid</th>
+                                            {historyPlayers.map(name => (
+                                                <th scope="col" key={name} title={name}>{name}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {rounds.map(round => {
+                                            const isBidderBid = name => name === round.bidderName;
+                                            return (
+                                                <tr key={round.roundNumber}>
+                                                    <td>{round.roundNumber}</td>
+                                                    <td className="game-over-podium__history-bid">
+                                                        <span title={`${round.bidderName} · ${round.bidType} · ${round.bidderCardPoints} card pts${round.dealExecuted ? ' · insured' : ''}`}>
+                                                            {BID_ABBR[round.bidType] || round.bidType}
+                                                            {round.dealExecuted && <span className="game-over-podium__history-ins" aria-label="insurance deal"> ⛨</span>}
+                                                        </span>
+                                                    </td>
+                                                    {historyPlayers.map(name => {
+                                                        const change = Number(round.pointChanges?.[name]) || 0;
+                                                        return (
+                                                            <td
+                                                                key={name}
+                                                                className={`game-over-podium__history-delta${change > 0 ? ' is-positive' : change < 0 ? ' is-negative' : ''}${isBidderBid(name) ? ' is-bidder' : ''}`}
+                                                            >
+                                                                {change > 0 ? `+${change}` : change}
+                                                            </td>
+                                                        );
+                                                    })}
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
                         )}
                     </section>
                 )}

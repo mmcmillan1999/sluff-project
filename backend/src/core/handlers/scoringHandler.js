@@ -59,6 +59,44 @@ function calculateRoundScores(engine) {
         });
     }
 
+    // Per-game recap entry (public: names and points only) + the durable
+    // round_results analytics row. Both capture the insurance negotiation as
+    // it stood when the round settled.
+    const bidderName = engine.bidWinnerInfo?.playerName;
+    const bidderPlayer = Object.values(engine.players).find(p => p.playerName === bidderName);
+    const activePlayers = engine.playerOrder.turnOrder.map(id => engine.players[id]).filter(Boolean);
+    engine.roundHistory = engine.roundHistory || [];
+    const roundEntry = {
+        roundNumber: engine.roundHistory.length + 1,
+        bidType: roundData.bidType,
+        bidderName,
+        bidderCardPoints: roundData.finalBidderPoints,
+        dealExecuted: Boolean(engine.insurance.dealExecuted),
+        pointChanges: { ...roundData.pointChanges },
+    };
+    engine.roundHistory.push(roundEntry);
+    if (engine.gameId) {
+        effects.push({
+            type: 'LOG_ROUND_RESULT',
+            payload: {
+                gameId: engine.gameId,
+                roundNumber: roundEntry.roundNumber,
+                playerMode: engine.playerMode,
+                bidType: roundData.bidType,
+                bidMultiplier: engine.insurance?.bidMultiplier
+                    || { Frog: 1, Solo: 2, 'Heart Solo': 3 }[roundData.bidType] || 1,
+                bidderUserId: Number.isInteger(bidderPlayer?.userId) ? bidderPlayer.userId : null,
+                bidderIsBot: Boolean(bidderPlayer?.isBot),
+                bidderCardPoints: roundData.finalBidderPoints,
+                dealExecuted: roundEntry.dealExecuted,
+                bidderRequirement: engine.insurance?.bidderRequirement ?? null,
+                defenderOffers: { ...(engine.insurance?.defenderOffers || {}) },
+                pointChanges: roundEntry.pointChanges,
+                allHuman: activePlayers.length > 0 && activePlayers.every(p => !p.isBot),
+            },
+        });
+    }
+
     engine.roundSummary = {
         message: isGameOver ? "Game Over!" : roundData.roundMessage,
         finalScores: { ...engine.scores },

@@ -203,6 +203,97 @@
     color: #cdd8e7;
 }
 
+/* --- Round-by-round history (collapsible) --- */
+.game-over-podium__history {
+    position: relative;
+    z-index: 2;
+    margin-top: clamp(0.65rem, 1.8vh, 0.95rem);
+    text-align: left;
+    border: 1px solid rgba(232, 189, 88, 0.3);
+    border-radius: 0.72rem;
+    background: rgba(31, 24, 8, 0.6);
+    overflow: hidden;
+}
+
+.game-over-podium__history-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0.55rem 0.7rem;
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+}
+
+.game-over-podium__history-toggle h2 {
+    margin: 0;
+    font-size: clamp(0.85rem, 2vh, 1rem);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: #f4e1a4;
+}
+
+.game-over-podium__history-chevron {
+    color: #d7a33e;
+    font-size: 0.7rem;
+}
+
+.game-over-podium__history-scroll {
+    max-height: 34vh;
+    overflow: auto;
+    padding: 0 0.7rem 0.6rem;
+}
+
+.game-over-podium__history-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: clamp(0.66rem, 1.5vh, 0.78rem);
+    font-variant-numeric: tabular-nums;
+}
+
+.game-over-podium__history-table th,
+.game-over-podium__history-table td {
+    padding: 0.28rem 0.4rem;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.game-over-podium__history-table th:first-child,
+.game-over-podium__history-table td:first-child,
+.game-over-podium__history-bid {
+    text-align: left;
+}
+
+.game-over-podium__history-table thead th {
+    position: sticky;
+    top: 0;
+    background: #241b09;
+    color: #cdbf9a;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    max-width: 6ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.game-over-podium__history-table tbody tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.game-over-podium__history-table td {
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    color: #cfc8b6;
+}
+
+.game-over-podium__history-delta.is-positive { color: #7dd6a0; }
+.game-over-podium__history-delta.is-negative { color: #e79a94; }
+.game-over-podium__history-delta.is-bidder { font-weight: 700; }
+
+.game-over-podium__history-ins { color: #e8bd58; }
+
 .game-over-podium__settlement {
     position: relative;
     z-index: 2;

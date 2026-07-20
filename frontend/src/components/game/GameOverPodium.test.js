@@ -483,4 +483,52 @@ describe('GameOverPodium', () => {
         expect(screen.getByRole('button', { name: 'Rematch' })).toBeDisabled();
         expect(screen.getByRole('button', { name: 'Lobby' })).toBeEnabled();
     });
+
+    const roundHistory = [
+        { roundNumber: 1, bidType: 'Solo', bidderName: 'Cara', bidderCardPoints: 72, dealExecuted: false, pointChanges: { Cara: 24, Alice: -12, Bob: -12 } },
+        { roundNumber: 2, bidType: 'Frog', bidderName: 'Alice', bidderCardPoints: 55, dealExecuted: true, pointChanges: { Alice: -8, Bob: 4, Cara: 4 } },
+    ];
+
+    test('shows a collapsed round-by-round panel that expands with per-player deltas', async () => {
+        const user = userEvent.setup();
+        render(
+            <GameOverPodium
+                gameWinner="Cara"
+                finalScores={baseScores}
+                roundHistory={roundHistory}
+                onRematch={vi.fn()}
+                onLobby={vi.fn()}
+            />
+        );
+
+        const toggle = screen.getByRole('button', { name: /Round-by-round/ });
+        expect(toggle).toHaveAttribute('aria-expanded', 'false');
+        expect(screen.queryByRole('table')).not.toBeInTheDocument();
+
+        await user.click(toggle);
+        expect(toggle).toHaveAttribute('aria-expanded', 'true');
+
+        const table = screen.getByRole('table');
+        // Column order follows the podium standings (Cara, Alice, Bob)
+        const headers = within(table).getAllByRole('columnheader').map(h => h.textContent);
+        expect(headers).toEqual(['Rd', 'Bid', 'Cara', 'Alice', 'Bob']);
+        expect(within(table).getByText('+24')).toBeInTheDocument();
+        expect(within(table).queryByText('H.Solo')).not.toBeInTheDocument();
+        expect(within(table).getByText('Solo')).toBeInTheDocument();
+        expect(within(table).getByText('Frog')).toBeInTheDocument();
+        // Insurance marker present on the dealt round
+        expect(within(table).getByLabelText('insurance deal')).toBeInTheDocument();
+    });
+
+    test('omits the round-by-round panel when no history is provided', () => {
+        render(
+            <GameOverPodium
+                gameWinner="Cara"
+                finalScores={baseScores}
+                onRematch={vi.fn()}
+                onLobby={vi.fn()}
+            />
+        );
+        expect(screen.queryByRole('button', { name: /Round-by-round/ })).not.toBeInTheDocument();
+    });
 });

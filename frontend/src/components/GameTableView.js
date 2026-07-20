@@ -1382,6 +1382,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 finalScores={roundSummary?.finalScores}
                 forfeit={roundSummary?.forfeit}
                 tokenSettlement={roundSummary?.tokenSettlement}
+                roundHistory={currentTableState.roundHistory}
                 statusMessage={terminalSettlementMessage}
                 actionsDisabled={!sharedPresentationReady || !serverRoundPresentationReady}
                 onRematch={(terminalSettlementBlocked || isSpectator)

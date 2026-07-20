@@ -1396,6 +1396,32 @@
                             }
                         });
                         break;
+                    case 'LOG_ROUND_RESULT':
+                        // Fire-and-forget analytics write; a database hiccup
+                        // must never delay or break round presentation.
+                        this.pool.query(
+                            `INSERT INTO round_results
+                             (game_id, round_number, player_mode, bid_type, bid_multiplier,
+                              bidder_user_id, bidder_is_bot, bidder_card_points, deal_executed,
+                              bidder_requirement, defender_offers, point_changes, all_human)
+                             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+                            [
+                                effect.payload.gameId,
+                                effect.payload.roundNumber,
+                                effect.payload.playerMode,
+                                effect.payload.bidType,
+                                effect.payload.bidMultiplier,
+                                effect.payload.bidderUserId,
+                                effect.payload.bidderIsBot,
+                                effect.payload.bidderCardPoints,
+                                effect.payload.dealExecuted,
+                                effect.payload.bidderRequirement,
+                                JSON.stringify(effect.payload.defenderOffers || {}),
+                                JSON.stringify(effect.payload.pointChanges || {}),
+                                effect.payload.allHuman,
+                            ],
+                        ).catch(err => console.error('[ROUND-LOG] insert failed:', err.message));
+                        break;
                     case 'HANDLE_GAME_OVER': {
                         const settlement = await this._runSettlementWithRetry(
                             engine,

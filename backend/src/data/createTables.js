@@ -505,8 +505,43 @@ const createDbTables = async (pool) => {
         `);
         
         await pool.query(`
-            CREATE INDEX IF NOT EXISTS idx_bot_insurance_logs_created_at 
+            CREATE INDEX IF NOT EXISTS idx_bot_insurance_logs_created_at
             ON bot_insurance_logs(created_at);
+        `);
+
+        // One row per settled round (July 2026): the analytics source for
+        // balance and UI tuning (bid-type win rates, insurance bands), with
+        // all_human separating human-table data from bot-heavy Quick Play.
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS round_results (
+                round_result_id SERIAL PRIMARY KEY,
+                game_id INTEGER REFERENCES game_history(game_id) ON DELETE CASCADE,
+                round_number INTEGER NOT NULL,
+                player_mode INTEGER NOT NULL,
+                bid_type VARCHAR(20) NOT NULL,
+                bid_multiplier INTEGER NOT NULL,
+                bidder_user_id INTEGER,
+                bidder_is_bot BOOLEAN NOT NULL DEFAULT FALSE,
+                bidder_card_points INTEGER NOT NULL,
+                deal_executed BOOLEAN NOT NULL,
+                bidder_requirement INTEGER,
+                defender_offers JSONB,
+                point_changes JSONB,
+                all_human BOOLEAN NOT NULL DEFAULT FALSE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+        await pool.query(`
+            CREATE INDEX IF NOT EXISTS idx_round_results_bid_type
+            ON round_results(bid_type);
+        `);
+        await pool.query(`
+            CREATE INDEX IF NOT EXISTS idx_round_results_created_at
+            ON round_results(created_at);
+        `);
+        await pool.query(`
+            CREATE INDEX IF NOT EXISTS idx_round_results_game_id
+            ON round_results(game_id);
         `);
 
         await pool.query(`
