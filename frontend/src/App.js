@@ -18,6 +18,7 @@ import GameHeader from "./components/GameHeader.js";
 import HowToPlayModal from "./components/HowToPlayModal.js";
 import FirstGameWelcome, { shouldShowFirstGameWelcome } from "./components/FirstGameWelcome.js";
 import OrientationScrim from "./components/OrientationScrim.js";
+import SluffIdent from "./components/SluffIdent.js";
 import { extractInviteTableId } from "./utils/tableInvites.js";
 import { newBuildAvailable } from "./utils/clientVersion.js";
 import "./App.css";
@@ -46,6 +47,16 @@ const socket = io(SERVER_URL, {
 
 function App() {
     const [view, setView] = useState('lobby');
+    // Boot ident: plays on every full page load (like the Netflix/Chess.com
+    // openers) and doubles as a curtain over the socket-connect wait. It
+    // replays on login (rolling into the lobby) and when the app returns
+    // after a long time away — never over a live game table.
+    const [showBootIdent, setShowBootIdent] = useState(true);
+    const [bootIdentRun, setBootIdentRun] = useState(1);
+    const playBootIdent = useCallback(() => {
+        setBootIdentRun(run => run + 1);
+        setShowBootIdent(true);
+    }, []);
     const [token, setToken] = useState(localStorage.getItem("sluff_token"));
     const [user, setUser] = useState(null);
     const [lobbyThemes, setLobbyThemes] = useState([]);
@@ -93,6 +104,8 @@ function App() {
         setUser(data.user);
         setSocketSessionReady(false);
         enableSound();
+        // Roll the ident as the freshly logged-in player lands in the lobby.
+        playBootIdent();
     };
 
     const handleHardReset = () => {
@@ -318,6 +331,31 @@ function App() {
     const viewRef = React.useRef(view);
     useEffect(() => { viewRef.current = view; }, [view]);
 
+    // Replay the ident when the app comes back after a long time away
+    // (backgrounded phone, laptop lid, offline stretch). Short app switches
+    // don't retrigger it, and it never plays over a live game table.
+    const identHiddenAtRef = React.useRef(null);
+    useEffect(() => {
+        const IDENT_REPLAY_AFTER_AWAY_MS = 10 * 60 * 1000;
+        const onVisibility = () => {
+            if (document.visibilityState === 'hidden') {
+                if (identHiddenAtRef.current === null) {
+                    identHiddenAtRef.current = Date.now();
+                }
+                return;
+            }
+            const hiddenAt = identHiddenAtRef.current;
+            identHiddenAtRef.current = null;
+            if (hiddenAt !== null
+                && Date.now() - hiddenAt >= IDENT_REPLAY_AFTER_AWAY_MS
+                && viewRef.current !== 'gameTable') {
+                playBootIdent();
+            }
+        };
+        document.addEventListener('visibilitychange', onVisibility);
+        return () => document.removeEventListener('visibilitychange', onVisibility);
+    }, [playBootIdent]);
+
     useEffect(() => {
         let disposed = false;
         const applyIfSafe = () => {
@@ -486,6 +524,9 @@ function App() {
     if (!token || !user) {
         return (
             <div className="app-content-container no-header">
+                {showBootIdent && (
+                    <SluffIdent key={bootIdentRun} onDone={() => setShowBootIdent(false)} />
+                )}
                 <OrientationScrim />
                 <AuthContainer onLoginSuccess={handleLoginSuccess} inviteTableId={pendingInviteTableId} />
             </div>
@@ -513,6 +554,9 @@ function App() {
 
     return (
         <>
+            {showBootIdent && (
+                <SluffIdent key={bootIdentRun} onDone={() => setShowBootIdent(false)} />
+            )}
             <OrientationScrim />
             {(errorMessage || connectionNotice) && (
                 <div

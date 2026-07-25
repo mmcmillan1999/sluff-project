@@ -5,7 +5,9 @@
 // the production build, which only includes index.html).
 // Query params: ?mode=4 for the four-player table (default 3);
 // ?broken=1 to fire the trump-broken banner on mount;
-// ?fx=lightning|shatter|faultline to force a trump-broken effect.
+// ?fx=lightning|shatter|faultline to force a trump-broken effect;
+// ?mode=ident to preview the boot ident (replays on tap/Replay button;
+// add &hold=1 to freeze the finished logo for screenshots).
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
@@ -22,9 +24,50 @@ import './styles/venueThemes.css';
 import GameHeader from './components/GameHeader.js';
 import GameTableView from './components/GameTableView.js';
 import OrientationScrim from './components/OrientationScrim.js';
+import SluffIdent from './components/SluffIdent.js';
 import { setCosmetic } from './utils/cosmetics.js';
 
 const params = new URLSearchParams(window.location.search);
+
+// --- Boot ident preview: /harness.html?mode=ident[&hold=1] ---
+const identMode = params.get('mode') === 'ident';
+if (identMode) {
+    const IdentHarness = () => {
+        const [runKey, setRunKey] = React.useState(1);
+        const [running, setRunning] = React.useState(true);
+        const hold = params.get('hold') === '1';
+        return (
+            <div style={{ position: 'fixed', inset: 0, background: '#040806' }}>
+                {running && (
+                    <SluffIdent
+                        key={runKey}
+                        hold={hold}
+                        onDone={() => setRunning(false)}
+                    />
+                )}
+                {!running && (
+                    <button
+                        type="button"
+                        onClick={() => { setRunKey(k => k + 1); setRunning(true); }}
+                        style={{
+                            position: 'fixed', left: '50%', top: '50%',
+                            transform: 'translate(-50%, -50%)',
+                            padding: '12px 28px', fontSize: 18,
+                            fontFamily: "'Oswald', sans-serif",
+                            background: '#1c4630', color: '#fff',
+                            border: '1px solid #c9a76d', borderRadius: 8,
+                            cursor: 'pointer',
+                        }}
+                    >
+                        Replay ident
+                    </button>
+                )}
+            </div>
+        );
+    };
+    ReactDOM.createRoot(document.getElementById('root')).render(<IdentHarness />);
+}
+
 const playerMode = params.get('mode') === '4' ? 4 : 3;
 // ?fx=<id> equips a trump-broken effect before mount so the three can be
 // compared back-to-back with ?broken=1. Unknown ids are ignored.
@@ -120,6 +163,7 @@ const soundSettings = {
     setMusicVolume: noop,
 };
 
+if (!identMode) {
 document.body.classList.add('game-active');
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -145,3 +189,4 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         </div>
     </>
 );
+}

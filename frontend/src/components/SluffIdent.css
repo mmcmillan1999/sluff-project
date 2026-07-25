@@ -1,0 +1,227 @@
+/* frontend/src/components/SluffIdent.css */
+/* Boot ident timeline (ms):
+   0     void fades up
+   250   the full logo (SluffLogo.png) erupts from a pinprick, settles ~1350
+   400   the real ace of clubs starts its boomerang arc — constant spin,
+         growing from small to logo-card size along the way
+   2000  the ace docks, fully solid: stage dip + gold shock ring
+   2400  the docked ace dissolves and the logo's card emerges (900ms),
+         while the gold light sweep rakes the logo
+   3900  leave (fade 380ms) — component unmounts via onDone */
+
+.sluff-ident {
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(ellipse at 50% 42%, #0e2519 0%, #081410 55%, #040806 100%);
+    cursor: pointer;
+    animation: sluff-ident-in 0.25s ease-out both;
+}
+
+@keyframes sluff-ident-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.sluff-ident.is-leaving {
+    animation: sluff-ident-out 0.38s ease both;
+    pointer-events: none;
+}
+
+@keyframes sluff-ident-out {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+.sluff-ident__stage {
+    position: relative;
+    width: min(92vw, 126vh);
+    aspect-ratio: 3 / 2;
+    animation: sluff-ident-impact 0.22s ease-out 2s;
+}
+
+.sluff-ident__layer {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+
+/* Logo: pinprick -> overshoot -> settle. */
+.sluff-ident__logo {
+    object-fit: contain;
+    transform: scale(0.004);
+    opacity: 0;
+    transform-origin: 50% 50%;
+    animation: sluff-ident-logo-zoom 1.1s cubic-bezier(0.5, 0, 0.15, 1) 0.25s forwards;
+    will-change: transform, opacity;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+@keyframes sluff-ident-logo-zoom {
+    0% { transform: scale(0.004); opacity: 0; }
+    10% { opacity: 1; }
+    82% { transform: scale(1.045); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* The real card flies one smooth boomerang arc — in from bottom-left, up
+   and over the top, hooking down from upper-right onto its docking spot.
+   The animation runs on LINEAR timing with rotation values proportional to
+   progress, so the spin rate is perfectly constant (two full turns), while
+   scale grows steadily from small to logo-card size. As it overlaps the
+   logo its transparency grows and the logo's card emerges through it.
+   transform-origin sits on the ace's own center (437.5, 150 of 600x400)
+   so it spins about itself. */
+.sluff-ident__card-svg {
+    transform: translate(-110%, 70%) rotate(-720deg) scale(0.18);
+    opacity: 0;
+    /* The ace's own center, (436.6, 192) of the 600x400 stage */
+    transform-origin: 72.77% 48%;
+    /* Two phases: fly-and-dock (fully solid landing), then — after a
+       settled beat — dissolve in place so the logo's card emerges. The
+       dissolve animates opacity only, so the docked transform holds. */
+    animation:
+        sluff-ident-card-orbit 1.6s linear 0.4s forwards,
+        sluff-ident-card-dissolve 0.9s ease 2.4s forwards;
+    will-change: transform, opacity;
+}
+
+@keyframes sluff-ident-card-orbit {
+    0% {
+        transform: translate(-110%, 70%) rotate(-720deg) scale(0.18);
+        opacity: 0;
+    }
+    8% { opacity: 1; }
+    /* Stays small for most of the tour; the growth to full logo-card size
+       packs into the final approach, like it's flying at the camera. */
+    20% { transform: translate(-72%, 0%) rotate(-576deg) scale(0.2); }
+    40% { transform: translate(-30%, -58%) rotate(-432deg) scale(0.24); }
+    60% { transform: translate(20%, -72%) rotate(-288deg) scale(0.34); }
+    80% { transform: translate(52%, -34%) rotate(-144deg) scale(0.58); }
+    100% {
+        transform: translate(0, 0) rotate(0deg) scale(0.94);
+        opacity: 1;
+    }
+}
+
+@keyframes sluff-ident-card-dissolve {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+/* Impact dip when the card lands */
+@keyframes sluff-ident-impact {
+    0% { transform: scale(1); }
+    35% { transform: scale(0.982); }
+    100% { transform: scale(1); }
+}
+
+/* Gold shock ring radiating from the landing */
+.sluff-ident__shock {
+    position: absolute;
+    left: 72.77%;
+    top: 48%;
+    width: 2vh;
+    height: 2vh;
+    margin: -1vh 0 0 -1vh;
+    border: 2px solid rgba(233, 196, 138, 0.55);
+    border-radius: 50%;
+    opacity: 0;
+    animation: sluff-ident-shock 0.55s ease-out 2s;
+    pointer-events: none;
+}
+
+@keyframes sluff-ident-shock {
+    0% { opacity: 0.75; transform: scale(1); }
+    100% { opacity: 0; transform: scale(30); }
+}
+
+/* Gold light sweep, masked to the logo's own pixels so the band only
+   shows where the logo is. */
+.sluff-ident__sweep {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    -webkit-mask-image: url('/SluffLogo.png');
+    mask-image: url('/SluffLogo.png');
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+}
+
+.sluff-ident__sweep::before {
+    content: '';
+    position: absolute;
+    top: -12%;
+    bottom: -12%;
+    left: -30%;
+    width: 26%;
+    background: linear-gradient(
+        90deg,
+        rgba(240, 212, 160, 0) 0%,
+        rgba(240, 212, 160, 0.85) 50%,
+        rgba(240, 212, 160, 0) 100%
+    );
+    transform: skewX(-18deg) translateX(-40%);
+    animation: sluff-ident-sweep 0.55s ease-in-out 2.45s both;
+}
+
+@keyframes sluff-ident-sweep {
+    from { transform: skewX(-18deg) translateX(-40%); }
+    to { transform: skewX(-18deg) translateX(660%); }
+}
+
+/* Reduced motion: no zoom, no fly-in — a calm fade of the finished mark. */
+@media (prefers-reduced-motion: reduce) {
+    .sluff-ident__stage,
+    .sluff-ident__logo,
+    .sluff-ident__card-svg,
+    .sluff-ident__shock,
+    .sluff-ident__sweep::before {
+        animation: none;
+    }
+
+    .sluff-ident__logo {
+        transform: none;
+        opacity: 1;
+    }
+
+    /* The finished mark is the logo alone — the real card has dissolved. */
+    .sluff-ident__card-svg {
+        transform: none;
+        opacity: 0;
+    }
+
+    .sluff-ident__shock {
+        display: none;
+    }
+}
+
+/* Harness hold: freeze the finished composition for screenshots. */
+.sluff-ident.is-held .sluff-ident__stage,
+.sluff-ident.is-held .sluff-ident__logo,
+.sluff-ident.is-held .sluff-ident__card-svg,
+.sluff-ident.is-held .sluff-ident__shock,
+.sluff-ident.is-held .sluff-ident__sweep::before {
+    animation: none;
+}
+
+.sluff-ident.is-held .sluff-ident__logo {
+    transform: none;
+    opacity: 1;
+}
+
+.sluff-ident.is-held .sluff-ident__card-svg {
+    transform: none;
+    opacity: 0;
+}

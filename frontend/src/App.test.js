@@ -25,6 +25,11 @@ vi.mock('socket.io-client', () => ({
 // Mock the entire api service
 vi.mock('./services/api');
 
+// The boot ident is a purely visual overlay with its own test suite
+// (SluffIdent.test.js); mocked here so its SVG text ("A", club pips)
+// doesn't pollute text queries against the views underneath.
+vi.mock('./components/SluffIdent', () => ({ default: () => null }));
+
 
 describe('App Component and Game Flow', () => {
 
