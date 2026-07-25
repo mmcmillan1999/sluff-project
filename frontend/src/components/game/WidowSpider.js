@@ -313,12 +313,16 @@ const WidowSpider = ({ runId, mode = 'wander', cancelled }) => {
                 {/* Cephalothorax + bulbous abdomen */}
                 <circle cx="0" cy="-5" r="4.2" fill="#151517" />
                 <ellipse cx="0" cy="4.5" rx="6.5" ry="8" fill="#0d0d10" />
-                <ellipse cx="0" cy="1.5" rx="6.5" ry="3.4" fill="rgba(255,255,255,0.06)" />
+                <ellipse cx="0" cy="1.5" rx="6.5" ry="3.4" fill="rgba(255,255,255,0.13)" />
+                {/* Moonlit rim light so her silhouette reads on dark felt
+                    (Shirecliff walnut) without breaking the black-widow look */}
+                <path d="M -6.2 2.1 Q -7.3 7.6 -3.2 11.4" stroke="rgba(255,255,255,0.32)" strokeWidth="0.7" strokeLinecap="round" fill="none" />
+                <path d="M -3.8 -6.8 Q -4.9 -5 -3.8 -3.2" stroke="rgba(255,255,255,0.26)" strokeWidth="0.6" strokeLinecap="round" fill="none" />
                 {/* Red hourglass */}
                 <path d="M 0 2.4 L -2.2 -0.6 L 2.2 -0.6 Z M 0 2.6 L -2.2 5.8 L 2.2 5.8 Z" fill="#c81e1e" transform="translate(0 1.4)" />
                 {/* Eyes glint */}
-                <circle cx="-1.4" cy="-8" r="0.7" fill="#3a3a40" />
-                <circle cx="1.4" cy="-8" r="0.7" fill="#3a3a40" />
+                <circle cx="-1.4" cy="-8" r="0.7" fill="#a9aab6" />
+                <circle cx="1.4" cy="-8" r="0.7" fill="#a9aab6" />
             </svg>
         </div>
     );

@@ -28,7 +28,11 @@
 .widow-spider-svg {
     width: 100%;
     height: 100%;
-    filter: drop-shadow(0.2vh 0.35vh 0.35vh rgba(0, 0, 0, 0.5));
+    /* Faint warm halo lifts her off dark felts (Shirecliff walnut) while the
+       dark drop shadow keeps her grounded on lighter tables. */
+    filter:
+        drop-shadow(0 0 0.4vh rgba(255, 243, 214, 0.3))
+        drop-shadow(0.2vh 0.35vh 0.35vh rgba(0, 0, 0, 0.5));
 }
 
 /* Walk cycle: alternating leg pairs scrabble while she's moving */
