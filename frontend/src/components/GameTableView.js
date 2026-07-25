@@ -16,7 +16,6 @@ import IosPwaPrompt from './game/IosPwaPrompt';
 import {
     END_ROUND_TOTAL_MS,
     ROUND_RECAP_ACTION_MS,
-    SETTLED_RECAP_HOLD_MS,
 } from '../config/endRoundTiming';
 import LobbyChat from './LobbyChat';
 import AdminObserverMode from './AdminObserverMode';
@@ -50,7 +49,6 @@ const ROUND_PRESENTATION_STATES = new Set([
     'Game Over'
 ]);
 const ROUND_SCORES_RELEASED_PHASES = new Set([
-    'score-settled-waiting',
     'settled',
     'podium'
 ]);
@@ -142,7 +140,6 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const roundModalScheduledRef = useRef(false);
     const roundPresentationAckRef = useRef(null);
     const roundPresentationConfirmedAckRef = useRef(null);
-    const roundAdvanceTimerRef = useRef(null);
     const errorTimerRef = useRef(null);
     const dropZoneRef = useRef(null);
     const dealTransitionRef = useRef({
@@ -438,8 +435,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const roundPresentationControlsLocked = isRoundPresentationState && [
         'waiting',
         'recap',
-        'scoring',
-        'score-settled-waiting'
+        'scoring'
     ].includes(roundPresentationPhase);
     const terminalSettlementMessage = terminalSettlementBlocked
         ? (roundSummary?.message || (terminalSettlementStatus === 'pending'
@@ -728,10 +724,6 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 clearTimeout(roundModalTimerRef.current);
                 roundModalTimerRef.current = null;
             }
-            if (roundAdvanceTimerRef.current) {
-                clearTimeout(roundAdvanceTimerRef.current);
-                roundAdvanceTimerRef.current = null;
-            }
             setShowRoundSummaryModal(false);
             setRoundPresentationPhase('idle');
         }
@@ -760,22 +752,14 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     }, [hasRoundScoreChanges, previousRoundScores, roundScorePresentationKey, roundSummary]);
 
     const handleScoreCeremonyComplete = useCallback(() => {
-        // Start the reading window only after the score animation finishes.
-        // If the server's shared presentation clock runs longer, keep the recap
-        // up through that deadline so it transitions directly into an enabled
-        // podium or next-round action instead of exposing a dead table gap.
-        const sharedClockRemaining = hasSharedPresentationClock
-            ? Math.max(0, localPresentationDeadline - Date.now())
-            : 0;
-        const settledRecapHold = Math.max(SETTLED_RECAP_HOLD_MS, sharedClockRemaining);
-        setRoundPresentationPhase('score-settled-waiting');
-        if (roundAdvanceTimerRef.current) clearTimeout(roundAdvanceTimerRef.current);
-        roundAdvanceTimerRef.current = setTimeout(() => {
-            roundAdvanceTimerRef.current = null;
-            setShowRoundSummaryModal(false);
-            setRoundPresentationPhase(roundSummary?.isGameOver ? 'podium' : 'settled');
-        }, settledRecapHold);
-    }, [hasSharedPresentationClock, localPresentationDeadline, roundSummary?.isGameOver]);
+        // The chip flight has already landed the new totals on the table, so
+        // return straight to the table (or the podium at game end) instead of
+        // re-opening the recap. Nothing advances early: table controls stay
+        // locked until the shared presentation clock and acknowledgement
+        // quorum release them.
+        setShowRoundSummaryModal(false);
+        setRoundPresentationPhase(roundSummary?.isGameOver ? 'podium' : 'settled');
+    }, [roundSummary?.isGameOver]);
 
     useEffect(() => {
         const presentationComplete = roundPresentationPhase === 'settled'
@@ -1080,8 +1064,6 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         if (roundModalTimerRef.current) clearTimeout(roundModalTimerRef.current);
         roundModalTimerRef.current = null;
         roundModalScheduledRef.current = false;
-        if (roundAdvanceTimerRef.current) clearTimeout(roundAdvanceTimerRef.current);
-        roundAdvanceTimerRef.current = null;
     }, []);
 
     const handleForfeit = () => {
@@ -1401,9 +1383,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                     ? scoreCollectionLabel
                     : (roundSummary?.isGameOver ? 'View Final Standings' : 'Continue')}
                 onContinue={handleRoundRecapContinue}
-                scoreStage={roundPresentationPhase === 'scoring'
-                    ? 'counting'
-                    : (roundPresentationPhase === 'score-settled-waiting' ? 'complete' : 'preview')}
+                scoreStage={roundPresentationPhase === 'scoring' ? 'counting' : 'preview'}
                 playerOrder={currentTableState.seatingOrder || currentTableState.playerOrderActive}
                 tableId={currentTableState.tableId}
                 playSound={playSound}
