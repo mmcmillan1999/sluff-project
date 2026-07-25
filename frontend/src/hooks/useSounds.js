@@ -9,7 +9,9 @@ const SOUND_FILES = {
     cardDeal: '/Sounds/card_dealing_3s_v1.mp3',
     trumpBroken: '/Sounds/trump_broken_v6.mp3',
     bidFrog: '/Sounds/bid_frog_v1.mp3',
-    bidSolo: '/Sounds/bid_solo_v1.mp3',
+    // v2: re-recorded (Liam, eleven_v3, 92% speed) — v1's "Solo bid" was
+    // getting misheard as "solo beans".
+    bidSolo: '/Sounds/bid_solo_v2.mp3',
     bidHeartSolo: '/Sounds/bid_heart_solo_v1.mp3',
     bidAllPass: '/Sounds/bid_all_pass_v1.mp3',
     bidPass: '/Sounds/bid_pass_v1.mp3',
