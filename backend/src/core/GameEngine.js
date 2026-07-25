@@ -366,6 +366,8 @@ class GameEngine {
         if (!this.players[userId]) return;
 
         const playerInfo = this.players[userId];
+        // A pending rematch offer cannot survive a participant walking away.
+        this._cancelRematchOfferForDeparture(playerInfo.playerName);
         const safeLeaveStates = ["Waiting for Players", "Ready to Start"];
         // Terminal states: the game is settled and payouts are done, so leaving
         // must release the seat for real even though gameId is still set —
@@ -406,6 +408,7 @@ class GameEngine {
     disconnectPlayer(userId) {
         const player = this.players[userId];
         if (!player) return;
+        this._cancelRematchOfferForDeparture(player.playerName);
         if (this.gameStartPending && !player.isSpectator && !player.isBot) {
             console.log(`[${this.tableId}] Player ${player.playerName} disconnected while the game start was committing.`);
             player.disconnected = true;
@@ -891,6 +894,73 @@ class GameEngine {
         }]);
     }
 
+    _newRematchOffer() {
+        return { isActive: false, initiator: null, votes: {}, resolution: null, cancelReason: null };
+    }
+
+    // A rematch is a fresh buy-in, so no single player may force it. The
+    // offer collects an explicit 'accept' from every present, seated player
+    // (draw-vote shape) before the table is allowed to reset.
+    requestRematch(userId) {
+        const player = this.players[userId];
+        if (!player || player.isSpectator
+            || !['Game Over', 'DrawComplete'].includes(this.state)
+            || this.rematchOffer.isActive) return this._effects();
+
+        const offer = this._newRematchOffer();
+        offer.isActive = true;
+        offer.initiator = player.playerName;
+        for (const id of this.playerOrder.allIds) {
+            const seated = this.players[id];
+            // Disconnected seats are excluded: reset() drops them anyway, and
+            // a vote entry nobody can answer would wedge the offer forever.
+            if (!seated || seated.isSpectator || seated.disconnected) continue;
+            offer.votes[seated.playerName] = seated.playerName === player.playerName ? 'accept' : null;
+        }
+        this.rematchOffer = offer;
+        console.log(`[${this.tableId}] Rematch offered by ${player.playerName}; awaiting ${Object.values(offer.votes).filter(v => v === null).length} acceptance(s).`);
+        this._resolveRematchOfferIfComplete();
+        return this._effects([{ type: 'BROADCAST_STATE' }]);
+    }
+
+    submitRematchVote(userId, vote) {
+        const player = this.players[userId];
+        if (!player || !this.rematchOffer.isActive
+            || !['accept', 'decline'].includes(vote)
+            || this.rematchOffer.votes[player.playerName] !== null) return this._effects();
+
+        console.log(`[${this.tableId}] ${player.playerName} responded to the rematch offer: ${vote}.`);
+        this.rematchOffer.votes[player.playerName] = vote;
+
+        if (vote === 'decline') {
+            this.rematchOffer.isActive = false;
+            this.rematchOffer.resolution = 'declined';
+            this.rematchOffer.cancelReason = `${player.playerName} declined the rematch.`;
+            return this._effects([{ type: 'BROADCAST_STATE' }]);
+        }
+
+        this._resolveRematchOfferIfComplete();
+        return this._effects([{ type: 'BROADCAST_STATE' }]);
+    }
+
+    _resolveRematchOfferIfComplete() {
+        if (!this.rematchOffer.isActive) return;
+        const votes = Object.values(this.rematchOffer.votes);
+        if (votes.length === 0 || votes.some(v => v === null)) return;
+        this.rematchOffer.isActive = false;
+        this.rematchOffer.resolution = 'accepted';
+        console.log(`[${this.tableId}] Rematch accepted by all players.`);
+    }
+
+    _cancelRematchOfferForDeparture(playerName) {
+        if (!this.rematchOffer?.isActive || !playerName) return;
+        if (!(playerName in this.rematchOffer.votes)) return;
+        this.rematchOffer.isActive = false;
+        this.rematchOffer.resolution = 'cancelled';
+        this.rematchOffer.cancelReason = `${playerName} left the table.`;
+        console.log(`[${this.tableId}] Rematch offer cancelled: ${playerName} left.`);
+    }
+
     _initializeNewRoundState() {
         this.roundPresentationAcknowledgements = new Set();
         this.botBidReadyAt = null;
@@ -900,6 +970,7 @@ class GameEngine {
         this.trickTurnPlayerId = null; this.trickLeaderId = null; this.currentTrickCards = []; this.leadSuitCurrentTrick = null; this.lastCompletedTrick = null; this.tricksPlayedCount = 0; this.capturedTricks = {}; this.roundSummary = null; 
         this.insurance = { isActive: false, bidMultiplier: null, bidderPlayerName: null, bidderRequirement: 0, defenderOffers: {}, dealExecuted: false, executedDetails: null };
         this.forfeiture = { targetPlayerName: null, timeLeft: null }; this.drawRequest = { isActive: false, initiator: null, votes: {}, timer: null };
+        this.rematchOffer = this._newRematchOffer();
         this.drawCountdown = null;
         Object.values(this.players).forEach(p => {
             if (p.playerName && this.scores[p.playerName] !== undefined) {
@@ -1043,6 +1114,7 @@ class GameEngine {
             originalDealtWidow: this.originalDealtWidow, scores: this.scores, currentHighestBidDetails: this.currentHighestBidDetails, bidWinnerInfo: this.bidWinnerInfo, gameStarted: this.gameStarted, trumpSuit: this.trumpSuit, currentTrickCards: this.currentTrickCards, tricksPlayedCount: this.tricksPlayedCount, leadSuitCurrentTrick: this.leadSuitCurrentTrick, trumpBroken: this.trumpBroken, capturedTricks: this.capturedTricks, roundSummary: this.roundSummary, lastCompletedTrick: this.lastCompletedTrick, playersWhoPassedThisRound: this.playersWhoPassedThisRound.map(id => this.players[id]?.playerName), playerMode: this.playerMode, serverVersion: this.serverVersion, insurance: this.insurance, forfeiture: this.forfeiture, drawRequest: this.drawRequest, originalFrogBidderId: this.originalFrogBidderId, soloBidMadeAfterFrog: this.soloBidMadeAfterFrog, revealedWidowForFrog: this.revealedWidowForFrog, widowDiscardsForFrogBidder: this.widowDiscardsForFrogBidder,
             bidderCardPoints: this.bidderCardPoints, defenderCardPoints: this.defenderCardPoints,
             drawCountdown: this.drawCountdown,
+            rematchOffer: this.rematchOffer,
             settlement: this.settlement,
             // Public per-round recap for the podium (names/points only).
             roundHistory: this.roundHistory || [],

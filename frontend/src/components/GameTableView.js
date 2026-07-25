@@ -166,6 +166,11 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     );
     const gameState = currentTableState?.state;
     const gameHasSettled = gameState === 'Game Over' || gameState === 'DrawComplete';
+    const rematchOffer = currentTableState?.rematchOffer;
+    const rematchOfferActive = Boolean(rematchOffer?.isActive);
+    const myRematchVote = rematchOfferActive && selfPlayerName
+        ? rematchOffer.votes?.[selfPlayerName]
+        : undefined;
     const activeSeatIsHeld = Boolean(
         selfPlayerInTable
         && !isSpectator
@@ -1423,9 +1428,18 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 roundHistory={currentTableState.roundHistory}
                 statusMessage={terminalSettlementMessage}
                 actionsDisabled={!sharedPresentationReady || !serverRoundPresentationReady}
+                rematchOffer={rematchOffer}
+                selfPlayerName={selfPlayerName}
+                voiceActive={tableVoiceAvailable}
                 onRematch={(terminalSettlementBlocked || isSpectator)
                     ? undefined
-                    : () => emitEvent('resetGame')}
+                    : () => {
+                        if (rematchOfferActive) {
+                            if (myRematchVote === null) emitEvent('submitRematchVote', { vote: 'accept' });
+                        } else {
+                            emitEvent('requestRematch');
+                        }
+                    }}
                 onLobby={handleLeaveTable}
             />
 

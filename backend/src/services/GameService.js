@@ -1078,6 +1078,61 @@
             await this._performAction(tableId, (engine) => engine.startForfeitTimer(userId, targetPlayerName));
         }
 
+        async requestRematch(tableId, userId) {
+            await this._performAction(tableId, (engine) => engine.requestRematch(userId));
+            const engine = this.getEngineById(tableId);
+            if (engine?.rematchOffer?.isActive) this._scheduleBotRematchVotes(tableId);
+            await this._resolveAcceptedRematch(tableId);
+        }
+
+        async submitRematchVote(tableId, userId, vote) {
+            await this._performAction(tableId, (engine) => engine.submitRematchVote(userId, vote));
+            await this._resolveAcceptedRematch(tableId);
+        }
+
+        async _resolveAcceptedRematch(tableId) {
+            const engine = this.getEngineById(tableId);
+            if (!engine || engine.rematchOffer?.resolution !== 'accepted') return;
+            engine.rematchOffer = engine._newRematchOffer();
+            await this.resetGame(tableId);
+        }
+
+        _scheduleBotRematchVotes(tableId) {
+            const engine = this.getEngineById(tableId);
+            if (!engine?.rematchOffer?.isActive) return;
+            let delay = 1200;
+            for (const botId in engine.bots) {
+                const bot = engine.bots[botId];
+                if (engine.rematchOffer.votes[bot.playerName] !== null) continue;
+                setTimeout(async () => {
+                    const current = this.getEngineById(tableId);
+                    if (!current?.rematchOffer?.isActive) return;
+                    if (current.rematchOffer.votes[bot.playerName] !== null) return;
+                    const vote = (await this._botCanAffordRematch(current, bot)) ? 'accept' : 'decline';
+                    await this.submitRematchVote(tableId, bot.userId, vote);
+                }, delay);
+                delay += 900;
+            }
+        }
+
+        async _botCanAffordRematch(engine, bot) {
+            const botId = Number(bot.userId);
+            // Local/dev bots with synthetic ids never touch the funded ledger.
+            if (!Number.isInteger(botId) || botId <= 0) return true;
+            try {
+                const balances = await loadBotBalances(this.pool, [botId]);
+                if (!balances.has(botId)) return true;
+                const buyInCents = Math.round(Number(TABLE_COSTS[engine.theme] || 0) * 100);
+                return Math.round(Number(balances.get(botId)) * 100) >= buyInCents;
+            } catch (error) {
+                // startGameTransaction (with bot mercy top-ups) remains the
+                // authoritative funding gate; a failed pre-check must not
+                // wedge the table on a broke-looking bot.
+                console.error(`[${engine.tableId}] Bot rematch affordability check failed:`, error.message);
+                return true;
+            }
+        }
+
         async resetGame(tableId) {
             const engine = this.getEngineById(tableId);
             const isTerminal = engine

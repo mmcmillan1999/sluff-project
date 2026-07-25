@@ -44,9 +44,11 @@ vi.mock('./game/RoundSummaryModal', () => ({
 }));
 
 vi.mock('./game/GameOverPodium', () => ({
-    default: ({ show, onRematch, onLobby, actionsDisabled, tokenSettlement }) => show ? (
+    default: ({ show, onRematch, onLobby, actionsDisabled, tokenSettlement, voiceActive, rematchOffer }) => show ? (
         <div role="dialog" aria-label="Winner podium">
             <span data-testid="podium-token-settlement">{JSON.stringify(tokenSettlement || null)}</span>
+            <span data-testid="podium-voice-active">{String(Boolean(voiceActive))}</span>
+            <span data-testid="podium-rematch-offer">{JSON.stringify(rematchOffer || null)}</span>
             <button type="button" onClick={onRematch} disabled={actionsDisabled || !onRematch}>Rematch</button>
             <button type="button" onClick={onLobby}>Lobby</button>
         </div>
@@ -628,9 +630,38 @@ describe('GameTableView round presentation sequence', () => {
         expect(screen.getByRole('dialog', { name: 'Winner podium' })).toBeInTheDocument();
         expect(screen.getByTestId('podium-token-settlement')).toHaveTextContent('"playerName":"Alice"');
         fireEvent.click(screen.getByRole('button', { name: 'Rematch' }));
-        fireEvent.click(screen.getByRole('button', { name: 'Lobby' }));
-        expect(emitEvent).toHaveBeenCalledWith('resetGame');
-        expect(handleLeaveTable).toHaveBeenCalledTimes(1);
+        expect(emitEvent).toHaveBeenCalledWith('requestRematch');
+    });
+
+    test('wires the podium with voice awareness and the accept-vote flow', () => {
+        vi.useFakeTimers();
+        const emitEvent = vi.fn();
+        const state = makeState({ state: 'Game Over', isGameOver: true });
+        state.rematchOffer = {
+            isActive: true,
+            initiator: 'Bob',
+            votes: { Alice: null, Bob: 'accept', Cara: null },
+            resolution: null,
+            cancelReason: null
+        };
+        renderGame(state, { emitEvent });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Collect Points' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Finish Score Ceremony' }));
+        act(() => vi.advanceTimersByTime(SETTLED_RECAP_HOLD_MS));
+        expect(screen.getByRole('dialog', { name: 'Winner podium' })).toBeInTheDocument();
+
+        // The real podium warns about the voice disconnect before onLobby
+        // fires (covered by GameOverPodium.test.js); the table view must tell
+        // it a live voice session exists and hand it the offer to render.
+        expect(screen.getByTestId('podium-voice-active')).toHaveTextContent('true');
+        expect(screen.getByTestId('podium-rematch-offer')).toHaveTextContent('"initiator":"Bob"');
+
+        // With an open offer and no vote from Alice yet, the primary action
+        // accepts instead of opening a second offer.
+        fireEvent.click(screen.getByRole('button', { name: 'Rematch' }));
+        expect(emitEvent).toHaveBeenCalledWith('submitRematchVote', { vote: 'accept' });
+        expect(emitEvent).not.toHaveBeenCalledWith('requestRematch');
     });
 
     test('skips a meaningless zero-change ceremony for a forfeit and opens final standings', async () => {

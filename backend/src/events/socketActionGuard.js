@@ -61,6 +61,7 @@ const validators = {
         && payload.discards.every(card => CARD_SET.has(card))
     ) ? null : 'Choose three unique valid cards to discard.',
     drawVote: payload => ['wash', 'split', 'no'].includes(payload.vote) ? null : 'Invalid draw vote.',
+    rematchVote: payload => ['accept', 'decline'].includes(payload.vote) ? null : 'Invalid rematch vote.',
     insurance: payload => (
         ['bidderRequirement', 'defenderOffer'].includes(payload.settingType)
         && Number.isInteger(Number(payload.value))

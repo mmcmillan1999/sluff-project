@@ -758,9 +758,18 @@ const registerGameHandlers = (io, gameService, options = {}) => {
             gameService.startForfeitTimer(tableId, socket.user.id, targetPlayerName)
         ));
         onTableAction("requestDraw", {}, ({ payload: { tableId } }) => gameService.requestDraw(tableId, socket.user.id));
+        onTableAction("requestRematch", {
+            validate: validators.terminalReset,
+        }, ({ payload: { tableId } }) => gameService.requestRematch(tableId, socket.user.id));
+        onTableAction("submitRematchVote", { validate: validators.rematchVote }, ({ payload: { tableId, vote } }) => (
+            gameService.submitRematchVote(tableId, socket.user.id, vote)
+        ));
+        // Legacy clients still emit resetGame from "Play Again" buttons. A
+        // lone click must never force everyone into a new buy-in, so it now
+        // opens the same all-players rematch offer.
         onTableAction("resetGame", {
             validate: validators.terminalReset,
-        }, ({ payload: { tableId } }) => gameService.resetGame(tableId));
+        }, ({ payload: { tableId } }) => gameService.requestRematch(tableId, socket.user.id));
         onTableAction("removeBot", { adminOnly: true, allowSpectator: true }, async ({ engine }) => {
             engine.removeBot();
             gameService.emitGameState(engine.tableId);

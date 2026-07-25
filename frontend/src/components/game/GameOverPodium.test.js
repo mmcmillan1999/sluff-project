@@ -398,6 +398,120 @@ describe('GameOverPodium', () => {
         expect(onLobby).not.toHaveBeenCalled();
     });
 
+    test('shows the rematch offer roster and turns the primary action into Accept', async () => {
+        const user = userEvent.setup();
+        const onRematch = vi.fn();
+        render(
+            <GameOverPodium
+                gameWinner="Cara"
+                finalScores={baseScores}
+                onRematch={onRematch}
+                onLobby={vi.fn()}
+                selfPlayerName="Alice"
+                rematchOffer={{
+                    isActive: true,
+                    initiator: 'Bob',
+                    votes: { Alice: null, Bob: 'accept', Cara: null },
+                    resolution: null,
+                    cancelReason: null
+                }}
+            />
+        );
+
+        expect(screen.getByText(/offered a rematch/i)).toBeInTheDocument();
+        const roster = screen.getByRole('list', { name: 'Rematch acceptances' });
+        expect(within(roster).getByText('✓ In')).toBeInTheDocument();
+        expect(within(roster).getAllByText('Waiting…')).toHaveLength(2);
+
+        await user.click(screen.getByRole('button', { name: 'Accept Rematch' }));
+        expect(onRematch).toHaveBeenCalledTimes(1);
+    });
+
+    test('parks the primary action while waiting on other acceptances', () => {
+        render(
+            <GameOverPodium
+                gameWinner="Cara"
+                finalScores={baseScores}
+                onRematch={vi.fn()}
+                onLobby={vi.fn()}
+                selfPlayerName="Alice"
+                rematchOffer={{
+                    isActive: true,
+                    initiator: 'Alice',
+                    votes: { Alice: 'accept', Bob: null, Cara: null },
+                    resolution: null,
+                    cancelReason: null
+                }}
+            />
+        );
+
+        expect(screen.getByRole('button', { name: 'Waiting for players…' })).toBeDisabled();
+    });
+
+    test('announces a dead offer and allows a fresh rematch request', () => {
+        render(
+            <GameOverPodium
+                gameWinner="Cara"
+                finalScores={baseScores}
+                onRematch={vi.fn()}
+                onLobby={vi.fn()}
+                selfPlayerName="Alice"
+                rematchOffer={{
+                    isActive: false,
+                    initiator: 'Alice',
+                    votes: { Alice: 'accept', Bob: 'decline', Cara: null },
+                    resolution: 'declined',
+                    cancelReason: 'Bob declined the rematch.'
+                }}
+            />
+        );
+
+        expect(screen.getByText(/Bob declined the rematch\./)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Rematch' })).toBeEnabled();
+    });
+
+    test('requires a voice-disconnect confirmation before leaving when voice is active', async () => {
+        const user = userEvent.setup();
+        const onLobby = vi.fn();
+        render(
+            <GameOverPodium
+                gameWinner="Cara"
+                finalScores={baseScores}
+                onRematch={vi.fn()}
+                onLobby={onLobby}
+                voiceActive
+            />
+        );
+
+        await user.click(screen.getByRole('button', { name: 'Lobby' }));
+        expect(onLobby).not.toHaveBeenCalled();
+        expect(screen.getByRole('alert')).toHaveTextContent(/disconnects you from voice chat/i);
+
+        await user.click(screen.getByRole('button', { name: 'Stay' }));
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+        expect(onLobby).not.toHaveBeenCalled();
+
+        await user.click(screen.getByRole('button', { name: 'Lobby' }));
+        await user.click(screen.getByRole('button', { name: 'Leave anyway' }));
+        expect(onLobby).toHaveBeenCalledTimes(1);
+    });
+
+    test('leaves immediately without a warning when voice is not active', async () => {
+        const user = userEvent.setup();
+        const onLobby = vi.fn();
+        render(
+            <GameOverPodium
+                gameWinner="Cara"
+                finalScores={baseScores}
+                onRematch={vi.fn()}
+                onLobby={onLobby}
+            />
+        );
+
+        await user.click(screen.getByRole('button', { name: 'Lobby' }));
+        expect(onLobby).toHaveBeenCalledTimes(1);
+    });
+
     test('releases a rejected Rematch submission after authoritative readiness changes', async () => {
         const user = userEvent.setup();
         const onRematch = vi.fn();

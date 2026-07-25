@@ -297,7 +297,10 @@ const GameOverPodium = ({
     statusMessage = null,
     actionsDisabled = false,
     tokenSettlement = null,
-    roundHistory = null
+    roundHistory = null,
+    rematchOffer = null,
+    selfPlayerName = null,
+    voiceActive = false
 }) => {
     const headingId = useId();
     const detailId = useId();
@@ -306,11 +309,41 @@ const GameOverPodium = ({
     const dialogRef = useModalFocus(show, 'button:not(:disabled)');
     const [submitted, setSubmitted] = useState(false);
     const [historyOpen, setHistoryOpen] = useState(false);
+    const [confirmingLeave, setConfirmingLeave] = useState(false);
+    const [leaving, setLeaving] = useState(false);
+
+    const offerActive = Boolean(rematchOffer?.isActive);
+    // `null` means "seated but hasn't answered yet" — it must survive here,
+    // so no null-coalescing. Absent names resolve to undefined (spectators).
+    const myRematchVote = offerActive && selfPlayerName && rematchOffer.votes
+        && Object.prototype.hasOwnProperty.call(rematchOffer.votes, selfPlayerName)
+        ? rematchOffer.votes[selfPlayerName]
+        : undefined;
+    const iHaveAccepted = offerActive && myRematchVote === 'accept';
+    const canAcceptOffer = offerActive && myRematchVote === null;
+    const offerNotice = !offerActive && rematchOffer?.cancelReason
+        ? rematchOffer.cancelReason
+        : null;
+    // Every transition of the offer (opened, my vote landed, declined,
+    // cancelled) re-arms the one-shot button guard.
+    const rematchStateKey = [
+        offerActive,
+        rematchOffer?.initiator || '',
+        rematchOffer?.resolution || '',
+        myRematchVote ?? '',
+    ].join('|');
 
     useEffect(() => {
         if (!show) return;
         setSubmitted(false);
-    }, [show, actionsDisabled]);
+    }, [show, actionsDisabled, rematchStateKey]);
+
+    useEffect(() => {
+        if (!show) {
+            setConfirmingLeave(false);
+            setLeaving(false);
+        }
+    }, [show]);
 
     if (!show) return null;
 
@@ -327,6 +360,15 @@ const GameOverPodium = ({
             || typeof callback !== 'function') return;
         setSubmitted(true);
         callback();
+    };
+    // Leaving keeps its own one-shot guard: the rapid-choice lock (`submitted`)
+    // releases as soon as the server acknowledges the rematch offer (the
+    // rematchStateKey effect above), after which a player who already pressed
+    // Rematch/Accept can still change their mind and exit to the lobby.
+    const invokeLeave = () => {
+        if (leaving || typeof onLobby !== 'function') return;
+        setLeaving(true);
+        onLobby();
     };
 
     return (
@@ -505,24 +547,88 @@ const GameOverPodium = ({
                     </section>
                 )}
 
-                <footer className="game-over-podium__actions">
-                    <button
-                        type="button"
-                        className="game-over-podium__button game-over-podium__button--primary"
-                        onClick={() => invokeAction(onRematch, { requiresReady: true })}
-                        disabled={actionsDisabled || submitted || typeof onRematch !== 'function'}
-                    >
-                        {rematchLabel}
-                    </button>
-                    <button
-                        type="button"
-                        className="game-over-podium__button game-over-podium__button--secondary"
-                        onClick={() => invokeAction(onLobby)}
-                        disabled={submitted || typeof onLobby !== 'function'}
-                    >
-                        {lobbyLabel}
-                    </button>
-                </footer>
+                {(offerActive || offerNotice) && (
+                    <section className="game-over-podium__rematch" aria-live="polite">
+                        {offerActive ? (
+                            <>
+                                <p className="game-over-podium__rematch-heading">
+                                    <strong>{rematchOffer.initiator}</strong> offered a rematch.
+                                    Everyone must accept the new buy-in before the next game starts.
+                                </p>
+                                <ul className="game-over-podium__rematch-votes" aria-label="Rematch acceptances">
+                                    {Object.entries(rematchOffer.votes).map(([name, vote]) => (
+                                        <li
+                                            key={name}
+                                            className={`game-over-podium__rematch-vote${vote === 'accept' ? ' is-accepted' : ''}`}
+                                        >
+                                            <span className="game-over-podium__rematch-name" title={name}>{name}</span>
+                                            <span className="game-over-podium__rematch-state">
+                                                {vote === 'accept' ? '✓ In' : vote === 'decline' ? 'Declined' : 'Waiting…'}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </>
+                        ) : (
+                            <p className="game-over-podium__rematch-heading" role="status">
+                                {offerNotice} You can offer another rematch.
+                            </p>
+                        )}
+                    </section>
+                )}
+
+                {confirmingLeave ? (
+                    <footer className="game-over-podium__actions game-over-podium__leave-confirm">
+                        <p className="game-over-podium__leave-warning" role="alert">
+                            Heads up — leaving the table disconnects you from voice chat.
+                            Say your goodbyes first!
+                        </p>
+                        <div className="game-over-podium__leave-buttons">
+                            <button
+                                type="button"
+                                className="game-over-podium__button game-over-podium__button--secondary"
+                                onClick={invokeLeave}
+                                disabled={leaving || typeof onLobby !== 'function'}
+                            >
+                                Leave anyway
+                            </button>
+                            <button
+                                type="button"
+                                className="game-over-podium__button game-over-podium__button--primary"
+                                onClick={() => setConfirmingLeave(false)}
+                            >
+                                Stay
+                            </button>
+                        </div>
+                    </footer>
+                ) : (
+                    <footer className="game-over-podium__actions">
+                        <button
+                            type="button"
+                            className="game-over-podium__button game-over-podium__button--primary"
+                            onClick={() => invokeAction(onRematch, { requiresReady: true })}
+                            disabled={actionsDisabled || submitted || iHaveAccepted || typeof onRematch !== 'function'}
+                        >
+                            {offerActive
+                                ? (canAcceptOffer ? 'Accept Rematch' : 'Waiting for players…')
+                                : rematchLabel}
+                        </button>
+                        <button
+                            type="button"
+                            className="game-over-podium__button game-over-podium__button--secondary"
+                            onClick={() => {
+                                if (voiceActive) {
+                                    setConfirmingLeave(true);
+                                    return;
+                                }
+                                invokeLeave();
+                            }}
+                            disabled={submitted || leaving || typeof onLobby !== 'function'}
+                        >
+                            {lobbyLabel}
+                        </button>
+                    </footer>
+                )}
             </section>
         </div>
     );
