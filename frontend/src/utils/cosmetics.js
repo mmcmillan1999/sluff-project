@@ -34,6 +34,11 @@ export const TRUMP_BROKEN_FX = [
         name: 'Shatterglass',
         description: 'Trump smashes through the table like plate glass.',
     },
+    {
+        id: 'faultline',
+        name: 'Fault Line',
+        description: 'An obsidian slab splits in two and molten light bleeds out.',
+    },
 ];
 
 const DEFAULTS = Object.freeze({

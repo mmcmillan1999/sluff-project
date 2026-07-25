@@ -3,7 +3,9 @@
 // mid-round state so the table can be screenshotted at any viewport without
 // a backend. Served by `npm run dev` at /harness.html (never bundled into
 // the production build, which only includes index.html).
-// Query params: ?mode=4 for the four-player table (default 3).
+// Query params: ?mode=4 for the four-player table (default 3);
+// ?broken=1 to fire the trump-broken banner on mount;
+// ?fx=lightning|shatter|faultline to force a trump-broken effect.
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
@@ -20,9 +22,15 @@ import './styles/venueThemes.css';
 import GameHeader from './components/GameHeader.js';
 import GameTableView from './components/GameTableView.js';
 import OrientationScrim from './components/OrientationScrim.js';
+import { setCosmetic } from './utils/cosmetics.js';
 
 const params = new URLSearchParams(window.location.search);
 const playerMode = params.get('mode') === '4' ? 4 : 3;
+// ?fx=<id> equips a trump-broken effect before mount so the three can be
+// compared back-to-back with ?broken=1. Unknown ids are ignored.
+if (params.get('fx')) {
+    setCosmetic('trumpBrokenFx', params.get('fx'));
+}
 // ?role=defender — Brandi holds the bid and You defend.
 const selfIsBidder = params.get('role') !== 'defender';
 // ?insurance=unset — everyone still at the server's round defaults

@@ -638,6 +638,31 @@ const TableLayout = ({
             return null;
         }
 
+        if (trumpBrokenFx === 'faultline') {
+            // Two clipped copies of the same slab, wrenched apart along a jagged
+            // seam; the molten core sits behind them and shows through the gap.
+            // The flow-level text is transparent — it sizes the box and is what
+            // screen readers announce (both halves are decorative).
+            return (
+                <div className="trump-broken-announcement trump-fx--faultline">
+                    <div className="trump-broken-content">
+                        <span className="fault-core" aria-hidden="true" />
+                        <span className="fault-slab fault-slab--upper" aria-hidden="true">
+                            <span className="trump-broken-text">TRUMP BROKEN!</span>
+                        </span>
+                        <span className="fault-slab fault-slab--lower" aria-hidden="true">
+                            <span className="trump-broken-text">TRUMP BROKEN!</span>
+                        </span>
+                        <span className="fault-shock" aria-hidden="true" />
+                        {Array.from({ length: 7 }).map((_, index) => (
+                            <span key={index} className={`fault-ember fault-ember--${index + 1}`} aria-hidden="true" />
+                        ))}
+                        <div className="trump-broken-text fault-measure">TRUMP BROKEN!</div>
+                    </div>
+                </div>
+            );
+        }
+
         if (trumpBrokenFx === 'shatter') {
             return (
                 <div className="trump-broken-announcement trump-fx--shatter">

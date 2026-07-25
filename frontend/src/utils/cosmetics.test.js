@@ -11,7 +11,7 @@ describe('cosmetics loadout', () => {
 
     test('registries include the alpha catalogue', () => {
         expect(DECK_SKINS.map(s => s.id)).toEqual(['classic', 'mcmillan']);
-        expect(TRUMP_BROKEN_FX.map(f => f.id)).toEqual(['lightning', 'shatter']);
+        expect(TRUMP_BROKEN_FX.map(f => f.id)).toEqual(['lightning', 'shatter', 'faultline']);
     });
 
     test('persists a swap and broadcasts the change event', () => {
@@ -37,7 +37,7 @@ describe('cosmetics loadout', () => {
         window.localStorage.setItem('sluff_cosmetics', 'not-json{');
         expect(getCosmetics()).toEqual({ deckSkin: 'classic', trumpBrokenFx: 'lightning' });
 
-        window.localStorage.setItem('sluff_cosmetics', JSON.stringify({ deckSkin: 'retired-skin', trumpBrokenFx: 'shatter' }));
-        expect(getCosmetics()).toEqual({ deckSkin: 'classic', trumpBrokenFx: 'shatter' });
+        window.localStorage.setItem('sluff_cosmetics', JSON.stringify({ deckSkin: 'retired-skin', trumpBrokenFx: 'faultline' }));
+        expect(getCosmetics()).toEqual({ deckSkin: 'classic', trumpBrokenFx: 'faultline' });
     });
 });

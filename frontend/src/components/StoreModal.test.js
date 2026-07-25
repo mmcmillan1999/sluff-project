@@ -19,7 +19,8 @@ describe('StoreModal', () => {
         expect(within(dialog).getByText('McMillan Crest')).toBeInTheDocument();
         expect(within(dialog).getByText('Lightning Strike')).toBeInTheDocument();
         expect(within(dialog).getByText('Shatterglass')).toBeInTheDocument();
-        expect(within(dialog).getAllByText('FREE')).toHaveLength(4);
+        expect(within(dialog).getByText('Fault Line')).toBeInTheDocument();
+        expect(within(dialog).getAllByText('FREE')).toHaveLength(5);
     });
 
     test('marks the current loadout equipped and swaps on Use', async () => {
@@ -30,7 +31,7 @@ describe('StoreModal', () => {
         expect(screen.getAllByRole('button', { name: 'Equipped ✓' })).toHaveLength(2);
 
         const useButtons = screen.getAllByRole('button', { name: 'Use' });
-        expect(useButtons).toHaveLength(2);
+        expect(useButtons).toHaveLength(3);
 
         // Equip the McMillan deck (first non-equipped item is in Card Decks)
         await user.click(useButtons[0]);

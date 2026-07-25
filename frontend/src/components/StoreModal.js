@@ -18,19 +18,37 @@ const DeckPreview = ({ skinId }) => (
     </div>
 );
 
-// Static miniature of each trump-broken banner; tapping it replays the
-// entrance so players can preview the effect before equipping.
+// Miniature of each trump-broken banner; tapping it replays the entrance
+// (the play key remounts the node) so players can preview before equipping.
+const FxPreviewBody = ({ fxId }) => {
+    if (fxId === 'faultline') {
+        // Same split-slab construction as the table banner, in miniature.
+        return (
+            <>
+                <span className="store-fx-core" />
+                <span className="store-fx-half store-fx-half--top">
+                    <span className="store-fx-mini">TRUMP BROKEN!</span>
+                </span>
+                <span className="store-fx-half store-fx-half--bottom">
+                    <span className="store-fx-mini">TRUMP BROKEN!</span>
+                </span>
+            </>
+        );
+    }
+    return (
+        <span className="store-fx-mini">
+            {fxId === 'lightning' ? '⚡ TRUMP BROKEN! ⚡' : '✦ TRUMP BROKEN! ✦'}
+        </span>
+    );
+};
+
 const FxPreview = ({ fxId, playKey }) => (
     <div
         key={playKey}
         className={`store-fx-preview store-fx-preview--${fxId}`}
         aria-hidden="true"
     >
-        {fxId === 'lightning' ? (
-            <span className="store-fx-mini">⚡ TRUMP BROKEN! ⚡</span>
-        ) : (
-            <span className="store-fx-mini">✦ TRUMP BROKEN! ✦</span>
-        )}
+        <FxPreviewBody fxId={fxId} />
     </div>
 );
 
