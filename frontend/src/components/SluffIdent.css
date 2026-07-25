@@ -2,12 +2,12 @@
 /* Boot ident timeline (ms):
    0     void fades up
    250   the full logo (SluffLogo.png) erupts from a pinprick, settles ~1350
-   400   the real ace of clubs starts its boomerang arc — constant spin,
-         growing from small to logo-card size along the way
-   2000  the ace docks, fully solid: stage dip + gold shock ring
-   2400  the docked ace dissolves and the logo's card emerges (900ms),
-         while the gold light sweep rakes the logo
-   3900  leave (fade 380ms) — component unmounts via onDone */
+   400   the real ace of clubs starts its boomerang arc behind the logo —
+         constant spin, growing from small to logo-card size along the way
+   1800  the white ace inverts to its dark negative (200ms)
+   2000  the ace docks, fully solid: stage impact dip
+   2400  the docked ace dissolves uniformly and the logo's card emerges
+   3900  leave (two-stage 850ms exit) — component unmounts via onDone */
 
 .sluff-ident {
     position: fixed;
@@ -26,14 +26,27 @@
     to { opacity: 1; }
 }
 
+/* Two-stage exit so the handoff to the lobby never cuts: the logo recedes
+   and fades first, then the dark backdrop melts away over the app. */
 .sluff-ident.is-leaving {
-    animation: sluff-ident-out 0.38s ease both;
+    animation: sluff-ident-out 0.6s ease 0.25s both;
     pointer-events: none;
+}
+
+.sluff-ident.is-leaving .sluff-ident__stage {
+    animation: sluff-ident-stage-out 0.45s cubic-bezier(0.4, 0, 0.7, 0.6) both;
 }
 
 @keyframes sluff-ident-out {
     from { opacity: 1; }
     to { opacity: 0; }
+}
+
+@keyframes sluff-ident-stage-out {
+    to {
+        transform: scale(1.06);
+        opacity: 0;
+    }
 }
 
 .sluff-ident__stage {
@@ -83,13 +96,32 @@
     opacity: 0;
     /* The ace's own center, (436.6, 192) of the 600x400 stage */
     transform-origin: 72.77% 48%;
-    /* Two phases: fly-and-dock (fully solid landing), then — after a
-       settled beat — dissolve in place so the logo's card emerges. The
-       dissolve animates opacity only, so the docked transform holds. */
+    filter: invert(0);
+    /* Three phases: fly-and-dock (fully solid landing), a 0.2s color
+       inversion right before touchdown (the white ace flips to its dark
+       negative as it merges with the mark), then — after a settled beat —
+       dissolve in place so the logo's card emerges. The dissolve animates
+       opacity only, so the docked transform and inversion hold. */
     animation:
         sluff-ident-card-orbit 1.6s linear 0.4s forwards,
+        sluff-ident-card-invert 0.2s linear 1.8s forwards,
         sluff-ident-card-dissolve 0.9s ease 2.4s forwards;
     will-change: transform, opacity;
+}
+
+@keyframes sluff-ident-card-invert {
+    from { filter: invert(0); }
+    to { filter: invert(1); }
+}
+
+/* The ace's club pips vanish the moment the card inverts, so the logo's
+   own club is the only suit on screen from the dock onward. */
+.sluff-ident__card-suit {
+    animation: sluff-ident-suit-out 0.15s linear 1.8s forwards;
+}
+
+@keyframes sluff-ident-suit-out {
+    to { opacity: 0; }
 }
 
 @keyframes sluff-ident-card-orbit {
@@ -122,72 +154,12 @@
     100% { transform: scale(1); }
 }
 
-/* Gold shock ring radiating from the landing */
-.sluff-ident__shock {
-    position: absolute;
-    left: 72.77%;
-    top: 48%;
-    width: 2vh;
-    height: 2vh;
-    margin: -1vh 0 0 -1vh;
-    border: 2px solid rgba(233, 196, 138, 0.55);
-    border-radius: 50%;
-    opacity: 0;
-    animation: sluff-ident-shock 0.55s ease-out 2s;
-    pointer-events: none;
-}
-
-@keyframes sluff-ident-shock {
-    0% { opacity: 0.75; transform: scale(1); }
-    100% { opacity: 0; transform: scale(30); }
-}
-
-/* Gold light sweep, masked to the logo's own pixels so the band only
-   shows where the logo is. */
-.sluff-ident__sweep {
-    position: absolute;
-    inset: 0;
-    overflow: hidden;
-    pointer-events: none;
-    -webkit-mask-image: url('/SluffLogo.png');
-    mask-image: url('/SluffLogo.png');
-    -webkit-mask-size: contain;
-    mask-size: contain;
-    -webkit-mask-repeat: no-repeat;
-    mask-repeat: no-repeat;
-    -webkit-mask-position: center;
-    mask-position: center;
-}
-
-.sluff-ident__sweep::before {
-    content: '';
-    position: absolute;
-    top: -12%;
-    bottom: -12%;
-    left: -30%;
-    width: 26%;
-    background: linear-gradient(
-        90deg,
-        rgba(240, 212, 160, 0) 0%,
-        rgba(240, 212, 160, 0.85) 50%,
-        rgba(240, 212, 160, 0) 100%
-    );
-    transform: skewX(-18deg) translateX(-40%);
-    animation: sluff-ident-sweep 0.55s ease-in-out 2.45s both;
-}
-
-@keyframes sluff-ident-sweep {
-    from { transform: skewX(-18deg) translateX(-40%); }
-    to { transform: skewX(-18deg) translateX(660%); }
-}
-
 /* Reduced motion: no zoom, no fly-in — a calm fade of the finished mark. */
 @media (prefers-reduced-motion: reduce) {
     .sluff-ident__stage,
     .sluff-ident__logo,
     .sluff-ident__card-svg,
-    .sluff-ident__shock,
-    .sluff-ident__sweep::before {
+    .sluff-ident.is-leaving .sluff-ident__stage {
         animation: none;
     }
 
@@ -201,18 +173,12 @@
         transform: none;
         opacity: 0;
     }
-
-    .sluff-ident__shock {
-        display: none;
-    }
 }
 
 /* Harness hold: freeze the finished composition for screenshots. */
 .sluff-ident.is-held .sluff-ident__stage,
 .sluff-ident.is-held .sluff-ident__logo,
-.sluff-ident.is-held .sluff-ident__card-svg,
-.sluff-ident.is-held .sluff-ident__shock,
-.sluff-ident.is-held .sluff-ident__sweep::before {
+.sluff-ident.is-held .sluff-ident__card-svg {
     animation: none;
 }
 

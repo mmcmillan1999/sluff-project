@@ -11,11 +11,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import './SluffIdent.css';
 
 export const IDENT_TOTAL_MS = 3900;
-export const IDENT_FADE_MS = 380;
+export const IDENT_FADE_MS = 850;
 export const IDENT_REDUCED_TOTAL_MS = 1400;
 
-const ClubPip = ({ x, y, scale = 1, fill = '#fff' }) => (
-    <g transform={`translate(${x} ${y}) scale(${scale})`} fill={fill}>
+const ClubPip = ({ x, y, scale = 1, fill = '#fff', className }) => (
+    <g className={className} transform={`translate(${x} ${y}) scale(${scale})`} fill={fill}>
         <circle cx="0" cy="-8" r="7.2" />
         <circle cx="-7.4" cy="3" r="7.2" />
         <circle cx="7.4" cy="3" r="7.2" />
@@ -59,27 +59,19 @@ const SluffIdent = ({ onDone, hold = false }) => {
             data-testid="sluff-ident"
         >
             <div className="sluff-ident__stage">
-                {/* Logo layer — the real SluffLogo.png grows from a pinprick */}
-                <img
-                    className="sluff-ident__layer sluff-ident__logo"
-                    src="/SluffLogo.png"
-                    alt=""
-                    draggable="false"
-                />
-
-                {/* Gold light sweep, masked to the logo's own pixels */}
-                <div className="sluff-ident__sweep" />
-
-                {/* A real ace of clubs tumbles around the screen; as it
-                    overlaps its docking spot it dissolves and the logo's
-                    stylized card emerges through it. Drawn at the docking
-                    coordinates; the orbit animation carries it around. */}
-                {/* Geometry least-squares-fit to SluffLogo.png's pixels so
+                {/* A real ace of clubs tumbles around the screen BEHIND the
+                    logo, slides in under the logo's card, and dissolves
+                    there — the logo stays fully drawn on top the whole time,
+                    so the card's exit reads as slipping into the mark.
+                    Geometry least-squares-fit to SluffLogo.png's pixels so
                     the ace docks exactly on the logo card: 247x327 rect
                     centered at (436.6, 192), rotated 12.26deg. Fit residuals
                     against the traced edges are ~1px. */}
                 <svg className="sluff-ident__layer sluff-ident__card-svg" viewBox="0 0 600 400">
                     <g transform="rotate(12.26 436.6 192)">
+                        {/* Drawn as a classic white ace; a timed CSS invert
+                            flips it to the dark negative in the last 0.2s
+                            before it docks. */}
                         <rect
                             x="313.1"
                             y="28.5"
@@ -101,8 +93,8 @@ const SluffIdent = ({ onDone, hold = false }) => {
                         >
                             A
                         </text>
-                        <ClubPip x={349} y={134} scale={0.7} fill="#15151a" />
-                        <ClubPip x={436.6} y={190} scale={2.2} fill="#15151a" />
+                        <ClubPip x={349} y={134} scale={0.7} fill="#15151a" className="sluff-ident__card-suit" />
+                        <ClubPip x={436.6} y={190} scale={2.2} fill="#15151a" className="sluff-ident__card-suit" />
                         <g transform="rotate(180 436.6 192)">
                             <text
                                 x="349"
@@ -115,12 +107,18 @@ const SluffIdent = ({ onDone, hold = false }) => {
                             >
                                 A
                             </text>
-                            <ClubPip x={349} y={134} scale={0.7} fill="#15151a" />
+                            <ClubPip x={349} y={134} scale={0.7} fill="#15151a" className="sluff-ident__card-suit" />
                         </g>
                     </g>
                 </svg>
 
-                <div className="sluff-ident__shock" />
+                {/* Logo layer — the real SluffLogo.png grows from a pinprick */}
+                <img
+                    className="sluff-ident__layer sluff-ident__logo"
+                    src="/SluffLogo.png"
+                    alt=""
+                    draggable="false"
+                />
             </div>
         </div>
     );
