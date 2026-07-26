@@ -1,0 +1,63 @@
+/* frontend/src/components/game/FrogWidowReveal.css */
+
+.frog-widow-reveal {
+    position: absolute;
+    left: 50%;
+    /* Dead center of the felt — the trick-landing zone, which is empty
+       during the exchange. --frog-shift-y is measured at mount: if the
+       top-docked action prompt (which wraps taller on portrait phones)
+       would overlap this row, the row slides down just enough to clear it. */
+    top: calc(48% + var(--frog-shift-y, 0px));
+    transform: translate(-50%, -50%);
+    display: flex;
+    gap: 1vh;
+    /* Above the trick piles (15), below prompts and the player hand */
+    z-index: 16;
+    pointer-events: none;
+}
+
+/* Each card flies from the widow pile (measured into --frog-from-x/y on the
+   container) to its slot in the center row, dealt with a small stagger. */
+.frog-widow-reveal__card {
+    animation: frog-widow-fly-in 0.5s cubic-bezier(0.25, 0.9, 0.35, 1.04) var(--frog-delay, 0ms) both;
+    filter: drop-shadow(0 0.5vh 1vh rgba(0, 0, 0, 0.35));
+    will-change: transform, opacity;
+}
+
+@keyframes frog-widow-fly-in {
+    from {
+        transform: translate(var(--frog-from-x, 0px), var(--frog-from-y, 0px)) scale(0.45) rotate(-9deg);
+        opacity: 0.85;
+    }
+    to {
+        transform: none;
+        opacity: 1;
+    }
+}
+
+/* Exchange over: fly back into the pile */
+.frog-widow-reveal.is-returning .frog-widow-reveal__card {
+    animation: frog-widow-fly-out 0.5s cubic-bezier(0.5, 0, 0.75, 0.45) both;
+    animation-delay: calc(var(--frog-delay, 0ms) * 0.35);
+}
+
+@keyframes frog-widow-fly-out {
+    from {
+        transform: none;
+        opacity: 1;
+    }
+    to {
+        transform: translate(var(--frog-from-x, 0px), var(--frog-from-y, 0px)) scale(0.45) rotate(-9deg);
+        opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .frog-widow-reveal__card {
+        animation: none;
+    }
+
+    .frog-widow-reveal.is-returning {
+        display: none;
+    }
+}

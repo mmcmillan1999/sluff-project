@@ -7,7 +7,9 @@
 // ?broken=1 to fire the trump-broken banner on mount;
 // ?fx=lightning|shatter|faultline to force a trump-broken effect;
 // ?mode=ident to preview the boot ident (replays on tap/Replay button;
-// add &hold=1 to freeze the finished logo for screenshots).
+// add &hold=1 to freeze the finished logo for screenshots);
+// ?frogwidow=1 to preview the Frog widow exchange table art (combine with
+// ?role=defender to see the "X is choosing…" status line).
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
@@ -141,6 +143,14 @@ const tableState = {
     lastCompletedTrick: null,
     playersWhoPassedThisRound: [],
 };
+
+// ?frogwidow=1 — the widow cards fly from the pile to the middle of the felt.
+if (params.get('frogwidow') === '1') {
+    tableState.state = 'Frog Widow Exchange';
+    tableState.revealedWidowForFrog = ['6D', '7D', '8D'];
+    tableState.currentTrickCards = [];
+    tableState.hands.You = [...tableState.hands.You, '6D', '7D', '8D'];
+}
 
 const noop = () => {};
 const fakeSocket = {

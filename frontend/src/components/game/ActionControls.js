@@ -427,22 +427,21 @@ const ActionControls = ({
         }
 
         case 'Frog Widow Exchange': {
+            // The widow itself is shown as table art (FrogWidowReveal flies
+            // the cards to the middle of the felt) — this is just the small
+            // status line.
             const isBidder = !isSpectator && currentTableState.bidWinnerInfo?.userId === playerId;
-            const revealedWidow = currentTableState.revealedWidowForFrog || [];
+            if (isBidder) {
+                return (
+                    <StatusPrompt label="Frog widow exchange">
+                        Choose 3 cards from your hand to return to the widow.
+                    </StatusPrompt>
+                );
+            }
             return (
-                <PromptShell variant="card" label="Frog widow exchange">
-                    <h2 className="action-prompt__heading">Widow cards</h2>
-                    <div className="action-prompt__cards">
-                        {revealedWidow.map((card, index) => (
-                            <React.Fragment key={`${card}-${index}`}>{renderCard(card, { large: true })}</React.Fragment>
-                        ))}
-                    </div>
-                    <p className="action-prompt__copy">
-                        {isBidder
-                            ? 'Choose 3 cards from your hand to discard.'
-                            : <><PlayerName>{currentTableState.bidWinnerInfo?.playerName}</PlayerName> is exchanging cards…</>}
-                    </p>
-                </PromptShell>
+                <StatusPrompt label="Frog widow exchange">
+                    <PlayerName>{currentTableState.bidWinnerInfo?.playerName}</PlayerName> is choosing 3 cards to return to the widow…
+                </StatusPrompt>
             );
         }
 

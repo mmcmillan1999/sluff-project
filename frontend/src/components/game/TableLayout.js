@@ -3,6 +3,7 @@ import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from
 import { useViewport } from '../../hooks/useViewport';
 import ScoreProgressBar from './ScoreProgressBar';
 import PlayerSeatPositioner from './PlayerSeatPositioner';
+import FrogWidowReveal from './FrogWidowReveal';
 import {
     FINAL_TRICK_HOLD_MS, FINAL_TRICK_FLY_MS,
     BANNER_START_MS,
@@ -843,7 +844,9 @@ const TableLayout = ({
             FULL_DECK.length,
             Math.max(0, Math.trunc(Number(widowCount) || 0)),
         );
-        const widowSize = (widowCelebrationActive && !isSpectator)
+        // During the frog exchange the widow cards are out on the felt
+        // (FrogWidowReveal), so the pile shows as an empty plate for everyone.
+        const widowSize = ((widowCelebrationActive && !isSpectator) || state === 'Frog Widow Exchange')
             ? 0
             : Math.max(cardsToDisplay?.length || 0, publicWidowCount);
         
@@ -962,6 +965,11 @@ const TableLayout = ({
                 
                 {renderTrickTallyPiles()}
                 {renderWidowPile()}
+                <FrogWidowReveal
+                    active={currentTableState.state === 'Frog Widow Exchange'}
+                    cards={currentTableState.revealedWidowForFrog}
+                    renderCard={renderCard}
+                />
                 {renderLastTrickOverlay()}
                 {renderWidowPeekOverlay()}
                 {/* Pucks are now rendered individually below */}

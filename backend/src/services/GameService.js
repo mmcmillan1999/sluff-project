@@ -1723,7 +1723,10 @@
                     scheduleTurnAction(this.chooseTrump, standardDelay, botUserId, suit);
                 } else if (engine.state === 'Frog Widow Exchange' && engine.bidWinnerInfo?.userId == botUserId && engine.widowDiscardsForFrogBidder.length === 0) {
                     const discards = bot.submitFrogDiscards();
-                    scheduleTurnAction(this.submitFrogDiscards, standardDelay, botUserId, discards);
+                    // The revealed widow is on the table for everyone to
+                    // study; a bot bidder holds the reveal 3 extra seconds
+                    // before returning its discards.
+                    scheduleTurnAction(this.submitFrogDiscards, standardDelay + 3000, botUserId, discards);
                 } else if (engine.state === 'Playing Phase' && !engine.drawRequest.isActive && engine.trickTurnPlayerId == botUserId) {
                     const card = bot.playCard();
                     if (card) {
