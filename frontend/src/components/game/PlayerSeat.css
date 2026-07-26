@@ -224,16 +224,17 @@
     font: inherit;
     white-space: nowrap;
     cursor: pointer;
-    text-decoration: underline;
-    text-decoration-color: rgba(120, 84, 23, 0.35);
-    text-decoration-thickness: 0.1vh;
-    text-underline-offset: 0.22vh;
+    /* No hyperlink underline, and the name must never text-select on
+       taps/drags — the hover color and focus ring carry the affordance. */
+    text-decoration: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .player-name-button:hover,
 .player-name-button:focus-visible {
     color: #8a5a08;
-    text-decoration-color: currentColor;
 }
 
 .player-name-button:focus-visible {
