@@ -23,7 +23,7 @@ export const PLAYER_SEAT_CONFIG = {
     south: {
         // Fixed anchor point - bottom center of nameplate is pinned here
         anchorX: 50,    // vw units - FIXED (center)
-        anchorY: 78.5,  // dvh units - plaque bottom at the table's bottom edge
+        anchorY: 77.5,  // dvh units - plaque bottom just above the table edge
         rotation: 0     // degrees - NO ROTATION
     },
     
