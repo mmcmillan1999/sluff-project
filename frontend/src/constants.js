@@ -21,7 +21,9 @@ export const BID_HIERARCHY = ["Pass", "Frog", "Solo", "Heart Solo"];
 export const BID_MULTIPLIERS = { "Frog": 1, "Solo": 2, "Heart Solo": 3 };
 
 // Sorting Order Definitions
-export const SUIT_SORT_ORDER = ['C', 'D', 'H', 'S'];
+// Alternates black-red-black-red (clubs, diamonds, spades, hearts) so
+// adjacent suit groups in the sorted hand always contrast in color.
+export const SUIT_SORT_ORDER = ['C', 'D', 'S', 'H'];
 
 // Miscellaneous Game Identifiers
 export const PLACEHOLDER_ID_CLIENT = "ScoreAbsorber";
