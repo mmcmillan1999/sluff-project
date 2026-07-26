@@ -129,9 +129,13 @@ class BotPlayer {
         const { points, suits } = this._analyzeHand(hand);
         let potentialBid = "Pass";
 
-        if ((points > 30 && suits.H >= 5) || (points > 40 && suits.H >= 4)) {
+        // Tuned July 2026 (simulated single-bot rates ~9% HS / 28% Solo /
+        // 12% Frog / 52% Pass): four hearts only justifies Heart Solo on a
+        // premium hand, and a long side suit alone doesn't justify Solo on
+        // a below-average one. Demoted 4-heart hands fall through to Frog.
+        if ((points > 30 && suits.H >= 5) || (points > 46 && suits.H >= 4)) {
             potentialBid = "Heart Solo";
-        } else if ((points > 30 && (suits.S >= 5 || suits.C >= 5 || suits.D >= 5)) || (points > 40 && (suits.S >= 4 || suits.C >= 4 || suits.D >= 4))) {
+        } else if ((points > 34 && (suits.S >= 5 || suits.C >= 5 || suits.D >= 5)) || (points > 40 && (suits.S >= 4 || suits.C >= 4 || suits.D >= 4))) {
             potentialBid = "Solo";
         } else if ((points > 30 && suits.H >= 4) || (points > 40 && suits.H >= 3)) {
             potentialBid = "Frog";
