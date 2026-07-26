@@ -52,9 +52,9 @@ const DrawVoteModal = ({ show, currentTableState, onVote, handleLeaveTable }) =>
             <div className="draw-vote-action-area">
                 <p style={{ margin: '0 0 10px 0', fontWeight: 'bold' }}>Your Vote:</p>
                 <div className="draw-vote-actions">
-                    <button className="game-button" onClick={() => onVote('wash')} title="Everyone gets their buy-in back.">Wash</button>
-                    <button className="game-button" style={{ backgroundColor: '#15803d' }} onClick={() => onVote('split')} title="Payouts are calculated based on score.">Split Pot</button>
-                    <button className="game-button" style={{ backgroundColor: '#b91c1c' }} onClick={() => onVote('no')} title="Cancel the draw and resume the game.">Vote No</button>
+                    <button className="game-button keycap draw-key draw-key--wash" onClick={() => onVote('wash')} title="Everyone gets their buy-in back.">Wash</button>
+                    <button className="game-button keycap draw-key draw-key--split" onClick={() => onVote('split')} title="Payouts are calculated based on score.">Split Pot</button>
+                    <button className="game-button keycap draw-key draw-key--no" onClick={() => onVote('no')} title="Cancel the draw and resume the game.">Vote No</button>
                 </div>
             </div>
         </>
@@ -97,7 +97,7 @@ const DrawVoteModal = ({ show, currentTableState, onVote, handleLeaveTable }) =>
                 )}
             </div>
             <div className="draw-vote-action-area">
-                <button className="game-button" onClick={handleLeaveTable}>Exit to Lobby</button>
+                <button className="game-button keycap draw-key" onClick={handleLeaveTable}>Exit to Lobby</button>
             </div>
         </>
     );
@@ -115,7 +115,7 @@ const DrawVoteModal = ({ show, currentTableState, onVote, handleLeaveTable }) =>
                 </p>
             </div>
             <div className="draw-vote-action-area">
-                <button className="game-button" onClick={handleLeaveTable}>Exit to Lobby</button>
+                <button className="game-button keycap draw-key" onClick={handleLeaveTable}>Exit to Lobby</button>
             </div>
         </>
     );

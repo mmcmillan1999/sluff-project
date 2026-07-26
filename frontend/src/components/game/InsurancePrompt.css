@@ -415,6 +415,20 @@
     font: 600 13px/1 'Oswald', sans-serif;
     cursor: pointer;
     touch-action: manipulation;
+    /* Key-cap: side wall + drop, collapsed on press */
+    box-shadow:
+        0 3px 0 rgba(0, 0, 0, 0.5),
+        0 6px 9px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    transform: translateY(0);
+    transition: transform 70ms ease-out, box-shadow 70ms ease-out;
+}
+
+.quick-jump-button:active {
+    transform: translateY(3px);
+    box-shadow:
+        0 0 0 rgba(0, 0, 0, 0.5),
+        inset 0 2px 5px rgba(0, 0, 0, 0.45);
 }
 
 .quick-jump-button.tone-get { border-color: rgba(74, 222, 128, 0.45); }
@@ -442,17 +456,29 @@
     letter-spacing: 0.04em;
     cursor: pointer;
     touch-action: manipulation;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    box-shadow:
+        0 4px 0 #96701c,
+        0 8px 14px rgba(0, 0, 0, 0.4);
+    transform: translateY(0);
+    transition: transform 70ms ease-out, box-shadow 70ms ease-out;
 }
 
 .submit-button:hover {
     background: linear-gradient(145deg, #f8e194, #e2b84b);
 }
 
+.submit-button:active {
+    transform: translateY(4px);
+    box-shadow:
+        0 0 0 #96701c,
+        inset 0 2px 5px rgba(0, 0, 0, 0.35);
+    animation: none;
+}
+
 /* Pulse the save button until the first wager of the round is saved */
 @keyframes save-attention-pulse {
-    0%, 100% { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35), 0 0 0 0 rgba(251, 191, 36, 0.65); }
-    50% { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35), 0 0 0 9px rgba(251, 191, 36, 0); }
+    0%, 100% { box-shadow: 0 4px 0 #96701c, 0 8px 14px rgba(0, 0, 0, 0.4), 0 0 0 0 rgba(251, 191, 36, 0.65); }
+    50% { box-shadow: 0 4px 0 #96701c, 0 8px 14px rgba(0, 0, 0, 0.4), 0 0 0 9px rgba(251, 191, 36, 0); }
 }
 
 .submit-button.attention-pulse {
@@ -470,6 +496,18 @@
     font: 600 14px/1 'Oswald', sans-serif;
     cursor: pointer;
     touch-action: manipulation;
+    box-shadow:
+        0 4px 0 rgba(0, 0, 0, 0.5),
+        0 8px 12px rgba(0, 0, 0, 0.3);
+    transform: translateY(0);
+    transition: transform 70ms ease-out, box-shadow 70ms ease-out;
+}
+
+.pass-button:active {
+    transform: translateY(4px);
+    box-shadow:
+        0 0 0 rgba(0, 0, 0, 0.5),
+        inset 0 2px 5px rgba(0, 0, 0, 0.4);
 }
 
 .pass-button:hover {
@@ -513,5 +551,11 @@
     .submit-button.attention-pulse,
     .unset-hint {
         animation: none !important;
+    }
+
+    .quick-jump-button,
+    .submit-button,
+    .pass-button {
+        transition: none;
     }
 }

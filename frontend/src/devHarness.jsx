@@ -9,7 +9,9 @@
 // ?mode=ident to preview the boot ident (replays on tap/Replay button;
 // add &hold=1 to freeze the finished logo for screenshots);
 // ?frogwidow=1 to preview the Frog widow exchange table art (combine with
-// ?role=defender to see the "X is choosing…" status line).
+// ?role=defender to see the "X is choosing…" status line);
+// ?prompt=bid|status|trump|frogup|allpass|qp3|seek|fill|private|draw to
+// force each table popup (combine ?mode=4&prompt=qp3 for the 4-seat start).
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
@@ -143,6 +145,67 @@ const tableState = {
     lastCompletedTrick: null,
     playersWhoPassedThisRound: [],
 };
+
+// ?prompt=<state> — force each ActionControls popup (and the draw vote
+// modal) so their size, position, and key-cap buttons can be screenshotted.
+const promptMode = params.get('prompt');
+if (promptMode) {
+    tableState.currentTrickCards = [];
+    tableState.trumpBroken = false;
+    switch (promptMode) {
+        case 'bid':
+            tableState.state = 'Bidding Phase';
+            tableState.biddingTurnPlayerName = 'You';
+            tableState.currentHighestBidDetails = null;
+            break;
+        case 'status':
+            tableState.state = 'Bidding Phase';
+            tableState.biddingTurnPlayerName = 'Brandi';
+            break;
+        case 'trump':
+            tableState.state = 'Trump Selection';
+            break;
+        case 'frogup':
+            tableState.state = 'Awaiting Frog Upgrade Decision';
+            tableState.biddingTurnPlayerName = 'You';
+            break;
+        case 'allpass':
+            tableState.state = 'AllPassWidowReveal';
+            break;
+        case 'qp3':
+            tableState.tableType = 'quickplay';
+            tableState.state = 'Ready to Start';
+            tableState.qpPhase = 'decision_pending';
+            tableState.qpGeneration = 1;
+            break;
+        case 'seek':
+            tableState.tableType = 'quickplay';
+            tableState.state = 'Ready to Start';
+            tableState.qpPhase = 'seeking_fourth';
+            tableState.qpGeneration = 1;
+            break;
+        case 'fill':
+            tableState.tableType = 'quickplay';
+            tableState.state = 'Waiting for Players';
+            tableState.qpPhase = 'filling';
+            tableState.qpGeneration = 1;
+            break;
+        case 'private':
+            tableState.tableType = 'private';
+            tableState.state = 'Ready to Start';
+            break;
+        case 'draw':
+            tableState.drawRequest = {
+                isActive: true,
+                initiator: 'Brandi',
+                timer: 27,
+                votes: { You: null, Brandi: 'wash', Elena: null },
+            };
+            break;
+        default:
+            break;
+    }
+}
 
 // ?frogwidow=1 — the widow cards fly from the pile to the middle of the felt.
 if (params.get('frogwidow') === '1') {

@@ -2,16 +2,20 @@
    compatibility, while these scoped variants override the old one-size box. */
 .action-prompt.action-prompt-container {
     box-sizing: border-box;
-    /* The north seat is anchored around 17vh. Keep prompts below that name
+    /* The north seat is anchored around 17dvh. Keep prompts below that name
        corridor instead of centering the shade over it. The outer max() keeps
        that guarantee on tall viewports (iPad/desktop) where the 11rem cap
        would otherwise land the prompt on the north plaque; below ~1035px
-       viewport height it resolves to the original clamp. */
+       viewport height it resolves to the original clamp. Same dvh basis as
+       the seat anchors (vh line is the pre-2022 fallback). */
     top: max(clamp(8.5rem, 20vh, 11rem), calc(17vh + 0.5rem));
+    top: max(clamp(8.5rem, 20dvh, 11rem), calc(17dvh + 0.5rem));
     min-width: 0;
+    /* Shrink-to-fit by default so short messages never carry a wide shade;
+       variants that need equal-width button columns opt into a fixed width. */
     width: auto;
-    max-width: min(82vw, 25rem);
-    padding: clamp(0.55rem, 1.15vh, 0.8rem) clamp(0.7rem, 2.4vw, 1rem);
+    max-width: min(68vw, 21rem);
+    padding: clamp(0.5rem, 1.05vh, 0.75rem) clamp(0.65rem, 2.2vw, 0.9rem);
     border: 1px solid rgba(238, 202, 118, 0.28);
     border-radius: 0.8rem;
     background:
@@ -25,21 +29,21 @@
 }
 
 .action-prompt.action-prompt--status {
-    max-width: min(72vw, 21rem);
+    max-width: min(62vw, 18rem);
     padding: 0.45rem 0.85rem;
     border-radius: 999px;
 }
 
 .action-prompt.action-prompt--choice {
-    width: min(78vw, 20.5rem);
+    width: min(64vw, 17rem);
 }
 
 .action-prompt.action-prompt--card {
-    width: min(84vw, 24rem);
+    max-width: min(74vw, 21rem);
 }
 
 .action-prompt.action-prompt--pregame {
-    width: min(82vw, 23rem);
+    max-width: min(66vw, 19rem);
 }
 
 .action-prompt .action-prompt__heading {
@@ -95,7 +99,9 @@
     box-sizing: border-box;
     min-width: 0;
     min-height: 44px;
-    margin: 0;
+    /* Bottom margin reserves room for the key-cap side wall (box-shadow
+       renders outside the border box) so stacked rows never overlap it. */
+    margin: 0 0 var(--key-travel, 0.24rem);
     padding: 0.45rem 0.55rem;
     border-radius: 0.48rem;
     font-size: clamp(0.78rem, 1.7vh, 0.94rem);
@@ -103,19 +109,29 @@
     text-wrap: balance;
 }
 
-.action-prompt__button--primary {
-    background: linear-gradient(to bottom, #2b8a61, #176344);
-    border-color: #125139;
+/* Key-cap palettes — the 3D body itself comes from .game-button.keycap. */
+.action-prompt .action-prompt__button--primary {
+    --key-face-top: #2f9a6a;
+    --key-face-bottom: #187048;
+    --key-rim: #0b422a;
 }
 
-.action-prompt__button--quiet {
-    background: linear-gradient(to bottom, #64696c, #45494c);
-    border-color: #35383a;
+.action-prompt .action-prompt__button--quiet {
+    --key-face-top: #6a7074;
+    --key-face-bottom: #45494c;
+    --key-rim: #232628;
 }
 
-.action-prompt__button--danger {
-    background: linear-gradient(to bottom, #c84f59, #92323a);
-    border-color: #792830;
+.action-prompt .action-prompt__button--danger {
+    --key-face-top: #d05762;
+    --key-face-bottom: #96343d;
+    --key-rim: #571c22;
+}
+
+.action-prompt .action-prompt__button.share-link-button {
+    --key-face-top: #4b8dfd;
+    --key-face-bottom: #0d63d8;
+    --key-rim: #0a3f8f;
 }
 
 .action-prompt__button-row {
@@ -123,6 +139,13 @@
     flex-wrap: wrap;
     justify-content: center;
     gap: 0.38rem;
+}
+
+/* Multi-button pregame rows (private table controls) pack as a two-column
+   grid so the shell stays short enough for the center-felt dock. */
+.action-prompt__button-row--grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .action-prompt__cards {
@@ -154,22 +177,26 @@
         /* Keep the prompt below the north player's overflowing score chip even
            on tall, narrow phones where the old rem cap pulled it upward. */
         top: clamp(7.75rem, 20vh, 10.5rem);
-        max-width: 80vw;
+        top: clamp(7.75rem, 20dvh, 10.5rem);
+        max-width: 70vw;
         padding: 0.48rem 0.58rem;
     }
 
     .action-prompt.action-prompt--status {
-        max-width: 70vw;
+        max-width: 66vw;
         padding: 0.4rem 0.65rem;
     }
 
     .action-prompt.action-prompt--choice {
-        width: 78vw;
+        width: 64vw;
     }
 
-    .action-prompt.action-prompt--card,
+    .action-prompt.action-prompt--card {
+        max-width: 72vw;
+    }
+
     .action-prompt.action-prompt--pregame {
-        width: 80vw;
+        max-width: 66vw;
     }
 
     .action-prompt .action-prompt__button {
@@ -177,10 +204,29 @@
     }
 }
 
+/* Portrait phones/tablets (same h/w >= 1.25 threshold as the seats' wide
+   mode, where the side plates hug the screen edges around 35-52.5dvh and
+   their score-chip banks overhang inward through ~48.6dvh): the button and
+   card prompts can't share that band, but every state that shows them
+   (bidding, trump, widow reveal, pregame) has an empty center felt — so
+   dock them just below the side chip banks. 41dvh here + the 7.5dvh header
+   puts the shell top at ~48.5dvh; the narrowed widths keep its upper
+   corners inside the plates' inner gutter. The compact status pills stay
+   in the top corridor, clear of everything. */
+@media (max-aspect-ratio: 4/5) {
+    .action-prompt.action-prompt--choice,
+    .action-prompt.action-prompt--card,
+    .action-prompt.action-prompt--pregame {
+        top: 41vh;
+        top: 41dvh;
+    }
+}
+
 @media (orientation: landscape) and (max-height: 540px) {
     .action-prompt.action-prompt-container {
-        /* The north seat is still bottom-anchored at 17vh in landscape. */
+        /* The north seat is still bottom-anchored at 17dvh in landscape. */
         top: clamp(4rem, 19vh, 5.5rem);
+        top: clamp(4rem, 19dvh, 5.5rem);
         padding-block: 0.38rem;
     }
 

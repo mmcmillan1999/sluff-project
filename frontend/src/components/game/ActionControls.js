@@ -141,7 +141,7 @@ const ActionControls = ({
                         <div className="action-prompt__button-row">
                             <button
                                 type="button"
-                                className="game-button action-prompt__button action-prompt__button--primary"
+                                className="game-button keycap action-prompt__button action-prompt__button--primary"
                                 disabled={quickPlayDecisionSubmitted}
                                 onClick={() => handleQuickPlayDecision('start4')}
                             >
@@ -167,7 +167,7 @@ const ActionControls = ({
                     <div className="action-prompt__button-grid action-prompt__button-grid--decision">
                         <button
                             type="button"
-                            className="game-button action-prompt__button action-prompt__button--primary"
+                            className="game-button keycap action-prompt__button action-prompt__button--primary"
                             disabled={quickPlayDecisionSubmitted}
                             onClick={() => handleQuickPlayDecision('start3')}
                         >
@@ -175,7 +175,7 @@ const ActionControls = ({
                         </button>
                         <button
                             type="button"
-                            className="game-button action-prompt__button"
+                            className="game-button keycap action-prompt__button"
                             disabled={quickPlayDecisionSubmitted}
                             onClick={() => handleQuickPlayDecision('seek4')}
                         >
@@ -187,7 +187,7 @@ const ActionControls = ({
                             type="button"
                             onClick={handleLeaveTable}
                             disabled={quickPlayDecisionSubmitted}
-                            className="game-button action-prompt__button action-prompt__button--quiet"
+                            className="game-button keycap action-prompt__button action-prompt__button--quiet"
                         >
                             {hasLowerStakesRecommendation ? 'View Lower-Stakes Tables' : 'Back to Lobby'}
                         </button>
@@ -207,7 +207,7 @@ const ActionControls = ({
                         <button
                             type="button"
                             onClick={handleLeaveTable}
-                            className="game-button action-prompt__button action-prompt__button--quiet"
+                            className="game-button keycap action-prompt__button action-prompt__button--quiet"
                         >
                             Leave
                         </button>
@@ -244,7 +244,7 @@ const ActionControls = ({
                         <button
                             type="button"
                             onClick={handleLeaveTable}
-                            className="game-button action-prompt__button action-prompt__button--quiet"
+                            className="game-button keycap action-prompt__button action-prompt__button--quiet"
                         >
                             {hasLowerStakesRecommendation ? 'View Lower-Stakes Tables' : 'Back to Lobby'}
                         </button>
@@ -263,7 +263,7 @@ const ActionControls = ({
                     <button
                         type="button"
                         onClick={handleLeaveTable}
-                        className="game-button action-prompt__button action-prompt__button--quiet"
+                        className="game-button keycap action-prompt__button action-prompt__button--quiet"
                     >
                         Leave
                     </button>
@@ -290,13 +290,13 @@ const ActionControls = ({
                     <h2 className="action-prompt__heading">
                         {isReady ? `${activePlayers.length}-player table ready` : `Waiting for friends · ${activePlayers.length}/3`}
                     </h2>
-                    <div className="action-prompt__button-row">
+                    <div className="action-prompt__button-row action-prompt__button-row--grid">
                         {isReady && (
-                            <button type="button" onClick={() => emitEvent('startGame')} className="game-button action-prompt__button action-prompt__button--primary">
+                            <button type="button" onClick={() => emitEvent('startGame')} className="game-button keycap action-prompt__button action-prompt__button--primary">
                                 Start Game
                             </button>
                         )}
-                        <button type="button" onClick={handleShareLink} className="game-button action-prompt__button share-link-button">
+                        <button type="button" onClick={handleShareLink} className="game-button keycap action-prompt__button share-link-button">
                             <svg className="action-prompt__share-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                 <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
                                 <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
@@ -308,7 +308,7 @@ const ActionControls = ({
                                 type="button"
                                 onClick={handleFindPlayer}
                                 disabled={seekingPlayer}
-                                className="game-button action-prompt__button"
+                                className="game-button keycap action-prompt__button"
                             >
                                 {seekingPlayer ? 'Searching…' : 'Find a Player'}
                             </button>
@@ -317,12 +317,12 @@ const ActionControls = ({
                             <button
                                 type="button"
                                 onClick={() => emitEvent('makeRoom')}
-                                className="game-button action-prompt__button"
+                                className="game-button keycap action-prompt__button"
                             >
                                 Make Room
                             </button>
                         )}
-                        <button type="button" onClick={handleLeaveTable} className="game-button action-prompt__button action-prompt__button--quiet">Lobby</button>
+                        <button type="button" onClick={handleLeaveTable} className="game-button keycap action-prompt__button action-prompt__button--quiet">Lobby</button>
                     </div>
                 </PromptShell>
             );
@@ -347,7 +347,7 @@ const ActionControls = ({
                                     type="button"
                                     key={bid}
                                     onClick={() => emitEvent('placeBid', { bid })}
-                                    className="game-button action-prompt__button action-prompt__bid-button"
+                                    className="game-button keycap action-prompt__button action-prompt__bid-button"
                                     aria-label={bid === 'Pass' ? 'Pass' : `${bid}, ${BID_MULTIPLIERS[bid]} times scoring multiplier`}
                                     disabled={bid !== 'Pass' && BID_HIERARCHY.indexOf(bid) <= currentHighestBidLevel}
                                 >
@@ -371,10 +371,10 @@ const ActionControls = ({
                         <h2 className="action-prompt__heading">Solo was bid</h2>
                         <p className="action-prompt__copy">Upgrade Frog to Heart Solo?</p>
                         <div className="action-prompt__button-grid action-prompt__button-grid--decision">
-                            <button type="button" onClick={() => emitEvent('placeBid', { bid: 'Heart Solo' })} className="game-button action-prompt__button action-prompt__button--primary">
+                            <button type="button" onClick={() => emitEvent('placeBid', { bid: 'Heart Solo' })} className="game-button keycap action-prompt__button action-prompt__button--primary">
                                 Heart Solo · {BID_MULTIPLIERS['Heart Solo']}×
                             </button>
-                            <button type="button" onClick={() => emitEvent('placeBid', { bid: 'Pass' })} className="game-button action-prompt__button">Keep Frog</button>
+                            <button type="button" onClick={() => emitEvent('placeBid', { bid: 'Pass' })} className="game-button keycap action-prompt__button">Keep Frog</button>
                         </div>
                     </PromptShell>
                 );

@@ -131,6 +131,30 @@
     gap: 10px;
 }
 
+/* Key-cap palettes for the vote keys (3D body from .game-button.keycap). */
+.draw-key {
+    margin: 0 0 calc(var(--key-travel, 0.24rem) + 2px);
+    border-radius: 8px;
+}
+
+.draw-key--wash {
+    --key-face-top: #4b8dfd;
+    --key-face-bottom: #0d63d8;
+    --key-rim: #0a3f8f;
+}
+
+.draw-key--split {
+    --key-face-top: #22a35a;
+    --key-face-bottom: #15803d;
+    --key-rim: #0b4f26;
+}
+
+.draw-key--no {
+    --key-face-top: #d24343;
+    --key-face-bottom: #b91c1c;
+    --key-rim: #7a1212;
+}
+
 .draw-payout-section {
     margin: 0;
     padding: 10px;
