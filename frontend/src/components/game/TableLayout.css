@@ -209,16 +209,19 @@
 
 /* Fixed trick pile positions - 4 containers total */
 
-/* Bottom positions */
+/* Bottom positions. Raised off the table's bottom edge so they can never
+   collide with the south nameplate, which now sits flush with the table
+   bottom — this puts them roughly mirror-image to the top piles around
+   the table's midline. */
 .pile-bottom-left {
     left: var(--trick-pile-left-inset);
-    bottom: 5%;
+    bottom: 16%;
 }
 
 .pile-bottom-right {
     right: var(--trick-pile-right-inset);
     left: auto;
-    bottom: 5%;
+    bottom: 16%;
 }
 
 /* Top positions - mirrored from bottom. Anchored to the VISIBLE viewport

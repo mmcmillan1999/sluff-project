@@ -7,23 +7,23 @@ export const PLAYER_SEAT_CONFIG = {
     west: {
         // Fixed anchor point - bottom center of nameplate is pinned here
         anchorX: 15,    // vw units - FIXED
-        anchorY: 45,    // vh units - FIXED
+        anchorY: 43.75, // dvh units - centered halfway up the table (7.5-80)
         rotation: 0     // degrees - NO ROTATION
     },
-    
+
     // East (Right) Player Configuration
     east: {
         // Fixed anchor point - bottom center of nameplate is pinned here
         anchorX: 85,    // vw units - FIXED
-        anchorY: 45,    // vh units - FIXED
+        anchorY: 43.75, // dvh units - centered halfway up the table (7.5-80)
         rotation: 0     // degrees - NO ROTATION
     },
-    
+
     // South (Bottom) Player Configuration
     south: {
         // Fixed anchor point - bottom center of nameplate is pinned here
         anchorX: 50,    // vw units - FIXED (center)
-        anchorY: 75,    // vh units - FIXED
+        anchorY: 78.5,  // dvh units - plaque bottom at the table's bottom edge
         rotation: 0     // degrees - NO ROTATION
     },
     

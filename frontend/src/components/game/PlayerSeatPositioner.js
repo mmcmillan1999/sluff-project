@@ -20,10 +20,10 @@ const DVH_SUPPORTED = typeof CSS !== 'undefined' && CSS.supports?.('top', '1dvh'
 const anchorTopValue = (y, seatPosition) => {
     if (!DVH_SUPPORTED) return `${y}vh`;
     if (seatPosition === 'bottom') {
-        // Safety ceiling: browser chrome can never shove the plaque under
-        // the player hand (visible height minus the 20vh footer block minus
-        // 1.5vh clearance). With dvh anchors it is normally inert.
-        return `min(${y}dvh, calc(100dvh - 21.5vh))`;
+        // Safety ceiling: the plaque can never sit under the player hand
+        // (visible height minus the 20dvh footer block minus 1.5dvh of
+        // clearance). Same dvh basis as the anchor so no browser drifts.
+        return `min(${y}dvh, calc(100dvh - 21.5dvh))`;
     }
     return `${y}dvh`;
 };
@@ -51,21 +51,24 @@ const PlayerSeatPositioner = ({
     // stay near the felt instead of hugging the edges of wide monitors.
     const [sideOffsetVw, setSideOffsetVw] = useState(35);
 
-    // Configuration for each seat position's default anchor points
+    // Configuration for each seat position's default anchor points.
+    // The game table spans ~7.5dvh (header) to ~80dvh (footer top), so
+    // "halfway up the table" is ~43.75 and "bottom of the table" puts the
+    // plaque's bottom edge at 78.5 (1.5dvh of clearance above the hand).
     const defaultAnchors = {
-        left: { x: 50 - sideOffsetVw, y: 45 },     // West position from config
-        right: { x: 50 + sideOffsetVw, y: 45 },    // East position from config
-        bottom: { x: 50, y: 75 },   // South position from config
-        top: { x: 50, y: 17, rotation: 0 }   // North position for widow - centered at 50vw, 17vh, no rotation
+        left: { x: 50 - sideOffsetVw, y: 43.75 },  // West: centered halfway up the table
+        right: { x: 50 + sideOffsetVw, y: 43.75 }, // East: centered halfway up the table
+        bottom: { x: 50, y: 78.5 },  // South: plaque bottom at the table's bottom edge
+        top: { x: 50, y: 17, rotation: 0 }   // North position for widow - centered at 50vw, 17dvh, no rotation
     };
-    
+
     // Collision prevention mode anchor positions (when seat width > 25vw)
     // Moves seats to edges and rotates them to prevent overlap
     const wideModeAnchors = {
-        left: { x: 1, y: 35, rotation: 90 },     // West: edge at 1vw, 35vh, rotate 90° clockwise
-        right: { x: 99, y: 35, rotation: -90 },  // East: edge at 99vw, 35vh, rotate 90° counter-clockwise
-        bottom: { x: 50, y: 66.5, rotation: 0 }, // South: moves up to 66.5vh in collision mode
-        top: { x: 50, y: 17, rotation: 0 }       // North: widow stays fixed - no collision mode changes
+        left: { x: 1, y: 43.75, rotation: 90 },   // West: edge strip centered halfway up the table
+        right: { x: 99, y: 43.75, rotation: -90 },// East: edge strip centered halfway up the table
+        bottom: { x: 50, y: 78.5, rotation: 0 },  // South: plaque bottom at the table's bottom edge
+        top: { x: 50, y: 17, rotation: 0 }        // North: widow stays fixed - no collision mode changes
     };
     
     // Check if player seat width exceeds the wide-mode threshold

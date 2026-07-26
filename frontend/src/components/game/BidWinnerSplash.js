@@ -55,7 +55,11 @@ export const seatAnchorForPlayer = (name, seatAssignments, root = globalThis.doc
     return CONFIG_BY_SEAT_POSITION[seatPosition] || { anchorX: 50, anchorY: 45 };
 };
 
-// VS-layout positions (vw/vh). This tighter grouping sits about 6vh above the
+// Vertical units match PlayerSeatPositioner: the visible viewport (dvh)
+// where supported, so splash positions and seat anchors share one basis.
+const SPLASH_Y_UNIT = typeof CSS !== 'undefined' && CSS.supports?.('top', '1dvh') ? 'dvh' : 'vh';
+
+// VS-layout positions (vw/dvh). This tighter grouping sits about 6vh above the
 // old composition while leaving breathing room below the north-seat nameplate.
 const BIDDER_POS = { x: 50, y: 23 };
 const DEFENDER_POS = [{ x: 50, y: 46.5 }, { x: 50, y: 52.5 }];
@@ -95,7 +99,9 @@ const BidWinnerSplash = ({ info, seatAssignments, playSound, onDone }) => {
         const target = flying ? seatAnchorForPlayer(name, seatAssignments) : null;
         return {
             left: `${target ? target.anchorX : vsPos.x}vw`,
-            top: `${target ? target.anchorY : vsPos.y}vh`
+            // Same visible-viewport basis as the seat anchors, so the
+            // fly-out lands on the plaque in every mobile browser.
+            top: `${target ? target.anchorY : vsPos.y}${SPLASH_Y_UNIT}`
         };
     };
 

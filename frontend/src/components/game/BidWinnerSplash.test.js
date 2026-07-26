@@ -119,17 +119,17 @@ describe('BidWinnerSplash', () => {
             </>
         );
 
-        expect(container.querySelector('.player-seat-bottom')).toHaveAttribute('data-anchor-y', '66.5');
+        expect(container.querySelector('.player-seat-bottom')).toHaveAttribute('data-anchor-y', '78.5');
         expect(container.querySelector('.player-seat-left')).toHaveAttribute('data-anchor-x', '1');
         expect(container.querySelector('.player-seat-right')).toHaveAttribute('data-anchor-x', '99');
 
         act(() => vi.advanceTimersByTime(BID_SPLASH_TIMING.FLY_AT));
 
         expect(container.querySelector('.bid-splash-name.bidder'))
-            .toHaveStyle({ left: '50vw', top: '66.5vh' });
+            .toHaveStyle({ left: '50vw', top: '78.5vh' });
         const defenders = container.querySelectorAll('.bid-splash-name.defender');
-        expect(defenders[0]).toHaveStyle({ left: '1vw', top: '35vh' });
-        expect(defenders[1]).toHaveStyle({ left: '99vw', top: '35vh' });
+        expect(defenders[0]).toHaveStyle({ left: '1vw', top: '43.75vh' });
+        expect(defenders[1]).toHaveStyle({ left: '99vw', top: '43.75vh' });
 
         Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth });
         Object.defineProperty(window, 'innerHeight', { configurable: true, value: originalHeight });
