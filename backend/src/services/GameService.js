@@ -1078,6 +1078,56 @@
             await this._performAction(tableId, (engine) => engine.startForfeitTimer(userId, targetPlayerName));
         }
 
+        // ==================== BOT EXHIBITION ====================
+        // Called on an interval by src/maintenance/botExhibition.js: keeps one
+        // continuous bot-only game running on the designated table. Each game
+        // gets a fresh random trio so play volume varies across the roster,
+        // and the table is handed back to humans the moment one takes a seat.
+        async ensureExhibitionGame(tableId) {
+            const engine = this.getEngineById(tableId);
+            if (!engine || engine.tableType === 'quickplay') return { status: 'no_engine' };
+            // Marks the table so the terminal-cleanup restart loop defers to
+            // this manager (which rotates the line-up) instead of restarting
+            // the same trio itself.
+            engine.isExhibitionTable = true;
+
+            const seated = engine.playerOrder.allIds
+                .map(id => engine.players[id])
+                .filter(Boolean);
+            // Any human seat — even a disconnected one that may reconnect —
+            // hands the table back to people until they leave.
+            if (seated.some(player => !player.isBot)) return { status: 'humans_seated' };
+            if (engine.gameStarted || engine.gameStartPending) return { status: 'game_running' };
+            if (!['Waiting for Players', 'Ready to Start'].includes(engine.state)) {
+                return { status: 'busy', state: engine.state };
+            }
+
+            // Fresh random trio every game.
+            for (const player of seated) {
+                engine.removeBotPlayer(player.userId);
+            }
+            const eligibleBotBalances = await this._loadAffordableQuickPlayBotBalances(engine);
+            for (let seat = 0; seat < 3; seat += 1) {
+                engine.addBotPlayer({ eligibleBotBalances });
+            }
+
+            const trio = engine.playerOrder.allIds
+                .map(id => engine.players[id])
+                .filter(player => player?.isBot);
+            if (trio.length < 3) {
+                // Not enough funded bots right now; mercy tokens replenish
+                // hourly, so release the partial line-up and retry next tick.
+                for (const player of trio) engine.removeBotPlayer(player.userId);
+                this.emitGameState(tableId);
+                return { status: 'insufficient_bots', available: trio.length };
+            }
+
+            console.log(`[EXHIBITION] Starting bot game on ${tableId}: ${trio.map(p => p.playerName).join(', ')}`);
+            await this._performAction(tableId, eng => eng.startGame(trio[0].userId));
+            this.io.emit('lobbyState', this.getLobbyState());
+            return { status: 'started', bots: trio.map(p => p.playerName) };
+        }
+
         async requestRematch(tableId, userId) {
             await this._performAction(tableId, (engine) => engine.requestRematch(userId));
             const engine = this.getEngineById(tableId);
@@ -1286,9 +1336,11 @@
 
             // Preserve the admin bot-table testing loop, but revalidate that no
             // human joined during the delay before starting another bot game.
+            // Exhibition tables are excluded: their manager rotates in a fresh
+            // random trio before each game instead of restarting the same one.
             const activePlayers = Object.values(engine.players).filter(player => !player.isSpectator);
             const allBots = activePlayers.length >= 3 && activePlayers.every(player => player.isBot);
-            if (allBots) {
+            if (allBots && !engine.isExhibitionTable) {
                 setTimeout(() => {
                     const current = this.getEngineById(tableId);
                     const currentActivePlayers = Object.values(current?.players || {})

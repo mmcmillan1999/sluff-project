@@ -34,6 +34,11 @@ const {
 const {
     validateAdminRecoveryHeartbeatCadence,
 } = require('./services/adminGameRecoveryService');
+const {
+    createBotExhibitionManager,
+    DEFAULT_EXHIBITION_INTERVAL_MS,
+    MINIMUM_EXHIBITION_INTERVAL_MS,
+} = require('./maintenance/botExhibition');
 
 const app = express();
 const server = http.createServer(app);
@@ -80,6 +85,18 @@ let recoveryMonitor;
 app.set('trust proxy', 1);
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '100kb' }));
+
+function botExhibitionConfigFromEnvironment() {
+    const enabled = process.env.BOT_EXHIBITION_ENABLED !== 'false';
+    const tableId = process.env.BOT_EXHIBITION_TABLE_ID || 'table-10';
+    const intervalSeconds = process.env.BOT_EXHIBITION_INTERVAL_SECONDS === undefined
+        ? DEFAULT_EXHIBITION_INTERVAL_MS / 1000
+        : Number(process.env.BOT_EXHIBITION_INTERVAL_SECONDS);
+    if (!Number.isFinite(intervalSeconds) || intervalSeconds * 1000 < MINIMUM_EXHIBITION_INTERVAL_MS) {
+        throw new Error('BOT_EXHIBITION_INTERVAL_SECONDS must be at least 10.');
+    }
+    return { enabled, tableId, intervalMs: Math.round(intervalSeconds * 1000) };
+}
 
 function recoveryTimingFromEnvironment() {
     const graceHours = process.env.ABANDONED_GAME_GRACE_HOURS === undefined
@@ -151,7 +168,20 @@ async function initializeApplication() {
 
     app.use('/api/bot-insurance', createBotInsuranceStatsRoutes(pool));
     recoveryMonitor.start();
-    return { gameService, pool, recoveryMonitor };
+
+    // Continuous 3-bot exhibition game (analytics feed for round_results).
+    const exhibitionConfig = botExhibitionConfigFromEnvironment();
+    let botExhibition = null;
+    if (exhibitionConfig.enabled) {
+        botExhibition = createBotExhibitionManager({
+            gameService,
+            tableId: exhibitionConfig.tableId,
+            intervalMs: exhibitionConfig.intervalMs,
+        });
+        botExhibition.start();
+    }
+
+    return { gameService, pool, recoveryMonitor, botExhibition };
 }
 
 async function initializeThenListen({
