@@ -5,20 +5,27 @@
 import React, { useState, useEffect } from 'react';
 import './PlayerSeatPositioner.css';
 
-// In iPad/iPhone BROWSERS, vh measures the large viewport (URL bar collapsed)
-// while the app shell lays out in dvh (the visible area). The tuned phone
-// look was built against vh, so anchors STAY in vh — but the bottom seat
-// gets a dvh ceiling so browser chrome can never shove the plaque under the
-// player hand (seen on iPad landscape). The cap = visible height minus the
-// 20vh footer block minus 1.5vh of clearance; anywhere vh === dvh (desktop,
-// installed PWA, Capacitor) the cap sits above every anchor and is inert.
+// Seat anchors ride the VISIBLE viewport (dvh), matching the app shell, the
+// game-view box, and every innerHeight-based JS measurement (cards, hand,
+// wide-mode detection). Mobile browsers disagree about what `vh` means —
+// Chrome (top URL bar) and Safari (bottom URL bar) both define vh as the
+// larger bar-collapsed viewport but with different bar geometry, which used
+// to scramble the composition between them (Safari plates drifted high /
+// low vs Chrome). With dvh everywhere, every browser plus the installed
+// PWA/Capacitor shell renders the identical layout: the one visible in the
+// /harness.html screenshots, where vh === dvh. `vh` remains only as the
+// fallback for browsers without dvh support (pre-2022).
 const DVH_SUPPORTED = typeof CSS !== 'undefined' && CSS.supports?.('top', '1dvh');
 
 const anchorTopValue = (y, seatPosition) => {
-    if (seatPosition === 'bottom' && DVH_SUPPORTED) {
-        return `min(${y}vh, calc(100dvh - 21.5vh))`;
+    if (!DVH_SUPPORTED) return `${y}vh`;
+    if (seatPosition === 'bottom') {
+        // Safety ceiling: browser chrome can never shove the plaque under
+        // the player hand (visible height minus the 20vh footer block minus
+        // 1.5vh clearance). With dvh anchors it is normally inert.
+        return `min(${y}dvh, calc(100dvh - 21.5vh))`;
     }
-    return `${y}vh`;
+    return `${y}dvh`;
 };
 
 const PlayerSeatPositioner = ({ 

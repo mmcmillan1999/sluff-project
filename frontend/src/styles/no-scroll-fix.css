@@ -4,6 +4,7 @@
 body.game-active {
   overflow: hidden;
   height: 100vh;
+  height: 100dvh; /* visible viewport on mobile; vh is the fallback */
   width: 100vw;
   /* Don't use position fixed on body - it breaks scrolling restoration */
   /* Prevent iOS bounce scrolling */

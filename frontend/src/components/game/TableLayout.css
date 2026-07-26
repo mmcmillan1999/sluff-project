@@ -221,18 +221,22 @@
     bottom: 5%;
 }
 
-/* Top positions - mirrored from bottom */
+/* Top positions - mirrored from bottom. Anchored to the VISIBLE viewport
+   (dvh) like the player seats, so Chrome's top URL bar and Safari's bottom
+   bar produce the same composition; vh is the pre-dvh fallback. */
 .pile-top-left {
     left: var(--trick-pile-left-inset);
     bottom: auto;
-    top: 10.5vh;  /* 10.5vh from top edge */
+    top: 10.5vh;
+    top: 10.5dvh;
 }
 
 .pile-top-right {
     right: var(--trick-pile-right-inset);
     left: auto;
     bottom: auto;
-    top: 10.5vh;  /* 10.5vh from top edge */
+    top: 10.5vh;
+    top: 10.5dvh;
 }
 
 /* Hover effects for fixed positions */
