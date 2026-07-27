@@ -41,6 +41,7 @@ import StoreModal from './StoreModal';
 import McMillanCrest from './game/McMillanCrest';
 import WidowSpider from './game/WidowSpider';
 import { useCosmetics } from '../utils/cosmetics';
+import { CARD_PLAY_STYLES, useCardPlayStyle, setCardPlayStyle } from '../utils/playStyle';
 import VoiceControls from './game/VoiceControls';
 
 const ROUND_PRESENTATION_STATES = new Set([
@@ -95,6 +96,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         setSpiderRun(run => ({ id: run.id + 1, mode }));
     }, []);
     const { deckSkin } = useCosmetics();
+    const cardPlayStyle = useCardPlayStyle();
     // True once the player has saved or nudged their wager this round; the
     // insurance controls stop pulsing for attention after that.
     const [insuranceWagerTouched, setInsuranceWagerTouched] = useState(false);
@@ -1095,7 +1097,10 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const perspectivePlayerId = isObserverMode ? observedPlayerId : playerId;
     const perspectivePlayer = currentTableState ? currentTableState.players[perspectivePlayerId] : null;
     
-    const GameMenu = () => createPortal(
+    // A plain element (not an inline component type): defining this as a
+    // component would remount the whole dialog on every GameTableView
+    // re-render, dropping focus from whichever control was just pressed.
+    const gameMenu = createPortal(
         <div
             className="game-menu-layer"
             data-table-theme={themePresentation.id}
@@ -1120,6 +1125,25 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 <p className="game-menu-description">{themePresentation.description}</p>
                 <div className="game-menu-sound">
                     <SoundControls soundSettings={soundSettings} />
+                </div>
+                <div className="game-menu-section game-menu-play-style">
+                    <p className="game-menu-section-title">Card Play Style</p>
+                    <div className="play-style-toggle" role="group" aria-label="Card play style">
+                        {CARD_PLAY_STYLES.map(style => (
+                            <button
+                                key={style.id}
+                                type="button"
+                                className={`play-style-option${cardPlayStyle === style.id ? ' selected' : ''}`}
+                                aria-pressed={cardPlayStyle === style.id}
+                                onClick={() => setCardPlayStyle(style.id)}
+                            >
+                                {style.name}
+                            </button>
+                        ))}
+                    </div>
+                    <p className="game-menu-helper">
+                        {CARD_PLAY_STYLES.find(style => style.id === cardPlayStyle)?.description}
+                    </p>
                 </div>
                 <div className="game-menu-actions">
                     <div className="game-menu-section">
@@ -1215,7 +1239,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 document.body
             )}
             <StoreModal show={showStoreModal} onClose={() => setShowStoreModal(false)} />
-            {showGameMenu && !roundPresentationControlsLocked && <GameMenu />}
+            {showGameMenu && !roundPresentationControlsLocked && gameMenu}
             {/* Card position debug overlay */}
             {false && window.cardDebugPositions && window.cardDebugPositions.length > 0 && (
                 <div style={{

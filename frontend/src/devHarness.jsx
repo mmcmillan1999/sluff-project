@@ -12,6 +12,9 @@
 // ?role=defender to see the "X is choosing…" status line);
 // ?prompt=bid|status|trump|frogup|allpass|qp3|seek|fill|private|draw to
 // force each table popup (combine ?mode=4&prompt=qp3 for the 4-seat start).
+// ?turn=1 to make it your turn with a live hand — playCard really moves the
+// card onto the felt; ?playstyle=flick|fast presets the card play style
+// (implies ?turn=1) so both gestures can be exercised without a backend.
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
@@ -30,6 +33,7 @@ import GameTableView from './components/GameTableView.js';
 import OrientationScrim from './components/OrientationScrim.js';
 import SluffIdent from './components/SluffIdent.js';
 import { setCosmetic } from './utils/cosmetics.js';
+import { setCardPlayStyle } from './utils/playStyle.js';
 
 const params = new URLSearchParams(window.location.search);
 
@@ -78,6 +82,13 @@ const playerMode = params.get('mode') === '4' ? 4 : 3;
 if (params.get('fx')) {
     setCosmetic('trumpBrokenFx', params.get('fx'));
 }
+// ?playstyle=flick|fast presets the card play style. Unknown ids are ignored.
+if (params.get('playstyle')) {
+    setCardPlayStyle(params.get('playstyle'));
+}
+// ?turn=1 (implied by ?playstyle) arms the hand: it becomes your turn and the
+// harness emitEvent really moves the played card onto the felt.
+const interactiveTurn = params.get('turn') === '1' || Boolean(params.get('playstyle'));
 // ?role=defender — Brandi holds the bid and You defend.
 const selfIsBidder = params.get('role') !== 'defender';
 // ?insurance=unset — everyone still at the server's round defaults
@@ -145,6 +156,9 @@ const tableState = {
     lastCompletedTrick: null,
     playersWhoPassedThisRound: [],
 };
+if (interactiveTurn) {
+    tableState.trickTurnPlayerName = 'You';
+}
 
 // ?prompt=<state> — force each ActionControls popup (and the draw vote
 // modal) so their size, position, and key-cap buttons can be screenshotted.
@@ -236,30 +250,52 @@ const soundSettings = {
     setMusicVolume: noop,
 };
 
+// With ?turn=1 the harness keeps the canned state in React state so a played
+// card genuinely leaves the hand and lands on the felt (one play per reload —
+// the turn then passes to Brandi, who never moves).
+const HarnessApp = () => {
+    const [liveState, setLiveState] = React.useState(tableState);
+    const emitEvent = React.useCallback((eventName, payload) => {
+        console.log('[harness] emitEvent', eventName, payload);
+        if (!interactiveTurn || eventName !== 'playCard' || !payload?.card) return;
+        setLiveState(prev => {
+            if (!prev.hands.You.includes(payload.card)) return prev;
+            return {
+                ...prev,
+                hands: { ...prev.hands, You: prev.hands.You.filter(c => c !== payload.card) },
+                currentTrickCards: [...prev.currentTrickCards, { playerName: 'You', card: payload.card }],
+                trickTurnPlayerName: 'Brandi',
+            };
+        });
+    }, []);
+
+    return (
+        <>
+            <OrientationScrim />
+            <GameHeader />
+            <div className="app-content-container with-header app-view-gameTable">
+                <GameTableView
+                    user={{ id: 101, username: 'You', is_admin: true }}
+                    playerId={101}
+                    currentTableState={liveState}
+                    handleLeaveTable={noop}
+                    handleLogout={noop}
+                    handleShowHowToPlay={noop}
+                    errorMessage=""
+                    emitEvent={emitEvent}
+                    playSound={noop}
+                    socket={fakeSocket}
+                    handleOpenFeedbackModal={noop}
+                    soundSettings={soundSettings}
+                    onShowTokenLedger={noop}
+                />
+            </div>
+        </>
+    );
+};
+
 if (!identMode) {
 document.body.classList.add('game-active');
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-    <>
-        <OrientationScrim />
-        <GameHeader />
-        <div className="app-content-container with-header app-view-gameTable">
-            <GameTableView
-                user={{ id: 101, username: 'You', is_admin: true }}
-                playerId={101}
-                currentTableState={tableState}
-                handleLeaveTable={noop}
-                handleLogout={noop}
-                handleShowHowToPlay={noop}
-                errorMessage=""
-                emitEvent={noop}
-                playSound={noop}
-                socket={fakeSocket}
-                handleOpenFeedbackModal={noop}
-                soundSettings={soundSettings}
-                onShowTokenLedger={noop}
-            />
-        </div>
-    </>
-);
+ReactDOM.createRoot(document.getElementById('root')).render(<HarnessApp />);
 }

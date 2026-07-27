@@ -113,6 +113,28 @@
     /* Removed - absolute positioning handles spacing */
 }
 
+/* Fast play style: cards are clicked, not grabbed */
+.player-hand-card-wrapper.fast-play {
+    cursor: pointer;
+}
+
+/* Raised (first click) card floats above the fan awaiting its second click */
+.player-hand-card-wrapper.is-fast-lifted {
+    filter: drop-shadow(0 0.8vh 1.2vh rgba(0, 0, 0, 0.45));
+}
+
+/* Keep the raised card's original footprint clickable: the lift moves it up
+   0.25in, and without this a double-click near the bottom edge would land
+   its second click on the neighbor underneath. */
+.player-hand-card-wrapper.is-fast-lifted::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    height: 0.25in;
+}
+
 .player-hand-card-wrapper.is-dragging {
     transition: none;
     cursor: grabbing;

@@ -297,6 +297,38 @@
     line-height: 1.4;
 }
 
+/* Flick/Fast segmented toggle in the game menu */
+.play-style-toggle {
+    display: flex;
+    gap: 0.6vh;
+}
+
+.play-style-option {
+    flex: 1;
+    box-sizing: border-box;
+    padding: 8px 12px;
+    min-height: 44px;
+    background-color: #333;
+    color: #c9c9c9;
+    border: 0.12vh solid #444;
+    border-radius: 0.5vh;
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(0.9rem, 1.8vh, 1.05rem);
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.play-style-option:hover:not(.selected) {
+    background-color: #444;
+    border-color: #666;
+}
+
+.play-style-option.selected {
+    background-color: #0d6efd;
+    border-color: #0a58ca;
+    color: white;
+}
+
 .game-menu-button {
     box-sizing: border-box;
     width: 100%;

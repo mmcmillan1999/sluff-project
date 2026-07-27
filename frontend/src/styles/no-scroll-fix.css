@@ -26,9 +26,12 @@ body.game-active * {
   overflow: hidden !important;
 }
 
-/* 5. Ensure no element can cause overflow */
-.game-table,
-.player-hand-container {
+/* 5. Ensure no element can cause overflow.
+   .player-hand-container is intentionally NOT listed: the fast play style
+   lifts a clicked card 0.25in above the hand, and PlayerHand.css declares the
+   container overflow:visible for exactly that kind of protrusion. Page scroll
+   stays locked by body.game-active and .game-view above. */
+.game-table {
   overflow: hidden !important;
 }
 
