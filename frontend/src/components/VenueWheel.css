@@ -1,0 +1,133 @@
+/* frontend/src/components/VenueWheel.css */
+/* Price-is-Right drum for the Quick Play venue panels. The panels
+   themselves are the untouched .qp-card styles (LobbyView.css +
+   venueThemes.css); this file only supplies the 3D drum they ride on. */
+
+.venue-wheel {
+    position: relative;
+}
+
+.venue-wheel-viewport {
+    position: relative;
+    height: 30vh;
+    min-height: 190px;
+    perspective: 95vh;
+    perspective-origin: 50% 50%;
+    overflow: hidden;
+    touch-action: pan-x; /* vertical drags belong to the wheel */
+    cursor: grab;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.venue-wheel-viewport:active {
+    cursor: grabbing;
+}
+
+.venue-wheel-drum {
+    position: absolute;
+    inset: 0;
+    transform-style: preserve-3d;
+}
+
+/* Each slot is a full-width shelf rotated onto the drum surface. The px
+   floor keeps card copy readable on short viewports and large OS fonts;
+   the drum radius is measured from the rendered slot, so geometry follows. */
+.venue-wheel-slot {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: max(11vh, 68px);
+    margin-top: calc(max(11vh, 68px) / -2);
+    transform-style: preserve-3d;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    will-change: transform, opacity;
+}
+
+.venue-wheel-slot .qp-card {
+    height: 100%;
+    min-height: 0;
+}
+
+/* Off-center panels read as background: dimmed and inert-looking, but they
+   still take pointer events so drags/taps work anywhere on the drum. */
+.venue-wheel-slot:not(.is-front) .qp-card {
+    filter: brightness(0.62) saturate(0.8);
+}
+
+/* Compose with the affordability grayscale, which this dimming rule would
+   otherwise out-specificity and erase on neighbors. */
+.venue-wheel-slot:not(.is-front) .qp-card.qp-disabled {
+    filter: brightness(0.62) saturate(0.8) grayscale(0.7);
+}
+
+/* The wheel uses aria-disabled (a real disabled attribute would swallow the
+   pointer events drags need), so re-suppress the hover/press styling that
+   :not(:disabled) selectors would otherwise re-enable on NEED TOKENS and
+   SEATING YOU cards. */
+.venue-wheel-slot .qp-card[aria-disabled='true'] {
+    cursor: not-allowed;
+}
+
+.venue-wheel-slot .qp-card[aria-disabled='true']:hover,
+.venue-wheel-slot .qp-card[aria-disabled='true']:active {
+    transform: none;
+    border-color: var(--venue-accent-soft, rgba(255, 255, 255, 0.18));
+    box-shadow:
+        0 0.55vh 1.5vh rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.16),
+        inset 0 -3px 0 var(--venue-accent-soft, rgba(255, 255, 255, 0.18));
+}
+
+.venue-wheel-slot:not(.is-front) .qp-play-pill {
+    visibility: hidden; /* one PLAY NOW at a time — the front card's */
+}
+
+.venue-wheel-slot.is-front .qp-card {
+    box-shadow:
+        0 0.75vh 1.9vh rgba(0, 0, 0, 0.55),
+        0 0 0 1px var(--venue-accent-soft, rgba(255, 255, 255, 0.25)),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* Drum shading sells the cylinder: darkness rolling in from the edges. */
+.venue-wheel-shade {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 28%;
+    pointer-events: none;
+    z-index: 200;
+}
+
+.venue-wheel-shade-top {
+    top: 0;
+    background: linear-gradient(to bottom, rgba(10, 12, 16, 0.92), rgba(10, 12, 16, 0));
+}
+
+.venue-wheel-shade-bottom {
+    bottom: 0;
+    background: linear-gradient(to top, rgba(10, 12, 16, 0.92), rgba(10, 12, 16, 0));
+}
+
+/* Screen-reader-only announcement of the front venue. */
+.venue-wheel-live {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .venue-wheel-slot {
+        will-change: auto;
+    }
+}
