@@ -3,6 +3,7 @@ import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMe
 import { createPortal } from 'react-dom';
 import './GameTableView.css';
 import DrawVoteModal from './game/DrawVoteModal';
+import PlayoutVoteModal from './game/PlayoutVoteModal';
 import PlayerHand from './game/PlayerHand';
 import InsuranceControls from './game/InsuranceControls';
 import RoundSummaryModal from './game/RoundSummaryModal';
@@ -105,6 +106,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const [showGameMenu, setShowGameMenu] = useState(false);
     const [showIosPwaPrompt, setShowIosPwaPrompt] = useState(false);
     const [showDrawVoteModal, setShowDrawVoteModal] = useState(false);
+    const [showPlayoutVoteModal, setShowPlayoutVoteModal] = useState(false);
     const [chatOpen, setChatOpen] = useState(false);
     const [unreadChat, setUnreadChat] = useState(0);
     const [touchStartX, setTouchStartX] = useState(null);
@@ -600,6 +602,20 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         }
     }, [currentTableState, isSpectator]);
 
+    // Post-deal playout vote: surfaces the moment the insurance deal locks
+    // the round, and closes anything that would cover it.
+    useEffect(() => {
+        const shouldShow = Boolean(currentTableState?.playoutVote?.isActive) && !isSpectator;
+        setShowPlayoutVoteModal(shouldShow);
+        if (shouldShow) {
+            setChatOpen(false);
+            setShowGameMenu(false);
+            setShowInsurancePrompt(false);
+            setShowIosPwaPrompt(false);
+            setShowStoreModal(false);
+        }
+    }, [currentTableState?.playoutVote?.isActive, isSpectator]);
+
     useEffect(() => {
         // Seats derive from the full seating roster, not playerOrderActive:
         // in a 4-player game playerOrderActive shrinks to the 3 active players
@@ -685,6 +701,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 setShowInsurancePrompt(false);
                 setShowIosPwaPrompt(false);
                 setShowDrawVoteModal(false);
+                setShowPlayoutVoteModal(false);
                 setShowStoreModal(false);
             }
             const rawReadyAt = roundSummary.presentationReadyAt;
@@ -714,7 +731,10 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 roundModalScheduledRef.current = true;
                 setRoundPresentationPhase('waiting');
                 setShowRoundSummaryModal(false);
-                const delay = (isSpectator || roundSummary.forfeit) ? 0 : END_ROUND_TOTAL_MS;
+                // Forfeits and insurance wraps skip the celebration: their
+                // rounds end without a played-out final trick.
+                const delay = (isSpectator || roundSummary.forfeit || roundSummary.insuranceWrap)
+                    ? 0 : END_ROUND_TOTAL_MS;
                 roundModalTimerRef.current = setTimeout(() => {
                     roundModalTimerRef.current = null;
                     setRoundPresentationPhase('recap');
@@ -1333,6 +1353,13 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 currentTableState={{...currentTableState, playerId: playerId}}
                 onVote={(vote) => emitEvent("submitDrawVote", { vote })}
                 handleLeaveTable={handleLeaveTable}
+            />
+
+            <PlayoutVoteModal
+                show={showPlayoutVoteModal}
+                currentTableState={currentTableState}
+                selfPlayerName={selfPlayerName}
+                onVote={(vote) => emitEvent("submitPlayoutVote", { vote })}
             />
 
             <IosPwaPrompt show={showIosPwaPrompt} onClose={() => setShowIosPwaPrompt(false)} />

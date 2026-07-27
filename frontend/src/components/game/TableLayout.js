@@ -240,6 +240,9 @@ const TableLayout = ({
             && currentTableState.settlement?.status === 'pending';
         const isRoundEnd = (state === 'Awaiting Next Round Trigger' || state === 'Game Over')
             && roundSummary && !roundSummary.forfeit
+            // An insurance wrap ends mid-round: lastCompletedTrick is a stale
+            // mid-round trick and the widow flourish would mislead.
+            && !roundSummary.insuranceWrap
             && !terminalSettlementPending
             && lastCompletedTrick && bidWinnerInfo && !isSpectator && !prefersReducedMotion;
 

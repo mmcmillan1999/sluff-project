@@ -6,9 +6,10 @@ const scoringHandler = require('./scoringHandler');
 
 function playCard(engine, userId, card) {
     // Playing Phase is the only state in which a card may leave a hand.  This
-    // also protects the completed-trick linger and an active draw vote from a
-    // late or replayed socket action.
-    if (engine.state !== "Playing Phase" || engine.drawRequest?.isActive) return [];
+    // also protects the completed-trick linger and an active draw or playout
+    // vote from a late or replayed socket action.
+    if (engine.state !== "Playing Phase" || engine.drawRequest?.isActive
+        || engine.playoutVote?.isActive) return [];
     if (userId !== engine.trickTurnPlayerId) return [];
     const player = engine.players[userId];
     if (!player) return [];

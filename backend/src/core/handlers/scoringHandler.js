@@ -75,7 +75,10 @@ function calculateRoundScores(engine) {
         pointChanges: { ...roundData.pointChanges },
     };
     engine.roundHistory.push(roundEntry);
-    if (engine.gameId) {
+    // A round wrapped early by the playout vote has partial trick data:
+    // its card counts, counterfactuals, and hindsight would poison the
+    // insurance-tuning analytics, so it is not logged to round_results.
+    if (engine.gameId && !engine.roundWrappedEarly) {
         // Per-player breakdown for analytics: each seat's insurance stance,
         // the card-only outcome (counterfactual when a deal executed), the
         // insurance outcome (the deal, if any), and what actually applied.
@@ -147,7 +150,11 @@ function calculateRoundScores(engine) {
         bidType: roundData.bidType,
         lastCompletedTrick: engine.lastCompletedTrick,
     };
-    engine.startRoundPresentationWindow(ROUND_PRESENTATION_LOCK_MS);
+    // Early wraps skip the client's 5.6s celebration flourish, so the full
+    // presentation lock would leave players staring at a settled table.
+    engine.startRoundPresentationWindow(
+        engine.roundWrappedEarly ? Math.min(12_000, ROUND_PRESENTATION_LOCK_MS) : ROUND_PRESENTATION_LOCK_MS
+    );
 
     effects.push({ type: 'SYNC_PLAYER_TOKENS', payload: { playerIds: Object.keys(engine.players) } });
     effects.push({ type: 'BROADCAST_STATE' });

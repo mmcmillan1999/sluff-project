@@ -1,0 +1,103 @@
+/* frontend/src/components/game/PlayoutVoteModal.css */
+/* Post-deal playout vote: mirrors the draw-vote popup's look. */
+
+.playout-vote-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000; /* same layer as the draw vote and round recap */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.playout-vote-modal {
+    width: min(88vw, 24rem);
+    padding: 2.2vh 2.4vh;
+    box-sizing: border-box;
+    background: #212121;
+    border: 0.12vh solid rgba(246, 207, 116, 0.5);
+    border-radius: 1vh;
+    color: white;
+    text-align: center;
+    box-shadow: 0 0.6vh 2vh rgba(0, 0, 0, 0.6);
+    font-family: 'Merriweather', serif;
+}
+
+.playout-vote-eyebrow {
+    margin: 0 0 0.3vh;
+    color: #f6cf74;
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(0.7rem, 1.35vh, 0.85rem);
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.playout-vote-title {
+    margin: 0 0 1vh;
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(1.2rem, 2.8vh, 1.6rem);
+}
+
+.playout-vote-copy {
+    margin: 0 0 1.6vh;
+    font-size: clamp(0.82rem, 1.6vh, 0.95rem);
+    line-height: 1.5;
+    color: #e2e2e2;
+}
+
+.playout-vote-actions {
+    display: flex;
+    gap: 1.2vh;
+    justify-content: center;
+}
+
+.playout-vote-btn {
+    flex: 1;
+    min-height: 44px;
+    padding: 1.1vh 1.2vh;
+    border: none;
+    border-radius: 0.6vh;
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(0.85rem, 1.8vh, 1rem);
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    color: white;
+}
+
+.playout-vote-play {
+    background: #198754;
+}
+
+.playout-vote-wrap {
+    background: #0d6efd;
+}
+
+.playout-vote-btn:hover {
+    filter: brightness(1.12);
+}
+
+.playout-vote-waiting {
+    margin: 0;
+    min-height: 44px;
+    display: grid;
+    place-items: center;
+    font-size: clamp(0.8rem, 1.55vh, 0.92rem);
+    color: #cfcfcf;
+}
+
+.playout-vote-timer {
+    margin: 1vh 0 0;
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(1rem, 2.2vh, 1.3rem);
+    color: #f6cf74;
+    min-height: 1.2em;
+}
+
+.playout-vote-hint {
+    margin: 0.6vh 0 0;
+    font-size: clamp(0.7rem, 1.3vh, 0.82rem);
+    color: #9a9a9a;
+}

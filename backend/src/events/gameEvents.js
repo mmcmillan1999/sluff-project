@@ -750,6 +750,9 @@ const registerGameHandlers = (io, gameService, options = {}) => {
         onTableAction("submitDrawVote", { validate: validators.drawVote }, ({ payload: { tableId, vote } }) => (
             gameService.submitDrawVote(tableId, socket.user.id, vote)
         ));
+        onTableAction("submitPlayoutVote", { validate: validators.playoutVote }, ({ payload: { tableId, vote } }) => (
+            gameService.submitPlayoutVote(tableId, socket.user.id, vote)
+        ));
         onTableAction("forfeitGame", {}, ({ payload: { tableId } }) => gameService.forfeitGame(tableId, socket.user.id));
         onTableAction("updateInsuranceSetting", { validate: validators.insurance }, ({ payload: { tableId, settingType, value } }) => (
             gameService.updateInsuranceSetting(tableId, socket.user.id, settingType, value)

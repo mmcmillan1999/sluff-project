@@ -794,13 +794,110 @@ class GameEngine {
                     defenderOffers: { ...this.insurance.defenderOffers }
                 }
             };
+            // The deal fixes the round's points, so the remaining tricks are
+            // optional: ask the table whether to play them out. Started as a
+            // direct state mutation (not an effect) because the bot entry
+            // path discards returned effects.
+            this._startPlayoutVote();
         }
         return this._effects([{ type: 'BROADCAST_STATE' }]);
     }
 
+    // --- Playout vote: play out a decided round, or wrap it up ---
+
+    _newPlayoutVote() {
+        return { isActive: false, votes: {}, timer: null, resolution: null };
+    }
+
+    _clearPlayoutTimer() {
+        if (this.internalTimers.playoutTimer) {
+            clearInterval(this.internalTimers.playoutTimer);
+            delete this.internalTimers.playoutTimer;
+        }
+    }
+
+    _startPlayoutVote() {
+        const voteStates = ['Bid Announcement', 'Playing Phase', 'TrickCompleteLinger'];
+        if (this.playoutVote.isActive || !voteStates.includes(this.state)) return;
+
+        const activePlayers = this.playerOrder.allIds
+            .map(id => this.players[id])
+            .filter(p => p && !p.isSpectator);
+        const humans = activePlayers.filter(p => !p.isBot);
+        // All-bot tables always play rounds out: the exhibition analytics
+        // need complete rounds, and there is nobody to ask anyway.
+        if (humans.length === 0) return;
+
+        console.log(`[${this.tableId}] Insurance deal struck — playout vote opened.`);
+        this.playoutVote.isActive = true;
+        this.playoutVote.resolution = null;
+        this.playoutVote.votes = {};
+        activePlayers.forEach(p => { this.playoutVote.votes[p.playerName] = null; });
+        this.playoutVote.timer = 30;
+
+        this.internalTimers.playoutTimer = setInterval(() => {
+            if (this.playoutVote.isActive) {
+                this.playoutVote.timer--;
+                if (this.playoutVote.timer <= 0) {
+                    console.log(`[${this.tableId}] Playout vote timed out — wrapping the round.`);
+                    this.emitLobbyUpdateCallback(this._resolvePlayoutWrap('timeout'));
+                    return;
+                }
+                this.emitLobbyUpdateCallback([{ type: 'BROADCAST_STATE' }]);
+            } else {
+                this._clearPlayoutTimer();
+            }
+        }, 1000);
+    }
+
+    submitPlayoutVote(userId, vote) {
+        const player = this.players[userId];
+        if (!player || !this.playoutVote.isActive || !['play', 'wrap'].includes(vote)
+            || this.playoutVote.votes[player.playerName] !== null) {
+            return this._effects();
+        }
+
+        console.log(`[${this.tableId}] ${player.playerName} voted to ${vote === 'play' ? 'play it out' : 'wrap the round'}.`);
+        this.playoutVote.votes[player.playerName] = vote;
+
+        if (vote === 'play') {
+            // A single "play it out" keeps the round alive for everyone.
+            this._clearPlayoutTimer();
+            this.playoutVote.isActive = false;
+            this.playoutVote.timer = 0;
+            this.playoutVote.resolution = 'play';
+            return this._effects([{ type: 'BROADCAST_STATE' }]);
+        }
+
+        if (Object.values(this.playoutVote.votes).some(v => v === null)) {
+            return this._effects([{ type: 'BROADCAST_STATE' }]);
+        }
+        return this._effects(this._resolvePlayoutWrap('unanimous'));
+    }
+
+    _resolvePlayoutWrap(reason) {
+        this._clearPlayoutTimer();
+        this.playoutVote.isActive = false;
+        this.playoutVote.timer = 0;
+        this.playoutVote.resolution = 'wrap';
+        console.log(`[${this.tableId}] Round wrapped early after insurance deal (${reason}).`);
+
+        // The deal supplies the points; card play stops here. The flag lets
+        // scoring skip the partial-round analytics and shorten the
+        // presentation lock, and tells clients to skip the trick/widow
+        // flourish that assumes a played-out round.
+        this.roundWrappedEarly = true;
+        const effects = scoringHandler.calculateRoundScores(this);
+        if (this.roundSummary) {
+            this.roundSummary.insuranceWrap = { reason };
+        }
+        return effects;
+    }
+
     requestDraw(userId) {
         const player = this.players[userId];
-        if (!player || player.isSpectator || this.drawRequest.isActive || this.state !== 'Playing Phase') return this._effects();
+        if (!player || player.isSpectator || this.drawRequest.isActive
+            || this.playoutVote?.isActive || this.state !== 'Playing Phase') return this._effects();
         
         console.log(`[${this.tableId}] Draw requested by ${player.playerName}.`);
         this.drawRequest.isActive = true;
@@ -970,6 +1067,9 @@ class GameEngine {
         this.trickTurnPlayerId = null; this.trickLeaderId = null; this.currentTrickCards = []; this.leadSuitCurrentTrick = null; this.lastCompletedTrick = null; this.tricksPlayedCount = 0; this.capturedTricks = {}; this.roundSummary = null; 
         this.insurance = { isActive: false, bidMultiplier: null, bidderPlayerName: null, bidderRequirement: 0, defenderOffers: {}, dealExecuted: false, executedDetails: null };
         this.forfeiture = { targetPlayerName: null, timeLeft: null }; this.drawRequest = { isActive: false, initiator: null, votes: {}, timer: null };
+        this._clearPlayoutTimer();
+        this.playoutVote = this._newPlayoutVote();
+        this.roundWrappedEarly = false;
         this.rematchOffer = this._newRematchOffer();
         this.drawCountdown = null;
         Object.values(this.players).forEach(p => {
@@ -1001,6 +1101,8 @@ class GameEngine {
             delete this.internalTimers.drawTimer;
         }
         this.drawRequest.isActive = false;
+        this._clearPlayoutTimer();
+        if (this.playoutVote) this.playoutVote.isActive = false;
         this.state = "Game Over";
         this.beginSettlement('forfeit');
         this.roundSummary = {
@@ -1113,6 +1215,7 @@ class GameEngine {
             widowCount: Array.isArray(this.widow) ? this.widow.length : 0,
             originalDealtWidow: this.originalDealtWidow, scores: this.scores, currentHighestBidDetails: this.currentHighestBidDetails, bidWinnerInfo: this.bidWinnerInfo, gameStarted: this.gameStarted, trumpSuit: this.trumpSuit, currentTrickCards: this.currentTrickCards, tricksPlayedCount: this.tricksPlayedCount, leadSuitCurrentTrick: this.leadSuitCurrentTrick, trumpBroken: this.trumpBroken, capturedTricks: this.capturedTricks, roundSummary: this.roundSummary, lastCompletedTrick: this.lastCompletedTrick, playersWhoPassedThisRound: this.playersWhoPassedThisRound.map(id => this.players[id]?.playerName), playerMode: this.playerMode, serverVersion: this.serverVersion, insurance: this.insurance, forfeiture: this.forfeiture, drawRequest: this.drawRequest, originalFrogBidderId: this.originalFrogBidderId, soloBidMadeAfterFrog: this.soloBidMadeAfterFrog, revealedWidowForFrog: this.revealedWidowForFrog, widowDiscardsForFrogBidder: this.widowDiscardsForFrogBidder,
             bidderCardPoints: this.bidderCardPoints, defenderCardPoints: this.defenderCardPoints,
+            playoutVote: this.playoutVote,
             drawCountdown: this.drawCountdown,
             rematchOffer: this.rematchOffer,
             settlement: this.settlement,

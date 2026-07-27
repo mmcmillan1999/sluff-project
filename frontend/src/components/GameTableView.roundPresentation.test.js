@@ -68,6 +68,7 @@ vi.mock('./game/TableLayout', () => ({
 }));
 
 vi.mock('./game/DrawVoteModal', () => ({ default: () => null }));
+vi.mock('./game/PlayoutVoteModal', () => ({ default: () => null }));
 vi.mock('./game/PlayerHand', () => ({ default: () => null }));
 vi.mock('./game/InsuranceControls', () => ({ default: () => null }));
 vi.mock('./game/InsurancePrompt', () => ({ default: () => null }));

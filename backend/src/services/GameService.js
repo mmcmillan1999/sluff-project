@@ -1055,6 +1055,10 @@
             await this._performAction(tableId, (engine) => engine.submitDrawVote(userId, vote));
         }
 
+        async submitPlayoutVote(tableId, userId, vote) {
+            await this._performAction(tableId, (engine) => engine.submitPlayoutVote(userId, vote));
+        }
+
         async requestDraw(tableId, userId) {
             await this._performAction(tableId, (engine) => {
                 const result = engine.requestDraw(userId);
@@ -1446,8 +1450,12 @@
                         this.emitGameState(tableId);
                         // --- THE FIX: No longer call _triggerBots here. ---
                         
-                        // Log insurance hindsight values for bots when round ends
-                        if (engine.roundSummary && engine.roundSummary.insuranceHindsight && engine.gameId) {
+                        // Log insurance hindsight values for bots when round ends.
+                        // Early-wrapped rounds are skipped: their hindsight is
+                        // computed from partial trick data and would mislead
+                        // the insurance tuning.
+                        if (engine.roundSummary && engine.roundSummary.insuranceHindsight
+                            && !engine.roundSummary.insuranceWrap && engine.gameId) {
                             console.log(`[Insurance] Round ended with hindsight data for game ${engine.gameId}`);
                             console.log(`[Insurance] Insurance was active:`, engine.insurance.isActive);
                             console.log(`[Insurance] Deal executed:`, engine.insurance.dealExecuted);
@@ -1779,7 +1787,7 @@
                     // study; a bot bidder holds the reveal 3 extra seconds
                     // before returning its discards.
                     scheduleTurnAction(this.submitFrogDiscards, standardDelay + 3000, botUserId, discards);
-                } else if (engine.state === 'Playing Phase' && !engine.drawRequest.isActive && engine.trickTurnPlayerId == botUserId) {
+                } else if (engine.state === 'Playing Phase' && !engine.drawRequest.isActive && !engine.playoutVote?.isActive && engine.trickTurnPlayerId == botUserId) {
                     const card = bot.playCard();
                     if (card) {
                         scheduleTurnAction(this.playCard, playDelay, botUserId, card);
@@ -1804,7 +1812,27 @@
                 }
             }
 
-            if (engine.state === 'Playing Phase' && !engine.drawRequest.isActive && engine.insurance.isActive && !engine.insurance.dealExecuted) {
+            if (engine.playoutVote?.isActive) {
+                // Bots never block a wrap: they vote "next round" with the
+                // same human-like pacing the draw vote uses. A human's
+                // "play it out" still resolves the vote instantly.
+                let playoutDelay = 1500;
+                for (const botId in engine.bots) {
+                    const bot = engine.bots[botId];
+                    if (engine.playoutVote.votes[bot.playerName] === null) {
+                        setTimeout(async () => {
+                            const currentEngine = this.getEngineById(tableId);
+                            if (currentEngine && currentEngine.playoutVote?.isActive
+                                && currentEngine.playoutVote.votes[bot.playerName] === null) {
+                                await this.submitPlayoutVote(tableId, bot.userId, 'wrap');
+                            }
+                        }, playoutDelay);
+                        playoutDelay += 1200;
+                    }
+                }
+            }
+
+            if (engine.state === 'Playing Phase' && !engine.drawRequest.isActive && !engine.playoutVote?.isActive && engine.insurance.isActive && !engine.insurance.dealExecuted) {
                 console.log(`[INSURANCE] Processing insurance for table ${tableId} - ${Object.keys(engine.bots).length} bots`);
                 let insuranceDelay = 500;
                 for (const botId in engine.bots) {
@@ -1818,6 +1846,12 @@
                             if (decision) {
                                 currentEngine.updateInsuranceSetting(bot.userId, decision.settingType, decision.value);
                                 this.emitGameState(tableId);
+                                // A bot's offer can be the one that executes
+                                // the deal: re-run the trigger so the playout
+                                // vote's bot votes get scheduled.
+                                if (currentEngine.playoutVote?.isActive) {
+                                    this._triggerBots(tableId);
+                                }
                                 
                                 // Log the decision for learning
                                 console.log(`[INSURANCE] Logging decision for ${bot.playerName}, gameId: ${currentEngine.gameId}`);

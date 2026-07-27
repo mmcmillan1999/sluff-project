@@ -123,6 +123,13 @@ const sanitizeDrawRequest = drawRequest => {
     return result;
 };
 
+const sanitizePlayoutVote = playoutVote => {
+    const result = copyScalarFields(playoutVote, ['isActive', 'timer', 'resolution']) || {};
+    const votes = copyScalarMap(playoutVote.votes);
+    if (votes) result.votes = votes;
+    return result;
+};
+
 const sanitizeRoundSummary = roundSummary => {
     const result = copyScalarFields(roundSummary, ROUND_SUMMARY_FIELDS) || {};
 
@@ -180,6 +187,7 @@ export function sanitizeFeedbackGameContext(gameContext) {
         value => copyScalarFields(value, ['targetPlayerName', 'timeLeft']) || {},
     );
     addObjectWhenPresent(result, 'drawRequest', gameContext.drawRequest, sanitizeDrawRequest);
+    addObjectWhenPresent(result, 'playoutVote', gameContext.playoutVote, sanitizePlayoutVote);
     addObjectWhenPresent(
         result,
         'settlement',

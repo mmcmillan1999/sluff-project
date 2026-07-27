@@ -112,6 +112,7 @@ vi.mock('./game/TutorialCoach', () => ({
 vi.mock('./game/RoundSummaryModal', () => ({ default: () => null }));
 vi.mock('./game/GameOverPodium', () => ({ default: () => null }));
 vi.mock('./game/DrawVoteModal', () => ({ default: () => null }));
+vi.mock('./game/PlayoutVoteModal', () => ({ default: () => null }));
 vi.mock('./game/InsuranceControls', () => ({ default: () => null }));
 vi.mock('./game/InsurancePrompt', () => ({ default: () => null }));
 vi.mock('./game/BidWinnerSplash', () => ({ default: () => null }));
