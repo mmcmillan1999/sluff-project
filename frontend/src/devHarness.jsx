@@ -15,8 +15,6 @@
 // ?turn=1 to make it your turn with a live hand — playCard really moves the
 // card onto the felt; ?playstyle=flick|fast presets the card play style
 // (implies ?turn=1) so both gestures can be exercised without a backend.
-// ?mode=lobby renders the lobby with canned venues — the venue wheel can be
-// spun and screenshotted without a backend (quick play just logs).
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
@@ -32,7 +30,6 @@ import './styles/no-scroll-fix.css';
 import './styles/venueThemes.css';
 import GameHeader from './components/GameHeader.js';
 import GameTableView from './components/GameTableView.js';
-import LobbyView from './components/LobbyView.js';
 import OrientationScrim from './components/OrientationScrim.js';
 import SluffIdent from './components/SluffIdent.js';
 import { setCosmetic } from './utils/cosmetics.js';
@@ -297,40 +294,7 @@ const HarnessApp = () => {
     );
 };
 
-// --- Lobby preview: /harness.html?mode=lobby ---
-const lobbyMode = params.get('mode') === 'lobby';
-if (lobbyMode) {
-    const lobbyThemes = [
-        { id: 'miss-pauls-academy', name: 'Academy', cost: 0.1, tables: [] },
-        { id: 'fort-creek', name: 'Fort Creek', cost: 1, tables: [] },
-        { id: 'shirecliff-road', name: 'Shirecliff', cost: 5, tables: [] },
-        { id: 'dans-deck', name: 'Eaglewood', cost: 20, tables: [] },
-    ];
-    ReactDOM.createRoot(document.getElementById('root')).render(
-        <LobbyView
-            user={{ id: 101, username: 'You', tokens: '12.00', wins: 4, losses: 2, washes: 1, is_admin: false }}
-            lobbyThemes={lobbyThemes}
-            serverVersion="harness"
-            handleJoinTable={noop}
-            handleQuickPlay={(themeId) => console.log('[harness] quickPlay', themeId)}
-            handleJoinTableAsSpectator={noop}
-            handleLogout={noop}
-            handleRequestFreeToken={noop}
-            handleShowLeaderboard={noop}
-            handleShowSeasonRecaps={noop}
-            handleShowTokenLedger={noop}
-            handleShowBulletin={noop}
-            handleShowAdmin={noop}
-            handleShowFeedback={noop}
-            handleShowHowToPlay={noop}
-            handleResetTutorial={noop}
-            socket={fakeSocket}
-            soundSettings={soundSettings}
-        />
-    );
-}
-
-if (!identMode && !lobbyMode) {
+if (!identMode) {
 document.body.classList.add('game-active');
 
 ReactDOM.createRoot(document.getElementById('root')).render(<HarnessApp />);
