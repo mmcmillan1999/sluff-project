@@ -550,11 +550,12 @@
     filter: drop-shadow(0 0.5vh 1vh rgba(0, 0, 0, 0.5));
 }
 
-/* 3D flip: starts showing the back (face-down), flips to the front on reveal */
+/* 3D flip: starts showing the back (face-down), flips to the front on reveal.
+   TableLayout sets transition-duration inline from WIDOW_FLIP_MS. */
 .widow-flip {
     position: relative;
     transform-style: preserve-3d;
-    transition: transform 500ms ease-in-out;
+    transition: transform 250ms ease-in-out;
     transform: rotateY(180deg);
 }
 

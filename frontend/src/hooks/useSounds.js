@@ -379,7 +379,10 @@ export const useSounds = ({ musicActive = false } = {}) => {
         };
     }, []);
 
-    const playSound = useCallback((soundName) => {
+    // `tailMs` plays only the final slice of a clip, so a clip written as a build
+    // (the drumroll) still crests on cue when the animation it scores is shorter
+    // than the recording.
+    const playSound = useCallback((soundName, { tailMs } = {}) => {
         if (mutedRef.current) return;
         if (!enabledRef.current) {
             console.warn(`[sound] "${soundName}" skipped — audio not unlocked yet (no user gesture)`);
@@ -394,8 +397,25 @@ export const useSounds = ({ musicActive = false } = {}) => {
         if (ctx.state === 'suspended') ctx.resume().catch(() => {});
         const source = ctx.createBufferSource();
         source.buffer = buffer;
-        source.connect(gainRef.current);
-        source.start(0);
+
+        const duration = Number(buffer.duration);
+        const trimTo = Number(tailMs) / 1000;
+        const offset = Number.isFinite(duration) && Number.isFinite(trimTo) && trimTo > 0 && trimTo < duration
+            ? duration - trimTo
+            : 0;
+
+        if (offset > 0) {
+            // Dropping in mid-clip would click, so ramp the entry over a few frames.
+            const entry = ctx.createGain();
+            setGain(entry, ctx, 0, { immediate: true });
+            setGain(entry, ctx, 1);
+            entry.connect(gainRef.current);
+            source.connect(entry);
+            source.onended = () => { try { entry.disconnect(); } catch { /* best effort */ } };
+        } else {
+            source.connect(gainRef.current);
+        }
+        source.start(0, offset);
     }, []);
 
     const toggleMute = useCallback(() => setMuted(current => !current), []);

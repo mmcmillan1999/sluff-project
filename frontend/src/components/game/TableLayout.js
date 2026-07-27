@@ -6,7 +6,7 @@ import PlayerSeatPositioner from './PlayerSeatPositioner';
 import FrogWidowReveal from './FrogWidowReveal';
 import {
     FINAL_TRICK_HOLD_MS, FINAL_TRICK_FLY_MS,
-    BANNER_START_MS,
+    BANNER_START_MS, DRUMROLL_TAIL_MS,
     WIDOW_TO_CENTER_START_MS, WIDOW_TO_CENTER_MS,
     WIDOW_FLIP_START_MS, WIDOW_FLIP_MS,
     WIDOW_TO_PILE_MS, WIDOW_OVERLAY_TO_PILE_MS,
@@ -277,8 +277,9 @@ const TableLayout = ({
 
         // 2) Drumroll begins (anticipation). The widow movement and flip make
         // the reveal self-explanatory, so no text banner covers the table.
+        // Only its tail plays, so the build still lands on the flip below.
         endRoundTimersRef.current.push(setTimeout(() => {
-            if (playSound) playSound('drumroll');
+            if (playSound) playSound('drumroll', { tailMs: DRUMROLL_TAIL_MS });
         }, BANNER_START_MS));
 
         // 3) Mount the widow overlay (face-down) just before it should start moving;
@@ -707,7 +708,10 @@ const TableLayout = ({
                         className="widow-celebration-card"
                         ref={(el) => { widowCardRefs.current[i] = el; }}
                     >
-                        <div className={`widow-flip${widowFlipped ? ' revealed' : ''}`}>
+                        <div
+                            className={`widow-flip${widowFlipped ? ' revealed' : ''}`}
+                            style={{ transitionDuration: `${WIDOW_FLIP_MS}ms` }}
+                        >
                             <div className="widow-flip-face widow-flip-front">
                                 {renderCard(card, { large: true })}
                             </div>
