@@ -98,6 +98,24 @@ const VenueWheel = ({
         return () => window.removeEventListener('resize', measure);
     }, [hasThemes]);
 
+    // touch-action: none SHOULD reserve every gesture that starts on the
+    // wheel, but iOS tracks touch-action per compositor layer and drops the
+    // region while the layer is animating — a finger landing on a SPINNING
+    // wheel could still scroll the page. Swallowing the raw touch events
+    // with non-passive listeners is the house-proven backstop (PlayerHand
+    // does the same for card drags). Pointer events are unaffected.
+    useEffect(() => {
+        const scene = sceneRef.current;
+        if (!scene) return undefined;
+        const swallow = (event) => event.preventDefault();
+        scene.addEventListener('touchstart', swallow, { passive: false });
+        scene.addEventListener('touchmove', swallow, { passive: false });
+        return () => {
+            scene.removeEventListener('touchstart', swallow);
+            scene.removeEventListener('touchmove', swallow);
+        };
+    }, [hasThemes]);
+
     // Hot path: write the rotor transform directly; touch React state only
     // when the front segment actually changes.
     const applySpin = useCallback((value) => {
