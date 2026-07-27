@@ -26,11 +26,13 @@
     perspective-origin: 50% 50%;
 }
 
-/* The game header owns a compact action rail on the right. Keep every face of
-   the rotating cube inside the remaining width so it never passes under the
-   menu button. */
+/* The game header owns a compact action rail on the right AND the quick-tips
+   beacon on the left. Keep every face of the rotating cube inside the
+   remaining width so it never passes under either — the carve is symmetric,
+   which also keeps the cube centered on screen. */
 .brand-header--game .brand-cube-viewport {
-    width: calc(100% - 56px - env(safe-area-inset-right, 0px));
+    margin-left: calc(56px + env(safe-area-inset-left, 0px));
+    width: calc(100% - 112px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
 }
 
 .brand-header--game .brand-header-text {

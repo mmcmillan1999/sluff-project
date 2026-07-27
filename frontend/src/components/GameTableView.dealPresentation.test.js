@@ -8,6 +8,8 @@ const { motionPreference } = vi.hoisted(() => ({
 
 vi.mock('../services/api', () => ({
     getLobbyChatHistory: vi.fn(() => new Promise(() => {})),
+    getSeenTips: vi.fn(() => Promise.resolve([])),
+    markTipSeen: vi.fn(() => Promise.resolve({})),
 }));
 
 vi.mock('../hooks/usePrefersReducedMotion', () => ({

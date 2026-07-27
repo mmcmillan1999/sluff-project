@@ -5,7 +5,9 @@ import GameTableView from './GameTableView';
 import { END_ROUND_TOTAL_MS } from '../config/endRoundTiming';
 
 vi.mock('../services/api', () => ({
-    getLobbyChatHistory: vi.fn(() => new Promise(() => {}))
+    getLobbyChatHistory: vi.fn(() => new Promise(() => {})),
+    getSeenTips: vi.fn(() => Promise.resolve([])),
+    markTipSeen: vi.fn(() => Promise.resolve({})),
 }));
 
 const { motionPreference } = vi.hoisted(() => ({

@@ -455,6 +455,19 @@ const createDbTables = async (pool) => {
         await pool.query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS last_updated_by_admin_at TIMESTAMP WITH TIME ZONE");
 
 
+        // Quick-tips read receipts: which in-game tips (the "i" beacon) each
+        // player has dismissed. The tip registry itself lives in the frontend
+        // (frontend/src/config/tips.js); the server only remembers ids so the
+        // unseen count survives across devices and browsers.
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS user_tips_seen (
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                tip_id VARCHAR(64) NOT NULL,
+                seen_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (user_id, tip_id)
+            );
+        `);
+
         await pool.query(`
             CREATE TABLE IF NOT EXISTS lobby_chat_messages (
                 id SERIAL PRIMARY KEY,

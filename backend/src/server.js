@@ -18,6 +18,7 @@ const createSeasonRoutes = require('./api/seasons');
 const createAdminRoutes = require('./api/admin');
 const createFeedbackRoutes = require('./api/feedback');
 const createChatRoutes = require('./api/chat');
+const createTipsRoutes = require('./api/tips');
 const createDbTables = require('./data/createTables');
 const { ensureBotAccounts } = require('./data/botAccounts');
 const createPingRoutes = require('./api/ping');
@@ -154,6 +155,7 @@ async function initializeApplication() {
     }));
     app.use('/api/feedback', createFeedbackRoutes(pool, jwt));
     app.use('/api/chat', createChatRoutes(pool, io, jwt));
+    app.use('/api/tips', createTipsRoutes(pool, jwt));
     app.use('/api/ping', createPingRoutes());
     app.use('/api/metrics', createMetricsRoutes(pool, jwt));
 

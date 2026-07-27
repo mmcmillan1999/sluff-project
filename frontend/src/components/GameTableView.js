@@ -39,6 +39,7 @@ import { getThemePresentation } from '../config/themePresentation';
 import PlayerProfileModal from './PlayerProfileModal';
 import StoreModal from './StoreModal';
 import McMillanCrest from './game/McMillanCrest';
+import TipsBeacon from './game/TipsBeacon';
 import WidowSpider from './game/WidowSpider';
 import { useCosmetics } from '../utils/cosmetics';
 import { CARD_PLAY_STYLES, useCardPlayStyle, setCardPlayStyle } from '../utils/playStyle';
@@ -1202,6 +1203,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             {shareNotice && <div className="share-invite-notice">{shareNotice}</div>}
             {!roundPresentationControlsLocked && createPortal(
                 <>
+                    <TipsBeacon userId={playerId} />
                     <button
                         className="game-header-store-btn"
                         type="button"

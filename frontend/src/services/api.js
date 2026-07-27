@@ -477,6 +477,26 @@ export const sendLobbyChatMessage = async (message) => {
     return data;
 };
 
+// --- Quick Tips Service Calls ---
+
+export const getSeenTips = async () => {
+    const response = await configuredFetch('/api/tips/seen', 'GET');
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.message || 'Failed to fetch seen tips.');
+    }
+    return data.seenTipIds || [];
+};
+
+export const markTipSeen = async (tipId) => {
+    const response = await configuredFetch('/api/tips/seen', 'POST', { tipId });
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.message || 'Failed to mark tip seen.');
+    }
+    return data;
+};
+
 // --- Feedback Service Calls ---
 
 export const submitFeedback = async (feedbackData) => {

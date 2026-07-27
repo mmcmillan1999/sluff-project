@@ -31,6 +31,7 @@ const suites = [
     { name: 'authentication integrity', file: './authenticationIntegrity.test.js' },
     { name: 'voice chat signaling', file: './voiceSignaling.test.js' },
     { name: 'tutorial persistence', file: './tutorialPersistence.test.js' },
+    { name: 'quick-tips read receipts', file: './tips.test.js' },
     { name: 'AI prompt rule contract', file: './aiPromptRules.test.js' },
 ];
 

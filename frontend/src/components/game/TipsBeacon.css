@@ -1,0 +1,156 @@
+/* frontend/src/components/game/TipsBeacon.css */
+/* The quick-tips "i" beacon mirrors the store/menu header buttons on the
+   opposite corner: same circle, same header-strip geometry, top-LEFT. */
+
+.tips-beacon-btn {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + max(2px, calc((7.5vh - 44px) / 2)));
+    left: max(6px, env(safe-area-inset-left, 0px));
+    z-index: 2050; /* header-strip layer, same as the store button */
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    box-sizing: border-box;
+    color: #f6cf74;
+    background: linear-gradient(145deg, rgba(55, 55, 55, 0.98), rgba(30, 30, 30, 0.98));
+    border: 1px solid rgba(246, 207, 116, 0.4);
+    border-radius: 50%;
+    cursor: pointer;
+    touch-action: manipulation;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+    animation: tips-beacon-pulse 2.4s ease-in-out infinite;
+}
+
+.tips-beacon-btn:hover,
+.tips-beacon-btn:focus-visible {
+    color: #ffe9ad;
+    background: linear-gradient(145deg, rgba(67, 67, 67, 0.98), rgba(38, 38, 38, 0.98));
+}
+
+.tips-beacon-i {
+    font-family: 'Merriweather', serif;
+    font-size: 24px;
+    font-style: italic;
+    font-weight: 700;
+    line-height: 1;
+    transform: translateX(-1px); /* optical centering for the italic glyph */
+}
+
+.tips-beacon-count {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    box-sizing: border-box;
+    display: grid;
+    place-items: center;
+    background: #dc3545;
+    color: white;
+    border: 1px solid rgba(0, 0, 0, 0.35);
+    border-radius: 9px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+@keyframes tips-beacon-pulse {
+    0%, 100% { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45); }
+    50% { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45), 0 0 12px 3px rgba(246, 207, 116, 0.55); }
+}
+
+/* The tip card hangs just below the beacon, WoW-tip style: no backdrop,
+   the table stays live behind it. */
+.tips-card {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 7.5vh + 1.2vh);
+    left: 1.2vh;
+    /* Above the header buttons (2050/2100), below the game-menu popup layer. */
+    z-index: 2150;
+    width: min(20rem, calc(100vw - 2.4vh));
+    box-sizing: border-box;
+    padding: 1.6vh;
+    background-color: #212121;
+    border: 0.12vh solid rgba(246, 207, 116, 0.5);
+    border-radius: 1vh;
+    color: white;
+    box-shadow: 0 0.5vh 1.5vh rgba(0, 0, 0, 0.5);
+    font-family: 'Merriweather', serif;
+    transform-origin: center;
+    animation: tips-card-pop 150ms ease-out;
+}
+
+.tips-card.is-flying {
+    pointer-events: none;
+    animation: none;
+}
+
+@keyframes tips-card-pop {
+    from { transform: scale(0.92); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+.tips-card-close {
+    position: absolute;
+    top: 0.4vh;
+    right: 0.4vh;
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    color: #c9c9c9;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.tips-card-close:hover,
+.tips-card-close:focus-visible {
+    color: white;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.tips-card-eyebrow {
+    margin: 0 0 0.4vh;
+    color: #f6cf74;
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(0.7rem, 1.35vh, 0.85rem);
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.tips-card-title {
+    margin: 0 1.8rem 0.8vh 0; /* right margin clears the close button */
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(1rem, 2vh, 1.2rem);
+}
+
+.tips-card-body {
+    margin: 0 0 1.2vh;
+    font-size: clamp(0.8rem, 1.5vh, 0.95rem);
+    line-height: 1.5;
+    color: #e2e2e2;
+}
+
+.tips-card-hint {
+    margin: 1vh 0 0;
+    font-size: clamp(0.72rem, 1.3vh, 0.85rem);
+    color: #9a9a9a;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tips-beacon-btn,
+    .tips-card {
+        animation: none !important;
+        transition: none !important;
+    }
+}
