@@ -1,0 +1,183 @@
+/* frontend/src/components/VenueWheel.css */
+/* Quick Play venue wheel: an octagonal prism seen edge-on (the big-wheel
+   view). Faces carry the venue lobby art via the [data-theme] CSS vars from
+   styles/venueThemes.css, at the art's native 4:1 aspect. The fixed CTA
+   below the wheel is the only control that ever buys in. */
+
+.venue-wheel {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.2vh;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.venue-wheel-scene {
+    position: relative;
+    /* Faces are lobby-panel height (11vh) at the art's 4:1 aspect. */
+    width: min(92vw, 44vh);
+    perspective: 1100px;
+    perspective-origin: 50% 50%;
+    overflow: visible;
+    touch-action: pan-x; /* vertical pulls belong to the wheel */
+    cursor: grab;
+    border-radius: 6px;
+    outline-offset: 4px;
+}
+
+.venue-wheel-scene:active {
+    cursor: grabbing;
+}
+
+.venue-wheel-rotor {
+    position: absolute;
+    inset: 0;
+    transform-style: preserve-3d;
+}
+
+.venue-wheel-face {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    /* Lobby-panel height, but never taller than a quarter of the scene
+       width (92vw arm / 4) — keeps the art's native 4:1 aspect on tall
+       narrow phones where 44vh outgrows 92vw. Geometry follows because the
+       drum radius is measured from this rendered height. */
+    height: min(11vh, 23vw);
+    border: 1px solid rgba(10, 8, 6, 0.85);
+    box-sizing: border-box;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    will-change: transform;
+}
+
+/* Venue art: same layered surface the lobby qp-card composites. */
+.venue-wheel-face[data-theme] {
+    background-image: var(--venue-lobby-surface);
+    background-size: var(--venue-lobby-size);
+    background-position: var(--venue-lobby-position);
+    background-repeat: var(--venue-lobby-repeat);
+}
+
+.venue-wheel-face.is-front {
+    box-shadow: inset 0 0 0 2px var(--venue-accent, rgba(224, 168, 60, 0.6));
+}
+
+/* The fixed CTA: venue name + buy-in + action, themed by the front venue.
+   A real button with a real disabled state — it never has to coexist with
+   drag gestures, so none of the wheel's pointer rules apply here. */
+.venue-wheel-cta {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    /* vw units are mobile-scaled; clamp them so desktop widths don't starve
+       the name column out of the grid. */
+    column-gap: clamp(8px, 3vw, 16px);
+    width: min(92vw, 44vh);
+    min-height: 44px;
+    margin: 0; /* the global App.css button rule adds one */
+    padding: 1vh clamp(12px, 3.5vw, 24px);
+    box-sizing: border-box;
+    border: 1px solid var(--venue-accent-soft, rgba(255, 255, 255, 0.2));
+    border-radius: 12px;
+    background: var(--venue-panel-deep, linear-gradient(135deg, #2c2c2c, #1d1d1d));
+    color: var(--venue-text, #fff);
+    font-family: 'Oswald', sans-serif;
+    cursor: pointer;
+    text-align: left;
+    box-shadow: 0 0.4vh 1.2vh rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Re-assert the venue paneling over App.css's global button:hover blue
+   (higher specificity than button:hover for both enabled and disabled). */
+.venue-wheel-cta:hover {
+    background: var(--venue-panel-deep, linear-gradient(135deg, #2c2c2c, #1d1d1d));
+}
+
+.venue-wheel-cta:hover:not(:disabled) {
+    border-color: var(--venue-accent, rgba(224, 168, 60, 0.7));
+}
+
+.venue-wheel-cta:active:not(:disabled) {
+    transform: scale(0.975);
+}
+
+.venue-wheel-cta:disabled {
+    cursor: not-allowed;
+    filter: grayscale(0.55) brightness(0.75);
+}
+
+.venue-wheel-cta:focus-visible {
+    outline: 3px solid var(--venue-accent, #e0a83c);
+    outline-offset: 3px;
+}
+
+.venue-wheel-cta-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: clamp(1rem, 2.4vh, 1.35rem);
+    font-weight: 600;
+    letter-spacing: 0.03em;
+}
+
+.venue-wheel-cta-cost {
+    display: inline-flex;
+    align-items: center;
+    gap: clamp(3px, 1vw, 6px);
+    font-size: clamp(0.75rem, 1.7vh, 0.95rem);
+    font-weight: 600;
+    opacity: 0.9;
+}
+
+.venue-wheel-cta-action {
+    padding: 0.9vh clamp(10px, 3vw, 18px);
+    background: rgba(255, 255, 255, 0.94);
+    color: #1b1b1b;
+    border-radius: 999px;
+    font-size: clamp(0.78rem, 1.8vh, 0.98rem);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+    box-shadow: 0 0.3vh 0.9vh rgba(0, 0, 0, 0.35);
+}
+
+.venue-wheel-cta.is-pending .venue-wheel-cta-action {
+    background: rgba(255, 255, 255, 0.6);
+    animation: venue-wheel-pending-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes venue-wheel-pending-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+}
+
+/* Screen-reader-only announcement of the settled front venue. */
+.venue-wheel-live {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .venue-wheel-face {
+        will-change: auto;
+    }
+    .venue-wheel-cta,
+    .venue-wheel-cta.is-pending .venue-wheel-cta-action {
+        animation: none !important;
+        transition: none !important;
+    }
+}

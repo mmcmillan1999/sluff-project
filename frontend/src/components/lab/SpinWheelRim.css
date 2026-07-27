@@ -1,0 +1,110 @@
+/* frontend/src/components/lab/SpinWheelRim.css */
+/* Edge-on (rim) view of the lab octagon: a Price-is-Right style prism. */
+
+.rim-wheel {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2vh;
+    padding-top: 2vh; /* room for the flapper */
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.rim-wheel-scene {
+    position: relative;
+    /* Faces are lobby-panel height (11vh) at the art's native 4:1 aspect,
+       so the wheel is 44vh wide; height comes inline from the octagon math. */
+    width: min(92vw, 44vh);
+    perspective: 1100px;
+    perspective-origin: 50% 50%;
+    overflow: visible;
+    touch-action: none; /* the rim owns every gesture on it */
+    cursor: grab;
+}
+
+.rim-wheel-scene:active {
+    cursor: grabbing;
+}
+
+.rim-wheel-rotor {
+    position: absolute;
+    inset: 0;
+    transform-style: preserve-3d;
+}
+
+.rim-face {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    display: grid;
+    place-items: center;
+    border: 1.5px solid #20242c;
+    box-sizing: border-box;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    will-change: transform;
+}
+
+.rim-face.is-front {
+    box-shadow: inset 0 0 0 2px rgba(224, 168, 60, 0.55);
+}
+
+/* Each face wears a venue panel's art — the same image + darkening wash
+   the lobby's qp-card composites, at the art's native 4:1 aspect. */
+.rim-face {
+    background-size: auto, cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.rim-face-fort-creek {
+    background-image:
+        linear-gradient(90deg, rgba(20, 10, 5, 0.82) 0%, rgba(24, 12, 7, 0.38) 48%, rgba(13, 8, 5, 0.52) 100%),
+        url('/assets/themes/fort-creek-lobby-v2.webp');
+}
+
+.rim-face-shirecliff-road {
+    background-image:
+        linear-gradient(90deg, rgba(19, 10, 8, 0.68) 0%, rgba(25, 14, 10, 0.18) 48%, rgba(15, 9, 7, 0.34) 100%),
+        url('/assets/themes/shirecliff-lobby-v2.webp');
+}
+
+.rim-face-dans-deck {
+    background-image:
+        linear-gradient(90deg, rgba(15, 10, 10, 0.62) 0%, rgba(35, 14, 8, 0.2) 50%, rgba(20, 10, 8, 0.28) 100%),
+        url('/assets/themes/eaglewood-lobby-v2.webp');
+}
+
+.rim-face-miss-pauls-academy {
+    background-image:
+        linear-gradient(90deg, rgba(4, 16, 9, 0.68) 0%, rgba(10, 30, 18, 0.16) 48%, rgba(4, 14, 8, 0.38) 100%),
+        url('/assets/themes/academy-lobby-v2.webp');
+}
+
+/* Flapper hangs over the top edge of the wheel, PiR style. */
+.rim-wheel-flapper {
+    position: absolute;
+    top: calc(2vh - 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2;
+    width: 0;
+    height: 0;
+    border-left: 14px solid transparent;
+    border-right: 14px solid transparent;
+    border-top: 32px solid #e0a83c;
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5));
+    pointer-events: none;
+}
+
+.rim-wheel-readout {
+    margin: 0;
+    min-height: 1.4em;
+    font-family: 'Oswald', system-ui, sans-serif;
+    font-size: clamp(1rem, 3vh, 1.5rem);
+    letter-spacing: 0.06em;
+    color: #e8ebf2;
+}

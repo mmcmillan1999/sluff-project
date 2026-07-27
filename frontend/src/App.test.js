@@ -108,16 +108,15 @@ describe('App Component and Game Flow', () => {
             });
         });
 
-        const quickPlayCard = screen.getByRole('button', {
-            name: 'Fort Creek, 1 token buy-in. Play now.',
-        });
-        expect(within(quickPlayCard).getByText('Fort Creek')).toBeInTheDocument();
-        expect(within(quickPlayCard).getByText('1')).toBeInTheDocument();
-        expect(within(quickPlayCard).getByText('PLAY NOW ▶')).toBeInTheDocument();
-        expect(within(quickPlayCard).queryByText('Oakley ranch nights')).not.toBeInTheDocument();
-        expect(within(quickPlayCard).queryByText('Cowhide, leather & campfire cards')).not.toBeInTheDocument();
-        expect(quickPlayCard.querySelector('.qp-card-eyebrow')).not.toBeInTheDocument();
-        expect(quickPlayCard.querySelector('.qp-card-description')).not.toBeInTheDocument();
+        // Quick Play is the venue wheel: the fixed CTA below it carries the
+        // terse copy — venue name, token cost, action — and nothing else.
+        const quickPlayCta = document.querySelector('.venue-wheel-cta');
+        expect(quickPlayCta).toBeInTheDocument();
+        expect(within(quickPlayCta).getByText('Fort Creek')).toBeInTheDocument();
+        expect(within(quickPlayCta).getByText('1')).toBeInTheDocument();
+        expect(within(quickPlayCta).getByText('PLAY NOW ▶')).toBeInTheDocument();
+        expect(within(quickPlayCta).queryByText('Oakley ranch nights')).not.toBeInTheDocument();
+        expect(within(quickPlayCta).queryByText('Cowhide, leather & campfire cards')).not.toBeInTheDocument();
     });
 
     test('opens the token ledger from the player menu and returns to the lobby', async () => {

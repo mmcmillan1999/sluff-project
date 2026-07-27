@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import './LobbyView.css';
 import BulletinTicker from './BulletinTicker';
 import LobbyTableCard from './LobbyTableCard';
+import VenueWheel from './VenueWheel';
 import LobbyChat from './LobbyChat';
 import SoundControls from './game/SoundControls';
 import { getLobbyChatHistory } from '../services/api';
@@ -351,40 +352,19 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
                 <div className="quickplay-section">
                     <div className="quickplay-heading">
                         <span className="quickplay-title">Quick Play</span>
-                        <span className="quickplay-subtitle">Tap a table — we'll find you a game</span>
+                        <span className="quickplay-subtitle">Spin the wheel, then hit play</span>
                     </div>
-                    <div className="quickplay-cards">
-                        {lobbyThemes && lobbyThemes.length > 0 ? lobbyThemes.map(theme => {
-                            const canAfford = parseFloat(user.tokens) >= theme.cost;
-                            const isPending = quickPlayPending === theme.id;
-                            const actionLabel = isPending ? 'Seating you' : (canAfford ? 'Play now' : 'Need tokens');
-                            return (
-                                <button
-                                    key={theme.id}
-                                    className={`qp-card qp-${theme.id} ${canAfford ? '' : 'qp-disabled'} ${isPending ? 'qp-pending' : ''}`}
-                                    data-theme={theme.id}
-                                    disabled={!canAfford || isPending}
-                                    aria-label={`${theme.name}, ${theme.cost} token buy-in. ${actionLabel}.`}
-                                    onClick={() => {
-                                        setQuickPlayPending(theme.id);
-                                        handleQuickPlay(theme.id);
-                                        // Safety: clear if the server didn't seat us
-                                        setTimeout(() => setQuickPlayPending(null), 4000);
-                                    }}
-                                >
-                                    <span className="qp-card-copy">
-                                        <span className="qp-card-name">{theme.name}</span>
-                                        <span className="qp-card-cost">
-                                            <img src="/Sluff_Token_v2.webp" alt="" className="tab-token-icon" /> {theme.cost}
-                                        </span>
-                                    </span>
-                                    <span className="qp-play-pill">
-                                        {isPending ? 'SEATING YOU…' : canAfford ? 'PLAY NOW ▶' : 'NEED TOKENS'}
-                                    </span>
-                                </button>
-                            );
-                        }) : <p className="loading-text">Loading tables...</p>}
-                    </div>
+                    <VenueWheel
+                        themes={lobbyThemes || []}
+                        userTokens={user.tokens}
+                        pendingThemeId={quickPlayPending}
+                        onPlay={(themeId) => {
+                            setQuickPlayPending(themeId);
+                            handleQuickPlay(themeId);
+                            // Safety: clear if the server didn't seat us
+                            setTimeout(() => setQuickPlayPending(null), 4000);
+                        }}
+                    />
                 </div>
 
                 {/* ============ PRIVATE TABLES — play with friends ============ */}
