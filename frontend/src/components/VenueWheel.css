@@ -35,6 +35,8 @@
     position: absolute;
     inset: 0;
     transform-style: preserve-3d;
+    /* The one animated transform on the whole wheel. */
+    will-change: transform;
 }
 
 .venue-wheel-face {
@@ -51,7 +53,7 @@
     box-sizing: border-box;
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
-    will-change: transform;
+    /* Faces are static planes on the drum; only the rotor animates. */
 }
 
 /* Venue art: same layered surface the lobby qp-card composites. */
@@ -172,7 +174,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .venue-wheel-face {
+    .venue-wheel-rotor {
         will-change: auto;
     }
     .venue-wheel-cta,

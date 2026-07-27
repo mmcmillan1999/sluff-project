@@ -242,6 +242,28 @@ describe('VenueWheel (rim)', () => {
         expect(screen.getByText('Loading tables...')).toBeInTheDocument();
     });
 
+    test('touch drags survive browsers that report buttons 0 mid-contact', () => {
+        // Regression: the missed-mouse-release guard must never apply to
+        // touch — several mobile browsers report buttons 0 during contact,
+        // which killed every touch drag on the first move.
+        renderWheel();
+
+        nowValue = 0;
+        fireEvent.pointerDown(scene(), { pointerId: 1, clientY: 300, pointerType: 'touch', buttons: 0 });
+        nowValue = 20;
+        fireEvent.pointerMove(scene(), { pointerId: 1, clientY: 250, pointerType: 'touch', buttons: 0 });
+        nowValue = 40;
+        fireEvent.pointerMove(scene(), { pointerId: 1, clientY: 200, pointerType: 'touch', buttons: 0 });
+        // The wheel tracked the finger instead of dying on the first move.
+        expect(scene().dataset.frontTheme).not.toBe('miss-pauls-academy');
+
+        nowValue = 60;
+        fireEvent.pointerUp(scene(), { pointerId: 1, clientY: 200, pointerType: 'touch' });
+        expect(rafQueue.length).toBeGreaterThan(0); // and the flick coasts
+        pumpUntilRest();
+        expect(scene().dataset.atRest).toBe('true');
+    });
+
     test('a mouse released off-wheel below the slop cannot orphan the drag', () => {
         // Regression: dragging=true used to latch forever, making the wheel
         // un-grabbable and letting hover moves spin it with no button down.

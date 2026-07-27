@@ -14,10 +14,17 @@
 //      removes the entire accidental-buy-in class of bugs (tap-vs-drag
 //      races, pointer-capture click retargeting, stale closures).
 //
-// Interaction hardening carried over from the experiment's review:
+// Motion architecture (phone-tested): the faces hold STATIC transforms and
+// only the rotor spins, written imperatively in the rAF/pointer hot path —
+// zero React renders per frame. React state changes only when the front
+// face changes or the wheel starts/stops moving. Driving all eight face
+// transforms through per-frame renders shimmered badly on mobile GPUs.
+//
+// Interaction hardening carried over from the adversarial reviews:
 //   pointer capture engages only after a real drag starts; one finger
-//   drives the wheel; motion state lives in a ref; a changed venue list
-//   resets the wheel instead of silently swapping the front face.
+//   drives the wheel; a mouse released off-scene is caught via buttons===0
+//   (never applied to touch — some mobile browsers report 0 mid-contact);
+//   a changed venue list resets during render, not a frame later.
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import './VenueWheel.css';
@@ -45,12 +52,17 @@ const VenueWheel = ({
     pendingThemeId = null,
     onPlay,
 }) => {
-    const [spin, setSpin] = useState(0);
+    // React state is deliberately coarse: which segment fronts the wheel,
+    // and whether it is at rest. The continuous rotation lives in the ref
+    // and is applied straight to the rotor's style.
+    const [frontK, setFrontK] = useState(0);
+    const [resting, setResting] = useState(true);
     // Face height measured from the rendered face (11vh via CSS) — computing
     // from window.innerHeight would disagree with CSS vh on mobile.
     const [metrics, setMetrics] = useState({ apothem: 200, faceH: 84 });
     const prefersReducedMotion = usePrefersReducedMotion();
     const sceneRef = useRef(null);
+    const rotorRef = useRef(null);
 
     const motionRef = useRef({
         spin: 0,
@@ -66,6 +78,7 @@ const VenueWheel = ({
         totalDy: 0,
         samples: [],
         apothem: 200,
+        notifiedK: 0,
     });
 
     // Re-measure when the wheel first gains faces: on a fresh login the
@@ -85,9 +98,20 @@ const VenueWheel = ({
         return () => window.removeEventListener('resize', measure);
     }, [hasThemes]);
 
+    // Hot path: write the rotor transform directly; touch React state only
+    // when the front segment actually changes.
     const applySpin = useCallback((value) => {
-        motionRef.current.spin = value;
-        setSpin(value);
+        const motion = motionRef.current;
+        motion.spin = value;
+        if (rotorRef.current) {
+            rotorRef.current.style.transform =
+                `translateZ(${-motion.apothem}px) rotateX(${value}deg)`;
+        }
+        const k = Math.round(value / FACE_DEG);
+        if (k !== motion.notifiedK) {
+            motion.notifiedK = k;
+            setFrontK(k);
+        }
     }, []);
 
     const stopLoop = useCallback(() => {
@@ -110,12 +134,11 @@ const VenueWheel = ({
             motion.lastT = t;
 
             if (motion.target === null) {
-                motion.spin += motion.velocity * dt;
+                applySpin(motion.spin + motion.velocity * dt);
                 motion.velocity *= Math.exp(-FRICTION * dt);
                 if (Math.abs(motion.velocity) < SETTLE_SPEED) {
                     motion.target = Math.round(motion.spin / FACE_DEG) * FACE_DEG;
                 }
-                setSpin(motion.spin);
             } else {
                 const remaining = motion.target - motion.spin;
                 // 0.4° is sub-pixel at this radius: end the glide (and free
@@ -126,10 +149,10 @@ const VenueWheel = ({
                     motion.velocity = 0;
                     motion.target = null;
                     motion.lastT = null;
+                    setResting(true);
                     return; // at rest
                 }
-                motion.spin += remaining * Math.min(1, dt * 8);
-                setSpin(motion.spin);
+                applySpin(motion.spin + remaining * Math.min(1, dt * 8));
             }
             motion.raf = requestAnimationFrame(step);
         };
@@ -153,6 +176,7 @@ const VenueWheel = ({
         motion.target = null;
         motion.velocity = 0;
         motion.spin = 0;
+        motion.notifiedK = 0;
         // Abandon any in-flight drag too — its samples and pointer latch
         // describe a wheel that no longer exists.
         motion.dragging = false;
@@ -161,7 +185,8 @@ const VenueWheel = ({
         motion.pointerId = null;
         motion.samples = [];
         motion.totalDy = 0;
-        setSpin(0);
+        setFrontK(0);
+        setResting(true);
     }
 
     const settleTo = useCallback((targetDeg) => {
@@ -171,9 +196,11 @@ const VenueWheel = ({
             stopLoop();
             motion.target = null;
             applySpin(targetDeg);
+            setResting(true);
             return;
         }
         motion.target = targetDeg;
+        setResting(false);
         startLoop();
     }, [prefersReducedMotion, applySpin, startLoop, stopLoop]);
 
@@ -191,18 +218,46 @@ const VenueWheel = ({
         motion.lastY = event.clientY;
         motion.totalDy = 0;
         motion.samples = [{ t: performance.now(), spin: motion.spin }];
+        setResting(false);
         // Capture engages only once a real drag starts: capturing on
         // pointerdown would retarget the follow-up click in real browsers.
+    };
+
+    const handlePointerUp = (event) => {
+        const motion = motionRef.current;
+        if (!motion.dragging || event.pointerId !== motion.pointerId) return;
+        motion.dragging = false;
+        if (!motion.wasDrag) {
+            // A tap on the wheel is a no-op (playing lives on the button
+            // below); just make sure sub-slop wobble leaves us on-grid.
+            const nearest = Math.round(motion.spin / FACE_DEG) * FACE_DEG;
+            if (motion.spin !== nearest) applySpin(nearest);
+            setResting(true);
+            return;
+        }
+
+        if (prefersReducedMotion) {
+            settleTo(Math.round(motion.spin / FACE_DEG) * FACE_DEG);
+            return;
+        }
+
+        const now = performance.now();
+        const oldest = motion.samples[0];
+        const dtSec = (now - oldest.t) / 1000;
+        const velocity = dtSec > 0.008 ? (motion.spin - oldest.spin) / dtSec : 0;
+        motion.velocity = Math.max(-MAX_SPEED, Math.min(MAX_SPEED, velocity));
+        motion.target = null;
+        startLoop();
     };
 
     const handlePointerMove = (event) => {
         const motion = motionRef.current;
         if (!motion.dragging || event.pointerId !== motion.pointerId) return;
-        if (event.buttons === 0) {
-            // Mouse released outside the scene before the drag crossed the
-            // capture slop: this hover move is the pointerup we never got.
-            // (Touch always reports buttons=1 while contacting, and gets
-            // implicit capture anyway.)
+        if (event.buttons === 0 && event.pointerType !== 'touch') {
+            // Mouse/pen released outside the scene before the drag crossed
+            // the capture slop: this hover move is the pointerup we never
+            // got. NEVER applied to touch — several mobile browsers report
+            // buttons 0 mid-contact, which would kill every touch drag.
             handlePointerUp(event);
             return;
         }
@@ -232,32 +287,6 @@ const VenueWheel = ({
         }
     };
 
-    const handlePointerUp = (event) => {
-        const motion = motionRef.current;
-        if (!motion.dragging || event.pointerId !== motion.pointerId) return;
-        motion.dragging = false;
-        if (!motion.wasDrag) {
-            // A tap on the wheel is a no-op (playing lives on the button
-            // below); just make sure sub-slop wobble leaves us on-grid.
-            const nearest = Math.round(motion.spin / FACE_DEG) * FACE_DEG;
-            if (motion.spin !== nearest) applySpin(nearest);
-            return;
-        }
-
-        if (prefersReducedMotion) {
-            settleTo(Math.round(motion.spin / FACE_DEG) * FACE_DEG);
-            return;
-        }
-
-        const now = performance.now();
-        const oldest = motion.samples[0];
-        const dtSec = (now - oldest.t) / 1000;
-        const velocity = dtSec > 0.008 ? (motion.spin - oldest.spin) / dtSec : 0;
-        motion.velocity = Math.max(-MAX_SPEED, Math.min(MAX_SPEED, velocity));
-        motion.target = null;
-        startLoop();
-    };
-
     const handleKeyDown = (event) => {
         if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
         event.preventDefault();
@@ -270,28 +299,26 @@ const VenueWheel = ({
         return <p className="loading-text">Loading tables...</p>;
     }
 
-    const motion = motionRef.current;
-    const atRest = motion.raf === null && !motion.dragging;
-    const frontIndex = mod(Math.round(spin / FACE_DEG), FACE_COUNT);
+    const frontIndex = mod(frontK, FACE_COUNT);
     const frontTheme = themes[frontIndex % themes.length];
     const canAfford = parseFloat(userTokens) >= frontTheme.cost;
     const isPending = pendingThemeId === frontTheme.id;
-    const playable = atRest && canAfford && !isPending;
+    const playable = resting && canAfford && !isPending;
 
     const faces = [];
     for (let i = 0; i < FACE_COUNT; i += 1) {
-        // Angle 0 faces the viewer; negative angles sit above and roll down
-        // when the rim is pulled. Each venue rides two opposite faces.
-        const angle = i * FACE_DEG - spin;
+        // Faces are STATIC: face i lives permanently at -i·45° on the drum
+        // and the rotor's single rotateX carries the spin. Each venue rides
+        // two opposite faces.
         const theme = themes[i % themes.length];
         faces.push(
             <div
                 key={i}
-                className={`venue-wheel-face${mod(Math.round(angle), 360) === 0 ? ' is-front' : ''}`}
+                className={`venue-wheel-face${resting && i === frontIndex ? ' is-front' : ''}`}
                 data-theme={theme.id}
                 style={{
                     marginTop: `${-metrics.faceH / 2}px`,
-                    transform: `rotateX(${-angle}deg) translateZ(${metrics.apothem}px)`,
+                    transform: `rotateX(${-i * FACE_DEG}deg) translateZ(${metrics.apothem}px)`,
                 }}
             />
         );
@@ -319,7 +346,7 @@ const VenueWheel = ({
                 aria-valuetext={`${frontTheme.name}, ${frontTheme.cost} token buy-in`}
                 style={{ height: `${metrics.apothem * 2}px` }}
                 data-front-theme={frontTheme.id}
-                data-at-rest={atRest ? 'true' : 'false'}
+                data-at-rest={resting ? 'true' : 'false'}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
@@ -327,7 +354,10 @@ const VenueWheel = ({
             >
                 <div
                     className="venue-wheel-rotor"
-                    style={{ transform: `translateZ(${-metrics.apothem}px)` }}
+                    ref={rotorRef}
+                    style={{
+                        transform: `translateZ(${-metrics.apothem}px) rotateX(${motionRef.current.spin}deg)`,
+                    }}
                 >
                     {faces}
                 </div>
@@ -355,7 +385,7 @@ const VenueWheel = ({
                 </span>
             </button>
             <span className="venue-wheel-live" aria-live="polite">
-                {atRest ? `${frontTheme.name}, ${frontTheme.cost} token buy-in, is up front` : ''}
+                {resting ? `${frontTheme.name}, ${frontTheme.cost} token buy-in, is up front` : ''}
             </span>
         </div>
     );
