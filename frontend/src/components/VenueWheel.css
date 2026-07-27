@@ -21,7 +21,11 @@
     perspective: 1100px;
     perspective-origin: 50% 50%;
     overflow: visible;
-    touch-action: pan-x; /* vertical pulls belong to the wheel */
+    /* A touch that starts on the wheel belongs to the wheel — no browser
+       gesture may claim it, however fast the flick. Page scrolling still
+       works from every touch that starts off the wheel. (pan-x let some
+       mobile fast-flick heuristics leak vertical scrolls through.) */
+    touch-action: none;
     cursor: grab;
     border-radius: 6px;
     outline-offset: 4px;
