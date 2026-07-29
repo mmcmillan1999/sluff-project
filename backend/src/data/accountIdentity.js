@@ -39,6 +39,16 @@ const RESERVED_USERNAMES = new Set([
 // that matcher's cost grows with the count, so the list is bounded.
 const USERNAME_HISTORY_LIMIT = 5;
 
+// Set by createTables at boot. The app-level availability check below is only
+// race-safe because the LOWER(username) unique index is the final arbiter; if
+// that index could not be built, renames must stop rather than run on a check
+// two concurrent requests can both pass.
+let caseInsensitiveUsernamesEnforced = true;
+
+function setCaseInsensitiveUsernamesEnforced(enforced) {
+    caseInsensitiveUsernamesEnforced = enforced !== false;
+}
+
 class AccountIdentityError extends Error {
     constructor(code, message, details = {}) {
         super(message);
@@ -132,6 +142,12 @@ function nextUsernameHistory(previousHistory, retiredName, nextName) {
  * Throws AccountIdentityError with a `code` the route maps to a status.
  */
 async function renameUser(pool, userId, requestedName, { now = new Date() } = {}) {
+    if (!caseInsensitiveUsernamesEnforced) {
+        throw new AccountIdentityError(
+            'RENAME_UNAVAILABLE',
+            'Username changes are temporarily unavailable. Please try again later.',
+        );
+    }
     const validation = validateUsername(requestedName);
     if (!validation.ok) {
         throw new AccountIdentityError('INVALID_USERNAME', validation.message);
@@ -213,6 +229,7 @@ module.exports = {
     nextChangeAllowedAt,
     nextUsernameHistory,
     renameUser,
+    setCaseInsensitiveUsernamesEnforced,
     validateUsername,
     SELECT_FOR_RENAME,
     SELECT_NAME_TAKEN,

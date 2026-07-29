@@ -428,6 +428,7 @@ async function voidGame(pool, { gameId: rawGameId, requester: rawRequester, atte
                     game.outcome,
                     game.end_time,
                     game.reconciliation_status,
+                    COALESCE(game.roster_complete, TRUE) AS roster_complete,
                     game.season_id,
                     season.status AS season_status
              FROM game_history game
@@ -510,6 +511,17 @@ async function voidGame(pool, { gameId: rawGameId, requester: rawRequester, atte
 
         if (game.reconciliation_status) {
             throw new GameVoidError('GAME_NOT_VOIDABLE', 'This game has already been reconciled.');
+        }
+        // Placed after the already-voided replay above so a completed void can
+        // still be re-read, but before any new one is attempted. A game whose
+        // roster lost a member to account deletion can no longer be reversed:
+        // the deleted player's buy-in and payout rows are gone, so the ledger
+        // no longer shows where the pot went and a void would invent tokens.
+        if (game.roster_complete === false) {
+            throw new GameVoidError(
+                'GAME_ROSTER_INCOMPLETE',
+                'A player from this game has deleted their account, so it can no longer be voided.',
+            );
         }
         if (game.season_status !== 'active') {
             throw new GameVoidError(

@@ -50,6 +50,9 @@ const makePool = ({
                 if (failDelete) throw failDelete;
                 return { rows: deletedRows, rowCount: deletedRows.length };
             }
+            if (text.startsWith('UPDATE game_history') && text.includes('roster_complete')) {
+                return { rows: [], rowCount: 2 };
+            }
             if (text.startsWith('DELETE FROM transactions')) {
                 if (failDelete) throw failDelete;
                 return { rows: [], rowCount: 4 };

@@ -253,7 +253,8 @@ module.exports = function(pool, bcrypt, jwt, io, gameService) {
 
             const userQuery = `
                 SELECT id, username, password_hash, is_admin, is_verified, is_vip,
-                       wins, losses, washes, tutorial_version, tutorial_active_version
+                       wins, losses, washes, tutorial_version, tutorial_active_version,
+                       username_changed_at
                 FROM users
                 WHERE email = $1
                   AND COALESCE(is_bot, FALSE) = FALSE

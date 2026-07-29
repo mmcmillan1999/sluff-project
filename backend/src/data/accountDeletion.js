@@ -49,6 +49,22 @@ const SELECT_OTHER_ADMIN = `
     LIMIT 1
 `;
 
+// Removing this player's ledger rows makes every game they funded impossible to
+// reverse correctly, so those games are marked before the rows go. gameVoid.js
+// refuses a flagged game: otherwise a settled forfeit whose winners have since
+// deleted their accounts reads as a lone unfunded forfeit, and voiding it hands
+// the forfeiter back a buy-in that nobody gives up — minting tokens in a ledger
+// whose whole premise is conservation.
+const FLAG_INCOMPLETE_ROSTERS = `
+    UPDATE game_history
+    SET roster_complete = FALSE
+    WHERE game_id IN (
+        SELECT DISTINCT game_id
+        FROM transactions
+        WHERE user_id = $1 AND game_id IS NOT NULL
+    )
+`;
+
 const DELETE_TRANSACTIONS = 'DELETE FROM transactions WHERE user_id = $1';
 const ANONYMISE_FEEDBACK = `
     UPDATE feedback
@@ -101,6 +117,7 @@ async function deleteOwnAccount(pool, userId) {
             }
         }
 
+        const strandedGames = await client.query(FLAG_INCOMPLETE_ROSTERS, [userId]);
         const ledger = await client.query(DELETE_TRANSACTIONS, [userId]);
         const feedback = await client.query(ANONYMISE_FEEDBACK, [userId]);
         const chat = await client.query(ANONYMISE_CHAT, [userId]);
@@ -119,6 +136,7 @@ async function deleteOwnAccount(pool, userId) {
             removedTransactions: ledger.rowCount,
             anonymisedFeedback: feedback.rowCount,
             anonymisedChatMessages: chat.rowCount,
+            gamesMarkedUnvoidable: strandedGames.rowCount,
         };
     } catch (error) {
         if (transactionOpen) {

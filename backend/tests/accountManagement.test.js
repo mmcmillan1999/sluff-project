@@ -7,6 +7,7 @@ const {
     USERNAME_HISTORY_LIMIT,
     nextUsernameHistory,
     renameUser,
+    setCaseInsensitiveUsernamesEnforced,
     validateUsername,
 } = require('../src/data/accountIdentity');
 const {
@@ -60,6 +61,7 @@ function createPool({
             if (sql.includes('COALESCE(is_admin, FALSE) = TRUE') && sql.includes('id <> $1')) {
                 return { rows: otherAdmin ? [{ '?column?': 1 }] : [], rowCount: otherAdmin ? 1 : 0 };
             }
+            if (sql.includes('SET roster_complete = FALSE')) return { rows: [], rowCount: 3 };
             if (sql.startsWith('DELETE FROM transactions')) return { rows: [], rowCount: 7 };
             if (sql.startsWith('UPDATE feedback')) return { rows: [], rowCount: 2 };
             if (sql.startsWith('UPDATE lobby_chat_messages')) return { rows: [], rowCount: 5 };
@@ -207,9 +209,16 @@ async function testDeleteHappyPath() {
         removedTransactions: 7,
         anonymisedFeedback: 2,
         anonymisedChatMessages: 5,
+        gamesMarkedUnvoidable: 3,
     });
 
     const sql = sqlList(pool);
+    // The flag has to land BEFORE the ledger rows go: afterwards the subquery
+    // that finds this player's games returns nothing and the games stay voidable.
+    const flagIndex = sql.findIndex(text => text.includes('SET roster_complete = FALSE'));
+    const deleteIndex = sql.findIndex(text => text.startsWith('DELETE FROM transactions'));
+    assert.ok(flagIndex >= 0, 'marks the games it is about to strand');
+    assert.ok(flagIndex < deleteIndex, 'flags rosters before deleting the ledger rows');
     // Other people's threads survive with the link to the departing player cut.
     assert.ok(sql.some(text => text.startsWith('DELETE FROM transactions')));
     assert.ok(sql.some(text => text.startsWith("UPDATE feedback") && text.includes("'Deleted User'")));
@@ -333,12 +342,27 @@ function testVoidRecognisesFormerNames() {
     console.log('  voiding a pre-rename game still recognises the player');
 }
 
+async function testRenameDisabledWithoutTheIndex() {
+    const base = { id: 7, username: 'Someone', username_changed_at: null, is_bot: false, previous_usernames: [] };
+    setCaseInsensitiveUsernamesEnforced(false);
+    try {
+        await rejectsWithCode(renameUser(createPool({ user: base }), 7, 'New Name'), 'RENAME_UNAVAILABLE');
+    } finally {
+        setCaseInsensitiveUsernamesEnforced(true);
+    }
+    // Restored: renames work again once the index is in place.
+    const ok = await renameUser(createPool({ user: base }), 7, 'New Name');
+    assert.equal(ok.username, 'New Name');
+    console.log('  renames refuse themselves when the uniqueness index is missing');
+}
+
 async function run() {
     testUsernameValidation();
     testUsernameHistory();
     await testRenameHappyPath();
     await testRenameCooldown();
     await testRenameGuards();
+    await testRenameDisabledWithoutTheIndex();
     await testDeleteHappyPath();
     await testDeleteGuards();
     testDisconnectAccountSockets();

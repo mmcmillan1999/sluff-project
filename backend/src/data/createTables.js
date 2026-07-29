@@ -1,6 +1,8 @@
 // backend/src/data/createTables.js
 // This file creates the necessary database tables and types for the application
 
+const { setCaseInsensitiveUsernamesEnforced } = require('./accountIdentity');
+
 const createDbTables = async (pool) => {
     const client = await pool.connect();
     // node-postgres transactions are connection-scoped. Keep every migration
@@ -85,20 +87,42 @@ const createDbTables = async (pool) => {
 
         // The UNIQUE constraint on username is case-sensitive, which would let a
         // player rename to a case-variant of someone else's name (including a
-        // bot's) and impersonate them in chat. Boot must not die if legacy rows
-        // already collide — log it and let the app run; renames still get a
-        // case-insensitive check in accountIdentity.js.
+        // bot's) and impersonate them in chat.
+        //
+        // Boot must survive legacy rows that already collide, and a bare
+        // try/catch cannot deliver that: every statement here runs inside one
+        // transaction, so a failed index build aborts it and every later
+        // statement dies with "current transaction is aborted" — turning a
+        // survivable condition into a dead server. The savepoint contains the
+        // failure so the rest of the migration still commits.
+        await pool.query('SAVEPOINT username_lower_index');
         try {
             await pool.query(
                 'CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower_key ON users (LOWER(username))'
             );
+            await pool.query('RELEASE SAVEPOINT username_lower_index');
+            setCaseInsensitiveUsernamesEnforced(true);
         } catch (error) {
+            await pool.query('ROLLBACK TO SAVEPOINT username_lower_index');
+            // Without the index the app-level availability check is not race-safe
+            // (two concurrent renames to "Bob" and "bob" both pass), which is the
+            // impersonation vector the index exists to close. Refuse renames
+            // entirely rather than serve a check that cannot hold.
+            setCaseInsensitiveUsernamesEnforced(false);
             console.error(
                 '⚠️  Could not create the case-insensitive username index — existing usernames '
-                + 'differ only by capitalisation. Resolve the duplicates, then restart.',
+                + 'differ only by capitalisation. Renames stay disabled until the duplicates are '
+                + 'resolved and the server restarts.',
                 error.message,
             );
         }
+
+        // Voiding a game reverses its ledger, which is only possible while every
+        // funded participant's rows still exist. Account deletion removes them,
+        // so games touched by a deleted player are flagged here and refused by
+        // gameVoid.js. Without this a deleted winner makes a settled forfeit look
+        // like a lone unfunded forfeit, and the void mints the buy-in back.
+        await pool.query('ALTER TABLE game_history ADD COLUMN IF NOT EXISTS roster_complete BOOLEAN NOT NULL DEFAULT TRUE');
         // Tutorial progress is durable across browsers/devices. Version 0 means
         // the player has not completed or skipped a guided tutorial; the active
         // version lets an interrupted tutorial resume without marking it done.

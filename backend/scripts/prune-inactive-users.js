@@ -172,6 +172,19 @@ const pruneInactiveUsers = async (pool, options) => {
         // Older Sluff databases used NO ACTION foreign keys even though the current
         // schema declares CASCADE/SET NULL. Handle those relationships explicitly so
         // this maintenance task behaves consistently across both schema versions.
+        // Same reason as the self-service delete path in src/data/accountDeletion.js:
+        // once these ledger rows are gone the game can no longer be reversed, and
+        // an unflagged void would mint the missing side of the pot.
+        await client.query(
+            `UPDATE game_history
+             SET roster_complete = FALSE
+             WHERE game_id IN (
+                 SELECT DISTINCT game_id
+                 FROM transactions
+                 WHERE user_id = ANY($1::int[]) AND game_id IS NOT NULL
+             )`,
+            [candidateIds]
+        );
         await client.query(
             'DELETE FROM transactions WHERE user_id = ANY($1::int[])',
             [candidateIds]

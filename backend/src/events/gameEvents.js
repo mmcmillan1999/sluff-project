@@ -4,6 +4,7 @@ const jwt = require("jsonwebtoken");
 const transactionManager = require('../data/transactionManager');
 const { authorizeTableAction, isPlainObject, validators } = require('./socketActionGuard');
 const { loadCurrentUserByTokenId } = require('../middleware/requireAuth');
+const { nextChangeAllowedAt } = require('../data/accountIdentity');
 const { playerProgressFields } = require('../services/tutorialProgress');
 
 const DEFAULT_SOCKET_AUTH_REFRESH_INTERVAL_MS = 60_000;
@@ -802,7 +803,8 @@ const registerGameHandlers = (io, gameService, options = {}) => {
                 const pool = gameService.pool;
                 const userQuery = `
                     SELECT id, username, email, created_at, wins, losses, washes,
-                           is_admin, is_vip, tutorial_version, tutorial_active_version
+                           is_admin, is_vip, tutorial_version, tutorial_active_version,
+                           username_changed_at
                     FROM users
                     WHERE id = $1
                 `;
@@ -813,6 +815,13 @@ const registerGameHandlers = (io, gameService, options = {}) => {
                     const tokenResult = await pool.query(tokenQuery, [socket.user.id]);
                     updatedUser.tokens = parseFloat(tokenResult.rows[0]?.current_tokens || 0).toFixed(2);
                     Object.assign(updatedUser, playerProgressFields(updatedUser));
+                    // The account screen reads this to show the rename cooldown.
+                    // requestUserSync replaces the client's user object wholesale,
+                    // so omitting it here would leave the cooldown invisible until
+                    // the player hit a 429 with a raw ISO timestamp in it.
+                    updatedUser.username_next_change_at =
+                        nextChangeAllowedAt(updatedUser.username_changed_at)?.toISOString() ?? null;
+                    delete updatedUser.username_changed_at;
                     
                     // Keep the live socket identity canonical and revoke observer
                     // trust immediately if this refresh observes an admin demotion.
