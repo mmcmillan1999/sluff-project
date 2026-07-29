@@ -1,0 +1,54 @@
+<!--
+  The Sluff card mark on transparency, with no background plate.
+
+  Used for the Android adaptive-icon foreground layer and for the splash, both
+  of which supply their own background. Geometry is identical to icon.svg so the
+  two can never drift; only the felt is missing.
+
+  The viewBox is tight to the artwork rather than square-with-margin, so callers
+  decide the safe-zone inset themselves (build-icons.js insets to 62%).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="140 140 744 744">
+  <defs>
+    <linearGradient id="cardFace" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#efece1"/>
+    </linearGradient>
+    <linearGradient id="cardFaceBack" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#f1eee4"/>
+      <stop offset="100%" stop-color="#d9d5c8"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#f6cf74"/>
+      <stop offset="100%" stop-color="#c9a76d"/>
+    </linearGradient>
+
+    <filter id="cardShadow" x="-30%" y="-30%" width="170%" height="170%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#04120b" flood-opacity="0.45"/>
+    </filter>
+
+    <symbol id="club" viewBox="0 0 100 100">
+      <path d="M50 8c-11 0-20 9-20 20 0 4 1 8 3 11-3-2-7-3-11-3-11 0-20 9-20 20s9 20 20 20c8 0 15-5 18-12
+               -1 12-7 20-15 25h50c-8-5-14-13-15-25 3 7 10 12 18 12 11 0 20-9 20-20s-9-20-20-20c-4 0-8 1-11 3
+               2-3 3-7 3-11 0-11-9-20-20-20z"/>
+    </symbol>
+  </defs>
+
+  <!-- Measured correction: the two rotated cards bound to 529x538 centred at
+       (500,533), so the group is nudged to true centre and scaled to fill the
+       62% safe band. Recompute this if either rotation changes. -->
+  <g transform="translate(11.9,-20.9) translate(512,512) scale(1.179) translate(-512,-512)">
+  <g filter="url(#cardShadow)">
+    <g transform="rotate(-17 512 512)">
+      <rect x="292" y="286" width="330" height="462" rx="30" fill="url(#cardFaceBack)"/>
+    </g>
+    <g transform="rotate(9 512 512)">
+      <rect x="402" y="286" width="330" height="462" rx="30" fill="url(#cardFace)"/>
+      <use href="#club" x="512" y="430" width="176" height="176" fill="url(#gold)"/>
+      <use href="#club" x="428" y="318" width="52" height="52" fill="#c9a76d" opacity="0.9"/>
+      <use href="#club" x="654" y="664" width="52" height="52" fill="#c9a76d" opacity="0.9"
+           transform="rotate(180 680 690)"/>
+    </g>
+  </g>
+  </g>
+</svg>

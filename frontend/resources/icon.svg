@@ -1,0 +1,100 @@
+<!--
+  Sluff app icon — vector source.
+
+  Deliberately NOT what ships as-is on its own: build.js rasterises this into
+  icon.png / icon-foreground.png / icon-background.png / splash.png.
+
+  Three rules drive every decision here, and all three came from what the old
+  512px icon got wrong:
+
+  1. No rounded corners and no border. iOS and Android apply their own mask;
+     baking one in gets it double-rounded and the frame sliced off.
+  2. The mark lives inside the middle ~62%. Android's adaptive icon crops to a
+     circle or squircle, and anything outside that band is gone.
+  3. No wordmark. "SLUFF" spanning the icon is illegible at 29x29 (iOS
+     Settings), which is the size that decides whether an icon works. Two cards
+     and a suit pip read at any size.
+
+  Colours are the app's own: #0b1711 is the PWA theme colour, #1f2a24 the
+  Capacitor splash background, and the golds match the action-prompt palette.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <!-- Warm centre falling to near-black at the corners, offset up-left so it
+         reads as a light source rather than a symmetrical spotlight. -->
+    <radialGradient id="felt" cx="42%" cy="36%" r="78%">
+      <stop offset="0%"   stop-color="#27543a"/>
+      <stop offset="45%"  stop-color="#1a3b2a"/>
+      <stop offset="100%" stop-color="#0b1711"/>
+    </radialGradient>
+
+    <!-- Card stock: not pure white. A faint warm gradient keeps the two cards
+         distinguishable where they overlap without needing an outline. -->
+    <linearGradient id="cardFace" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#efece1"/>
+    </linearGradient>
+    <linearGradient id="cardFaceBack" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#f1eee4"/>
+      <stop offset="100%" stop-color="#d9d5c8"/>
+    </linearGradient>
+
+    <linearGradient id="gold" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#f6cf74"/>
+      <stop offset="100%" stop-color="#c9a76d"/>
+    </linearGradient>
+
+    <!-- Woven felt. Subtle enough to survive downscaling to 29px as texture
+         rather than noise. -->
+    <filter id="weave" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" seed="7" result="n"/>
+      <feColorMatrix in="n" type="saturate" values="0"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.055"/>
+      </feComponentTransfer>
+    </filter>
+
+    <filter id="cardShadow" x="-30%" y="-30%" width="170%" height="170%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#04120b" flood-opacity="0.55"/>
+    </filter>
+
+    <!-- A club, drawn once and reused at two sizes. -->
+    <symbol id="club" viewBox="0 0 100 100">
+      <path d="M50 8c-11 0-20 9-20 20 0 4 1 8 3 11-3-2-7-3-11-3-11 0-20 9-20 20s9 20 20 20c8 0 15-5 18-12
+               -1 12-7 20-15 25h50c-8-5-14-13-15-25 3 7 10 12 18 12 11 0 20-9 20-20s-9-20-20-20c-4 0-8 1-11 3
+               2-3 3-7 3-11 0-11-9-20-20-20z"/>
+    </symbol>
+  </defs>
+
+  <!-- Full bleed. No corner radius: the platforms own that. -->
+  <rect width="1024" height="1024" fill="url(#felt)"/>
+  <rect width="1024" height="1024" filter="url(#weave)" opacity="0.85"/>
+
+  <!--
+    The mark. Both cards keep the app's own 5:7 card ratio, and the whole group
+    sits within a 636px band centred on the canvas — 62%, comfortably inside
+    Android's circular crop.
+  -->
+  <!-- Measured correction: the two rotated cards bound to 529x538 centred at
+       (500,533), so the group is nudged to true centre and scaled to fill the
+       62% safe band. Recompute this if either rotation changes. -->
+  <g transform="translate(11.9,-20.9) translate(512,512) scale(1.179) translate(-512,-512)">
+  <g filter="url(#cardShadow)">
+    <!-- Back card, fanned left. -->
+    <g transform="rotate(-17 512 512)">
+      <rect x="292" y="286" width="330" height="462" rx="30" fill="url(#cardFaceBack)"/>
+    </g>
+
+    <!-- Front card, fanned right, carrying the pip. -->
+    <g transform="rotate(9 512 512)">
+      <rect x="402" y="286" width="330" height="462" rx="30" fill="url(#cardFace)"/>
+      <use href="#club" x="512" y="430" width="176" height="176" fill="url(#gold)"/>
+      <!-- Corner index, the detail that reads as "playing card" rather than
+           "white rectangle" once the icon is large enough to show it. -->
+      <use href="#club" x="428" y="318" width="52" height="52" fill="#c9a76d" opacity="0.9"/>
+      <use href="#club" x="654" y="664" width="52" height="52" fill="#c9a76d" opacity="0.9"
+           transform="rotate(180 680 690)"/>
+    </g>
+  </g>
+  </g>
+</svg>

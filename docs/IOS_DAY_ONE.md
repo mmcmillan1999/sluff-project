@@ -182,7 +182,7 @@ rejection.
 | UGC: published contact | 1.2 | **Done** — but confirm the inbox, see below |
 | Username validation | 1.2 | **Partial** — new names filtered; existing names never screened |
 | Age rating vs simulated gambling | 2.3.7 / regional | **Decision open** — see section 0 |
-| App icon 1024×1024 | assets | **Missing** — largest master is 512×512 |
+| App icon 1024×1024 | assets | **Done** — vector masters in `frontend/resources`, `npm run assets` generates every size |
 | Not a website wrapper | 4.2 | **Done** — assets are bundled, not remote-loaded |
 | Sign in with Apple | 4.8 | **Not applicable** — no third-party login |
 

@@ -29,21 +29,37 @@ npx cap sync
 | `splash.png` | 2732×2732 | Centre the mark in the middle ~40%; the edges are cropped on almost every aspect ratio. |
 | `splash-dark.png` | 2732×2732 | Optional. |
 
-## Status: the master does not exist yet
+## Status: done
 
-The largest existing art is **512×512** (`frontend/public/sluff-app-icon-v1.png`),
-and `SluffLogo.png` is 600×400. Neither is usable as a 1024 master.
+`icon.svg`, `icon-mark.svg` and `icon-background.svg` are the vector masters.
+They are hand-drawn rather than generated, so they scale losslessly and carry
+the app's own colours (`#0b1711` is the PWA theme colour; the golds match the
+action-prompt palette).
 
-**Do not upscale them.** App Store review rejects a blurry or artefacted icon,
-and a 2× upscale of a 512 PNG is visibly soft at 1024. This needs to be redrawn
-or re-exported at native size from whatever the original source was.
+Regenerate the PNG masters after editing any SVG:
 
-Two things already in the repo may be the right starting point, since both are
-vector and scale losslessly:
+```bash
+node resources/build-icons.cjs   # SVG -> icon/foreground/background/splash PNGs
+npm run assets                   # PNGs -> every iOS, Android and PWA size
+npx cap sync
+```
 
-- `frontend/src/components/game/McMillanCrest.js` — the crest, as inline SVG.
-- `frontend/src/components/SluffIdent.js` — the boot ident artwork.
+### Design constraints these encode
 
-Until a master lands here, the platforms fall back to the default Capacitor
-icon, which is an automatic rejection. This is tracked in `docs/IOS_DAY_ONE.md`
-as an open blocker.
+- **No rounded corners, no border.** The platforms apply their own mask. The
+  previous 512px icon baked in a gold frame, which would have been
+  double-rounded and clipped.
+- **The mark sits inside the middle 62%.** Android crops adaptive icons to a
+  circle or squircle. The correction transform in `icon.svg` is measured, not
+  eyeballed — recompute it if either card rotation changes.
+- **No wordmark.** "SLUFF" spanning the icon is illegible at 29x29, which is
+  the size that decides whether an icon works. Two cards and a suit pip read at
+  any size.
+- **The splash plate drops the felt weave.** At 2732px the texture is invisible
+  per-pixel grain that PNG cannot compress — it cost 5.8MB per splash against
+  0.33MB without, across sixteen Android densities.
+
+### Checking it
+
+The only test that matters is the small one. Render `icon.png` at 29x29 and see
+whether you can still tell what it is.

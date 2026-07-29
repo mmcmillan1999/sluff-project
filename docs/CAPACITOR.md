@@ -49,15 +49,21 @@ change, re-run `npm run build && npx cap sync`.
   internal space/hyphen/underscore, a reserved-name list, and a case-insensitive
   unique index so nobody can shadow another player (or a bot) by capitalisation.
   This is only *part* of Apple 1.2 — see the chat-moderation item below.
+- **Chat moderation** (Apple 1.2) — masking profanity filter, per-message report,
+  per-player block, plus an admin report queue with hide-message and timed mute.
+- **Voice chat is opt-in** (Apple 5.1.1/5.1.2) — nothing touches the microphone
+  until the player turns it on; the choice persists per device.
+- **App icon and splash** — hand-drawn vector masters in `frontend/resources`.
+  `node resources/build-icons.cjs` rasterises them, `npm run assets` expands to
+  every platform size.
+- **Android platform scaffolded** — `frontend/android/`, buildable on Windows.
+  `npm run android:open` builds, syncs, and opens Android Studio.
 - 4-player is shipped (Quick Play offers a 4-seat start), so that decision is closed.
 
 ## Still TODO before submission (tracked separately)
-- App icons: the largest asset today is 512×512; the App Store needs **1024×1024**,
-  and Android needs adaptive icons. No `frontend/resources/` yet for
-  `@capacitor/assets` to generate from. Plus splash images.
-- **Chat moderation**: profanity filter + report + block (Apple 1.2). Lobby chat
-  still inserts messages verbatim with no filter, no report, and no block, and
-  there is no ban tooling in `api/admin.js` despite the Terms promising suspension.
+- App Store screenshots at the required device sizes. Icons and splash are done:
+  hand-drawn vector masters in `frontend/resources`, rasterised by
+  `node resources/build-icons.cjs`, expanded by `npm run assets`.
 - **Age rating vs. simulated gambling.** Players stake tokens and the winner takes
   the pot. The Terms say 13+ (`TermsOfService.js`, with an open TODO); a rating
   board will likely want 17+/18+. Decide before filling in the questionnaire.
@@ -66,8 +72,6 @@ change, re-run `npm run build && npx cap sync`.
   footer link, and confirm the URL in a private window before submitting.
 - Confirm `support@playsluff.com` actually receives mail (`PrivacyPolicy.js` TODO);
   reviewers do test it. Both legal pages are still marked lawyer-unreviewed.
-- **Android is not started**: `@capacitor/android` isn't installed and there's no
-  `android/` directory. Buildable from Windows, unlike iOS.
 - On-device **safe-area** tuning (bottom hand vs. home indicator).
 - Always-on backend tier. A GitHub Actions cron pings `/health` every 10 minutes
   to dodge Render's idle spin-down; a Starter instance is the real fix.

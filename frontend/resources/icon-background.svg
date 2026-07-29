@@ -1,0 +1,31 @@
+<!--
+  The felt plate alone — Android adaptive-icon background layer.
+
+  Kept as its own file rather than derived from icon.svg so all three layers are
+  editable vector sources. The gradient and weave must stay in step with
+  icon.svg by hand; they are only a few lines, and a launcher showing a flat
+  green circle next to a gradient square icon looks like two different apps.
+
+  The launcher may crop this to a circle, squircle, or rounded square, and may
+  parallax it a little, so nothing here can be positional — it is texture only.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="felt" cx="42%" cy="36%" r="78%">
+      <stop offset="0%"   stop-color="#27543a"/>
+      <stop offset="45%"  stop-color="#1a3b2a"/>
+      <stop offset="100%" stop-color="#0b1711"/>
+    </radialGradient>
+
+    <filter id="weave" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" seed="7" result="n"/>
+      <feColorMatrix in="n" type="saturate" values="0"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.055"/>
+      </feComponentTransfer>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" fill="url(#felt)"/>
+  <rect width="1024" height="1024" filter="url(#weave)" opacity="0.85"/>
+</svg>
