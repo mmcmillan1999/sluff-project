@@ -3,8 +3,6 @@
 Real-time multiplayer trick-taking card game (4-player Sluff) with LLM-powered bot opponents.
 
 ## Stack
-- **Frontend** (`/frontend`): React 19 + Vite 6, plain JS (no TypeScript), Socket.IO client, CSS files (no framework). Tests: Vitest + Testing Library.
-- **Backend** (`/backend`): Node 22, Express 4, Socket.IO 4, PostgreSQL (`pg`), JWT auth, SendGrid email. Tests: plain-Node suite in `backend/tests` (`run_all_tests.js`).
 - **AI bots** (`backend/src/services/aiService.js`): multi-provider (OpenAI, Anthropic, Google, Groq) with a single `MODELS` registry, legacy-ID aliases, and a cross-provider fallback chain. Verify model changes with `node scripts/smoke-test-ai.js`.
 
 ## Commands
@@ -28,11 +26,6 @@ Debug overlay in game: `Shift+D`.
 `POSTGRES_CONNECT_STRING`, `JWT_SECRET`, `CLIENT_ORIGIN`, `PORT`, `RESEND_API_KEY` (transactional email; `SENDGRID_API_KEY` is a legacy fallback), `SENDER_EMAIL_ADDRESS`, plus `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GOOGLE_API_KEY` / `GROQ_API_KEY` for bots. Optional recovery tuning: `ABANDONED_GAME_GRACE_HOURS` and `ABANDONED_GAME_RECOVERY_INTERVAL_MINUTES`.
 
 ## Architecture map
-- `backend/src/core/` — GameEngine (state machine), BotPlayer/SuperBot, handlers (bidding, card play, scoring, insurance), legalMoves.
-- `backend/src/events/gameEvents.js` — all Socket.IO handlers.
-- `backend/src/services/GameService.js` — table orchestration.
-- `backend/src/api/` — REST routes (auth, leaderboard, admin, feedback, chat, ai, ping). `/health` endpoint checks DB.
-- `frontend/src/components/game/` — game UI; `GameTableView` orchestrates, `TableLayout` lays out the oval, `PlayerHand` renders the hand.
 - `frontend/src/utils/CardPhysicsEngine.js` — momentum drag physics (~3k lines, the crown jewel).
 - `frontend/src/utils/CardSpacingEngine.js` — CENTER/OVERLAP card spacing math (`docs/CARD_SPACING_LOGIC.md`).
 
