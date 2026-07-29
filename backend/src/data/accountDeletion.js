@@ -24,19 +24,26 @@ const SELECT_ACCOUNT_FOR_DELETE = `
     FOR UPDATE
 `;
 
-// A player with tokens committed to a live game cannot leave: settlement
+// A player with tokens committed to a LIVE game cannot leave: settlement
 // redistributes exactly the staked pot, and removing a staker mid-game would
-// break that conservation. Same condition the prune maintenance task uses.
+// break that conservation. They can finish or leave the game, so this is a
+// wait, not a wall.
+//
+// Deliberately narrower than the prune maintenance task, which also refuses
+// 'manual_review'. That status is terminal — abandonedGameRecovery sets it on
+// an already-ended game whose ledger needs an admin's eye — and nothing in the
+// app clears it. Treating it as "you have a game in progress" told the player
+// to leave a game that no longer exists and blocked deletion forever, which is
+// exactly the App Store 5.1.1(v) failure this feature exists to fix. The
+// quarantine still gets recorded: FLAG_INCOMPLETE_ROSTERS marks the game so an
+// admin reviewing it can see a participant has gone.
 const SELECT_ACTIVE_GAME = `
     SELECT active_game.game_id
     FROM transactions active_transaction
     JOIN game_history active_game
       ON active_game.game_id = active_transaction.game_id
     WHERE active_transaction.user_id = $1
-      AND (
-          active_game.outcome = 'In Progress'
-          OR active_game.reconciliation_status = 'manual_review'
-      )
+      AND active_game.outcome = 'In Progress'
     LIMIT 1
 `;
 

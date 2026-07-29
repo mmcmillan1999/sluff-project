@@ -239,6 +239,18 @@ async function testDeleteGuards() {
         }), 9),
         'ACTIVE_GAME',
     );
+
+    // A quarantined ('manual_review') game is terminal and nothing in the app
+    // clears it, so it must never veto deletion — that blocked the player
+    // forever and told them to leave a game that had already ended.
+    const quarantined = createPool({ user: { id: 9, username: 'Quarantined', is_admin: false, is_bot: false } });
+    await deleteOwnAccount(quarantined, 9);
+    const activeGameQuery = quarantined.calls.find(call => call.sql.includes('FROM transactions active_transaction'));
+    assert.ok(
+        !activeGameQuery.sql.includes('manual_review'),
+        'the live-game guard must not treat a terminal quarantine as in-progress',
+    );
+    assert.ok(activeGameQuery.sql.includes("outcome = 'In Progress'"), 'still blocks a genuinely live game');
     await rejectsWithCode(
         deleteOwnAccount(createPool({
             user: { id: 9, username: 'OnlyAdmin', is_admin: true, is_bot: false },
