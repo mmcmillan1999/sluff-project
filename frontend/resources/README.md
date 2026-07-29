@@ -1,4 +1,14 @@
-# App icon and splash masters
+# Art masters
+
+Source art that is not itself shipped. Nothing here is served to the web — this
+directory sits outside `public/`, so committing a large master costs repo size
+and nothing else.
+
+- **This file** — app icon and splash masters, consumed by `@capacitor/assets`.
+- **`venue-sources/`** — the originals the lobby venue banners were cropped
+  from. Not built from; kept because they are the only copies.
+
+## App icon and splash masters
 
 `@capacitor/assets` generates every iOS and Android icon and splash size from
 the masters in this directory. Put the source art here and run:
