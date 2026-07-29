@@ -37,15 +37,20 @@ const renderVoice = (props = {}) => render(
     <VoiceControls socket={socket} tableId="table-one" {...props} />,
 );
 
+// Table voice is opt-in and off by default, so every test below that exercises
+// the connected behaviour has to turn it on first — the same one-time choice a
+// real player makes.
 describe('VoiceControls', () => {
     beforeEach(() => {
         voiceHarness.instances.length = 0;
         voiceHarness.behavior.join = async () => undefined;
         voiceHarness.behavior.setMicrophoneMuted = async () => true;
+        window.localStorage.setItem('sluff_voice_enabled', 'true');
     });
 
     afterEach(() => {
         delete document.visibilityState;
+        window.localStorage.clear();
     });
 
     test('joins automatically and attempts to make the microphone live', async () => {
@@ -201,5 +206,77 @@ describe('VoiceControls', () => {
 
         await user.click(screen.getByRole('button', { name: 'Mute Ben' }));
         expect(voice.setMuted).toHaveBeenCalledWith(7, true);
+    });
+});
+
+// The whole point of the opt-in: sitting at a table must not reach the
+// microphone. These assert the absence of behaviour, which is the guarantee
+// Apple 5.1.1/5.1.2 actually cares about.
+describe('VoiceControls opt-in gate', () => {
+    beforeEach(() => {
+        voiceHarness.instances.length = 0;
+        voiceHarness.behavior.join = async () => undefined;
+        voiceHarness.behavior.setMicrophoneMuted = async () => true;
+        window.localStorage.clear();
+    });
+
+    afterEach(() => {
+        window.localStorage.clear();
+    });
+
+    test('is off by default and never constructs a voice session', async () => {
+        renderVoice();
+
+        // No VoiceChat at all means no signalling and, crucially, no getUserMedia.
+        await new Promise(resolve => setTimeout(resolve, 20));
+        expect(voiceHarness.instances).toHaveLength(0);
+        expect(screen.getByRole('button', { name: /turn on voice/i })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /mute microphone/i })).not.toBeInTheDocument();
+    });
+
+    test('opting in joins and goes live, and the choice persists', async () => {
+        const user = userEvent.setup();
+        renderVoice();
+
+        await user.click(screen.getByRole('button', { name: /turn on voice/i }));
+
+        await waitFor(() => expect(voiceHarness.instances).toHaveLength(1));
+        const voice = voiceHarness.instances[0];
+        expect(voice.join).toHaveBeenCalledTimes(1);
+        await waitFor(() => expect(voice.setMicrophoneMuted).toHaveBeenCalledWith(false));
+        expect(JSON.parse(window.localStorage.getItem('sluff_voice_enabled'))).toBe(true);
+    });
+
+    test('a stored opt-in joins straight away without asking again', async () => {
+        window.localStorage.setItem('sluff_voice_enabled', 'true');
+        renderVoice();
+
+        await waitFor(() => expect(voiceHarness.instances).toHaveLength(1));
+        expect(screen.queryByRole('button', { name: /turn on voice/i })).not.toBeInTheDocument();
+    });
+
+    test('corrupt storage fails closed rather than opening the mic', async () => {
+        window.localStorage.setItem('sluff_voice_enabled', '{not json');
+        renderVoice();
+
+        await new Promise(resolve => setTimeout(resolve, 20));
+        expect(voiceHarness.instances).toHaveLength(0);
+        expect(screen.getByRole('button', { name: /turn on voice/i })).toBeInTheDocument();
+    });
+
+    test('turning voice back off tears the session down', async () => {
+        const user = userEvent.setup();
+        window.localStorage.setItem('sluff_voice_enabled', 'true');
+        renderVoice();
+
+        await waitFor(() => expect(voiceHarness.instances).toHaveLength(1));
+        const voice = voiceHarness.instances[0];
+
+        await user.click(screen.getByRole('button', { name: /open voice settings/i }));
+        await user.click(screen.getByRole('button', { name: /turn off voice chat/i }));
+
+        await waitFor(() => expect(voice.leave).toHaveBeenCalled());
+        expect(screen.getByRole('button', { name: /turn on voice/i })).toBeInTheDocument();
+        expect(JSON.parse(window.localStorage.getItem('sluff_voice_enabled'))).toBe(false);
     });
 });

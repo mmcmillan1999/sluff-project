@@ -1,9 +1,16 @@
 // frontend/src/components/game/VoiceControls.js
-// Table voice joins automatically. The prominent control is the player's own
-// microphone toggle; the compact mixer controls only incoming player audio.
+// Table voice is opt-in and off until the player turns it on. Nothing here
+// touches the microphone before that: sitting down used to join and unmute
+// immediately, which fired the OS permission prompt unasked and went live
+// before the player had agreed to anything. Once enabled, the choice persists
+// per device, so it is a one-time decision rather than a per-table nag.
+//
+// The prominent control is the player's own microphone toggle; the compact
+// mixer controls only incoming player audio.
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import VoiceChat from '../../utils/VoiceChat';
+import { getVoiceEnabled as getVoiceEnabledInitial, setVoiceEnabled, useVoiceEnabled } from '../../utils/voicePreference';
 import './VoiceControls.css';
 
 const microphoneErrorMessage = (error) => {
@@ -56,8 +63,11 @@ const SpeakerIcon = ({ muted }) => (
 );
 
 const VoiceControls = ({ socket, tableId }) => {
-    const [connectionState, setConnectionState] = useState('joining');
-    const [microphoneState, setMicrophoneState] = useState('starting');
+    const voiceEnabled = useVoiceEnabled();
+    const [connectionState, setConnectionState] = useState(() => (
+        getVoiceEnabledInitial() ? 'joining' : 'off'
+    ));
+    const [microphoneState, setMicrophoneState] = useState('muted');
     const [error, setError] = useState('');
     const [peers, setPeers] = useState([]);
     const [mixerOpen, setMixerOpen] = useState(false);
@@ -124,6 +134,23 @@ const VoiceControls = ({ socket, tableId }) => {
     }, []);
 
     useEffect(() => {
+        // Opted out (the default): stay entirely inert. No VoiceChat instance,
+        // no signalling, and above all no getUserMedia.
+        if (!voiceEnabled) {
+            sessionRef.current += 1;
+            microphoneOperationRef.current += 1;
+            if (voiceRef.current) {
+                voiceRef.current.leave();
+                voiceRef.current = null;
+            }
+            setConnectionState('off');
+            setMicrophoneState('muted');
+            setError('');
+            setPeers([]);
+            setMixerOpen(false);
+            return undefined;
+        }
+
         const session = ++sessionRef.current;
         microphoneOperationRef.current += 1;
         setConnectionState('joining');
@@ -157,8 +184,10 @@ const VoiceControls = ({ socket, tableId }) => {
                 }
 
                 setConnectionState('joined');
-                // The requested table behavior is a live microphone on entry.
-                // A blocked prompt affects sending only; receive voice remains.
+                // Going live here is the player's own opt-in taking effect —
+                // they turned voice on, so the mic being open is the thing they
+                // asked for. A blocked prompt affects sending only; receive
+                // voice remains.
                 await setLocalMicrophoneMuted(false, voice, session);
             } catch (joinError) {
                 if (voiceRef.current !== voice || sessionRef.current !== session) return;
@@ -178,7 +207,7 @@ const VoiceControls = ({ socket, tableId }) => {
             if (voiceRef.current === voice) voiceRef.current = null;
             voice.leave();
         };
-    }, [setLocalMicrophoneMuted, socket, tableId]);
+    }, [setLocalMicrophoneMuted, socket, tableId, voiceEnabled]);
 
     useEffect(() => {
         const muteForBackground = () => {
@@ -207,6 +236,32 @@ const VoiceControls = ({ socket, tableId }) => {
         if (!voiceJoined || microphoneStarting) return;
         void setLocalMicrophoneMuted(microphoneLive);
     };
+
+    // Off is the default and the resting state. One tap turns table voice on
+    // for good on this device; the OS microphone prompt appears only after it,
+    // as a consequence of the player's choice rather than of sitting down.
+    if (!voiceEnabled) {
+        return (
+            <div
+                className="voice-controls"
+                role="group"
+                aria-label="Table voice controls"
+                data-connection-state="off"
+            >
+                <div className="voice-primary-row">
+                    <button
+                        type="button"
+                        className="voice-enable-btn"
+                        onClick={() => setVoiceEnabled(true)}
+                        title="Talk to the other players at this table using your microphone"
+                    >
+                        <MicrophoneIcon muted />
+                        <span className="voice-enable-label">Turn on voice</span>
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div
@@ -257,6 +312,13 @@ const VoiceControls = ({ socket, tableId }) => {
                         {peers.length === 0 && (
                             <p className="voice-mixer-empty">Waiting for other players to connect.</p>
                         )}
+                        <button
+                            type="button"
+                            className="voice-disable-btn"
+                            onClick={() => setVoiceEnabled(false)}
+                        >
+                            Turn off voice chat
+                        </button>
                         {peers.map((peer) => {
                             const peerMicrophoneLive = peer.microphoneLive ?? peer.speaking;
                             const peerStatus = connectionStatus(peer);

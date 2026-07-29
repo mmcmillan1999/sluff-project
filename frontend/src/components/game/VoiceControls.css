@@ -356,3 +356,48 @@
         forced-color-adjust: auto;
     }
 }
+
+/* Opt-in affordance. Table voice is off until this is tapped, so it stands in
+   for the microphone button rather than sitting beside it. */
+.voice-enable-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5em;
+    padding: 0.4em 0.8em;
+    color: #f0e2b8;
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(0.68rem, 1.5vh, 0.85rem);
+    letter-spacing: 0.04em;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(233, 201, 119, 0.4);
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.voice-enable-btn:hover { background: rgba(255, 255, 255, 0.15); }
+
+.voice-enable-btn svg {
+    width: 1.15em;
+    height: 1.15em;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+}
+
+.voice-enable-label { white-space: nowrap; }
+
+.voice-disable-btn {
+    width: 100%;
+    margin-top: 8px;
+    padding: 7px 10px;
+    color: rgba(246, 240, 223, 0.8);
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.78rem;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(233, 201, 119, 0.28);
+    border-radius: 7px;
+    cursor: pointer;
+}
+
+.voice-disable-btn:hover { background: rgba(255, 255, 255, 0.12); }
