@@ -357,6 +357,29 @@ export const updateTutorialStatus = async (action) => {
     return data;
 };
 
+// --- Chat moderation ---
+
+export const getBlockedPlayers = async () => {
+    const response = await configuredFetch('/api/chat/blocks', 'GET');
+    const data = await readJsonResponse(response);
+    if (!response.ok) throw new Error(data.message || 'Could not load your block list.');
+    return Array.isArray(data) ? data : [];
+};
+
+export const reportChatMessage = async (messageId, reason = 'abuse') => {
+    const response = await configuredFetch('/api/chat/report', 'POST', { messageId, reason });
+    const data = await readJsonResponse(response);
+    if (!response.ok) throw new Error(data.message || 'Could not send that report.');
+    return data;
+};
+
+export const setPlayerBlocked = async (userId, blocked) => {
+    const response = await configuredFetch('/api/chat/block', 'POST', { userId, blocked });
+    const data = await readJsonResponse(response);
+    if (!response.ok) throw new Error(data.message || 'Could not update that block.');
+    return data;
+};
+
 // --- Account management ---
 
 // Errors carry the server's `code` so the account screen can react to the

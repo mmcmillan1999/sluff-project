@@ -38,6 +38,106 @@ const createAdminRoutes = (pool, jwt, io = null, options = {}) => {
     return res.status(403).send('Access Forbidden: Requires admin privileges.');
   };
 
+  // --- Chat moderation queue (App Store guideline 1.2) -------------------
+  // The Terms have always promised suspension; until now nothing here could
+  // deliver it, which made the promise the only moderation the app had.
+
+  // GET /api/admin/chat-reports - open reports, newest first.
+  router.get('/chat-reports', checkAuth, isAdmin, async (req, res) => {
+    try {
+      const { rows } = await pool.query(
+        `SELECT r.id, r.message_id, r.reason, r.message_snapshot, r.created_at,
+                r.reported_user_id, reported.username AS reported_username,
+                r.reporter_user_id, reporter.username AS reporter_username,
+                COALESCE(m.hidden, TRUE) AS message_hidden,
+                reported.chat_muted_until
+         FROM chat_reports r
+         LEFT JOIN users reported ON reported.id = r.reported_user_id
+         LEFT JOIN users reporter ON reporter.id = r.reporter_user_id
+         LEFT JOIN lobby_chat_messages m ON m.id = r.message_id
+         WHERE r.resolved_at IS NULL
+         ORDER BY r.created_at DESC
+         LIMIT 100`,
+      );
+      res.set('Cache-Control', 'private, no-store');
+      return res.json({ reports: rows });
+    } catch (error) {
+      console.error('Failed to load chat reports:', error);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // POST /api/admin/chat-reports/:id/resolve  { hideMessage, muteHours }
+  router.post('/chat-reports/:id/resolve', checkAuth, isAdmin, async (req, res) => {
+    const reportId = Number(req.params.id);
+    if (!Number.isSafeInteger(reportId) || reportId <= 0) {
+      return res.status(400).json({ error: 'A report id is required.' });
+    }
+    const hideMessage = req.body?.hideMessage === true;
+    const muteHours = Number(req.body?.muteHours) || 0;
+    if (!Number.isFinite(muteHours) || muteHours < 0 || muteHours > 24 * 365) {
+      return res.status(400).json({ error: 'Mute duration is out of range.' });
+    }
+
+    const client = await pool.connect();
+    let open = false;
+    try {
+      await client.query('BEGIN');
+      open = true;
+
+      const found = await client.query(
+        'SELECT message_id, reported_user_id FROM chat_reports WHERE id = $1 FOR UPDATE',
+        [reportId],
+      );
+      const report = found.rows?.[0];
+      if (!report) {
+        await client.query('ROLLBACK');
+        open = false;
+        return res.status(404).json({ error: 'Report not found.' });
+      }
+
+      if (hideMessage && report.message_id) {
+        await client.query(
+          'UPDATE lobby_chat_messages SET hidden = TRUE WHERE id = $1',
+          [report.message_id],
+        );
+      }
+      if (muteHours > 0 && report.reported_user_id) {
+        await client.query(
+          `UPDATE users
+           SET chat_muted_until = GREATEST(
+                 COALESCE(chat_muted_until, NOW()), NOW()
+               ) + ($1 || ' hours')::interval
+           WHERE id = $2`,
+          [String(muteHours), report.reported_user_id],
+        );
+      }
+      // Resolving one report on a message resolves every report on it: the
+      // decision was about the message, not about who happened to flag it.
+      await client.query(
+        `UPDATE chat_reports SET resolved_at = NOW()
+         WHERE resolved_at IS NULL AND (id = $1 OR ($2::int IS NOT NULL AND message_id = $2))`,
+        [reportId, report.message_id],
+      );
+
+      await client.query('COMMIT');
+      open = false;
+      console.log(`[ADMIN] chat report ${reportId} resolved by ${req.user.username}`
+        + `${hideMessage ? ' (message hidden)' : ''}${muteHours > 0 ? ` (muted ${muteHours}h)` : ''}`);
+      return res.json({ resolved: true, hidden: hideMessage, muteHours });
+    } catch (error) {
+      if (open) {
+        try { await client.query('ROLLBACK'); } catch (rollbackError) {
+          console.error('Report-resolve rollback failed:', rollbackError.message);
+        }
+      }
+      console.error('Failed to resolve chat report:', error);
+      return res.status(500).json({ error: 'Internal server error' });
+    } finally {
+      client.release();
+    }
+  });
+
   // GET /api/admin/mercy-token-report
   router.get('/mercy-token-report', checkAuth, isAdmin, async (req, res) => {
     try {

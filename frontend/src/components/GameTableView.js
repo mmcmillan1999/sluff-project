@@ -1675,6 +1675,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                     <LobbyChat
                         socket={socket}
                         messages={chatMessages}
+                        currentUserId={playerId}
                     />
                 </div>
             )}

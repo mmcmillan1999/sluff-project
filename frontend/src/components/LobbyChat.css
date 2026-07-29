@@ -99,3 +99,45 @@
         height: 42px;
     }
 }
+/* Report/block live on the message itself — guideline 1.2 wants them reachable
+   where the offence is, not in a settings screen. */
+.chat-line-body {
+    display: block;
+    width: 100%;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+
+.chat-line-actions {
+    display: flex;
+    gap: 6px;
+    margin: 4px 0 6px;
+}
+
+.chat-line-actions button {
+    padding: 3px 10px;
+    color: #f0e2b8;
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.72rem;
+    letter-spacing: 0.03em;
+    background: rgba(255, 255, 255, 0.09);
+    border: 1px solid rgba(233, 201, 119, 0.35);
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.chat-line-actions button:hover { background: rgba(255, 255, 255, 0.16); }
+
+.chat-notice {
+    margin: 4px 6px;
+    color: #9be59b;
+    font-size: 0.76rem;
+    line-height: 1.35;
+}
+
+.chat-notice--error { color: #ff9d8f; }

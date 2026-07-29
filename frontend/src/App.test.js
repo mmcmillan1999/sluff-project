@@ -49,6 +49,7 @@ describe('App Component and Game Flow', () => {
         });
 
         api.getLobbyChatHistory.mockResolvedValue([]);
+        api.getBlockedPlayers.mockResolvedValue([]);
         api.getTokenLedger.mockResolvedValue({
             currentBalanceCents: 800,
             entries: [],

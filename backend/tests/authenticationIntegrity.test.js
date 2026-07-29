@@ -70,6 +70,10 @@ function createHttpPool() {
                     rows: [{ id: 10, username: params[1], message: params[2], created_at: new Date(0).toISOString() }],
                 };
             }
+            // Chat posting checks the poster is not muted before it inserts.
+            if (/chat_muted_until\s+FROM\s+users/i.test(sql)) {
+                return { rows: [{ chat_muted_until: null }] };
+            }
             if (/FROM\s+lobby_chat_messages/i.test(sql)) return { rows: [] };
             if (/FROM\s+feedback/i.test(sql)) {
                 state.feedbackReads.push(sql);

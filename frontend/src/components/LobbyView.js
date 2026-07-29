@@ -445,6 +445,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
                     <LobbyChat
                         socket={socket}
                         messages={chatMessages}
+                        currentUserId={user?.id}
                     />
                 </div>
             </main>

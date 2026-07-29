@@ -527,6 +527,44 @@ const createDbTables = async (pool) => {
             );
         `);
 
+        // --- Chat moderation (App Store guideline 1.2) ---------------------
+        // Hiding a message rather than deleting it keeps the thread readable
+        // and leaves the evidence a report refers to.
+        await pool.query('ALTER TABLE lobby_chat_messages ADD COLUMN IF NOT EXISTS hidden BOOLEAN NOT NULL DEFAULT FALSE');
+
+        // One row per (reporter, message). The unique constraint makes a
+        // double-tap idempotent instead of inflating a player's report count.
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS chat_reports (
+                id SERIAL PRIMARY KEY,
+                message_id INTEGER REFERENCES lobby_chat_messages(id) ON DELETE CASCADE,
+                reporter_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                reported_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                reason VARCHAR(40) NOT NULL,
+                message_snapshot TEXT NOT NULL,
+                resolved_at TIMESTAMP WITH TIME ZONE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (message_id, reporter_user_id)
+            );
+        `);
+        await pool.query('CREATE INDEX IF NOT EXISTS chat_reports_open_idx ON chat_reports (created_at DESC) WHERE resolved_at IS NULL');
+
+        // Blocking is one-directional and personal: it hides the blocked
+        // player's messages from the blocker only, and needs no approval.
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS chat_blocks (
+                blocker_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                blocked_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (blocker_user_id, blocked_user_id),
+                CHECK (blocker_user_id <> blocked_user_id)
+            );
+        `);
+
+        // A muted player can still play; they just cannot post. Null means no
+        // restriction. Kept on users so one lookup covers the chat path.
+        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_muted_until TIMESTAMP WITH TIME ZONE');
+
         await pool.query(`
             CREATE TABLE IF NOT EXISTS funnel_events (
                 id SERIAL PRIMARY KEY,
