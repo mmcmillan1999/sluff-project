@@ -15,6 +15,10 @@
 // ?turn=1 to make it your turn with a live hand — playCard really moves the
 // card onto the felt; ?playstyle=flick|fast presets the card play style
 // (implies ?turn=1) so both gestures can be exercised without a backend.
+// The turn call-up rides along with ?turn=1 and ?prompt=bid|frogup|trump:
+// sit still for 5s for the nudge, 15s for the urgent tier. Any click or key
+// restarts the clock, so leave the pointer alone while you wait — and note
+// that a backgrounded tab throttles the timer.
 // ?mode=lobby renders the lobby with canned venues — the venue wheel can be
 // spun and screenshotted without a backend (quick play just logs).
 

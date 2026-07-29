@@ -41,7 +41,11 @@ import PlayerProfileModal from './PlayerProfileModal';
 import StoreModal from './StoreModal';
 import McMillanCrest from './game/McMillanCrest';
 import TipsBeacon from './game/TipsBeacon';
+import TurnNudge from './game/TurnNudge';
 import WidowSpider from './game/WidowSpider';
+import { useTurnNudge } from '../hooks/useTurnNudge';
+import { getPendingSelfAction, pendingActionKey } from '../utils/pendingSelfAction';
+import { buzz } from '../utils/haptics';
 import { useCosmetics } from '../utils/cosmetics';
 import { CARD_PLAY_STYLES, useCardPlayStyle, setCardPlayStyle } from '../utils/playStyle';
 import VoiceControls from './game/VoiceControls';
@@ -136,6 +140,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const gameViewRef = useRef(null);
     const shareNoticeTimerRef = useRef(null);
     const turnPlayerRef = useRef(null);
+    const bidTurnPlayerRef = useRef(null);
     const trickWinnerRef = useRef(null);
     const cardCountRef = useRef(null);
     const gameStateRef = useRef(null);
@@ -189,6 +194,43 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const currentDealTableId = currentTableState?.tableId ?? null;
     const currentDealState = currentTableState?.state ?? null;
     const currentDealOrder = currentTableState?.playerOrderActive;
+
+    // --- Turn call-up -----------------------------------------------------
+    // Five seconds of silence with the action on you and the table starts
+    // waving. Spectators, observed seats, and bots are never chased.
+    const nudgeEligible = Boolean(
+        selfPlayerInTable
+        && !isSpectator
+        && !isObserverMode
+        && !selfPlayerInTable.isBot
+    );
+    const pendingSelfAction = useMemo(
+        () => (nudgeEligible
+            ? getPendingSelfAction(currentTableState, selfPlayerName, playerId)
+            : null),
+        [nudgeEligible, currentTableState, selfPlayerName, playerId]
+    );
+    const turnNudgeKey = useMemo(
+        () => pendingActionKey(currentTableState, pendingSelfAction),
+        [currentTableState, pendingSelfAction]
+    );
+    const handleTurnEscalation = useCallback((nextLevel) => {
+        playSound('turnAlert');
+        buzz(nextLevel >= 2
+            ? { pattern: [30, 70, 30, 70, 30], nativeStyle: 'Heavy', nativeTaps: 3 }
+            : { pattern: [18, 90, 18], nativeStyle: 'Medium', nativeTaps: 2 });
+    }, [playSound]);
+    const turnNudgeLevel = useTurnNudge({
+        actionKey: turnNudgeKey,
+        onEscalate: handleTurnEscalation
+    });
+    // Colour the rim with the player's own team so it reads as "you", not
+    // "someone". Before the bid is settled there is no team, and it stays gold.
+    const nudgeTeam = currentTableState?.bidWinnerInfo
+        ? (currentTableState.bidWinnerInfo.userId === playerId ? 'bidder' : 'defender')
+        : null;
+    const handNudgeLevel = pendingSelfAction?.surface === 'hand' ? turnNudgeLevel : 0;
+    const promptNudgeLevel = pendingSelfAction?.surface === 'prompt' ? turnNudgeLevel : 0;
 
     useLayoutEffect(() => {
         const previous = dealTransitionRef.current;
@@ -829,11 +871,17 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
 
     useEffect(() => {
         if (!currentTableState || !selfPlayerName || isSpectator) return;
-        const { state, trickTurnPlayerName, lastCompletedTrick, currentTrickCards } = currentTableState;
-        if ((state === "Playing Phase" || state === "Bidding Phase") && trickTurnPlayerName === selfPlayerName && turnPlayerRef.current !== selfPlayerName) playSound('turnAlert');
+        const { state, trickTurnPlayerName, biddingTurnPlayerName, lastCompletedTrick, currentTrickCards } = currentTableState;
+        if (state === "Playing Phase" && trickTurnPlayerName === selfPlayerName && turnPlayerRef.current !== selfPlayerName) playSound('turnAlert');
         // Don't stamp the ref during Bid Announcement: the leader is assigned
         // then, and stamping would swallow their turn alert when play opens.
         if (state !== "Bid Announcement") turnPlayerRef.current = trickTurnPlayerName;
+        // Bidding order lives on its own field, and the trick ref can't stand
+        // in for it — a bidding turn would stamp "you" there and then swallow
+        // the alert when play opened. Watching trickTurnPlayerName is why the
+        // bidding alert had never once fired.
+        if (state === "Bidding Phase" && biddingTurnPlayerName === selfPlayerName && bidTurnPlayerRef.current !== selfPlayerName) playSound('turnAlert');
+        bidTurnPlayerRef.current = state === "Bidding Phase" ? biddingTurnPlayerName : null;
         const newCardCount = currentTrickCards?.length || 0;
         if (newCardCount > 0 && newCardCount !== cardCountRef.current) playSound('cardPlay');
         cardCountRef.current = newCardCount;
@@ -1483,6 +1531,12 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 onShowTokenLedger={onShowTokenLedger}
             />
 
+            <TurnNudge
+                level={turnNudgeLevel}
+                kind={pendingSelfAction?.kind}
+                team={nudgeTeam}
+            />
+
             <TableLayout
                 currentTableState={tableStateForDealPresentation}
                 seatAssignments={seatAssignments}
@@ -1508,6 +1562,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 dealCardsRemaining={dealPresentation.cardsRemaining}
                 suppressActionControls={dealPresentation.active}
                 onPlayerProfile={setProfilePlayerName}
+                turnNudgeLevel={promptNudgeLevel}
             />
 
             <TutorialCoach
@@ -1546,6 +1601,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                     selectedDiscards={selectedFrogDiscards}
                     onSelectDiscard={handleFrogDiscardSelect}
                     showDebug={false}
+                    nudgeLevel={handNudgeLevel}
                 />
                 <div className="footer-controls-wrapper">
                     {['Playing Phase', 'TrickCompleteLinger'].includes(currentTableState.state) && currentTableState.bidWinnerInfo && (

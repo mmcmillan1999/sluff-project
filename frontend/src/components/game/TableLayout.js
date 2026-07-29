@@ -54,7 +54,8 @@ const TableLayout = ({
     dealPresentationActive = false,
     dealCardsRemaining = 36,
     suppressActionControls = false,
-    onPlayerProfile
+    onPlayerProfile,
+    turnNudgeLevel = 0
 }) => {
     const tableThemeId = getThemePresentation(currentTableState?.theme).id;
     const [lastTrickVisible, setLastTrickVisible] = useState(false);
@@ -1018,6 +1019,7 @@ const TableLayout = ({
                         isAdmin={isAdmin}
                         quickPlayDecisionRejectionNonce={quickPlayDecisionRejectionNonce}
                         roundPresentationComplete={roundPresentationComplete}
+                        turnNudgeLevel={turnNudgeLevel}
                     />
                 )}
             </div>

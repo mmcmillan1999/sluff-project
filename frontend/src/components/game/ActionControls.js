@@ -19,9 +19,16 @@ const HIDDEN_TABLE_STATES = new Set([
     'Draw Declined'
 ]);
 
-const PromptShell = ({ variant, label, status = false, children }) => (
+// `nudge` is the turn call-up level (0 calm, 1 nudge, 2 urgent). Decisions
+// made in this popup rather than in the hand escalate here instead.
+const PromptShell = ({ variant, label, status = false, nudge = 0, children }) => (
     <section
-        className={`action-prompt-container action-prompt action-prompt--portrait-docked action-prompt--${variant}`}
+        className={[
+            'action-prompt-container action-prompt action-prompt--portrait-docked',
+            `action-prompt--${variant}`,
+            nudge > 0 ? 'turn-nudge-prompt' : '',
+            nudge >= 2 ? 'turn-nudge-prompt--urgent' : ''
+        ].filter(Boolean).join(' ')}
         data-prompt-variant={variant}
         aria-label={label}
         {...(status ? { role: 'status', 'aria-live': 'polite' } : {})}
@@ -60,7 +67,8 @@ const ActionControls = ({
     handleLeaveTable,
     renderCard,
     isAdmin,
-    quickPlayDecisionRejectionNonce = 0
+    quickPlayDecisionRejectionNonce = 0,
+    turnNudgeLevel = 0
 }) => {
     const [inviteCopied, setInviteCopied] = useState(false);
     const [quickPlayDecisionSubmitted, setQuickPlayDecisionSubmitted] = useState(false);
@@ -339,7 +347,7 @@ const ActionControls = ({
                     ? BID_HIERARCHY.indexOf(currentTableState.currentHighestBidDetails.bid)
                     : -1;
                 return (
-                    <PromptShell variant="choice" label="Bidding controls">
+                    <PromptShell variant="choice" label="Bidding controls" nudge={turnNudgeLevel}>
                         <h2 className="action-prompt__heading">Choose your bid</h2>
                         <div className="action-prompt__button-grid action-prompt__button-grid--bids">
                             {BID_HIERARCHY.map(bid => (
@@ -367,7 +375,7 @@ const ActionControls = ({
         case 'Awaiting Frog Upgrade Decision':
             if (!isSpectator && currentTableState.biddingTurnPlayerName === selfPlayerName) {
                 return (
-                    <PromptShell variant="choice" label="Frog upgrade decision">
+                    <PromptShell variant="choice" label="Frog upgrade decision" nudge={turnNudgeLevel}>
                         <h2 className="action-prompt__heading">Solo was bid</h2>
                         <p className="action-prompt__copy">Upgrade Frog to Heart Solo?</p>
                         <div className="action-prompt__button-grid action-prompt__button-grid--decision">
@@ -388,7 +396,7 @@ const ActionControls = ({
         case 'Trump Selection':
             if (!isSpectator && currentTableState.bidWinnerInfo?.userId === playerId) {
                 return (
-                    <PromptShell variant="card" label="Choose trump suit">
+                    <PromptShell variant="card" label="Choose trump suit" nudge={turnNudgeLevel}>
                         <h2 className="action-prompt__heading">Choose trump</h2>
                         <div className="action-prompt__cards action-prompt__cards--trump">
                             {['D', 'C', 'S'].map(suit => (

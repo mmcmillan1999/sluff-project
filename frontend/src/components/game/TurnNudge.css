@@ -1,0 +1,239 @@
+/* frontend/src/components/game/TurnNudge.css
+   The turn call-up: what happens when the action has sat on you for 5s.
+
+   Design rule for everything in this file — never hide table information.
+   Players are often slow because they are studying the trick, and dimming
+   the felt to shout at them would punish exactly the right behaviour. So the
+   loud parts ride the viewport edge (peripheral vision) and the gutter above
+   the hand, and the pointed parts move the things you are meant to touch. */
+
+/* ---------------------------------------------------------------- rim light */
+
+.turn-nudge-rim {
+    position: fixed;
+    inset: 0;
+    z-index: 1500; /* over the felt and the footer, under modals (2000+) */
+    pointer-events: none;
+    --nudge-rgb: 234, 179, 8; /* gold, before teams are known */
+    animation: turn-nudge-rim-breathe 1.7s ease-in-out infinite;
+}
+
+.turn-nudge-rim--bidder { --nudge-rgb: 245, 158, 11; }
+.turn-nudge-rim--defender { --nudge-rgb: 96, 165, 250; }
+
+.turn-nudge-rim--urgent {
+    animation: turn-nudge-rim-alarm 0.9s ease-in-out infinite;
+}
+
+/* Two shadows per frame: a hard ring that gives the light a defined edge, and
+   a soft bloom behind it. The bloom alone washed out against the bright felt
+   and read as nothing on a wide screen. */
+@keyframes turn-nudge-rim-breathe {
+    0%, 100% {
+        box-shadow:
+            inset 0 0 0 0 rgba(var(--nudge-rgb), 0),
+            inset 0 0 1.6vh 0.1vh rgba(var(--nudge-rgb), 0.10);
+    }
+    50% {
+        box-shadow:
+            inset 0 0 0 0.35vh rgba(var(--nudge-rgb), 0.6),
+            inset 0 0 6.5vh 0.9vh rgba(var(--nudge-rgb), 0.35);
+    }
+}
+
+@keyframes turn-nudge-rim-alarm {
+    0%, 100% {
+        box-shadow:
+            inset 0 0 0 0.18vh rgba(var(--nudge-rgb), 0.38),
+            inset 0 0 2.4vh 0.2vh rgba(var(--nudge-rgb), 0.22);
+    }
+    50% {
+        box-shadow:
+            inset 0 0 0 0.6vh rgba(var(--nudge-rgb), 0.95),
+            inset 0 0 9vh 1.6vh rgba(var(--nudge-rgb), 0.6);
+    }
+}
+
+/* -------------------------------------------------------------- "Your move" */
+
+/* Sits in the gutter above the hand and points down at it with a tail. The
+   hand container and its card row both force overflow:visible, and the footer
+   outranks the felt, so the tab escapes upward over the table without any
+   measuring. */
+.turn-nudge-beacon {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 1.1vh);
+    z-index: 4;
+    padding: 0.4em 0.85em;
+    border: 1px solid rgba(255, 240, 194, 0.6);
+    border-radius: 999px;
+    background: linear-gradient(160deg, rgb(250, 210, 60), rgb(202, 138, 4));
+    box-shadow:
+        0 0.4vh 1.2vh rgba(0, 0, 0, 0.5),
+        0 0 2.4vh rgba(250, 204, 21, 0.55);
+    color: #1c1305;
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(0.7rem, 1.55vh, 0.95rem);
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    line-height: 1;
+    text-transform: uppercase;
+    white-space: nowrap;
+    pointer-events: none;
+    transform: translateX(-50%);
+    animation:
+        turn-nudge-beacon-in 320ms cubic-bezier(0.2, 1.5, 0.4, 1) both,
+        turn-nudge-beacon-bob 1.7s ease-in-out 320ms infinite;
+}
+
+/* The tail — makes the tab read as pointing at the cards rather than
+   floating over them. */
+.turn-nudge-beacon::after {
+    content: '';
+    position: absolute;
+    top: calc(100% - 1px);
+    left: 50%;
+    width: 0;
+    height: 0;
+    border: 0.6vh solid transparent;
+    border-bottom: 0;
+    border-top-color: rgb(202, 138, 4);
+    transform: translateX(-50%);
+}
+
+.turn-nudge-beacon--urgent {
+    background: linear-gradient(160deg, rgb(254, 226, 130), rgb(234, 88, 12));
+    box-shadow:
+        0 0.4vh 1.2vh rgba(0, 0, 0, 0.5),
+        0 0 3.2vh rgba(251, 146, 60, 0.75);
+    animation:
+        turn-nudge-beacon-in 320ms cubic-bezier(0.2, 1.5, 0.4, 1) both,
+        turn-nudge-beacon-bob 0.9s ease-in-out 320ms infinite;
+}
+
+.turn-nudge-beacon--urgent::after { border-top-color: rgb(234, 88, 12); }
+
+@keyframes turn-nudge-beacon-in {
+    from { opacity: 0; transform: translateX(-50%) translateY(1vh) scale(0.8); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
+
+@keyframes turn-nudge-beacon-bob {
+    0%, 100% { transform: translateX(-50%) translateY(0) scale(1); }
+    50%      { transform: translateX(-50%) translateY(-0.6vh) scale(1.05); }
+}
+
+/* --------------------------------------------------------------- card wave */
+
+/* A crest that runs left-to-right across the legal cards, then rests. Legal
+   cards have never carried a positive mark — only illegal ones get shaded —
+   so this is also the first cue that says "these ones" rather than "not
+   those". The stagger index is set per card by PlayerHand. */
+.card-display.turn-nudge-wave {
+    --nudge-lift: 1.2vh;
+    animation: turn-nudge-card-wave 2.6s ease-in-out infinite;
+    animation-delay: calc(var(--nudge-wave-index, 0) * 70ms);
+}
+
+.card-display.turn-nudge-wave--urgent {
+    --nudge-lift: 1.9vh;
+    animation-duration: 1.5s;
+    animation-delay: calc(var(--nudge-wave-index, 0) * 50ms);
+}
+
+@keyframes turn-nudge-card-wave {
+    0% { transform: translateY(0); }
+    9% {
+        transform: translateY(calc(-1 * var(--nudge-lift)));
+        box-shadow:
+            0 0.45vh 1vh rgba(0, 0, 0, 0.45),
+            0 0 1.5vh rgba(250, 204, 21, 0.6);
+    }
+    22%, 100% { transform: translateY(0); }
+}
+
+/* ------------------------------------------------------------ prompt glow */
+
+/* Bidding, the Frog upgrade, and trump selection are decided in the popup
+   rather than the hand, so the pointed cue is the popup itself. Keyframes
+   have to carry the container's translateX(-50%) or it jumps out of centre. */
+.action-prompt.turn-nudge-prompt {
+    animation: turn-nudge-prompt-glow 1.7s ease-in-out infinite;
+}
+
+.action-prompt.turn-nudge-prompt--urgent {
+    animation: turn-nudge-prompt-glow 0.9s ease-in-out infinite;
+}
+
+@keyframes turn-nudge-prompt-glow {
+    0%, 100% {
+        transform: translateX(-50%) scale(1);
+        border-color: rgba(238, 202, 118, 0.3);
+        box-shadow:
+            0 0.55rem 1.4rem rgba(0, 0, 0, 0.34),
+            inset 0 1px rgba(255, 255, 255, 0.06);
+    }
+    50% {
+        transform: translateX(-50%) scale(1.035);
+        border-color: rgba(253, 224, 128, 0.95);
+        box-shadow:
+            0 0.55rem 1.4rem rgba(0, 0, 0, 0.34),
+            inset 0 1px rgba(255, 255, 255, 0.06),
+            0 0 2.6vh 0.35vh rgba(250, 204, 21, 0.55);
+    }
+}
+
+/* ------------------------------------------------------------------- a11y */
+
+.turn-nudge-announcement {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+/* Reduced motion keeps every cue — a player who cannot see the animation is
+   exactly the player who most needs the prompt — but holds each one still at
+   its loudest frame instead of cycling. */
+@media (prefers-reduced-motion: reduce) {
+    .turn-nudge-rim {
+        animation: none !important;
+        box-shadow:
+            inset 0 0 0 0.35vh rgba(var(--nudge-rgb), 0.6),
+            inset 0 0 5vh 0.8vh rgba(var(--nudge-rgb), 0.32);
+    }
+
+    .turn-nudge-rim--urgent {
+        box-shadow:
+            inset 0 0 0 0.6vh rgba(var(--nudge-rgb), 0.95),
+            inset 0 0 8vh 1.4vh rgba(var(--nudge-rgb), 0.55);
+    }
+
+    .turn-nudge-beacon,
+    .turn-nudge-beacon--urgent {
+        animation: none !important;
+        opacity: 1;
+        transform: translateX(-50%);
+    }
+
+    .card-display.turn-nudge-wave {
+        animation: none !important;
+        transform: translateY(calc(-1 * var(--nudge-lift)));
+        box-shadow: 0 0.45vh 1vh rgba(0, 0, 0, 0.45), 0 0 1.5vh rgba(250, 204, 21, 0.6);
+    }
+
+    .action-prompt.turn-nudge-prompt {
+        animation: none !important;
+        border-color: rgba(253, 224, 128, 0.95);
+        box-shadow:
+            0 0.55rem 1.4rem rgba(0, 0, 0, 0.34),
+            0 0 2.6vh 0.35vh rgba(250, 204, 21, 0.55);
+    }
+}

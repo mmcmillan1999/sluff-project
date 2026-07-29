@@ -9,6 +9,7 @@ import CardPhysicsEngine from '../../utils/CardPhysicsEngine';
 import CardSpacingEngine from '../../utils/CardSpacingEngine';
 import { useCardPlayStyle } from '../../utils/playStyle';
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion';
+import { TurnBeacon } from './TurnNudge';
 // import { useViewport } from '../../hooks/useViewport'; // Currently unused
 
 // Fast play style timings. First click raises the card; a second click within
@@ -43,7 +44,9 @@ const PlayerHand = ({
     renderCard,
     dropZoneRef,
     selectedDiscards,
-    onSelectDiscard
+    onSelectDiscard,
+    // Turn call-up level for hand-owned decisions: 0 calm, 1 nudge, 2 urgent.
+    nudgeLevel = 0
 }) => {
     // Use local state only if not provided from parent
     const [localSelectedDiscards, setLocalSelectedDiscards] = useState([]);
@@ -737,6 +740,16 @@ const PlayerHand = ({
     const isMyTurnToPlay = state === "Playing Phase" && trickTurnPlayerName === selfPlayerName;
     const legalMoves = getLegalMoves(myHand, currentTrickCards.length === 0, leadSuitCurrentTrick, trumpSuit, trumpBroken);
 
+    // Position of each legal card among the legal ones only, so the call-up
+    // crest sweeps left to right across what's playable instead of stuttering
+    // over the gaps where the shaded cards sit.
+    const legalWaveIndex = new Map();
+    if (isMyTurnToPlay && nudgeLevel > 0) {
+        myHandToDisplay.forEach((card) => {
+            if (legalMoves.includes(card)) legalWaveIndex.set(card, legalWaveIndex.size);
+        });
+    }
+
     // Calculate turn indicator bounds
     const getTurnIndicatorStyle = () => {
         if (!cardLayout || !isMyTurnToPlay || dragState.isDragging || fastFlight || myHandToDisplay.length === 0) {
@@ -790,9 +803,12 @@ const PlayerHand = ({
                 {/* Turn indicator overlay - absolute positioned behind cards */}
                 {isMyTurnToPlay && !dragState.isDragging && !fastFlight && (
                     <div
-                        className={`turn-indicator-overlay ${isBidder ? 'team-bidder' : ''} ${isDefender ? 'team-defender' : ''}`}
+                        className={`turn-indicator-overlay ${isBidder ? 'team-bidder' : ''} ${isDefender ? 'team-defender' : ''} ${nudgeLevel > 0 ? 'is-nudging' : ''} ${nudgeLevel >= 2 ? 'is-urgent' : ''}`}
                         style={getTurnIndicatorStyle()}
                     />
+                )}
+                {isMyTurnToPlay && !dragState.isDragging && !fastFlight && (
+                    <TurnBeacon level={nudgeLevel} />
                 )}
                 {myHandToDisplay.map((card, index) => {
                     const isLegal = isMyTurnToPlay && legalMoves.includes(card);
@@ -803,6 +819,15 @@ const PlayerHand = ({
                     // play and must finish (and emit once) even if the player
                     // switches styles from the menu mid-flight.
                     const isFastFlying = fastFlight?.card === card;
+                    // The crest animates the card face, never the wrapper: the
+                    // wrapper is what the physics engine and the fast-play
+                    // flight drive, and a competing transform there would
+                    // hijack a play in progress.
+                    const isWaving = nudgeLevel > 0
+                        && isLegal
+                        && !isBeingDragged
+                        && !isFastFlying
+                        && !isFastLifted;
 
                     // CRITICAL FIX: Don't apply React transforms when physics is controlling the element
                     const isPhysicsControlled = usePhysics && isBeingDragged;
@@ -873,7 +898,12 @@ const PlayerHand = ({
                         >
                             {renderCard(card, {
                                 large: true,
-                                className: isShaded ? 'illegal-move' : ''
+                                className: [
+                                    isShaded ? 'illegal-move' : '',
+                                    isWaving ? 'turn-nudge-wave' : '',
+                                    isWaving && nudgeLevel >= 2 ? 'turn-nudge-wave--urgent' : ''
+                                ].filter(Boolean).join(' '),
+                                style: isWaving ? { '--nudge-wave-index': legalWaveIndex.get(card) } : {}
                             })}
                         </div>
                     );
