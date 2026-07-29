@@ -16,10 +16,21 @@ const RENAME_COOLDOWN_MS = RENAME_COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
 
 const USERNAME_MIN_LENGTH = 3;
 const USERNAME_MAX_LENGTH = 20; // the column holds 50; 20 is what the UI can lay out
-// Letters, digits, and single internal spaces / underscores / hyphens. No
-// leading or trailing separators, so a name can't be padded to impersonate
-// another one.
-const USERNAME_PATTERN = /^[A-Za-z0-9]+(?:[ _-][A-Za-z0-9]+)*$/;
+// Letters and digits, with single internal separators. No leading separator and
+// no trailing one except a period, so a name cannot be padded with invisible
+// space to shadow another — but ordinary human names still fit.
+//
+// The period and apostrophe are here because the first draft rejected them and
+// that was wrong: the app ships a bot called "Courtney Sr.", and a player with
+// 148 games is called "Courtney Jr.". A validator that refuses names the
+// product itself uses is the validator's bug, not the name's. "O'Brien" is the
+// same story.
+//
+// Known limit: a period may separate or end a name but cannot be followed by a
+// space, so "J.R. Smith" is refused while "JR Smith" and "Courtney Sr." pass.
+// Allowing it means also allowing "a..b", and initials-with-periods are rarer
+// than sloppy punctuation.
+const USERNAME_PATTERN = /^[A-Za-z0-9]+(?:[ _.'-][A-Za-z0-9]+)*\.?$/;
 
 // Names that aren't accounts but appear as a username in the UI. Bot names need
 // no entry here — bots are real rows in `users`, so the case-insensitive unique

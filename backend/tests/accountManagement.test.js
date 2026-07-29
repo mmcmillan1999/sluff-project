@@ -102,6 +102,18 @@ function testUsernameValidation() {
     assert.equal(validateUsername('  Ace   McGraw  ').value, 'Ace McGraw', 'collapses internal whitespace');
     assert.ok(validateUsername('Ok_Name-9').ok);
 
+    // A validator that refuses names the product itself ships is the
+    // validator's bug. The app has a bot called "Courtney Sr." and a player
+    // with 148 games called "Courtney Jr.", and the first draft rejected both.
+    assert.ok(validateUsername('Courtney Sr.').ok, 'abbreviating period');
+    assert.ok(validateUsername('Courtney Jr.').ok);
+    assert.ok(validateUsername("O'Brien").ok, 'apostrophe in a surname');
+    // ...without letting punctuation run loose.
+    assert.equal(validateUsername('a..b').ok, false, 'no doubled punctuation');
+    assert.equal(validateUsername('...').ok, false);
+    assert.equal(validateUsername('.leading').ok, false);
+    assert.equal(validateUsername('amcmillan_').ok, false, 'no trailing underscore');
+
     for (const bad of ['ab', 'a'.repeat(21), 'bad!!name', '-lead', 'trail-', '', null, undefined, 42]) {
         assert.equal(validateUsername(bad).ok, false, `should reject ${JSON.stringify(bad)}`);
     }
@@ -111,6 +123,17 @@ function testUsernameValidation() {
         assert.equal(validateUsername(reserved).ok, false, `should reserve ${reserved}`);
     }
     console.log('  username validation rules hold');
+}
+
+
+function testEveryBotNamePassesTheValidator() {
+    // Bots live in the same users table and are protected by the same
+    // case-insensitive index, so a bot name the validator rejects means a human
+    // can never legitimately hold a name in that style.
+    const { BOT_NAMES } = require('../src/data/botAccounts');
+    const rejected = (BOT_NAMES || []).filter(name => !validateUsername(name).ok);
+    assert.deepEqual(rejected, [], `these shipped bot names fail the validator: ${rejected.join(', ')}`);
+    console.log(`  all ${(BOT_NAMES || []).length} shipped bot names satisfy the username rules`);
 }
 
 function testUsernameHistory() {
@@ -370,6 +393,7 @@ async function testRenameDisabledWithoutTheIndex() {
 
 async function run() {
     testUsernameValidation();
+    testEveryBotNamePassesTheValidator();
     testUsernameHistory();
     await testRenameHappyPath();
     await testRenameCooldown();

@@ -94,11 +94,11 @@ describe('InsurancePrompt range coverage', () => {
 });
 
 describe('InsurancePrompt saving and attention', () => {
-    test('saves through the steppers and notifies the wager-interaction callback', async () => {
+    test('saves through the steppers and notifies the insurance-interaction callback', async () => {
         const user = userEvent.setup();
         const emitEvent = vi.fn();
         const onClose = vi.fn();
-        const onWagerInteract = vi.fn();
+        const onInsuranceInteract = vi.fn();
         render(
             <InsurancePrompt
                 show
@@ -106,7 +106,7 @@ describe('InsurancePrompt saving and attention', () => {
                 selfPlayerName="Bob"
                 emitEvent={emitEvent}
                 onClose={onClose}
-                onWagerInteract={onWagerInteract}
+                onInsuranceInteract={onInsuranceInteract}
             />
         );
 
@@ -117,11 +117,11 @@ describe('InsurancePrompt saving and attention', () => {
             settingType: 'defenderOffer',
             value: -9,
         });
-        expect(onWagerInteract).toHaveBeenCalledTimes(1);
+        expect(onInsuranceInteract).toHaveBeenCalledTimes(1);
         expect(onClose).toHaveBeenCalledTimes(1);
     });
 
-    test('pulses the save button while the wager is still at the round default', async () => {
+    test('pulses the save button while the insurance value is still at the round default', async () => {
         render(
             <InsurancePrompt
                 show

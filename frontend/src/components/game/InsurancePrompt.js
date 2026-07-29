@@ -5,7 +5,7 @@ import './InsurancePrompt.css';
 
 /**
  * The full insurance panel: a live view of the whole negotiation (ask,
- * every offer, and the gap) plus the editor for your own wager. Pure
+ * every offer, and the gap) plus the editor for your own insurance. Pure
  * presentation — ranges and the lock rule mirror the server exactly
  * (GameEngine.updateInsuranceSetting: ask within ±120×multiplier,
  * offers within ±60×multiplier, deal locks when ask ≤ sum of offers).
@@ -30,7 +30,7 @@ const BouncingValue = ({ value, className = '', format = String }) => {
     );
 };
 
-const InsurancePrompt = ({ show, insuranceState, selfPlayerName, emitEvent, onClose, onWagerInteract }) => {
+const InsurancePrompt = ({ show, insuranceState, selfPlayerName, emitEvent, onClose, onInsuranceInteract }) => {
     const [value, setValue] = useState(0);
     const [isInitialized, setIsInitialized] = useState(false);
 
@@ -77,7 +77,7 @@ const InsurancePrompt = ({ show, insuranceState, selfPlayerName, emitEvent, onCl
         ? Number(bidderRequirement)
         : Number(defenderOffers?.[selfPlayerName]);
 
-    // Load your current saved wager once per open.
+    // Load your current saved insurance once per open.
     useEffect(() => {
         if (!show || !config || isInitialized) return;
         const startValue = Number.isFinite(savedValue)
@@ -107,7 +107,7 @@ const InsurancePrompt = ({ show, insuranceState, selfPlayerName, emitEvent, onCl
 
     const handleSubmit = () => {
         emitEvent('updateInsuranceSetting', { settingType: config.settingType, value });
-        onWagerInteract?.();
+        onInsuranceInteract?.();
         onClose();
     };
 
@@ -190,7 +190,7 @@ const InsurancePrompt = ({ show, insuranceState, selfPlayerName, emitEvent, onCl
                 {dealExecuted ? (
                     <div className="deal-locked-banner" role="status">
                         <strong>DEAL LOCKED</strong>
-                        <p>The point exchange is set for this round — wagers can no longer change.</p>
+                        <p>The point exchange is set for this round — insurance can no longer change.</p>
                     </div>
                 ) : !isParticipant ? (
                     <p className="insurance-observer-note">
@@ -198,9 +198,9 @@ const InsurancePrompt = ({ show, insuranceState, selfPlayerName, emitEvent, onCl
                     </p>
                 ) : (
                     <>
-                        {/* Your wager editor */}
-                        <div className="wager-editor">
-                            <div className="wager-editor-heading">
+                        {/* Your insurance editor */}
+                        <div className="insurance-editor">
+                            <div className="insurance-editor-heading">
                                 <span>Your {config.roleLabel}</span>
                                 {needsFirstSave && <em className="unset-hint">not set yet</em>}
                             </div>

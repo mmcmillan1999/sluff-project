@@ -5,7 +5,7 @@ import './InsuranceControls.css'; // Import the new CSS file
  * Compact insurance negotiation panel for the active three-player round.
  * Four-player games use the same trio while the dealer sits out.
  */
-const InsuranceControls = ({ insuranceState, selfPlayerName, isSpectator, emitEvent, onOpenPrompt, wagerTouched, onWagerInteract }) => {
+const InsuranceControls = ({ insuranceState, selfPlayerName, isSpectator, emitEvent, onOpenPrompt, insuranceTouched, onInsuranceInteract }) => {
     const isActive = !!(insuranceState && insuranceState.isActive && !isSpectator);
 
     const { bidderPlayerName, bidderRequirement, defenderOffers, dealExecuted, bidMultiplier } = insuranceState || {};
@@ -28,7 +28,7 @@ const InsuranceControls = ({ insuranceState, selfPlayerName, isSpectator, emitEv
         }
         const newValue = currentValue + amount;
         emitEvent("updateInsuranceSetting", { settingType, value: newValue });
-        onWagerInteract?.();
+        onInsuranceInteract?.();
     };
 
     const openDetailsOnKey = (event) => {
@@ -44,14 +44,14 @@ const InsuranceControls = ({ insuranceState, selfPlayerName, isSpectator, emitEv
 
     // The server arms each round with the maximally-unagreeable defaults
     // (ask 120xM, offers -60xM), so "still at the default and untouched this
-    // round" is the signal that this player hasn't set a wager yet.
+    // round" is the signal that this player hasn't set an insurance value yet.
     const untouchedDefault = isBidder ? 120 * multiplier : (isDefender ? -60 * multiplier : null);
     const needsAttention = isActive && !dealExecuted
         && untouchedDefault !== null
-        && !wagerTouched
+        && !insuranceTouched
         && Number(playerValue) === untouchedDefault;
 
-    // When the gap moves while our own wager didn't, another player changed
+    // When the gap moves while our own insurance didn't, another player changed
     // theirs — bounce the GAP number and float the delta so the eye catches it.
     const [gapFx, setGapFx] = useState(null); // { key, delta }
     const prevGapRef = useRef(null);
@@ -88,7 +88,7 @@ const InsuranceControls = ({ insuranceState, selfPlayerName, isSpectator, emitEv
         if (playerValue > 0) playerValueClasses.push('player-value-give');
         else playerValueClasses.push('player-value-get');
     }
-    if (needsAttention) playerValueClasses.push('wager-unset');
+    if (needsAttention) playerValueClasses.push('insurance-unset');
 
     // --- Determine button colors based on role ---
     const decreaseButtonClasses = ['adjust-button'];

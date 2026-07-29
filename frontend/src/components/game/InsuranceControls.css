@@ -217,7 +217,7 @@
     border-color: #7f1d1d;
 }
 
-/* --- Attention: this player hasn't set a wager yet this round --- */
+/* --- Attention: this player hasn't set an insurance value yet this round --- */
 @keyframes insurance-attention-glow {
     0%, 100% {
         border-color: rgba(255, 255, 255, 0.15);
@@ -233,17 +233,17 @@
     animation: insurance-attention-glow 1.6s ease-in-out infinite;
 }
 
-@keyframes wager-unset-blink {
+@keyframes insurance-unset-blink {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.45; }
 }
 
-.value-display.wager-unset .insurance-value-label {
+.value-display.insurance-unset .insurance-value-label {
     color: #fbbf24;
-    animation: wager-unset-blink 1.6s ease-in-out infinite;
+    animation: insurance-unset-blink 1.6s ease-in-out infinite;
 }
 
-/* --- Another player moved their wager: bounce the GAP number hard --- */
+/* --- Another player moved their insurance: bounce the GAP number hard --- */
 .gap-value {
     position: relative;
 }
@@ -300,7 +300,7 @@
 
 @media (prefers-reduced-motion: reduce) {
     .insurance-controls-container.needs-attention,
-    .value-display.wager-unset .insurance-value-label,
+    .value-display.insurance-unset .insurance-value-label,
     .gap-number.gap-bounce {
         animation: none !important;
     }
