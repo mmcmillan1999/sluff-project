@@ -12,14 +12,38 @@ const { reviewMessage } = require('../data/chatModeration');
 
 const REPORT_REASONS = new Set(['abuse', 'harassment', 'spam', 'cheating', 'other']);
 
+// Keyed by account, not IP. Mobile carriers put thousands of subscribers behind
+// one CGNAT address, and on a mobile-first game an IP-keyed cap lets one chatty
+// player silence a whole carrier block. These run after checkAuth, so req.user
+// is always present.
+// Never falls back to req.ip: express-rate-limit rightly warns that a raw IP
+// key lets IPv6 clients hop addresses to reset their bucket, and checkAuth has
+// already guaranteed req.user. An id-less request shares one conservative
+// bucket rather than getting a free pass.
+const byUser = (req) => (req.user?.id != null ? `u:${req.user.id}` : 'anonymous');
+
+const limiterDefaults = {
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: byUser,
+};
+
 // Chat is the one authenticated write a bored player can hold down. The cap is
 // generous for conversation and useless for flooding.
 const postLimiter = rateLimit({
+    ...limiterDefaults,
     windowMs: 60 * 1000,
     limit: 20,
-    standardHeaders: true,
-    legacyHeaders: false,
     message: { message: 'You are sending messages too quickly. Wait a moment.' },
+});
+
+// Report and block are cheap per call but unbounded without this, and each
+// still costs an auth round trip plus a write.
+const moderationLimiter = rateLimit({
+    ...limiterDefaults,
+    windowMs: 60 * 1000,
+    limit: 30,
+    message: { message: 'Too many requests. Wait a moment and try again.' },
 });
 
 const createChatRoutes = (pool, io, jwt) => {
@@ -125,7 +149,7 @@ const createChatRoutes = (pool, io, jwt) => {
     });
 
     // POST /api/chat/report - flag a message for an admin.
-    router.post('/report', checkAuth, async (req, res) => {
+    router.post('/report', checkAuth, moderationLimiter, async (req, res) => {
         const messageId = Number(req.body?.messageId);
         const reason = String(req.body?.reason || 'other');
         if (!Number.isSafeInteger(messageId) || messageId <= 0) {
@@ -166,7 +190,7 @@ const createChatRoutes = (pool, io, jwt) => {
     });
 
     // POST /api/chat/block  { userId, blocked: boolean }
-    router.post('/block', checkAuth, async (req, res) => {
+    router.post('/block', checkAuth, moderationLimiter, async (req, res) => {
         const targetId = Number(req.body?.userId);
         const blocked = req.body?.blocked !== false;
         if (!Number.isSafeInteger(targetId) || targetId <= 0) {
@@ -178,6 +202,16 @@ const createChatRoutes = (pool, io, jwt) => {
 
         try {
             if (blocked) {
+                // Only someone who has actually posted can be blocked. Without
+                // this, walking userId 1..N and reading /blocks back would dump
+                // the whole id-to-username map for free.
+                const seen = await pool.query(
+                    'SELECT 1 FROM lobby_chat_messages WHERE user_id = $1 LIMIT 1',
+                    [targetId],
+                );
+                if (seen.rowCount === 0) {
+                    return res.status(404).json({ message: 'That player has not posted here.' });
+                }
                 await pool.query(
                     `INSERT INTO chat_blocks (blocker_user_id, blocked_user_id)
                      VALUES ($1, $2)

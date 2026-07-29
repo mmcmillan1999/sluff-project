@@ -289,7 +289,7 @@ module.exports = function(pool, bcrypt, jwt, io, gameService) {
                     VALUES ($1, $2, $3)
                     RETURNING id, username, message, created_at;
                 `;
-                const msgValues = [user.id, 'System', `${user.username} has logged on.`];
+                const msgValues = [null, 'System', `${user.username} has logged on.`];
                 const { rows } = await pool.query(loginMsgQuery, msgValues);
                 io.emit('new_lobby_message', rows[0]);
             } catch (chatError) {

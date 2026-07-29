@@ -1,6 +1,7 @@
     // backend/src/services/GameService.js
 
     const GameEngine = require('../core/GameEngine');
+    const afkTurnTimer = require('../core/afkTurnTimer');
     const transactionManager = require('../data/transactionManager');
     const { loadBotBalances } = require('../data/botAccounts');
     const {
@@ -59,6 +60,12 @@
             this.terminalCleanupTimers = {};
             this.roundAdvanceTimers = {};
             this.adaptiveInsurance = new AdaptiveInsuranceStrategy(pool, io);
+            // The client nudges at 5s and escalates at 15s; this is what
+            // happens when that goes unanswered.
+            const configuredAfk = Number(process.env.AFK_TURN_TIMEOUT_SECONDS);
+            this.afkTimeoutMs = Number.isFinite(configuredAfk) && configuredAfk >= 10
+                ? configuredAfk * 1000
+                : afkTurnTimer.DEFAULT_TIMEOUT_MS;
             this._initializeEngines();
 
             // --- THE NEW GAME LOOP HEARTBEAT ---
@@ -68,6 +75,10 @@
                     const engine = this.engines[tableId];
                     if (engine.gameStarted) {
                         this._triggerBots(tableId);
+                        // Present-but-idle humans ride the same heartbeat. The
+                        // forfeit timer only ever covered disconnected seats,
+                        // so before this a face-down phone froze the table.
+                        void this._enforceAfkTurnTimer(tableId);
                     }
                 }
             }, 1500);
@@ -1717,6 +1728,35 @@
                         break;
                     }
                 }
+            }
+        }
+
+        // A present-but-idle player is not the same problem as a disconnected
+        // one, and only the second had a timer. This acts for a seat that has
+        // sat untouched past the window, taking the least damaging move
+        // available so the cost to the absent player is as small as unblocking
+        // the table allows. See core/afkTurnTimer.js.
+        async _enforceAfkTurnTimer(tableId) {
+            const engine = this.getEngineById(tableId);
+            if (!engine) return;
+
+            const decision = afkTurnTimer.evaluate(engine, { timeoutMs: this.afkTimeoutMs });
+            if (!decision) return;
+
+            try {
+                if (decision.action === 'bid') {
+                    console.log(`[AFK] ${decision.playerName} passed automatically at ${tableId}`);
+                    await this.placeBid(tableId, decision.userId, decision.bid);
+                } else {
+                    console.log(`[AFK] ${decision.playerName} auto-played ${decision.card} at ${tableId}`);
+                    await this.playCard(tableId, decision.userId, decision.card);
+                }
+            } catch (error) {
+                // A rejected auto-action means the state moved under us — the
+                // player acted in the same tick, or the round advanced. The
+                // clock is already re-armed, so the next turn gets a fresh
+                // window and this simply retries if it is still stuck.
+                console.error(`[AFK] Auto-action failed at ${tableId}:`, error.message);
             }
         }
 

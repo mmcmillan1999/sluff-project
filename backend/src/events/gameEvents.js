@@ -273,7 +273,7 @@ const registerGameHandlers = (io, gameService, options = {}) => {
             try {
                 const pool = gameService.pool;
                 const query = `INSERT INTO lobby_chat_messages (user_id, username, message) VALUES ($1, $2, $3)`;
-                await pool.query(query, [socket.user.id, 'System', 'The server is being reset by an administrator.']);
+                await pool.query(query, [null, 'System', 'The server is being reset by an administrator.']);
                 io.emit('new_lobby_message', { id: Date.now(), username: 'System', message: 'The server is being reset by an administrator.' });
             } catch (error) {
                 console.error("Failed to post server reset message to chat:", error);
@@ -1059,7 +1059,7 @@ const registerGameHandlers = (io, gameService, options = {}) => {
             try {
                 const pool = gameService.pool;
                 const logoutMsgQuery = `INSERT INTO lobby_chat_messages (user_id, username, message) VALUES ($1, $2, $3) RETURNING id, username, message, created_at;`;
-                const msgValues = [socket.user.id, 'System', `${socket.user.username} has logged out.`];
+                const msgValues = [null, 'System', `${socket.user.username} has logged out.`];
                 const { rows } = await pool.query(logoutMsgQuery, msgValues);
                 io.emit('new_lobby_message', rows[0]);
             } catch (chatError) {

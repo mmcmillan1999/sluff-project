@@ -286,7 +286,11 @@ const VoiceControls = ({ socket, tableId }) => {
                     type="button"
                     className="voice-mixer-btn"
                     onClick={() => setMixerOpen(open => !open)}
-                    disabled={!voiceJoined}
+                    // Gated on the preference, not on a successful join: if
+                    // joining fails this is the only way back out, and
+                    // disabling it would strand the player with voice
+                    // permanently on and getUserMedia retried at every table.
+                    disabled={!voiceEnabled}
                     aria-label={mixerOpen ? 'Close voice settings' : 'Open voice settings'}
                     aria-expanded={mixerOpen}
                     aria-controls={mixerId}
@@ -303,14 +307,17 @@ const VoiceControls = ({ socket, tableId }) => {
                 )}
                 {error && <p className="voice-error" role="alert">{error}</p>}
 
-                {mixerOpen && voiceJoined && (
+                {mixerOpen && (
                     <div className="voice-mixer" id={mixerId} role="group" aria-label="Voice player volumes">
                         <div className="voice-mixer-heading">
                             <strong>Table voice</strong>
                             <span>{peers.length} {peers.length === 1 ? 'player' : 'players'}</span>
                         </div>
-                        {peers.length === 0 && (
+                        {voiceJoined && peers.length === 0 && (
                             <p className="voice-mixer-empty">Waiting for other players to connect.</p>
+                        )}
+                        {!voiceJoined && (
+                            <p className="voice-mixer-empty">Table voice is not connected.</p>
                         )}
                         <button
                             type="button"
