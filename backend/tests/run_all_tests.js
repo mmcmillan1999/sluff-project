@@ -21,6 +21,7 @@ const suites = [
     { name: 'player profiles', file: './playerProfiles.test.js' },
     { name: 'token ledger', file: './tokenLedger.test.js' },
     { name: 'player-requested game voids', file: './gameVoid.test.js' },
+    { name: 'account rename and deletion', file: './accountManagement.test.js' },
     { name: 'inactive-user maintenance', file: './pruneInactiveUsers.test.js' },
     { name: 'database backup snapshot', file: './backupDatabase.test.js' },
     { name: 'abandoned-game crash recovery', file: './abandonedGameRecovery.test.js' },

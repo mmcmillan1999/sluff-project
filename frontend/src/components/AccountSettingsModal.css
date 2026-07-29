@@ -1,0 +1,181 @@
+/* frontend/src/components/AccountSettingsModal.css */
+/* Charcoal-and-gold house style, matching StoreModal / PlayerProfileModal. */
+
+.account-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483250;
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    min-height: 100dvh;
+    padding:
+        max(14px, env(safe-area-inset-top))
+        max(14px, env(safe-area-inset-right))
+        max(14px, env(safe-area-inset-bottom))
+        max(14px, env(safe-area-inset-left));
+    background: rgba(7, 9, 8, 0.78);
+    -webkit-backdrop-filter: blur(5px);
+    backdrop-filter: blur(5px);
+}
+
+.account-dialog {
+    position: relative;
+    box-sizing: border-box;
+    width: min(100%, 460px);
+    max-height: calc(100dvh - 28px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 20px 18px 18px;
+    color: #f6f0df;
+    background:
+        radial-gradient(circle at 85% 0%, rgba(213, 164, 58, 0.14), transparent 35%),
+        linear-gradient(165deg, #262826 0%, #171918 70%);
+    border: 1px solid rgba(233, 201, 119, 0.45);
+    border-radius: 14px;
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+}
+
+.account-close {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    color: #f0e2b8;
+    font-size: 22px;
+    line-height: 1;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(233, 201, 119, 0.35);
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.account-close:hover { background: rgba(255, 255, 255, 0.12); }
+
+.account-title {
+    margin: 0 0 4px;
+    padding-right: 40px;
+    color: #f6cf74;
+    font-family: 'Oswald', sans-serif;
+    font-size: 1.35rem;
+    letter-spacing: 0.03em;
+}
+
+.account-current {
+    margin: 0 0 16px;
+    color: rgba(246, 240, 223, 0.75);
+    font-size: 0.9rem;
+}
+
+.account-current strong { color: #f8d987; }
+
+.account-section {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(233, 201, 119, 0.2);
+}
+
+.account-section-title {
+    margin: 0 0 6px;
+    color: #f0e2b8;
+    font-family: 'Oswald', sans-serif;
+    font-size: 1rem;
+    letter-spacing: 0.02em;
+}
+
+.account-hint {
+    margin: 0 0 12px;
+    color: rgba(246, 240, 223, 0.66);
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
+.account-label {
+    display: block;
+    margin: 10px 0 5px;
+    color: rgba(246, 240, 223, 0.8);
+    font-size: 0.82rem;
+}
+
+.account-label strong { color: #f8d987; }
+
+.account-input {
+    box-sizing: border-box;
+    width: 100%;
+    margin-bottom: 10px;
+    padding: 10px 12px;
+    color: #f6f0df;
+    font-family: inherit;
+    font-size: 0.95rem;
+    background: rgba(0, 0, 0, 0.34);
+    border: 1px solid rgba(233, 201, 119, 0.32);
+    border-radius: 8px;
+}
+
+.account-input:focus {
+    outline: none;
+    border-color: rgba(250, 204, 21, 0.8);
+    box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.18);
+}
+
+.account-input:disabled { opacity: 0.55; }
+
+.account-button {
+    padding: 10px 16px;
+    color: #f6f0df;
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.9rem;
+    letter-spacing: 0.03em;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(233, 201, 119, 0.35);
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.account-button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.14); }
+
+.account-button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.account-button--primary {
+    color: #1c1305;
+    background: linear-gradient(160deg, rgb(250, 210, 60), rgb(202, 138, 4));
+    border-color: rgba(255, 240, 194, 0.55);
+    font-weight: 700;
+}
+
+.account-button--primary:hover:not(:disabled) {
+    background: linear-gradient(160deg, rgb(253, 224, 128), rgb(217, 152, 10));
+}
+
+.account-section--danger { border-top-color: rgba(220, 90, 70, 0.35); }
+
+.account-button--danger {
+    color: #ffe9e4;
+    background: rgba(150, 42, 30, 0.5);
+    border-color: rgba(220, 90, 70, 0.6);
+}
+
+.account-button--danger:hover:not(:disabled) { background: rgba(178, 50, 36, 0.68); }
+
+.account-button-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.account-button-row .account-button { flex: 1 1 auto; }
+
+.account-status {
+    margin: 8px 0 0;
+    font-size: 0.82rem;
+    line-height: 1.4;
+}
+
+.account-status--good { color: #9be59b; }
+.account-status--bad { color: #ff9d8f; }

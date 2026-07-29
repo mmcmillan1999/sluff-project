@@ -32,7 +32,7 @@ export const deriveLobbyPlayerStats = (user = {}) => {
     };
 };
 
-const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQuickPlay, handleJoinTableAsSpectator, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowSeasonRecaps, handleShowTokenLedger, handleShowBulletin, handleShowAdmin, handleShowFeedback, handleShowHowToPlay, handleResetTutorial, socket, soundSettings }) => {
+const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQuickPlay, handleJoinTableAsSpectator, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowSeasonRecaps, handleShowTokenLedger, handleShowBulletin, handleShowAdmin, handleShowFeedback, handleShowHowToPlay, handleResetTutorial, handleShowAccountSettings, socket, soundSettings }) => {
 
     const [activeTab, setActiveTab] = useState('');
     const [showMenu, setShowMenu] = useState(false);
@@ -196,6 +196,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
             id: 'account',
             label: 'Account',
             actions: [
+                { id: 'account-settings', label: 'Account Settings', onSelect: handleShowAccountSettings },
                 ...(user?.is_admin ? [{
                     id: 'admin',
                     label: 'Admin Tools',

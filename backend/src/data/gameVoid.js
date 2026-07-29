@@ -228,10 +228,40 @@ function permutations(values) {
     return result;
 }
 
+// game_history.outcome freezes the names players held when the game ended, so a
+// player who has since renamed would no longer match their own history. Each
+// participant therefore matches on their current name OR any name they have
+// held before (users.previous_usernames, bounded to 5 by accountIdentity.js).
+// This only widens which stored outcome a funded participant recognises — who
+// may void a game is decided by the ledger's user_ids, never by these names.
+function candidateNamesFor(row) {
+    const names = [];
+    const push = (value) => {
+        if (typeof value !== 'string' || !value) return;
+        if (!names.includes(value)) names.push(value);
+    };
+    push(row?.username);
+    for (const previous of row?.previous_usernames || []) push(previous);
+    return names;
+}
+
+// Cartesian product over each participant's candidate names.
+function nameCombinations(nameSets) {
+    let combinations = [[]];
+    for (const names of nameSets) {
+        const next = [];
+        for (const combination of combinations) {
+            for (const name of names) next.push([...combination, name]);
+        }
+        combinations = next;
+    }
+    return combinations;
+}
+
 function validateOutcomeIdentity(validated, outcome, userRows) {
-    const usernames = new Map((userRows || []).map(row => [Number(row.id), row.username]));
-    if (usernames.size !== validated.participantResults.length
-        || [...usernames.values()].some(username => typeof username !== 'string' || !username)) {
+    const aliases = new Map((userRows || []).map(row => [Number(row.id), candidateNamesFor(row)]));
+    if (aliases.size !== validated.participantResults.length
+        || [...aliases.values()].some(names => names.length === 0)) {
         throw new GameVoidError('GAME_LEDGER_AMBIGUOUS', 'The funded player identities are incomplete.');
     }
     if (/^Game Over! Draw \(/.test(outcome)) return;
@@ -239,15 +269,16 @@ function validateOutcomeIdentity(validated, outcome, userRows) {
     if (!outcome.startsWith(NORMAL_OUTCOME_PREFIX)) {
         const losers = validated.participantResults.filter(result => result.statColumn === 'losses');
         const allWashes = validated.participantResults.every(result => result.statColumn === 'washes');
-        const fundedNames = new Set(usernames.values());
+        const fundedNames = [...aliases.values()].flat();
+        const forfeitedBy = (name) => outcome.startsWith(`Game Over! ${name} forfeited (`);
         const fundedForfeiterMatches = losers.length === 1
-            && outcome.startsWith(`Game Over! ${usernames.get(losers[0].userId)} forfeited (`)
+            && (aliases.get(losers[0].userId) || []).some(forfeitedBy)
             && outcome.endsWith(')');
         const generalForfeitMatch = /^Game Over! (.+) forfeited \(.*\)$/.exec(outcome);
         const unfundedForfeiterMatches = losers.length === 0
             && allWashes
             && generalForfeitMatch
-            && ![...fundedNames].some(name => outcome.startsWith(`Game Over! ${name} forfeited (`));
+            && !fundedNames.some(forfeitedBy);
         if (!fundedForfeiterMatches && !unfundedForfeiterMatches) {
             throw new GameVoidError(
                 'GAME_LEDGER_AMBIGUOUS',
@@ -259,12 +290,14 @@ function validateOutcomeIdentity(validated, outcome, userRows) {
 
     const winners = validated.participantResults.filter(result => result.statColumn === 'wins');
     const allWashes = validated.participantResults.every(result => result.statColumn === 'washes');
-    const expectedNames = winners.length > 0
-        ? winners.map(result => usernames.get(result.userId))
-        : allWashes ? [...usernames.values()] : [];
-    const matchesCanonicalWinner = expectedNames.length > 0
-        && permutations(expectedNames).some(order => (
-            outcome === `${NORMAL_OUTCOME_PREFIX}${order.join(' & ')}`
+    const expectedNameSets = winners.length > 0
+        ? winners.map(result => aliases.get(result.userId) || [])
+        : allWashes ? [...aliases.values()] : [];
+    const matchesCanonicalWinner = expectedNameSets.length > 0
+        && nameCombinations(expectedNameSets).some(names => (
+            permutations(names).some(order => (
+                outcome === `${NORMAL_OUTCOME_PREFIX}${order.join(' & ')}`
+            ))
         ));
     if (!matchesCanonicalWinner) {
         throw new GameVoidError(
@@ -502,7 +535,7 @@ async function voidGame(pool, { gameId: rawGameId, requester: rawRequester, atte
         }
 
         const usersResult = await client.query(
-            `SELECT id, username
+            `SELECT id, username, COALESCE(previous_usernames, ARRAY[]::text[]) AS previous_usernames
              FROM users
              WHERE id = ANY($1::int[])
              ORDER BY id

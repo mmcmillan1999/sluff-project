@@ -37,6 +37,12 @@ Debug overlay in game: `Shift+D`.
 - **Layout harness**: `npm run dev` then open `/harness.html?mode=3|4` — renders the real game table with canned state, no backend needed. Use it to screenshot layout changes at any viewport. Add `?turn=1` for a live hand (playCard really moves the card), `?playstyle=flick|fast` to preset the card play style (implies turn).
 
 ## Known quirks
+- **Player name is live game-state identity.** GameEngine keys `scores`, `hands`,
+  `capturedTricks`, insurance offers, and every vote map by the name string, and
+  there is no re-key path — so renames are refused while seated (`isUserSeatedAnywhere`).
+  `game_history.outcome` also stores names as free text, which is why accounts keep
+  `previous_usernames` for `gameVoid.js` to match against.
+- CORS is pinned to GET and POST (`server.js`), so new mutating routes must be POST.
 - The Vitest suite is fully green as of July 2026 (the old note about 11 stale physics/spacing failures no longer applies) — treat any failure as a real regression.
 - `docs/archive/` is historical; don't treat as current.
 - Local Python tooling in `tools/legacy-agents/` is unrelated to the app (gitignored).

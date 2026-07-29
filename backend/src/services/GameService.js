@@ -528,6 +528,19 @@
             return false;
         }
 
+        // True while this account holds a seat at any live table. A rename would
+        // orphan the player-name keys the engine uses for scores, hands, and
+        // turn order, so the rename route refuses while this is true.
+        // Spectators are excluded — they hold no keyed state.
+        isUserSeatedAnywhere(userId) {
+            const id = Number(userId);
+            if (!Number.isSafeInteger(id) || id <= 0) return false;
+            return Object.values(this.engines || {}).some(engine => {
+                const player = engine?.players?.[id];
+                return Boolean(player) && player.isSpectator !== true;
+            });
+        }
+
         findQuickPlayTable(themeId) {
             const pool = Object.values(this.engines).filter(engine => (
                 engine.theme === themeId && this.canAcceptQuickPlayHuman(engine)

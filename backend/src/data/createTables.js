@@ -74,6 +74,31 @@ const createDbTables = async (pool) => {
         // --- NEW: Add columns for password recovery ---
         await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token TEXT");
         await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token_expires TIMESTAMP WITH TIME ZONE");
+
+        // Self-service rename cooldown. NULL means the player has never renamed,
+        // so their first change is free.
+        await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS username_changed_at TIMESTAMP WITH TIME ZONE");
+        // Former names, most recent first. game_history.outcome stores winner and
+        // forfeiter names as free text, so voiding a pre-rename game needs to
+        // recognise who the player used to be (see data/gameVoid.js).
+        await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS previous_usernames TEXT[] NOT NULL DEFAULT ARRAY[]::text[]");
+
+        // The UNIQUE constraint on username is case-sensitive, which would let a
+        // player rename to a case-variant of someone else's name (including a
+        // bot's) and impersonate them in chat. Boot must not die if legacy rows
+        // already collide — log it and let the app run; renames still get a
+        // case-insensitive check in accountIdentity.js.
+        try {
+            await pool.query(
+                'CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower_key ON users (LOWER(username))'
+            );
+        } catch (error) {
+            console.error(
+                '⚠️  Could not create the case-insensitive username index — existing usernames '
+                + 'differ only by capitalisation. Resolve the duplicates, then restart.',
+                error.message,
+            );
+        }
         // Tutorial progress is durable across browsers/devices. Version 0 means
         // the player has not completed or skipped a guided tutorial; the active
         // version lets an interrupted tutorial resume without marking it done.

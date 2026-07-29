@@ -357,6 +357,36 @@ export const updateTutorialStatus = async (action) => {
     return data;
 };
 
+// --- Account management ---
+
+// Errors carry the server's `code` so the account screen can react to the
+// specific refusal (cooldown, name taken, still at a table) instead of just
+// printing a sentence.
+const accountError = (data, fallback) => {
+    const error = new Error(data?.message || fallback);
+    if (data?.code) error.code = data.code;
+    if (data?.nextChangeAllowedAt) error.nextChangeAllowedAt = data.nextChangeAllowedAt;
+    return error;
+};
+
+export const changeUsername = async (username) => {
+    const response = await configuredFetch('/api/auth/username', 'POST', { username });
+    const data = await readJsonResponse(response);
+    if (!response.ok) throw accountError(data, 'Could not change your username.');
+    // The old token still carries the old name, and a cold boot reads the
+    // display name straight out of it.
+    if (data.token) localStorage.setItem('sluff_token', data.token);
+    return data;
+};
+
+// POST, not DELETE: the server's CORS policy allows only GET and POST.
+export const deleteAccount = async (password) => {
+    const response = await configuredFetch('/api/auth/account/delete', 'POST', { password });
+    const data = await readJsonResponse(response);
+    if (!response.ok) throw accountError(data, 'Could not delete your account.');
+    return data;
+};
+
 // --- Admin Service Calls ---
 
 export const getSeasonRolloverPreview = async () => {

@@ -16,6 +16,7 @@ import FeedbackView from "./components/FeedbackView.js";
 import LobbyHeader from "./components/LobbyHeader.js";
 import GameHeader from "./components/GameHeader.js";
 import HowToPlayModal from "./components/HowToPlayModal.js";
+import AccountSettingsModal from "./components/AccountSettingsModal.js";
 import FirstGameWelcome, { shouldShowFirstGameWelcome } from "./components/FirstGameWelcome.js";
 import OrientationScrim from "./components/OrientationScrim.js";
 import SluffIdent from "./components/SluffIdent.js";
@@ -70,6 +71,7 @@ function App() {
     });
     const [showFeedbackModal, setShowFeedbackModal] = useState(false);
     const [showHowToPlay, setShowHowToPlay] = useState(false);
+    const [showAccountSettings, setShowAccountSettings] = useState(false);
     const [feedbackGameContext, setFeedbackGameContext] = useState(null);
     const [socketSessionReady, setSocketSessionReady] = useState(false);
     const [welcomeDelayElapsed, setWelcomeDelayElapsed] = useState(false);
@@ -97,6 +99,20 @@ function App() {
             socket.disconnect();
         }
     }, []);
+
+    // The API already swapped the stored JWT for one carrying the new name.
+    // Re-reading it keeps `token` in step, and requestUserSync repoints the
+    // server's socket identity and the rest of the cached profile.
+    const handleUsernameChanged = useCallback((username) => {
+        setToken(localStorage.getItem("sluff_token"));
+        setUser(currentUser => (currentUser ? { ...currentUser, username } : currentUser));
+        if (socket.connected) socket.emit("requestUserSync");
+    }, []);
+
+    const handleAccountDeleted = useCallback(() => {
+        setShowAccountSettings(false);
+        handleLogout();
+    }, [handleLogout]);
 
     const handleLoginSuccess = (data) => {
         localStorage.setItem("sluff_token", data.token);
@@ -257,6 +273,10 @@ function App() {
             const onNotification = ({ message }) => alert(message);
             const onForceLobbyReturn = () => handleLeaveTable();
             const onTokenBalanceChanged = () => socket.emit('requestUserSync');
+            // Both fire for this account's OTHER live sessions: a rename on one
+            // device repoints the rest, and a deletion signs them out.
+            const onIdentityChanged = () => socket.emit('requestUserSync');
+            const onAccountDeleted = () => handleLogout();
 
             socket.on('connect', onConnect);
             socket.on('disconnect', onDisconnect);
@@ -273,6 +293,8 @@ function App() {
             socket.on('forceLobbyReturn', onForceLobbyReturn);
             socket.on('tokenBalancesReset', onTokenBalanceChanged);
             socket.on('tokenBalanceChanged', onTokenBalanceChanged);
+            socket.on('identityChanged', onIdentityChanged);
+            socket.on('accountDeleted', onAccountDeleted);
 
             return () => {
                 socket.off('connect', onConnect);
@@ -290,6 +312,8 @@ function App() {
                 socket.off('forceLobbyReturn', onForceLobbyReturn);
                 socket.off('tokenBalancesReset', onTokenBalanceChanged);
                 socket.off('tokenBalanceChanged', onTokenBalanceChanged);
+                socket.off('identityChanged', onIdentityChanged);
+                socket.off('accountDeleted', onAccountDeleted);
                 if (errorMessageTimerRef.current) clearTimeout(errorMessageTimerRef.current);
                 if (connectionNoticeTimerRef.current) clearTimeout(connectionNoticeTimerRef.current);
             };
@@ -586,6 +610,13 @@ function App() {
                         ? handleStartGuidedTutorial
                         : undefined}
                 />
+                <AccountSettingsModal
+                    show={showAccountSettings}
+                    user={user}
+                    onClose={() => setShowAccountSettings(false)}
+                    onUsernameChanged={handleUsernameChanged}
+                    onAccountDeleted={handleAccountDeleted}
+                />
                 {welcomeIsEligible && welcomeDelayElapsed && (
                     <FirstGameWelcome
                         activeVersion={user.tutorial_active_version}
@@ -597,7 +628,7 @@ function App() {
                 {(() => {
                     switch (view) {
                         case 'lobby':
-                            return <LobbyView user={user} lobbyThemes={lobbyThemes} serverVersion={serverVersion} handleJoinTable={handleJoinTable} handleQuickPlay={handleQuickPlay} handleJoinTableAsSpectator={handleJoinTableAsSpectator} handleLogout={handleLogout} handleRequestFreeToken={handleRequestFreeToken} handleShowLeaderboard={() => setView('leaderboard')} handleShowSeasonRecaps={() => setView('seasonRecaps')} handleShowTokenLedger={() => setView('tokenLedger')} handleShowBulletin={() => setView('bulletin')} handleShowAdmin={handleShowAdmin} handleShowFeedback={() => setView('feedback')} handleShowHowToPlay={handleShowHowToPlay} handleResetTutorial={handleResetTutorial} errorMessage={errorMessage} socket={socket} soundSettings={soundSettings} />;
+                            return <LobbyView user={user} lobbyThemes={lobbyThemes} serverVersion={serverVersion} handleJoinTable={handleJoinTable} handleQuickPlay={handleQuickPlay} handleJoinTableAsSpectator={handleJoinTableAsSpectator} handleLogout={handleLogout} handleRequestFreeToken={handleRequestFreeToken} handleShowLeaderboard={() => setView('leaderboard')} handleShowSeasonRecaps={() => setView('seasonRecaps')} handleShowTokenLedger={() => setView('tokenLedger')} handleShowBulletin={() => setView('bulletin')} handleShowAdmin={handleShowAdmin} handleShowFeedback={() => setView('feedback')} handleShowHowToPlay={handleShowHowToPlay} handleResetTutorial={handleResetTutorial} handleShowAccountSettings={() => setShowAccountSettings(true)} errorMessage={errorMessage} socket={socket} soundSettings={soundSettings} />;
                         case 'gameTable':
                             return currentTableState ? <GameTableView user={user} playerId={user.id} currentTableState={currentTableState} handleLeaveTable={handleLeaveTable} handleLogout={handleLogout} handleShowHowToPlay={handleShowHowToPlay} errorMessage={errorMessage} emitEvent={emitEvent} playSound={playSound} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} soundSettings={soundSettings} tutorialState={{ tutorialVersion: Number(user.tutorial_version) || 0, activeVersion: Number(user.tutorial_active_version) || 0, gamesPlayed: Number(user.games_played) || 0 }} onTutorialAction={handleTutorialAction} onShowTokenLedger={() => setView('tokenLedger')} /> : <div>Loading table...</div>;
                         case 'leaderboard':

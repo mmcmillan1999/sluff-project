@@ -39,11 +39,38 @@ npx cap open ios            # opens Xcode
 In Xcode: set the Signing team, pick a device/simulator, and Run. After any web
 change, re-run `npm run build && npx cap sync`.
 
+## Done since this doc was written (July 2026)
+- **In-app account deletion** (Apple 5.1.1(v)) — Lobby menu → Account → Account
+  Settings. Requires the player to retype their username and their password.
+  Refused while a staked game is in progress, or for the last admin account.
+  See `backend/src/data/accountDeletion.js`.
+- **Username validation** — shared validator on both registration and rename
+  (`backend/src/data/accountIdentity.js`): 3–20 chars, letters/digits with single
+  internal space/hyphen/underscore, a reserved-name list, and a case-insensitive
+  unique index so nobody can shadow another player (or a bot) by capitalisation.
+  This is only *part* of Apple 1.2 — see the chat-moderation item below.
+- 4-player is shipped (Quick Play offers a 4-seat start), so that decision is closed.
+
 ## Still TODO before submission (tracked separately)
-- App icons (1024×1024) + splash images.
-- In-app **account deletion** (Apple 5.1.1(v)).
-- **Chat moderation**: profanity filter + report + block (Apple 1.2).
-- Privacy policy URL + App Privacy "nutrition label".
+- App icons: the largest asset today is 512×512; the App Store needs **1024×1024**,
+  and Android needs adaptive icons. No `frontend/resources/` yet for
+  `@capacitor/assets` to generate from. Plus splash images.
+- **Chat moderation**: profanity filter + report + block (Apple 1.2). Lobby chat
+  still inserts messages verbatim with no filter, no report, and no block, and
+  there is no ban tooling in `api/admin.js` despite the Terms promising suspension.
+- **Age rating vs. simulated gambling.** Players stake tokens and the winner takes
+  the pot. The Terms say 13+ (`TermsOfService.js`, with an open TODO); a rating
+  board will likely want 17+/18+. Decide before filling in the questionnaire.
+- Privacy policy URL + App Privacy "nutrition label". `/privacy` and `/terms`
+  resolve for a logged-out visitor but are unreachable once signed in — add a
+  footer link, and confirm the URL in a private window before submitting.
+- Confirm `support@playsluff.com` actually receives mail (`PrivacyPolicy.js` TODO);
+  reviewers do test it. Both legal pages are still marked lawyer-unreviewed.
+- **Android is not started**: `@capacitor/android` isn't installed and there's no
+  `android/` directory. Buildable from Windows, unlike iOS.
 - On-device **safe-area** tuning (bottom hand vs. home indicator).
-- Always-on backend tier (Render free tier cold-starts).
-- Decide 4-player (fix vs. hide) and token monetization (IAP if ever sold).
+- Always-on backend tier. A GitHub Actions cron pings `/health` every 10 minutes
+  to dodge Render's idle spin-down; a Starter instance is the real fix.
+- Token monetization stays out (IAP if ever sold). Note that selling tokens would
+  also flip the "no payment path" answer the store classification rests on.
+- No crash reporting anywhere — only a React `ErrorBoundary`.

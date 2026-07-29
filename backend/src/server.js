@@ -146,7 +146,7 @@ async function initializeApplication() {
     await recoveryMonitor.runNow();
 
     registerGameHandlers(io, gameService);
-    app.use('/api/auth', createAuthRoutes(pool, bcrypt, jwt, io));
+    app.use('/api/auth', createAuthRoutes(pool, bcrypt, jwt, io, gameService));
     app.use('/api/leaderboard', createLeaderboardRoutes(pool, jwt));
     app.use('/api/players', createPlayerRoutes(pool, jwt));
     app.use('/api/seasons', createSeasonRoutes(pool, jwt));

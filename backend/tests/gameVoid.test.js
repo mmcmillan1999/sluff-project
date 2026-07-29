@@ -167,11 +167,12 @@ function createVoidPool(state = baseState()) {
                             })) };
                     }
 
-                    if (sql.startsWith('SELECT id, username FROM users') && sql.includes('FOR UPDATE')) {
+                    if (sql.startsWith('SELECT id, username') && sql.includes('FROM users') && sql.includes('FOR UPDATE')) {
                         const ids = params[0];
                         return { rows: ids.filter(id => state.users.has(id)).map(id => ({
                             id,
                             username: state.users.get(id).username,
+                            previous_usernames: state.users.get(id).previousUsernames || [],
                         })) };
                     }
                     if (sql.startsWith('SELECT user_id, wins, losses, washes FROM season_player_stats')) {
@@ -356,7 +357,7 @@ async function testAtomicNormalVoidAndIdempotentRetry() {
         call.sql.includes('ORDER BY transaction_id DESC') && !call.sql.includes('FOR UPDATE')
     ));
     const userLockIndex = pool.calls.findIndex(call => (
-        call.sql.startsWith('SELECT id, username FROM users') && call.sql.includes('FOR UPDATE')
+        call.sql.startsWith('SELECT id, username') && call.sql.includes('FROM users') && call.sql.includes('FOR UPDATE')
     ));
     const transactionLockIndex = pool.calls.findIndex(call => (
         call.sql.includes('ORDER BY transaction_id DESC') && call.sql.includes('FOR UPDATE')

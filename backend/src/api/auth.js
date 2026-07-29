@@ -17,10 +17,36 @@ const {
     GameVoidError,
     voidGame,
 } = require('../data/gameVoid');
+const {
+    AccountIdentityError,
+    nextChangeAllowedAt,
+    renameUser,
+    validateUsername,
+} = require('../data/accountIdentity');
+const {
+    AccountDeletionError,
+    deleteOwnAccount,
+    disconnectAccountSockets,
+} = require('../data/accountDeletion');
+
+const RENAME_STATUS_BY_CODE = {
+    INVALID_USERNAME: 400,
+    UNCHANGED: 400,
+    NOT_FOUND: 404,
+    USERNAME_TAKEN: 409,
+    RENAME_TOO_SOON: 429,
+};
+
+const DELETE_STATUS_BY_CODE = {
+    NOT_FOUND: 404,
+    ACTIVE_GAME: 409,
+    LAST_ADMIN: 409,
+};
 
 const PROFILE_COLUMNS = `
     id, username, email, created_at, wins, losses, washes,
-    is_admin, is_vip, tutorial_version, tutorial_active_version
+    is_admin, is_vip, tutorial_version, tutorial_active_version,
+    username_changed_at
 `;
 
 async function tokenBalanceForUser(pool, userId) {
@@ -40,8 +66,33 @@ function publicUserProfile(user, tokens) {
         tokens,
         is_admin: user.is_admin === true,
         is_vip: user.is_vip === true,
+        // Lets the account screen show when the next rename unlocks instead of
+        // only finding out by being refused.
+        ...(user.username_changed_at !== undefined
+            ? { username_next_change_at: nextChangeAllowedAt(user.username_changed_at)?.toISOString() ?? null }
+            : {}),
         ...playerProgressFields(user),
     };
+}
+
+// After a rename, every live socket for the account still carries the old
+// name in socket.user and in the client's cached profile. Asking the client to
+// re-sync repoints both from the database in one round trip.
+function refreshAccountSockets(io, userId) {
+    const targetId = Number(userId);
+    const connectedSockets = io?.sockets?.sockets;
+    if (!Number.isSafeInteger(targetId) || typeof connectedSockets?.values !== 'function') return;
+
+    for (const socket of connectedSockets.values()) {
+        if (Number(socket?.user?.id) !== targetId || typeof socket?.emit !== 'function') continue;
+        try {
+            socket.emit('identityChanged');
+        } catch (error) {
+            // The rename is already committed; a stale socket re-syncs on its
+            // next reconnect rather than failing the request.
+            console.error(`[RENAME] Failed to notify socket for user ${targetId}:`, error);
+        }
+    }
 }
 
 function notifyParticipantTokenBalances(io, affectedUserIds) {
@@ -80,10 +131,14 @@ const loginLimiter = rateLimit({ ...limiterDefaults, windowMs: 15 * 60 * 1000, l
 const registerLimiter = rateLimit({ ...limiterDefaults, windowMs: 60 * 60 * 1000, limit: 5 });
 const emailSendLimiter = rateLimit({ ...limiterDefaults, windowMs: 60 * 60 * 1000, limit: 3 });
 const tokenCheckLimiter = rateLimit({ ...limiterDefaults, windowMs: 15 * 60 * 1000, limit: 30 });
+// Rename is already capped at once a week in the database; this only stops a
+// stolen token from grinding name-availability probes or password guesses
+// against the delete route.
+const accountChangeLimiter = rateLimit({ ...limiterDefaults, windowMs: 60 * 60 * 1000, limit: 10 });
 
 const MIN_PASSWORD_LENGTH = 8;
 
-module.exports = function(pool, bcrypt, jwt, io) {
+module.exports = function(pool, bcrypt, jwt, io, gameService) {
     const router = express.Router();
     const checkAuth = requireAuth(pool, jwt);
 
@@ -105,10 +160,16 @@ module.exports = function(pool, bcrypt, jwt, io) {
             if (acceptedTerms !== true) {
                 return res.status(400).json({ message: "You must accept the Terms of Service and Privacy Policy to create an account." });
             }
+            // Same validator the rename route uses, so the two can't diverge and
+            // registration can't mint a name a rename would reject.
+            const usernameCheck = validateUsername(username);
+            if (!usernameCheck.ok) {
+                return res.status(400).json({ message: usernameCheck.message });
+            }
             const hashedPassword = await bcrypt.hash(password, 10);
-            
+
             const insertUserQuery = 'INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id';
-            const userResult = await client.query(insertUserQuery, [username, email, hashedPassword]);
+            const userResult = await client.query(insertUserQuery, [usernameCheck.value, email, hashedPassword]);
             newUserId = userResult.rows[0].id;
 
             const startingTokens = 8.00;
@@ -281,6 +342,91 @@ module.exports = function(pool, bcrypt, jwt, io) {
             }
             console.error('Token-ledger load error:', error);
             return res.status(500).json({ message: 'Unable to load token history.' });
+        }
+    });
+
+    // Self-service rename, at most once a week. The engine keys live game state
+    // (seats, scores, hands, turn order) on the player name, so this is
+    // deliberately not reachable mid-game — a rename would orphan those keys.
+    router.post('/username', checkAuth, accountChangeLimiter, async (req, res) => {
+        res.set('Cache-Control', 'private, no-store');
+        try {
+            if (gameService?.isUserSeatedAnywhere?.(req.user.id)) {
+                return res.status(409).json({
+                    code: 'AT_TABLE',
+                    message: 'Leave your table before changing your username.',
+                });
+            }
+
+            const result = await renameUser(pool, req.user.id, req.body?.username);
+            console.log(`[RENAME] user ${req.user.id}: ${result.previousUsername} -> ${result.username}`);
+            // Their sockets still carry the old identity; a sync repoints both
+            // socket.user and the client's cached profile at the new name.
+            refreshAccountSockets(io, req.user.id);
+            // The old 90-day JWT still carries the old username, and the client
+            // seeds its display name from that payload on a cold boot. Without a
+            // reissue the player would see their former name for months.
+            const token = jwt.sign(
+                { id: req.user.id, username: result.username, is_admin: req.user.is_admin },
+                process.env.JWT_SECRET,
+                { expiresIn: '90d' },
+            );
+            return res.json({
+                username: result.username,
+                nextChangeAllowedAt: result.nextChangeAllowedAt,
+                token,
+            });
+        } catch (error) {
+            if (error instanceof AccountIdentityError) {
+                const status = RENAME_STATUS_BY_CODE[error.code] || 400;
+                return res.status(status).json({
+                    code: error.code,
+                    message: error.message,
+                    ...error.details,
+                });
+            }
+            console.error('Username change error:', error);
+            return res.status(500).json({ message: 'Unable to change your username.' });
+        }
+    });
+
+    // Permanent, irreversible account deletion (App Store 5.1.1(v)). Password
+    // re-entry is required: a JWT lives 90 days, so an unlocked device must not
+    // be enough to destroy an account.
+    //
+    // POST rather than DELETE on purpose — server.js pins CORS to GET and POST,
+    // so a DELETE would be refused at preflight from the browser.
+    router.post('/account/delete', checkAuth, accountChangeLimiter, async (req, res) => {
+        res.set('Cache-Control', 'private, no-store');
+        try {
+            const password = req.body?.password;
+            if (typeof password !== 'string' || password.length === 0) {
+                return res.status(400).json({ message: 'Enter your password to confirm deletion.' });
+            }
+
+            const credentials = await pool.query(
+                'SELECT password_hash FROM users WHERE id = $1 AND COALESCE(is_bot, FALSE) = FALSE',
+                [req.user.id],
+            );
+            const passwordHash = credentials.rows?.[0]?.password_hash;
+            if (!passwordHash || !(await bcrypt.compare(password, passwordHash))) {
+                return res.status(403).json({ message: 'That password is incorrect.' });
+            }
+
+            const summary = await deleteOwnAccount(pool, req.user.id);
+            console.log(
+                `[DELETE] account ${summary.userId} removed: ${summary.removedTransactions} ledger rows, `
+                + `${summary.anonymisedChatMessages} chat and ${summary.anonymisedFeedback} feedback rows anonymised`,
+            );
+            disconnectAccountSockets(io, summary.userId);
+            return res.json({ deleted: true });
+        } catch (error) {
+            if (error instanceof AccountDeletionError) {
+                const status = DELETE_STATUS_BY_CODE[error.code] || 400;
+                return res.status(status).json({ code: error.code, message: error.message });
+            }
+            console.error('Account deletion error:', error);
+            return res.status(500).json({ message: 'Unable to delete your account.' });
         }
     });
 
