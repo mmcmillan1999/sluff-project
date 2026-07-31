@@ -184,9 +184,9 @@
     top: calc(var(--chip-face-h) / 2);
     left: 50%;
     z-index: 2;
-    min-width: 1.55vh;
-    min-height: 1.35vh;
-    padding: 0.08vh 0.28vh;
+    min-width: 2.35vh;
+    min-height: 2.0vh;
+    padding: 0.12vh 0.36vh;
     box-sizing: border-box;
     display: grid;
     place-items: center;
@@ -198,7 +198,7 @@
         inset 0 0 0 0.035vh rgba(255, 255, 255, 0.16),
         0 0.08vh 0.14vh rgba(18, 10, 4, 0.55);
     font-family: 'Oswald', sans-serif;
-    font-size: 1.26vh;
+    font-size: 2.0vh;
     font-weight: 800;
     font-variant-numeric: tabular-nums;
     line-height: 1;
@@ -209,15 +209,15 @@
 }
 
 .score-chip-total--compact {
-    min-width: 1.65vh;
-    padding-inline: 0.18vh;
-    font-size: 0.96vh;
+    min-width: 2.5vh;
+    padding-inline: 0.24vh;
+    font-size: 1.62vh;
 }
 
 .score-chip-total--tiny {
-    min-width: 1.75vh;
-    padding-inline: 0.11vh;
-    font-size: 0.74vh;
+    min-width: 2.62vh;
+    padding-inline: 0.16vh;
+    font-size: 1.34vh;
 }
 
 .score-chip-delta {
@@ -334,18 +334,23 @@
 }
 
 /* Keep exact totals readable on short portrait phones without forcing an
-   oversized label onto the much smaller chips used in landscape. */
+   oversized label onto the much smaller chips used in landscape.
+
+   The px floors matter more than they look: under iOS Display Zoom the viewport
+   shrinks in CSS pixels, so a vh-sized number keeps its PHYSICAL size while the
+   player has explicitly asked for everything to be bigger. The floor is what
+   actually grows for them. */
 @media (orientation: portrait) and (max-width: 600px) {
     .score-chip-total {
-        font-size: clamp(9px, 1.26vh, 13px);
+        font-size: clamp(14px, 2.0vh, 22px);
     }
 
     .score-chip-total--compact {
-        font-size: clamp(7.5px, 0.96vh, 10px);
+        font-size: clamp(12px, 1.62vh, 18px);
     }
 
     .score-chip-total--tiny {
-        font-size: clamp(6px, 0.74vh, 8px);
+        font-size: clamp(10.5px, 1.34vh, 15px);
     }
 }
 

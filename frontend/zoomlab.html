@@ -1,0 +1,61 @@
+<!doctype html>
+<!--
+  Dev-only viewport comparison rig: /zoomlab.html
+
+  Renders the layout harness inside iframes at exact phone viewports. An iframe
+  gets its own viewport, so vh/vw/dvh resolve against the frame rather than the
+  desktop window — which is the only way to inspect true phone geometry when the
+  browser window itself cannot be resized.
+
+  The "zoomed" columns are the real thing, not a guess: iOS Display Zoom renders
+  the device at a smaller LOGICAL resolution and scales the result up, so a
+  zoomed iPhone genuinely reports a smaller CSS viewport. Matching that viewport
+  reproduces exactly what those players see.
+
+  ?path= overrides the harness query (default ?turn=1).
+-->
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Sluff — viewport / zoom lab</title>
+  <style>
+    body { margin: 0; padding: 16px; background: #202020; color: #eee;
+           font: 13px/1.4 system-ui, sans-serif; }
+    h1 { font-size: 15px; margin: 0 0 4px; letter-spacing: .04em; }
+    p  { margin: 0 0 16px; color: #999; }
+    .row { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+    figure { margin: 0; }
+    figcaption { padding: 6px 2px; font-size: 12px; }
+    figcaption b { color: #f6cf74; }
+    figcaption span { color: #888; }
+    iframe { border: 1px solid #444; background: #000; display: block; }
+  </style>
+</head>
+<body>
+  <h1>Sluff layout across phone viewports</h1>
+  <p>Zoomed columns reproduce iOS Display Zoom, which reports a smaller CSS viewport.</p>
+  <div class="row" id="row"></div>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const harness = params.get('path') || '?turn=1';
+
+    // Logical CSS viewport sizes. Default vs Display Zoom ("Larger Text").
+    const DEVICES = [
+      { name: 'iPhone SE',      w: 375, h: 667, note: 'default' },
+      { name: 'iPhone 15 Pro',  w: 393, h: 852, note: 'default' },
+      { name: 'iPhone 15 Pro',  w: 320, h: 693, note: 'ZOOMED', zoom: true },
+      { name: 'iPhone 15 Pro Max', w: 430, h: 932, note: 'default' },
+      { name: 'iPhone 15 Pro Max', w: 375, h: 812, note: 'ZOOMED', zoom: true },
+    ];
+
+    document.getElementById('row').innerHTML = DEVICES.map(d => `
+      <figure>
+        <figcaption>
+          <b>${d.name}</b> <span>${d.w}×${d.h} · ${d.note}</span>
+        </figcaption>
+        <iframe src="/harness.html${harness}" width="${d.w}" height="${d.h}"
+                title="${d.name} ${d.note}"></iframe>
+      </figure>`).join('');
+  </script>
+</body>
+</html>

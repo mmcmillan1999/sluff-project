@@ -28,9 +28,19 @@ const getDeclaration = (selector, property) => {
 describe('player-seat ornament layout', () => {
     test('rests the dealer and trump pucks flush inside opposite lower plaque corners', () => {
         // The chip bank owns the top plaque edge; the pucks own the bottom.
-        expect(getDeclaration('.dealer-puck-ear', 'left')).toBe('1.95vh');
+        //
+        // "Flush" is a relationship, not a magic number: each puck is centred on
+        // its inset by the translate, so the inset must be exactly half the puck
+        // width or the puck hangs off the plaque or floats inside it. Asserting
+        // the relationship means resizing the puck cannot silently unseat it —
+        // which is what a hardcoded 1.95vh let happen when the face grew.
+        const vh = value => Number.parseFloat(value);
+        const puckWidth = vh(getDeclaration('.player-seat-wrapper .seat-puck', '--puck-d'));
+        const halfPuck = puckWidth / 2;
+
+        expect(vh(getDeclaration('.dealer-puck-ear', 'left'))).toBeCloseTo(halfPuck, 2);
         expect(getDeclaration('.dealer-puck-ear', 'transform')).toBe('translateX(-50%)');
-        expect(getDeclaration('.bidder-puck-ear', 'right')).toBe('1.95vh');
+        expect(vh(getDeclaration('.bidder-puck-ear', 'right'))).toBeCloseTo(halfPuck, 2);
         expect(getDeclaration('.bidder-puck-ear', 'transform')).toBe('translateX(50%)');
         expect(getDeclaration('.dealer-puck-ear', 'bottom'))
             .toBe(getDeclaration('.bidder-puck-ear', 'bottom'));

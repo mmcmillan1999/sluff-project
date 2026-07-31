@@ -10,9 +10,11 @@
 .widow-seat-container {
     /* Same dimensions as PlayerSeat */
     height: 7vh;
-    width: calc(7vh * 2.5); /* Width = height * 2.5 aspect ratio = 17.5vh */
-    max-width: calc(7vh * 2.5); /* Prevent expansion */
-    min-width: calc(7vh * 2.5); /* Consistent size */
+    /* Tracks the player plaque aspect (PlayerSeat.css) — they share a
+       visual language and sit on the same felt, so they widen together. */
+    width: calc(7vh * 3.05);
+    max-width: calc(7vh * 3.05);
+    min-width: calc(7vh * 3.05);
     
     background-color: rgba(255, 255, 255, 0.9);
     border-radius: 1vh;

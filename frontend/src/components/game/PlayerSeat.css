@@ -3,7 +3,7 @@
 .player-seat-wrapper {
     position: relative;
     /* Match the fixed plaque geometry so pucks and score chips share one anchor. */
-    width: 17.5vh;
+    width: 21.35vh;
     height: 7vh;
     overflow: visible;
 }
@@ -12,9 +12,9 @@
    the score chips: ::after paints the elliptical top face, ::before the
    cylindrical edge below it, so the pucks lie on the felt like the chips. */
 .player-seat-wrapper .seat-puck {
-    --puck-d: 3.9vh;         /* face ellipse width */
-    --puck-face-h: 2.3vh;    /* face ellipse height (foreshortened) */
-    --puck-thick: 0.48vh;    /* visible edge thickness */
+    --puck-d: 5.1vh;         /* face ellipse width */
+    --puck-face-h: 3.0vh;    /* face ellipse height (foreshortened) */
+    --puck-thick: 0.62vh;    /* visible edge thickness */
     position: absolute;
     width: var(--puck-d);
     height: calc(var(--puck-face-h) + var(--puck-thick));
@@ -69,7 +69,7 @@
     line-height: var(--puck-face-h);
     text-align: center;
     font-family: 'Oswald', sans-serif;
-    font-size: 1.5vh;
+    font-size: 1.95vh;
     font-weight: 700;
     text-shadow: 0 0.08vh 0.12vh rgba(0, 0, 0, 0.7);
 }
@@ -80,8 +80,8 @@
     z-index: 2;
     top: calc(var(--puck-face-h) / 2);
     left: 50%;
-    width: 2.9vh;
-    height: 2.9vh;
+    width: 3.8vh;
+    height: 3.8vh;
     object-fit: contain;
     transform: translate(-50%, -50%) scaleY(0.72);
     filter: drop-shadow(0.1vh 0.1vh 0.2vh rgba(0, 0, 0, 0.5));
@@ -90,21 +90,21 @@
 /* Dealer puck — dark button, anchored flush inside the lower-left plaque
    corner: the chip bank owns the top edge, the pucks own the bottom. */
 .dealer-puck-ear {
-    --puck-base: #2c2c31;
-    --puck-hi: #4a4a52;
-    --puck-edge: #0c0c0e;
-    --puck-side: #46464e;
+    --puck-base: #55555f;
+    --puck-hi: #8b8b98;
+    --puck-edge: #d8d8e2;
+    --puck-side: #6d6d78;
     bottom: 0.1vh;
-    left: 1.95vh;
+    left: 2.55vh;
     transform: translateX(-50%);
-    color: #f0f0f0;
+    color: #ffffff;
 }
 
 /* Bidder/Trump puck — gold button flush inside the lower-right corner */
 .bidder-puck-ear {
     position: absolute;
     bottom: 0.1vh;
-    right: 1.95vh;
+    right: 2.55vh;
     transform: translateX(50%);
 }
 
@@ -176,9 +176,9 @@
         inset 0 0.09vh 0 rgba(255, 255, 255, 0.9),
         inset 0 -0.12vh 0.28vh rgba(91, 61, 24, 0.16),
         0 calc(7vh * 0.035) calc(7vh * 0.085) rgba(0, 0, 0, 0.3);
-    width: calc(7vh * 2.5); /* Width = height * 2.5 aspect ratio = 17.5vh */
-    max-width: calc(7vh * 2.5); /* Prevent expansion */
-    min-width: calc(7vh * 2.5); /* Consistent size */
+    width: calc(7vh * 3.05); /* Width = height * 3.05 aspect ratio = 21.35vh */
+    max-width: calc(7vh * 3.05); /* Prevent expansion */
+    min-width: calc(7vh * 3.05); /* Consistent size */
     height: 7vh; /* Fixed height */
     max-height: 7vh; /* Prevent expansion */
     min-height: 7vh; /* Consistent size */
@@ -198,7 +198,7 @@
     z-index: 2;
     font-weight: 700;
     font-size: calc(7vh * 0.29);
-    letter-spacing: 0.025em;
+    letter-spacing: 0.005em;
     color: #332719;
     text-shadow: 0 0.07vh 0 rgba(255, 255, 255, 0.95);
     display: flex;
@@ -336,12 +336,12 @@
 .puck {
     position: absolute;
     border-radius: 50%;
-    width: calc(7vh * 0.32); /* 32% of seat height = 2.24vh */
-    height: calc(7vh * 0.32); /* 32% of seat height = 2.24vh */
+    width: calc(7vh * 0.42); /* 42% of seat height = 2.94vh */
+    height: calc(7vh * 0.42); /* 42% of seat height = 2.94vh */
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: calc(7vh * 0.17); /* 17% of seat height = 1.19vh */
+    font-size: calc(7vh * 0.23); /* 23% of seat height = 1.61vh */
     font-weight: bold;
     border: 0.1vh solid black;
     z-index: 25; /* Higher z-index to stay visible */
@@ -360,9 +360,9 @@
     color: #2c1810;
     font-weight: bold;
     box-shadow: 0 calc(7vh * 0.043) calc(7vh * 0.114) rgba(0, 0, 0, 0.3);
-    width: calc(7vh * 0.64); /* 64% of seat height = 4.48vh */
-    height: calc(7vh * 0.64); /* 64% of seat height = 4.48vh */
-    font-size: calc(7vh * 0.36); /* 36% of seat height = 2.52vh */
+    width: calc(7vh * 0.82); /* 82% of seat height = 5.74vh */
+    height: calc(7vh * 0.82); /* 82% of seat height = 5.74vh */
+    font-size: calc(7vh * 0.46); /* 46% of seat height = 3.22vh */
     border-radius: 0.8vh;
 }
 
