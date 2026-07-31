@@ -68,7 +68,8 @@ const ActionControls = ({
     renderCard,
     isAdmin,
     quickPlayDecisionRejectionNonce = 0,
-    turnNudgeLevel = 0
+    turnNudgeLevel = 0,
+    turnNudgeCountdown = null
 }) => {
     const [inviteCopied, setInviteCopied] = useState(false);
     const [quickPlayDecisionSubmitted, setQuickPlayDecisionSubmitted] = useState(false);
@@ -348,7 +349,12 @@ const ActionControls = ({
                     : -1;
                 return (
                     <PromptShell variant="choice" label="Bidding controls" nudge={turnNudgeLevel}>
-                        <h2 className="action-prompt__heading">Choose your bid</h2>
+                        <h2 className="action-prompt__heading">
+                            Choose your bid
+                            {turnNudgeLevel > 0 && Number.isFinite(turnNudgeCountdown) && turnNudgeCountdown <= 20 && (
+                                <span className="action-prompt__countdown"> · {Math.max(turnNudgeCountdown, 0)}s</span>
+                            )}
+                        </h2>
                         <div className="action-prompt__button-grid action-prompt__button-grid--bids">
                             {BID_HIERARCHY.map(bid => (
                                 <button

@@ -242,3 +242,9 @@
         transition: none !important;
     }
 }
+
+/* Seconds until the AFK backstop passes for an idle bidder. */
+.action-prompt__countdown {
+    color: #ffb46b;
+    font-variant-numeric: tabular-nums;
+}

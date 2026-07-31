@@ -10,6 +10,7 @@ const {
     ROUND_PRESENTATION_ACK_GRACE_MS,
 } = require('./constants');
 const BotPlayer = require('./BotPlayer');
+const { deadlineFor: afkDeadlineFor } = require('./afkTurnTimer');
 const { shuffle } = require('../utils/shuffle');
 const playHandler = require('./handlers/playHandler');
 const scoringHandler = require('./handlers/scoringHandler');
@@ -1222,6 +1223,15 @@ class GameEngine {
             // Public per-round recap for the podium (names/points only).
             roundHistory: this.roundHistory || [],
         };
+        // When the AFK backstop is armed for the player on turn, clients get
+        // the deadline (server epoch ms) plus the window length, so the nudge
+        // can count down instead of the auto-play landing as a surprise.
+        state.afkDeadline = Number.isFinite(this.afkTimeoutMs)
+            ? afkDeadlineFor(this, { timeoutMs: this.afkTimeoutMs })
+            : null;
+        state.afkTimeoutSeconds = Number.isFinite(this.afkTimeoutMs)
+            ? Math.round(this.afkTimeoutMs / 1000)
+            : null;
         state.biddingTurnPlayerName = this.players[this.biddingTurnPlayerId]?.playerName;
         state.trickTurnPlayerName = this.players[this.trickTurnPlayerId]?.playerName;
         return state;

@@ -51,14 +51,19 @@ const TurnNudge = ({ level = 0, kind, team }) => {
  * words "your move" — the table has always announced whose turn it is by
  * omission ("Brandi is bidding…") and never by naming yours.
  */
-export const TurnBeacon = ({ level = 0 }) => {
+export const TurnBeacon = ({ level = 0, countdown = null }) => {
     if (!level) return null;
+    // The countdown appears only near the deadline: a full-window number reads
+    // as a shot clock, which is more pressure than a nudge should apply. Near
+    // zero it flips to warning the player what is about to happen, because an
+    // auto-play that was never announced reads as the game moving your cards.
+    const showCountdown = Number.isFinite(countdown) && countdown <= 20;
     return (
         <span
             className={`turn-nudge-beacon ${level >= 2 ? 'turn-nudge-beacon--urgent' : ''}`}
             aria-hidden="true"
         >
-            Your move
+            {showCountdown ? `Your move · ${Math.max(countdown, 0)}s` : 'Your move'}
         </span>
     );
 };

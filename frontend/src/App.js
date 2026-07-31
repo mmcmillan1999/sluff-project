@@ -17,6 +17,8 @@ import LobbyHeader from "./components/LobbyHeader.js";
 import GameHeader from "./components/GameHeader.js";
 import HowToPlayModal from "./components/HowToPlayModal.js";
 import AccountSettingsModal from "./components/AccountSettingsModal.js";
+import PrivacyPolicy from "./components/legal/PrivacyPolicy.js";
+import TermsOfService from "./components/legal/TermsOfService.js";
 import FirstGameWelcome, { shouldShowFirstGameWelcome } from "./components/FirstGameWelcome.js";
 import OrientationScrim from "./components/OrientationScrim.js";
 import SluffIdent from "./components/SluffIdent.js";
@@ -72,6 +74,16 @@ function App() {
     const [showFeedbackModal, setShowFeedbackModal] = useState(false);
     const [showHowToPlay, setShowHowToPlay] = useState(false);
     const [showAccountSettings, setShowAccountSettings] = useState(false);
+    // /privacy and /terms used to render only for logged-out visitors — once
+    // signed in, those paths fell through to the lobby and the documents were
+    // unreachable. Store reviewers check exactly this. Path-driven state so a
+    // signed-in deep link works, plus lobby menu entries.
+    const legalPageFromPath = () => (
+        ['/privacy', '/terms'].includes(window.location.pathname)
+            ? window.location.pathname.slice(1)
+            : null
+    );
+    const [legalPage, setLegalPage] = useState(legalPageFromPath);
     const [feedbackGameContext, setFeedbackGameContext] = useState(null);
     const [socketSessionReady, setSocketSessionReady] = useState(false);
     const [welcomeDelayElapsed, setWelcomeDelayElapsed] = useState(false);
@@ -107,6 +119,23 @@ function App() {
         setToken(localStorage.getItem("sluff_token"));
         setUser(currentUser => (currentUser ? { ...currentUser, username } : currentUser));
         if (socket.connected) socket.emit("requestUserSync");
+    }, []);
+
+    const handleShowLegalPage = useCallback((page) => {
+        window.history.pushState({}, '', `/${page}`);
+        setLegalPage(page);
+    }, []);
+
+    const handleCloseLegalPage = useCallback(() => {
+        window.history.pushState({}, '', '/');
+        setLegalPage(null);
+    }, []);
+
+    useEffect(() => {
+        const onPopState = () => setLegalPage(legalPageFromPath());
+        window.addEventListener('popstate', onPopState);
+        return () => window.removeEventListener('popstate', onPopState);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const handleAccountDeleted = useCallback(() => {
@@ -277,6 +306,12 @@ function App() {
             // device repoints the rest, and a deletion signs them out.
             const onIdentityChanged = () => socket.emit('requestUserSync');
             const onAccountDeleted = () => handleLogout();
+            // A deploy is about to drop this socket; saying so first makes the
+            // disconnect read as an update rather than a mystery.
+            const onServerRestarting = () => {
+                if (connectionNoticeTimerRef.current) clearTimeout(connectionNoticeTimerRef.current);
+                setConnectionNotice({ kind: 'reconnecting', message: 'Sluff is updating — back in a moment…' });
+            };
 
             socket.on('connect', onConnect);
             socket.on('disconnect', onDisconnect);
@@ -295,6 +330,7 @@ function App() {
             socket.on('tokenBalanceChanged', onTokenBalanceChanged);
             socket.on('identityChanged', onIdentityChanged);
             socket.on('accountDeleted', onAccountDeleted);
+            socket.on('serverRestarting', onServerRestarting);
 
             return () => {
                 socket.off('connect', onConnect);
@@ -314,6 +350,7 @@ function App() {
                 socket.off('tokenBalanceChanged', onTokenBalanceChanged);
                 socket.off('identityChanged', onIdentityChanged);
                 socket.off('accountDeleted', onAccountDeleted);
+                socket.off('serverRestarting', onServerRestarting);
                 if (errorMessageTimerRef.current) clearTimeout(errorMessageTimerRef.current);
                 if (connectionNoticeTimerRef.current) clearTimeout(connectionNoticeTimerRef.current);
             };
@@ -610,6 +647,21 @@ function App() {
                         ? handleStartGuidedTutorial
                         : undefined}
                 />
+                {legalPage && (
+                    <div className="legal-overlay">
+                        {legalPage === 'terms'
+                            ? <TermsOfService onNavigate={(view) => (
+                                view === 'privacy' || view === 'terms'
+                                    ? handleShowLegalPage(view)
+                                    : handleCloseLegalPage()
+                            )} />
+                            : <PrivacyPolicy onNavigate={(view) => (
+                                view === 'privacy' || view === 'terms'
+                                    ? handleShowLegalPage(view)
+                                    : handleCloseLegalPage()
+                            )} />}
+                    </div>
+                )}
                 <AccountSettingsModal
                     show={showAccountSettings}
                     user={user}
@@ -628,7 +680,7 @@ function App() {
                 {(() => {
                     switch (view) {
                         case 'lobby':
-                            return <LobbyView user={user} lobbyThemes={lobbyThemes} serverVersion={serverVersion} handleJoinTable={handleJoinTable} handleQuickPlay={handleQuickPlay} handleJoinTableAsSpectator={handleJoinTableAsSpectator} handleLogout={handleLogout} handleRequestFreeToken={handleRequestFreeToken} handleShowLeaderboard={() => setView('leaderboard')} handleShowSeasonRecaps={() => setView('seasonRecaps')} handleShowTokenLedger={() => setView('tokenLedger')} handleShowBulletin={() => setView('bulletin')} handleShowAdmin={handleShowAdmin} handleShowFeedback={() => setView('feedback')} handleShowHowToPlay={handleShowHowToPlay} handleResetTutorial={handleResetTutorial} handleShowAccountSettings={() => setShowAccountSettings(true)} errorMessage={errorMessage} socket={socket} soundSettings={soundSettings} />;
+                            return <LobbyView user={user} lobbyThemes={lobbyThemes} serverVersion={serverVersion} handleJoinTable={handleJoinTable} handleQuickPlay={handleQuickPlay} handleJoinTableAsSpectator={handleJoinTableAsSpectator} handleLogout={handleLogout} handleRequestFreeToken={handleRequestFreeToken} handleShowLeaderboard={() => setView('leaderboard')} handleShowSeasonRecaps={() => setView('seasonRecaps')} handleShowTokenLedger={() => setView('tokenLedger')} handleShowBulletin={() => setView('bulletin')} handleShowAdmin={handleShowAdmin} handleShowFeedback={() => setView('feedback')} handleShowHowToPlay={handleShowHowToPlay} handleResetTutorial={handleResetTutorial} handleShowAccountSettings={() => setShowAccountSettings(true)} handleShowPrivacy={() => handleShowLegalPage('privacy')} handleShowTerms={() => handleShowLegalPage('terms')} errorMessage={errorMessage} socket={socket} soundSettings={soundSettings} />;
                         case 'gameTable':
                             return currentTableState ? <GameTableView user={user} playerId={user.id} currentTableState={currentTableState} handleLeaveTable={handleLeaveTable} handleLogout={handleLogout} handleShowHowToPlay={handleShowHowToPlay} errorMessage={errorMessage} emitEvent={emitEvent} playSound={playSound} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} soundSettings={soundSettings} tutorialState={{ tutorialVersion: Number(user.tutorial_version) || 0, activeVersion: Number(user.tutorial_active_version) || 0, gamesPlayed: Number(user.games_played) || 0 }} onTutorialAction={handleTutorialAction} onShowTokenLedger={() => setView('tokenLedger')} /> : <div>Loading table...</div>;
                         case 'leaderboard':

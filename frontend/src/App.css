@@ -171,3 +171,15 @@ li {
   font-size: 2vh;
   margin: 0.6vh 0;
 }
+
+/* Signed-in overlay for /privacy and /terms. The legal components are full
+   pages already; this just floats them above the app so a live game or lobby
+   stays mounted underneath. */
+.legal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483300;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: #101412;
+}

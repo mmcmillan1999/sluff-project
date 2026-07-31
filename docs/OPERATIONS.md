@@ -33,6 +33,13 @@ The "where is everything" file. Update this whenever an account, plan, or URL ch
 - Prefer setting `SLUFF_BACKUP_DIR` to an access-restricted, encrypted location outside the repository. Backups contain account and application data and must never be committed.
 - Set a calendar reminder: review Render + Squarespace + SendGrid billing every 6 months.
 
+## Crash reports
+
+Client crashes land in the `client_errors` table via `POST /api/errors` —
+first-party, anonymous (message, stack, URL, build id; never an account id).
+Review the latest 100 as an admin: `GET /api/errors`. The table trims itself at
+boot to 30 days / 5,000 rows, so it cannot quietly bloat the database.
+
 ## Low-activity account cleanup
 
 The maintenance command counts games as `wins + losses + washes` and protects

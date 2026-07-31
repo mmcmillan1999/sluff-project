@@ -46,7 +46,9 @@ const PlayerHand = ({
     selectedDiscards,
     onSelectDiscard,
     // Turn call-up level for hand-owned decisions: 0 calm, 1 nudge, 2 urgent.
-    nudgeLevel = 0
+    nudgeLevel = 0,
+    // Seconds until the AFK backstop plays for this player, or null.
+    nudgeCountdown = null
 }) => {
     // Use local state only if not provided from parent
     const [localSelectedDiscards, setLocalSelectedDiscards] = useState([]);
@@ -808,7 +810,7 @@ const PlayerHand = ({
                     />
                 )}
                 {isMyTurnToPlay && !dragState.isDragging && !fastFlight && (
-                    <TurnBeacon level={nudgeLevel} />
+                    <TurnBeacon level={nudgeLevel} countdown={nudgeCountdown} />
                 )}
                 {myHandToDisplay.map((card, index) => {
                     const isLegal = isMyTurnToPlay && legalMoves.includes(card);

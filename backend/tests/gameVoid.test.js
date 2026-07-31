@@ -167,6 +167,15 @@ function createVoidPool(state = baseState()) {
                             })) };
                     }
 
+                    // Replay-path alias lookup: no lock, previous_usernames included.
+                    if (sql.startsWith('SELECT id, username') && sql.includes('FROM users') && !sql.includes('FOR UPDATE')) {
+                        const ids = params[0];
+                        return { rows: ids.filter(id => state.users.has(id)).map(id => ({
+                            id,
+                            username: state.users.get(id).username,
+                            previous_usernames: state.users.get(id).previousUsernames || [],
+                        })) };
+                    }
                     if (sql.startsWith('SELECT id, username') && sql.includes('FROM users') && sql.includes('FOR UPDATE')) {
                         const ids = params[0];
                         return { rows: ids.filter(id => state.users.has(id)).map(id => ({
@@ -708,9 +717,66 @@ async function testAuthenticatedEndpointAndAttestation() {
     }
 }
 
+async function testRenamedPlayerCanStillReplayTheirVoid() {
+    // Rename between game end and void: the outcome froze "Player1", the
+    // manifest freezes the name held at VOID time. Before the alias fix the
+    // replay compared snapshot to outcome and failed forever — an idempotent
+    // retry (flaky network, double tap) surfaced as "requires administrator
+    // review" on a void that had already committed correctly.
+    const pool = createVoidPool();
+    const renamed = pool.state.users.get(1);
+    renamed.username = 'BrandNewOne';
+    renamed.previousUsernames = ['Player1'];
+
+    const first = await voidGame(pool, {
+        gameId: 44,
+        requester: { id: 3, username: 'Player3' },
+        attestation: 'scouts_honor',
+    });
+    assert.equal(first.alreadyVoided, false, 'the void itself commits via the write-path aliases');
+    assert.equal(
+        pool.state.manifestRows.some(row => row.source_username_snapshot === 'BrandNewOne'),
+        true,
+        'the manifest froze the post-rename name, which is the mismatch under test',
+    );
+
+    const replay = await voidGame(pool, {
+        gameId: 44,
+        requester: { id: 3, username: 'Player3' },
+        attestation: 'scouts_honor',
+    });
+    assert.equal(replay.alreadyVoided, true, 'the committed void replays despite the rename');
+
+    // A second rename AFTER the void must not break it either.
+    renamed.username = 'EvenNewerOne';
+    renamed.previousUsernames = ['BrandNewOne', 'Player1'];
+    const replayAgain = await voidGame(pool, {
+        gameId: 44,
+        requester: { id: 3, username: 'Player3' },
+        attestation: 'scouts_honor',
+    });
+    assert.equal(replayAgain.alreadyVoided, true, 'replays keep working through further renames');
+
+    // A NON-winner participant deleting their account must not orphan the
+    // replay: their name never appears in the outcome text, so the manifest
+    // snapshots carry the check without live aliases. (Known limit, on purpose:
+    // if the renamed WINNER deletes, their old name survives nowhere — not the
+    // manifest, not the users table — and the replay correctly refuses rather
+    // than guessing. Aliases widen recognition; they are never a requirement.)
+    pool.state.users.delete(2);
+    const replayAfterDeletion = await voidGame(pool, {
+        gameId: 44,
+        requester: { id: 3, username: 'Player3' },
+        attestation: 'scouts_honor',
+    });
+    assert.equal(replayAfterDeletion.alreadyVoided, true, 'a deleted non-winner does not orphan the replay');
+    console.log('  renamed participants can still replay a committed void');
+}
+
 async function runGameVoidTests() {
     testStatDerivationAndAmbiguousLedgers();
     await testAtomicNormalVoidAndIdempotentRetry();
+    await testRenamedPlayerCanStillReplayTheirVoid();
     await testAuthorizationAndEligibilityFailures();
     await testFailedWriteRollsBackEverything();
     await testLedgerMustMatchAfterUserLocks();

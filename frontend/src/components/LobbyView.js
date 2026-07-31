@@ -32,7 +32,7 @@ export const deriveLobbyPlayerStats = (user = {}) => {
     };
 };
 
-const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQuickPlay, handleJoinTableAsSpectator, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowSeasonRecaps, handleShowTokenLedger, handleShowBulletin, handleShowAdmin, handleShowFeedback, handleShowHowToPlay, handleResetTutorial, handleShowAccountSettings, socket, soundSettings }) => {
+const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQuickPlay, handleJoinTableAsSpectator, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowSeasonRecaps, handleShowTokenLedger, handleShowBulletin, handleShowAdmin, handleShowFeedback, handleShowHowToPlay, handleResetTutorial, handleShowAccountSettings, handleShowPrivacy, handleShowTerms, socket, soundSettings }) => {
 
     const [activeTab, setActiveTab] = useState('');
     const [showMenu, setShowMenu] = useState(false);
@@ -67,11 +67,17 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
         const handleNewMessage = (newMessage) => {
             setChatMessages(prev => [...prev, newMessage]);
         };
+        // An admin hid it: drop it from every open pane now, not on reload.
+        const handleMessageHidden = ({ messageId }) => {
+            setChatMessages(prev => prev.filter(msg => msg.id !== messageId));
+        };
 
         socket.on('new_lobby_message', handleNewMessage);
+        socket.on('lobby_message_hidden', handleMessageHidden);
 
         return () => {
             socket.off('new_lobby_message', handleNewMessage);
+            socket.off('lobby_message_hidden', handleMessageHidden);
         };
     }, [socket]);
 
@@ -197,6 +203,8 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
             label: 'Account',
             actions: [
                 { id: 'account-settings', label: 'Account Settings', onSelect: handleShowAccountSettings },
+                { id: 'privacy', label: 'Privacy Policy', onSelect: handleShowPrivacy },
+                { id: 'terms', label: 'Terms of Service', onSelect: handleShowTerms },
                 ...(user?.is_admin ? [{
                     id: 'admin',
                     label: 'Admin Tools',

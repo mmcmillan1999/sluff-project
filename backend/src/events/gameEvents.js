@@ -5,6 +5,7 @@ const transactionManager = require('../data/transactionManager');
 const { authorizeTableAction, isPlainObject, validators } = require('./socketActionGuard');
 const { loadCurrentUserByTokenId } = require('../middleware/requireAuth');
 const { nextChangeAllowedAt } = require('../data/accountIdentity');
+const afkTurnTimer = require('../core/afkTurnTimer');
 const { playerProgressFields } = require('../services/tutorialProgress');
 
 const DEFAULT_SOCKET_AUTH_REFRESH_INTERVAL_MS = 60_000;
@@ -395,6 +396,12 @@ const registerGameHandlers = (io, gameService, options = {}) => {
             const engineToJoin = gameService.getEngineById(tableId);
             if (!engineToJoin) return socket.emit("error", { message: "Table not found." });
 
+            // A rename is committing for this account right now. Seating them
+            // mid-transaction would key the engine on the outgoing name.
+            if (gameService.isRenameInFlight?.(socket.user.id)) {
+                return socket.emit("error", { message: "One moment — your account is updating. Try again." });
+            }
+
             try {
                 const joined = await seatUserAtTable(engineToJoin, asSpectator);
                 if (!joined) return;
@@ -568,7 +575,35 @@ const registerGameHandlers = (io, gameService, options = {}) => {
         // Seated players join voice with the table. The joiner initiates
         // WebRTC offers to everyone already present; the server never sees
         // or stores audio.
-        onTableAction("voiceJoin", {}, ({ engine }) => {
+        // A throttled sign-of-life from the player on turn. The AFK backstop
+        // watches for a player who has STOPPED interacting, but the server can
+        // only see completed actions — this ping is how "still thinking" stays
+        // distinguishable from "phone face-down". Only the pending player can
+        // extend their own clock, and an extension is not a broadcastable event.
+        onTableAction("turnActivity", {}, ({ engine }) => {
+            afkTurnTimer.refresh(engine, socket.user.id);
+        });
+
+        onTableAction("voiceJoin", {}, async ({ engine }) => {
+            // A chat mute is a conduct sanction, and voice is the louder
+            // channel — "suspended chat access" has to mean voice too, or the
+            // sanction just moves the behaviour somewhere less moderated.
+            // Listening is unaffected; posting and speaking are what pause.
+            try {
+                const muteCheck = await gameService.pool.query(
+                    'SELECT chat_muted_until FROM users WHERE id = $1',
+                    [socket.user.id],
+                );
+                const mutedUntil = muteCheck.rows?.[0]?.chat_muted_until;
+                if (mutedUntil && new Date(mutedUntil).getTime() > Date.now()) {
+                    socket.emit('error', { message: 'Voice chat is unavailable while your chat access is suspended.' });
+                    return;
+                }
+            } catch (muteError) {
+                // Fail open for voice: a transient DB blip must not silence a
+                // table. The POST /api/chat gate still enforces the text mute.
+                console.error('[VOICE] Mute check failed:', muteError.message);
+            }
             pruneVoiceRoom(engine.tableId, engine);
             const room = voiceRoomFor(engine.tableId);
             const peers = [...room.entries()]

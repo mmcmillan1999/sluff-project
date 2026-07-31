@@ -55,7 +55,8 @@ const TableLayout = ({
     dealCardsRemaining = 36,
     suppressActionControls = false,
     onPlayerProfile,
-    turnNudgeLevel = 0
+    turnNudgeLevel = 0,
+    turnNudgeCountdown = null
 }) => {
     const tableThemeId = getThemePresentation(currentTableState?.theme).id;
     const [lastTrickVisible, setLastTrickVisible] = useState(false);
@@ -1004,6 +1005,25 @@ const TableLayout = ({
 
                 {renderPlayedCardsOnTable()}
                 {renderCardDropZones()}
+
+                {/* Compact tricks/points readout for portrait phones. The
+                    footer HUD (.round-status-hud) is display:none under 850px,
+                    which meant phone players never saw the trick count or the
+                    bidder's points at all — the two numbers that say how the
+                    round is going. Bottom-left felt is empty at every phone
+                    size (verified in zoomlab); desktop keeps the footer HUD
+                    and hides this one. */}
+                {['Playing Phase', 'TrickCompleteLinger'].includes(currentTableState.state)
+                    && currentTableState.bidWinnerInfo && (
+                    <div
+                        className="mobile-status-hud"
+                        aria-hidden="true"
+                        title={`${currentTableState.bidWinnerInfo.playerName}: ${currentTableState.bidderCardPoints || 0} of 60 card points; ${currentTableState.tricksPlayedCount || 0} of 11 tricks complete`}
+                    >
+                        <span className="mobile-status-line">Tricks {currentTableState.tricksPlayedCount || 0}/11</span>
+                        <span className="mobile-status-line mobile-status-bid">Bid {currentTableState.bidderCardPoints || 0}/60</span>
+                    </div>
+                )}
                 
                 {/* Pucks are now rendered as "ears" on PlayerSeat components */}
                 
@@ -1020,6 +1040,7 @@ const TableLayout = ({
                         quickPlayDecisionRejectionNonce={quickPlayDecisionRejectionNonce}
                         roundPresentationComplete={roundPresentationComplete}
                         turnNudgeLevel={turnNudgeLevel}
+                        turnNudgeCountdown={turnNudgeCountdown}
                     />
                 )}
             </div>

@@ -152,10 +152,12 @@ analytics, and no third-party login.
 | Contact info | Email address, linked to identity, for account management |
 | User content | Chat messages and support/feedback text, linked to identity |
 | Identifiers | Username only. No IDFA, no device identifier |
-| Diagnostics | None — there is no crash SDK |
+| Diagnostics | Crash data: **first-party**, anonymous, not linked to identity. No SDK — reports go to our own `/api/errors` (message, stack, URL, build id only; never an account id). Declare "Crash Data — not linked to you". |
 
 Nothing is collected for tracking, so **App Tracking Transparency does not
-apply** and no `NSUserTrackingUsageDescription` is needed.
+apply** and no `NSUserTrackingUsageDescription` is needed. The crash reports
+are the one Diagnostics declaration, and they are deliberately anonymous so it
+stays "not linked to you".
 
 ### Privacy policy URL
 
@@ -180,6 +182,8 @@ rejection.
 | UGC: report mechanism | 1.2 | **Done** — per message |
 | UGC: block mechanism | 1.2 | **Done** — per player |
 | UGC: published contact | 1.2 | **Done** — but confirm the inbox, see below |
+| Legal pages reachable signed-in | 1.2 / 5.1.1 | **Done** — lobby menu links + `/privacy` and `/terms` deep links work while signed in |
+| Crash visibility | quality | **Done** — first-party, anonymous; admin review at `GET /api/errors` |
 | Username validation | 1.2 | **Partial** — new names filtered; existing names never screened |
 | Age rating vs simulated gambling | 2.3.7 / regional | **Decision open** — see section 0 |
 | App icon 1024×1024 | assets | **Done** — vector masters in `frontend/resources`, `npm run assets` generates every size |
@@ -190,6 +194,9 @@ Two smaller items with open `TODO(owner)` markers in the source:
 
 - `support@playsluff.com` must actually receive mail
   (`frontend/src/components/legal/PrivacyPolicy.js`). Reviewers do test it.
+  The domain's MX records point at ImprovMX (mail forwarding), so the plumbing
+  exists — send a test mail to the address and confirm where it lands before
+  submitting.
 - Both legal pages still carry a "not yet reviewed by a lawyer" note.
 
 ---

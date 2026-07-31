@@ -220,9 +220,32 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             ? { pattern: [30, 70, 30, 70, 30], nativeStyle: 'Heavy', nativeTaps: 3 }
             : { pattern: [18, 90, 18], nativeStyle: 'Medium', nativeTaps: 2 });
     }, [playSound]);
-    const turnNudgeLevel = useTurnNudge({
+    const handleTurnActivity = useCallback(() => {
+        // Throttled by the hook. Tells the server this player is interacting,
+        // so the AFK backstop counts idle time rather than thinking time.
+        emitEvent('turnActivity');
+    }, [emitEvent]);
+    // Server clock skew: afkDeadline is server-epoch ms, and phones drift.
+    const serverOffsetRef = useRef(0);
+    const observedServerTime = Number(currentTableState?.serverTime);
+    useEffect(() => {
+        if (Number.isFinite(observedServerTime) && observedServerTime > 0) {
+            serverOffsetRef.current = observedServerTime - Date.now();
+        }
+    }, [observedServerTime]);
+    const rawAfkDeadline = Number(currentTableState?.afkDeadline);
+    const afkDeadlineLocal = Number.isFinite(rawAfkDeadline) && rawAfkDeadline > 0
+        ? rawAfkDeadline - serverOffsetRef.current
+        : null;
+    const afkTimeoutSecondsRaw = Number(currentTableState?.afkTimeoutSeconds);
+    const { level: turnNudgeLevel, afkSecondsLeft: turnNudgeCountdown } = useTurnNudge({
         actionKey: turnNudgeKey,
-        onEscalate: handleTurnEscalation
+        onEscalate: handleTurnEscalation,
+        onActivity: handleTurnActivity,
+        afkDeadline: afkDeadlineLocal,
+        afkTimeoutMs: Number.isFinite(afkTimeoutSecondsRaw) && afkTimeoutSecondsRaw > 0
+            ? afkTimeoutSecondsRaw * 1000
+            : null,
     });
     // Colour the rim with the player's own team so it reads as "you", not
     // "someone". Before the bid is settled there is no team, and it stays gold.
@@ -551,13 +574,19 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             setQuickPlayDecisionRejectionNonce(value => value + 1);
         };
 
+        // An admin hid it: drop it from every open pane now, not on reload.
+        const handleMessageHidden = ({ messageId }) => {
+            setChatMessages(prev => prev.filter(msg => msg.id !== messageId));
+        };
         socket.on('new_lobby_message', handleNewChatMessage);
+        socket.on('lobby_message_hidden', handleMessageHidden);
         socket.on('error', handlePlayerError);
         socket.on('drawDeclined', handleDrawDeclined);
         socket.on('quickPlayDecisionRejected', handleQuickPlayDecisionRejected);
 
         return () => {
             socket.off('new_lobby_message', handleNewChatMessage);
+            socket.off('lobby_message_hidden', handleMessageHidden);
             socket.off('error', handlePlayerError);
             socket.off('drawDeclined', handleDrawDeclined);
             socket.off('quickPlayDecisionRejected', handleQuickPlayDecisionRejected);
@@ -1563,6 +1592,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 suppressActionControls={dealPresentation.active}
                 onPlayerProfile={setProfilePlayerName}
                 turnNudgeLevel={promptNudgeLevel}
+                turnNudgeCountdown={promptNudgeLevel > 0 ? turnNudgeCountdown : null}
             />
 
             <TutorialCoach
@@ -1602,6 +1632,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                     onSelectDiscard={handleFrogDiscardSelect}
                     showDebug={false}
                     nudgeLevel={handNudgeLevel}
+                    nudgeCountdown={handNudgeLevel > 0 ? turnNudgeCountdown : null}
                 />
                 <div className="footer-controls-wrapper">
                     {['Playing Phase', 'TrickCompleteLinger'].includes(currentTableState.state) && currentTableState.bidWinnerInfo && (

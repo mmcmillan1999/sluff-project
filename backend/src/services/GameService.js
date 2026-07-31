@@ -539,6 +539,25 @@
             return false;
         }
 
+        // A rename is check-then-commit: the route verifies the player is not
+        // seated, then runs a multi-statement transaction. A join landing in
+        // that window would seat the OLD name and orphan every name-keyed
+        // structure the moment the rename commits. This in-process hold lets
+        // the join paths refuse for the few milliseconds the window is open —
+        // same-process is sufficient because seating and renames both live in
+        // this one Node process.
+        holdRenameFor(userId) {
+            const id = Number(userId);
+            if (!(this.renamesInFlight instanceof Set)) this.renamesInFlight = new Set();
+            this.renamesInFlight.add(id);
+            return () => { this.renamesInFlight.delete(id); };
+        }
+
+        isRenameInFlight(userId) {
+            return this.renamesInFlight instanceof Set
+                && this.renamesInFlight.has(Number(userId));
+        }
+
         // True while this account holds a seat at any live table. A rename would
         // orphan the player-name keys the engine uses for scores, hands, and
         // turn order, so the rename route refuses while this is true.
@@ -575,6 +594,9 @@
         // Intentionally synchronous: callers finish balance/auth I/O first,
         // then select and mutate the target table in one JavaScript turn.
         claimQuickPlaySeat(themeId, user, socketId, tokens) {
+            // Mid-rename, this user's name is changing under us; seating them
+            // now would key engine state on a name about to be false.
+            if (this.isRenameInFlight(user?.id)) return null;
             const existingEngine = Object.values(this.engines).find(engine => engine.players[user.id]);
             if (existingEngine?.tableType === 'quickplay'
                 && existingEngine.theme === themeId
@@ -1740,7 +1762,18 @@
             const engine = this.getEngineById(tableId);
             if (!engine) return;
 
+            // The serializer reads this to publish the deadline; engines are
+            // created and reset in several places, so stamping here keeps every
+            // generation covered.
+            engine.afkTimeoutMs = this.afkTimeoutMs;
+
+            const keyBefore = engine.afkWatch?.key ?? null;
             const decision = afkTurnTimer.evaluate(engine, { timeoutMs: this.afkTimeoutMs });
+            // Arming happens between action broadcasts, so without this push the
+            // client would never learn the deadline it is counting down to.
+            if (!decision && engine.afkWatch && engine.afkWatch.key !== keyBefore) {
+                this.emitGameState(tableId);
+            }
             if (!decision) return;
 
             try {

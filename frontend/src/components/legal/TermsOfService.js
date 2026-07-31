@@ -35,7 +35,6 @@ const TermsOfService = ({ onNavigate }) => {
                 </ul>
 
                 <h2>Age requirement</h2>
-                {/* TODO(owner): confirm the 13+ threshold is the right one before launch. */}
                 <p>
                     You must be at least 13 years old to play Sluff. If you&apos;re under 18,
                     you need permission from a parent or guardian.

@@ -391,9 +391,41 @@ async function testRenameDisabledWithoutTheIndex() {
     console.log('  renames refuse themselves when the uniqueness index is missing');
 }
 
+async function testRenameHoldBlocksSeating() {
+    // The rename route checks "not seated" and then runs a multi-statement
+    // transaction. A join landing inside that window seats the OLD name and
+    // orphans every name-keyed engine structure the instant the rename commits.
+    // The hold closes the window; seating paths refuse while it is up.
+    const GameService = require('../src/services/GameService');
+    const { createGameServiceWithoutHeartbeat } = require('./test-helpers');
+    const mockIo = { to: () => ({ emit: () => {} }), emit: () => {}, sockets: { sockets: new Map() } };
+    const mockPool = {
+        query: () => Promise.resolve({ rows: [], rowCount: 0 }),
+        connect: async () => ({ query: () => Promise.resolve({ rows: [], rowCount: 0 }), release() {} }),
+    };
+    const service = createGameServiceWithoutHeartbeat(GameService, mockIo, mockPool);
+
+    assert.equal(service.isRenameInFlight(7), false, 'no hold by default');
+    const release = service.holdRenameFor(7);
+    assert.equal(service.isRenameInFlight(7), true);
+    assert.equal(service.isRenameInFlight('7'), true, 'string ids normalise');
+    assert.equal(service.isRenameInFlight(8), false, 'other players are unaffected');
+
+    const seat = service.claimQuickPlaySeat('fort-creek', { id: 7, username: 'Mid Rename' }, 'sock', '8.00');
+    assert.equal(seat, null, 'quick play refuses a seat mid-rename');
+
+    release();
+    assert.equal(service.isRenameInFlight(7), false, 'the hold releases');
+    // Released twice must be harmless — the route calls it in a finally.
+    release();
+    assert.equal(service.isRenameInFlight(7), false);
+    console.log('  a rename in flight blocks seating until it releases');
+}
+
 async function run() {
     testUsernameValidation();
     testEveryBotNamePassesTheValidator();
+    await testRenameHoldBlocksSeating();
     testUsernameHistory();
     await testRenameHappyPath();
     await testRenameCooldown();

@@ -169,6 +169,11 @@ const createChatRoutes = (pool, io, jwt) => {
             if (Number(message.user_id) === Number(req.user.id)) {
                 return res.status(400).json({ message: 'You cannot report your own message.' });
             }
+            // System announcements ("X has logged on.") have no author to act
+            // against; letting them into the queue just buries real reports.
+            if (message.user_id == null) {
+                return res.status(400).json({ message: 'System messages cannot be reported.' });
+            }
 
             // The snapshot outlives an admin hiding the row or the author
             // deleting their account, so the report stays reviewable.

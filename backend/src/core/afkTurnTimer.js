@@ -134,6 +134,27 @@ function deadlineFor(engine, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
     return engine.afkWatch.since + timeoutMs;
 }
 
+/**
+ * The pending player showed signs of life — restart their clock.
+ *
+ * The timer's own doc says it exists for the player who has STOPPED touching
+ * the screen, but the server cannot see touches, only completed actions — so
+ * without this, "idle" silently meant "elapsed turn time" and a present player
+ * thinking through a hard trick got auto-played at 45s. That is exactly the
+ * feedback that came in: "the game plays itself for you." The client now sends
+ * a throttled activity ping while its owner is interacting, and only the
+ * player actually on turn can extend their own clock.
+ *
+ * @returns {boolean} whether the clock was extended
+ */
+function refresh(engine, userId, { now = Date.now() } = {}) {
+    const pending = pendingHumanAction(engine);
+    if (!pending || Number(pending.userId) !== Number(userId)) return false;
+    if (!engine.afkWatch || engine.afkWatch.key !== turnKey(engine, pending)) return false;
+    engine.afkWatch.since = now;
+    return true;
+}
+
 module.exports = {
     CARD_POINTS,
     DEFAULT_TIMEOUT_MS,
@@ -142,5 +163,6 @@ module.exports = {
     deadlineFor,
     evaluate,
     pendingHumanAction,
+    refresh,
     turnKey,
 };

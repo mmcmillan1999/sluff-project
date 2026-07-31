@@ -23,6 +23,7 @@ const createDbTables = require('./data/createTables');
 const { ensureBotAccounts } = require('./data/botAccounts');
 const createPingRoutes = require('./api/ping');
 const createMetricsRoutes = require('./api/metrics');
+const createErrorRoutes = require('./api/errors');
 const createBotInsuranceStatsRoutes = require('./api/botInsuranceStats');
 const {
     DEFAULT_GRACE_MS,
@@ -158,6 +159,7 @@ async function initializeApplication() {
     app.use('/api/tips', createTipsRoutes(pool, jwt));
     app.use('/api/ping', createPingRoutes());
     app.use('/api/metrics', createMetricsRoutes(pool, jwt));
+    app.use('/api/errors', createErrorRoutes(pool, jwt));
 
     app.get('/health', async (req, res) => {
         try {
@@ -202,8 +204,30 @@ async function initializeThenListen({
     });
 }
 
+// Render sends SIGTERM before replacing the instance, and until now the
+// process just died: sockets dropped mid-trick with no explanation, and the
+// games surfaced later as "Abandoned after server interruption". In-memory
+// engines cannot be saved on the way out, but the clients CAN be told what is
+// happening, so the drop reads as an update instead of a mystery. The refunds
+// stay abandonedGameRecovery's job on the next boot.
+function registerShutdownNotice() {
+    process.once('SIGTERM', () => {
+        console.log('[SHUTDOWN] SIGTERM received — notifying clients, exiting shortly.');
+        try {
+            io.emit('serverRestarting');
+        } catch (error) {
+            console.error('[SHUTDOWN] Failed to notify clients:', error.message);
+        }
+        // Long enough for the emit to flush, short enough that Render's kill
+        // window is never in play. Deliberately referenced: the timer IS the
+        // reason the process stays alive to flush.
+        setTimeout(() => process.exit(0), 1200);
+    });
+}
+
 async function startServer() {
     await initializeThenListen();
+    registerShutdownNotice();
     console.log(`Sluff Game Server running on port ${PORT}`);
 }
 

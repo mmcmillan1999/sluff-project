@@ -74,7 +74,9 @@ const createAdminRoutes = (pool, jwt, io = null, options = {}) => {
       return res.status(400).json({ error: 'A report id is required.' });
     }
     const hideMessage = req.body?.hideMessage === true;
-    const muteHours = Number(req.body?.muteHours) || 0;
+    // `Number(x) || 0` turned NaN into 0 and made the range guard dead code —
+    // a garbage muteHours must be refused, not silently treated as "no mute".
+    const muteHours = Number(req.body?.muteHours ?? 0);
     if (!Number.isFinite(muteHours) || muteHours < 0 || muteHours > 24 * 365) {
       return res.status(400).json({ error: 'Mute duration is out of range.' });
     }
@@ -122,6 +124,31 @@ const createAdminRoutes = (pool, jwt, io = null, options = {}) => {
 
       await client.query('COMMIT');
       open = false;
+
+      // The chat pane is long-lived: without this, a hidden message stays on
+      // every connected screen until that player happens to reload — which for
+      // the reporter looks like the report went nowhere.
+      if (hideMessage && report.message_id && io) {
+        try {
+          io.emit('lobby_message_hidden', { messageId: Number(report.message_id) });
+        } catch (emitError) {
+          console.error('[ADMIN] Failed to broadcast message hide:', emitError.message);
+        }
+      }
+      // Tell the muted player directly. Learning about a sanction only by
+      // having a post rejected reads as a bug, not as moderation.
+      if (muteHours > 0 && report.reported_user_id && io?.sockets?.sockets) {
+        const mutedId = Number(report.reported_user_id);
+        for (const memberSocket of io.sockets.sockets.values()) {
+          if (Number(memberSocket?.user?.id) !== mutedId) continue;
+          try {
+            memberSocket.emit('chatMuted', { hours: muteHours });
+          } catch (emitError) {
+            console.error('[ADMIN] Failed to notify muted player:', emitError.message);
+          }
+        }
+      }
+
       console.log(`[ADMIN] chat report ${reportId} resolved by ${req.user.username}`
         + `${hideMessage ? ' (message hidden)' : ''}${muteHours > 0 ? ` (muted ${muteHours}h)` : ''}`);
       return res.json({ resolved: true, hidden: hideMessage, muteHours });

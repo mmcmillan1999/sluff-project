@@ -37,7 +37,7 @@ const LobbyChat = ({ socket, messages = [], currentUserId }) => {
                 // from a blocked player would slip past until the next load.
             });
         return () => { cancelled = true; };
-    }, []);
+    }, [currentUserId]);
 
     // History arrives pre-filtered, but a live broadcast goes to everyone at
     // once, so the block list is applied again here.
@@ -51,6 +51,18 @@ const LobbyChat = ({ socket, messages = [], currentUserId }) => {
             chatLogRef.current.scrollTop = chatLogRef.current.scrollHeight;
         }
     }, [visibleMessages]);
+
+    // The admin muted this player: say so the moment it happens. Without this
+    // the only signal was a rejected post, which reads as a bug.
+    useEffect(() => {
+        if (!socket) return undefined;
+        const handleMuted = ({ hours }) => {
+            const label = Number(hours) === 1 ? '1 hour' : `${hours} hours`;
+            setSendError(`Your chat access is suspended for ${label}.`);
+        };
+        socket.on('chatMuted', handleMuted);
+        return () => socket.off('chatMuted', handleMuted);
+    }, [socket]);
 
     useEffect(() => {
         if (!notice) return undefined;

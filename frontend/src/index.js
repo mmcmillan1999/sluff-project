@@ -11,11 +11,15 @@ import './index.css';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import { initNative } from './utils/nativeInit';
+import { initErrorReporter } from './utils/errorReporter';
 import reportWebVitals from './utils/reportWebVitals';
 import './utils/logger'; // Silences console in production
 
 // Native (Capacitor) startup — no-ops on web.
 initNative();
+// First-party crash reporting: window.onerror + unhandledrejection. Dev is a
+// no-op; production posts anonymised reports to our own /api/errors.
+initErrorReporter();
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

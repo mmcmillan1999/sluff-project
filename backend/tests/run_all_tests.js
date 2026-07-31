@@ -25,6 +25,7 @@ const suites = [
     { name: 'chat moderation filter', file: './chatModeration.test.js' },
     { name: 'AFK turn timer', file: './afkTurnTimer.test.js' },
     { name: 'bid winner leads trick one', file: './bidWinnerLeads.test.js' },
+    { name: 'client crash-report intake', file: './clientErrors.test.js' },
     { name: 'inactive-user maintenance', file: './pruneInactiveUsers.test.js' },
     { name: 'database backup snapshot', file: './backupDatabase.test.js' },
     { name: 'abandoned-game crash recovery', file: './abandonedGameRecovery.test.js' },

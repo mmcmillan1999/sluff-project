@@ -1530,3 +1530,38 @@ button.card-display:disabled {
 .game-button.share-link-button {
     background-color: #0d6efd;
 }
+
+/* Phone-only round status: tricks played and the bidder's card points, the two
+   numbers that say how the round is going. Desktop gets the fuller footer HUD;
+   under 850px that is display:none and this stands in. */
+.mobile-status-hud {
+    position: absolute;
+    left: 1vh;
+    bottom: 1vh;
+    z-index: 6; /* below played cards, above the felt */
+    display: flex;
+    flex-direction: column;
+    gap: 0.15vh;
+    padding: 0.55vh 0.9vh;
+    background: rgba(12, 18, 14, 0.82);
+    border: 1px solid rgba(233, 201, 119, 0.32);
+    border-radius: 0.9vh;
+    pointer-events: none;
+}
+
+.mobile-status-line {
+    color: #efe7d2;
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(11px, 1.5vh, 15px);
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    line-height: 1.25;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.mobile-status-bid { color: #f6cf74; }
+
+@media (min-width: 850px) and (min-height: 600px) {
+    .mobile-status-hud { display: none; }
+}

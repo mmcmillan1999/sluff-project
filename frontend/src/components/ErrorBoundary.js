@@ -1,4 +1,5 @@
 import React from 'react';
+import { reportError } from '../utils/errorReporter';
 
 // App-wide error boundary: a single component crash should not white-screen the
 // whole app (especially inside a native WebView with no address bar to reload).
@@ -15,6 +16,9 @@ class ErrorBoundary extends React.Component {
     componentDidCatch(error, info) {
         // eslint-disable-next-line no-console
         console.error('[ErrorBoundary] Caught a render error:', error, info?.componentStack);
+        // A render crash is the one failure the player definitely saw — it is
+        // exactly what first-party crash reporting exists for.
+        reportError(error?.message || 'Render error', error?.stack || info?.componentStack);
     }
 
     handleReload = () => {

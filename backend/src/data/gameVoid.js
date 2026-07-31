@@ -307,7 +307,15 @@ function validateOutcomeIdentity(validated, outcome, userRows) {
     }
 }
 
-function validateVoidManifest(rows, audit, game) {
+// aliasesByUserId (optional): Map of userId -> { username, previous_usernames }
+// for the CURRENT user rows. The manifest froze each name as it was at void
+// time, but game_history.outcome froze it as it was at game END — and a player
+// can rename between the two, and again afterwards. Replaying an
+// already-committed void must therefore recognise a participant by any name
+// they have held, or the idempotent retry path fails forever for exactly the
+// players the rename feature was built for. Authority is unchanged: who may
+// void is decided by ledger user_ids, never by these strings.
+function validateVoidManifest(rows, audit, game, aliasesByUserId = null) {
     const expectedSourceCount = Number(audit?.source_transaction_count);
     const expectedReversalCount = Number(audit?.reversal_transaction_count);
     const expectedPlayerCount = Number(audit?.affected_player_count);
@@ -363,7 +371,17 @@ function validateVoidManifest(rows, audit, game) {
     validateOutcomeIdentity(
         validated,
         game.outcome,
-        [...userNames].map(([id, username]) => ({ id, username })),
+        [...userNames].map(([id, username]) => {
+            const live = aliasesByUserId?.get(id);
+            const previous = [];
+            if (live) {
+                if (typeof live.username === 'string' && live.username) previous.push(live.username);
+                for (const name of live.previous_usernames || []) previous.push(name);
+            }
+            // The manifest snapshot stays the primary name; the live account's
+            // current and former names widen what the outcome may call them.
+            return { id, username, previous_usernames: previous };
+        }),
     );
     return [...userNames.keys()].sort((left, right) => left - right);
 }
@@ -498,7 +516,22 @@ async function voidGame(pool, { gameId: rawGameId, requester: rawRequester, atte
                  ORDER BY source_transaction_id_snapshot DESC`,
                 [gameId],
             );
-            const affectedUserIds = validateVoidManifest(manifestResult.rows || [], existingVoid, game);
+            // Current names and rename history for everyone in the manifest, so
+            // a participant who renamed since the void (or since the game) still
+            // matches the outcome text. Missing rows (deleted accounts) simply
+            // contribute no extra aliases — the snapshots still carry the check.
+            const manifestUserIds = [...new Set((manifestResult.rows || [])
+                .map(row => Number(row.source_user_id_snapshot))
+                .filter(Number.isSafeInteger))];
+            const aliasResult = manifestUserIds.length > 0
+                ? await client.query(
+                    `SELECT id, username, COALESCE(previous_usernames, ARRAY[]::text[]) AS previous_usernames
+                     FROM users WHERE id = ANY($1::int[])`,
+                    [manifestUserIds],
+                )
+                : { rows: [] };
+            const aliasesByUserId = new Map(aliasResult.rows.map(row => [Number(row.id), row]));
+            const affectedUserIds = validateVoidManifest(manifestResult.rows || [], existingVoid, game, aliasesByUserId);
             const balance = await currentBalanceCents(client, requester.id);
             await client.query('COMMIT');
             transactionOpen = false;

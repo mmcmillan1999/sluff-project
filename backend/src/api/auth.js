@@ -75,10 +75,13 @@ function publicUserProfile(user, tokens) {
     };
 }
 
-// After a rename, every live socket for the account still carries the old
-// name in socket.user and in the client's cached profile. Asking the client to
-// re-sync repoints both from the database in one round trip.
-function refreshAccountSockets(io, userId) {
+// After a rename, every live socket for the account still carries the old name
+// in socket.user and in the client's cached profile. The SERVER-side identity
+// is patched here directly — waiting for the client's requestUserSync round
+// trip left a window where a joinTable arriving right after the commit seated
+// the old name out of socket.user. The client is still asked to re-sync for
+// its own cached profile.
+function refreshAccountSockets(io, userId, newUsername) {
     const targetId = Number(userId);
     const connectedSockets = io?.sockets?.sockets;
     if (!Number.isSafeInteger(targetId) || typeof connectedSockets?.values !== 'function') return;
@@ -86,6 +89,9 @@ function refreshAccountSockets(io, userId) {
     for (const socket of connectedSockets.values()) {
         if (Number(socket?.user?.id) !== targetId || typeof socket?.emit !== 'function') continue;
         try {
+            if (typeof newUsername === 'string' && newUsername) {
+                socket.user = { ...socket.user, username: newUsername };
+            }
             socket.emit('identityChanged');
         } catch (error) {
             // The rename is already committed; a stale socket re-syncs on its
@@ -351,6 +357,9 @@ module.exports = function(pool, bcrypt, jwt, io, gameService) {
     // deliberately not reachable mid-game — a rename would orphan those keys.
     router.post('/username', checkAuth, accountChangeLimiter, async (req, res) => {
         res.set('Cache-Control', 'private, no-store');
+        // Held for the whole check-then-commit sequence so a join arriving in
+        // the window is refused instead of seating the outgoing name.
+        const releaseRenameHold = gameService?.holdRenameFor?.(req.user.id) || (() => {});
         try {
             if (gameService?.isUserSeatedAnywhere?.(req.user.id)) {
                 return res.status(409).json({
@@ -361,9 +370,16 @@ module.exports = function(pool, bcrypt, jwt, io, gameService) {
 
             const result = await renameUser(pool, req.user.id, req.body?.username);
             console.log(`[RENAME] user ${req.user.id}: ${result.previousUsername} -> ${result.username}`);
-            // Their sockets still carry the old identity; a sync repoints both
-            // socket.user and the client's cached profile at the new name.
-            refreshAccountSockets(io, req.user.id);
+            // Belt and braces: the hold should make this impossible, but if a
+            // seat was somehow taken mid-rename, say so loudly — the engine now
+            // holds an orphaned name key and that table needs eyes on it.
+            if (gameService?.isUserSeatedAnywhere?.(req.user.id)) {
+                console.error(`[RENAME] user ${req.user.id} was seated during their rename to `
+                    + `"${result.username}" — a table now keys state on "${result.previousUsername}".`);
+            }
+            // Patch every live socket's server-side identity, then ask the
+            // clients to re-sync their cached profiles.
+            refreshAccountSockets(io, req.user.id, result.username);
             // The old 90-day JWT still carries the old username, and the client
             // seeds its display name from that payload on a cold boot. Without a
             // reissue the player would see their former name for months.
@@ -388,6 +404,8 @@ module.exports = function(pool, bcrypt, jwt, io, gameService) {
             }
             console.error('Username change error:', error);
             return res.status(500).json({ message: 'Unable to change your username.' });
+        } finally {
+            releaseRenameHold();
         }
     });
 
@@ -675,3 +693,4 @@ module.exports = function(pool, bcrypt, jwt, io, gameService) {
 
     return router;
 };
+module.exports.refreshAccountSockets = refreshAccountSockets;

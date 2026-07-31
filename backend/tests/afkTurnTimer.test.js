@@ -7,6 +7,7 @@ const {
     deadlineFor,
     evaluate,
     pendingHumanAction,
+    refresh,
 } = require('../src/core/afkTurnTimer');
 
 // The timer exists because the forfeit timer only ever covered DISCONNECTED
@@ -169,6 +170,37 @@ function testDeadlineIsExposedForTheClient() {
     console.log('  the deadline is reportable so the client can warn first');
 }
 
+
+function testActivityPingsExtendTheClock() {
+    // The server cannot see touches, only completed actions — so without the
+    // ping, "idle" silently meant "elapsed turn time" and a present player
+    // thinking through a hard trick was auto-played mid-thought. That is the
+    // exact complaint feedback #73 filed.
+    const engine = engineFor();
+    const start = 1_000_000;
+    evaluate(engine, { now: start });
+
+    assert.equal(refresh(engine, 1, { now: start + 40_000 }), true, 'the pending player extends their clock');
+    assert.equal(
+        evaluate(engine, { now: start + DEFAULT_TIMEOUT_MS + 1000 }),
+        null,
+        'the extended clock does not fire at the original deadline',
+    );
+    const fired = evaluate(engine, { now: start + 40_000 + DEFAULT_TIMEOUT_MS });
+    assert.ok(fired, 'it fires a full window after the last sign of life');
+
+    // Only the player actually on turn can extend — a defender spamming pings
+    // for the bidder must not hold the table open.
+    const fresh = engineFor();
+    evaluate(fresh, { now: start });
+    assert.equal(refresh(fresh, 2, { now: start + 10_000 }), false, 'a bot seat cannot be extended');
+    assert.equal(refresh(fresh, 3, { now: start + 10_000 }), false, 'a different player cannot extend');
+    assert.equal(fresh.afkWatch.since, start, 'the clock did not move');
+
+    assert.equal(refresh({ gameStarted: false }, 1), false, 'no engine state, no crash');
+    console.log('  activity pings extend the clock, and only for the player on turn');
+}
+
 function run() {
     testItOnlyWatchesIdleHumans();
     testNothingHappensBeforeTheWindowElapses();
@@ -177,6 +209,7 @@ function run() {
     testItPlaysTheCheapestLegalCard();
     testCheapestPrefersPointlessThenLow();
     testItFiresOnlyOncePerTurn();
+    testActivityPingsExtendTheClock();
     testDeadlineIsExposedForTheClient();
     console.log('AFK turn timer tests passed.');
 }

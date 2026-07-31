@@ -538,7 +538,7 @@ const createDbTables = async (pool) => {
             CREATE TABLE IF NOT EXISTS chat_reports (
                 id SERIAL PRIMARY KEY,
                 message_id INTEGER REFERENCES lobby_chat_messages(id) ON DELETE CASCADE,
-                reporter_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                reporter_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
                 reported_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
                 reason VARCHAR(40) NOT NULL,
                 message_snapshot TEXT NOT NULL,
@@ -547,6 +547,17 @@ const createDbTables = async (pool) => {
                 UNIQUE (message_id, reporter_user_id)
             );
         `);
+        // The reporter column originally cascaded, which meant a reporter
+        // deleting their account deleted the EVIDENCE — the open report and its
+        // message snapshot vanished from the admin queue. Reports outlive their
+        // reporter; only the link to them is severed. DROP + ADD runs every
+        // boot, which is harmless at this scale and keeps the action correct on
+        // databases created under the old shape.
+        await pool.query('ALTER TABLE chat_reports ALTER COLUMN reporter_user_id DROP NOT NULL');
+        await pool.query('ALTER TABLE chat_reports DROP CONSTRAINT IF EXISTS chat_reports_reporter_user_id_fkey');
+        await pool.query(`ALTER TABLE chat_reports
+            ADD CONSTRAINT chat_reports_reporter_user_id_fkey
+            FOREIGN KEY (reporter_user_id) REFERENCES users(id) ON DELETE SET NULL`);
         await pool.query('CREATE INDEX IF NOT EXISTS chat_reports_open_idx ON chat_reports (created_at DESC) WHERE resolved_at IS NULL');
 
         // Blocking is one-directional and personal: it hides the blocked
@@ -564,6 +575,27 @@ const createDbTables = async (pool) => {
         // A muted player can still play; they just cannot post. Null means no
         // restriction. Kept on users so one lookup covers the chat path.
         await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_muted_until TIMESTAMP WITH TIME ZONE');
+
+        // --- First-party crash reports -------------------------------------
+        // The only crash visibility the app has: no third-party SDK, nothing
+        // linked to an account. Rows are size-capped at the API and the table
+        // is trimmed at boot, so it can never quietly become the biggest thing
+        // in the database the way bot_insurance_logs did.
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS client_errors (
+                id SERIAL PRIMARY KEY,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                message TEXT NOT NULL,
+                stack TEXT,
+                url TEXT,
+                build_id VARCHAR(64),
+                user_agent TEXT
+            );
+        `);
+        await pool.query("DELETE FROM client_errors WHERE created_at < NOW() - INTERVAL '30 days'");
+        await pool.query(`DELETE FROM client_errors WHERE id NOT IN (
+            SELECT id FROM client_errors ORDER BY id DESC LIMIT 5000
+        )`);
 
         await pool.query(`
             CREATE TABLE IF NOT EXISTS funnel_events (
