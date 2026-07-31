@@ -4,6 +4,7 @@
 // a backend. Served by `npm run dev` at /harness.html (never bundled into
 // the production build, which only includes index.html).
 // Query params: ?mode=4 for the four-player table (default 3);
+// ?prompt=podium for the game-over podium ceremony;
 // ?broken=1 to fire the trump-broken banner on mount;
 // ?fx=lightning|shatter|faultline to force a trump-broken effect;
 // ?mode=ident to preview the boot ident (replays on tap/Replay button;
@@ -232,6 +233,31 @@ if (promptMode) {
                 votes: { You: null, Brandi: 'wash', Elena: null },
             };
             break;
+        case 'podium': {
+            // Game-over ceremony. presentationReadyAt in the past takes the
+            // reconnect shortcut in GameTableView straight to the podium
+            // phase, so no scoring sequence has to play out first.
+            // &lose=1 puts Brandi on the top step instead, which fires the
+            // local player's loss sting (watch for [harness] playSound in
+            // the console; audition the clip itself in sound-audition.html).
+            const selfLoses = params.get('lose') === '1';
+            tableState.state = 'Game Over';
+            tableState.serverTime = Date.now();
+            tableState.currentTrickCards = [];
+            tableState.roundSummary = {
+                isGameOver: true,
+                gameWinner: selfLoses ? 'Brandi' : 'You',
+                finalScores: playerMode === 4
+                    ? (selfLoses
+                        ? { Brandi: 152, You: 97, Elena: 61, Marcus: 50 }
+                        : { You: 152, Brandi: 97, Elena: 61, Marcus: 50 })
+                    : (selfLoses
+                        ? { Brandi: 152, You: 97, Elena: 61 }
+                        : { You: 152, Brandi: 97, Elena: 61 }),
+                presentationReadyAt: Date.now() - 1000,
+            };
+            break;
+        }
         default:
             break;
     }
@@ -299,7 +325,7 @@ const HarnessApp = () => {
                     handleShowHowToPlay={noop}
                     errorMessage=""
                     emitEvent={emitEvent}
-                    playSound={noop}
+                    playSound={(name) => console.log('[harness] playSound', name)}
                     socket={fakeSocket}
                     handleOpenFeedbackModal={noop}
                     soundSettings={soundSettings}

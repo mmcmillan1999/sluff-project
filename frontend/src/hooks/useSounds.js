@@ -20,6 +20,9 @@ const SOUND_FILES = {
     suitClubs: '/Sounds/suit_clubs_v1.mp3',
     suitDiamonds: '/Sounds/suit_diamonds_v1.mp3',
     roundEnd: '/Sounds/round_end_v1.mp3',
+    // Rubbing it in: greets a player who finished the game off the top step.
+    // Winner and wash stings are planned to join it.
+    podiumLoss: '/Sounds/podium_loss_v1.mp3',
     drumroll: '/Sounds/drumroll_v1.mp3',
     no_peaking_cheater: '/Sounds/no_peaking_cheater.mp3',
 };

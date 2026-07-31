@@ -1202,7 +1202,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         <div
             className="game-menu-layer"
             data-table-theme={themePresentation.id}
-            style={{ zIndex: 2147483000 }}
+            style={{ zIndex: 2300 }}
         >
             <div
                 className="game-menu-backdrop"
@@ -1541,6 +1541,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 rematchOffer={rematchOffer}
                 selfPlayerName={selfPlayerName}
                 voiceActive={tableVoiceAvailable}
+                playSound={playSound}
                 onRematch={(terminalSettlementBlocked || isSpectator)
                     ? undefined
                     : () => {

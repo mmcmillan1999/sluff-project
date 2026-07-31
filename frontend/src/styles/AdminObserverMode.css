@@ -1,6 +1,8 @@
 .admin-observer-mode {
   position: fixed;
-  top: 7vh;
+  /* Fully below the header (calc(7.5vh + safe-area) tall) — at 7vh the top
+     sliver tucked under it on notched phones. */
+  top: calc(7.5vh + env(safe-area-inset-top, 0px) + 0.5vh);
   left: 98vw;
   transform: translateX(-50%); /* Center the button at 98vw */
   z-index: 1000;

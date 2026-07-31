@@ -402,7 +402,7 @@ const RoundSummaryModal = ({
         const standardMessage = `${forfeitingPlayerName} forfeited the game.`;
 
         return (
-            <div className="modal-overlay">
+            <div className="modal-overlay summary-modal-overlay">
                 <div ref={dialogRef} className="summary-modal-content" role="dialog" aria-modal="true" aria-label={title || 'Game ended by forfeit'} tabIndex={-1}>
                     <div className="summary-main-area">
                         <h2>{title || 'Game Ended by Forfeit'}</h2>

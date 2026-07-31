@@ -12,6 +12,16 @@
     100% { border-color: #ca8a04; box-shadow: 0 0 5px #facc15; }
 }
 
+/* The recap is a ceremony like the podium: its shield covers the WHOLE
+   viewport, header included (above header 2000 and its strip buttons 2100,
+   below insurance/podium 2500). At the shared .modal-overlay's z 1000 the
+   header stayed bright over the dim, still-clickable store button included,
+   and a tall recap's top border slid under it. Scoped here so IosPwaPrompt,
+   which shares .modal-overlay, keeps sitting below the header. */
+.modal-overlay.summary-modal-overlay {
+    z-index: 2200;
+}
+
 .summary-modal-content {
     background-color: #f8f9fa;
     padding: 0;

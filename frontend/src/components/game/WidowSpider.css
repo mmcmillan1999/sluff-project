@@ -20,9 +20,12 @@
 }
 
 /* While she's fully out she climbs on top of everything on the table
-   (cards, hand, chrome); emerging and hiding stay under the pile. */
+   (cards, hand, chrome); emerging and hiding stay under the pile. The
+   header is not the table: 1900 keeps her under it (2000), so a chase
+   toward the top of the screen slides her beneath the ad strip instead of
+   over it. */
 .widow-spider.is-on-top {
-    z-index: 3000;
+    z-index: 1900;
 }
 
 .widow-spider-svg {
@@ -65,7 +68,8 @@
 /* Tiny admin trigger, tucked right below the observer eye */
 .admin-spider-btn {
     position: fixed;
-    top: calc(7vh + 48px);
+    /* Tracks the observer eye's corrected below-the-header anchor. */
+    top: calc(7.5vh + env(safe-area-inset-top, 0px) + 0.5vh + 48px);
     left: 98vw;
     transform: translateX(-50%);
     z-index: 1000;
@@ -90,9 +94,10 @@
     border-color: rgba(200, 30, 30, 0.7);
 }
 
-/* Second trigger: chase mode, just below the wander button */
+/* Second trigger: chase mode, just below the wander button (same corrected
+   below-the-header basis, 30px further down). */
 .admin-spider-btn--chase {
-    top: calc(7vh + 78px);
+    top: calc(7.5vh + env(safe-area-inset-top, 0px) + 0.5vh + 78px);
     border-color: rgba(200, 30, 30, 0.6);
     background: rgba(46, 12, 12, 0.85);
 }

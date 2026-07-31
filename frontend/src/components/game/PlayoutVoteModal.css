@@ -4,7 +4,7 @@
 .playout-vote-overlay {
     position: fixed;
     inset: 0;
-    z-index: 1000; /* same layer as the draw vote and round recap */
+    z-index: 1000; /* same below-the-header layer as the draw vote */
     display: flex;
     align-items: center;
     justify-content: center;

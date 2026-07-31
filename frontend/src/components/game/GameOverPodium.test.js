@@ -646,3 +646,111 @@ describe('GameOverPodium', () => {
         expect(screen.queryByRole('button', { name: /Round-by-round/ })).not.toBeInTheDocument();
     });
 });
+
+describe('GameOverPodium loss sting', () => {
+    const scores = { Cara: 127, Alice: 104, Bob: 91 };
+
+    test('plays once for the local player who lost, and only once', () => {
+        const playSound = vi.fn();
+        const { rerender } = render(
+            <GameOverPodium
+                gameWinner="Cara"
+                finalScores={scores}
+                selfPlayerName="Bob"
+                playSound={playSound}
+            />
+        );
+        expect(playSound).toHaveBeenCalledTimes(1);
+        expect(playSound).toHaveBeenCalledWith('podiumLoss');
+
+        rerender(
+            <GameOverPodium
+                gameWinner="Cara"
+                finalScores={scores}
+                selfPlayerName="Bob"
+                playSound={playSound}
+                statusMessage="Settled."
+            />
+        );
+        expect(playSound).toHaveBeenCalledTimes(1);
+    });
+
+    test('stays silent for the winner and for a spectator', () => {
+        const playSound = vi.fn();
+        const { unmount } = render(
+            <GameOverPodium
+                gameWinner="Cara"
+                finalScores={scores}
+                selfPlayerName="Cara"
+                playSound={playSound}
+            />
+        );
+        expect(playSound).not.toHaveBeenCalled();
+        unmount();
+
+        render(
+            <GameOverPodium
+                gameWinner="Cara"
+                finalScores={scores}
+                selfPlayerName={null}
+                playSound={playSound}
+            />
+        );
+        expect(playSound).not.toHaveBeenCalled();
+    });
+
+    test('the forfeiter is spared the needle', () => {
+        // A voluntary forfeiter stays seated and sees this podium; every
+        // other player is ranked a winner, so without the explicit guard
+        // they would be the one non-winner and get stung on their way out.
+        const playSound = vi.fn();
+        render(
+            <GameOverPodium
+                gameWinner="Cara & Alice"
+                finalScores={scores}
+                forfeit={{ forfeitingPlayerName: 'Bob' }}
+                selfPlayerName="Bob"
+                playSound={playSound}
+            />
+        );
+        expect(playSound).not.toHaveBeenCalled();
+    });
+
+    test('a full tie shames nobody', () => {
+        const playSound = vi.fn();
+        render(
+            <GameOverPodium
+                gameWinner="3-Way Tie"
+                finalScores={{ Cara: 100, Alice: 100, Bob: 100 }}
+                selfPlayerName="Bob"
+                playSound={playSound}
+            />
+        );
+        expect(playSound).not.toHaveBeenCalled();
+    });
+
+    test('waits for the podium to actually show', () => {
+        const playSound = vi.fn();
+        const { rerender } = render(
+            <GameOverPodium
+                show={false}
+                gameWinner="Cara"
+                finalScores={scores}
+                selfPlayerName="Bob"
+                playSound={playSound}
+            />
+        );
+        expect(playSound).not.toHaveBeenCalled();
+
+        rerender(
+            <GameOverPodium
+                show
+                gameWinner="Cara"
+                finalScores={scores}
+                selfPlayerName="Bob"
+                playSound={playSound}
+            />
+        );
+        expect(playSound).toHaveBeenCalledTimes(1);
+    });
+});

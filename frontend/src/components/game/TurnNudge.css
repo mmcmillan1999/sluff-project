@@ -11,7 +11,10 @@
 
 .turn-nudge-rim {
     position: fixed;
-    inset: 0;
+    /* The top edge hugs the header's bottom (the header is calc(7.5vh +
+       safe-area) tall): the rim outlines the PLAY AREA, and at z 1500 the
+       opaque header would clip a viewport-top ring's whole top segment. */
+    inset: calc(7.5vh + env(safe-area-inset-top, 0px)) 0 0 0;
     z-index: 1500; /* over the felt and the footer, under modals (2000+) */
     pointer-events: none;
     --nudge-rgb: 234, 179, 8; /* gold, before teams are known */

@@ -205,7 +205,7 @@ describe('useSounds music channel', () => {
         const ctx = contexts[0];
 
         await waitFor(() => {
-            expect(ctx.decodeAudioData).toHaveBeenCalledTimes(16);
+            expect(ctx.decodeAudioData).toHaveBeenCalledTimes(17);
             expect(errorSpy).toHaveBeenCalledWith(
                 'Failed to load background music:',
                 expect.any(Error)

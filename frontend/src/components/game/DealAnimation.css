@@ -1,7 +1,9 @@
 .deal-animation-overlay {
     position: fixed;
     inset: 0;
-    z-index: 55;
+    /* Above the chat panel (120): dealing must stay visible over an open
+       chat. Below the nudge rim (1500) and the header (2000). */
+    z-index: 130;
     overflow: hidden;
     pointer-events: none;
     contain: layout style paint;

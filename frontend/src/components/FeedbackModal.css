@@ -11,7 +11,9 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 2147483200;
+    /* Above the game menu it can open from (2300); below the connection
+       toast (5000) and the orientation scrim (100000). */
+    z-index: 2450;
     backdrop-filter: blur(4px);
 }
 

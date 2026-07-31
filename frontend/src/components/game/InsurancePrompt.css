@@ -4,8 +4,12 @@
 .insurance-prompt-modal {
     position: fixed;
     inset: 0;
-    /* Above footer toasts/voice notices, aligned with the other full modals */
-    z-index: 2147483200;
+    /* Above the header (2000) and its strip buttons (2100), below the
+       connection toast (5000), How To Play (6000), and the orientation scrim
+       (100000). The old 2147483200 was harmless only while the game view's
+       stacking context flattened it; at root level it would have hidden
+       "Connection lost" during an insurance decision. */
+    z-index: 2500;
     display: flex;
     align-items: center;
     justify-content: center;

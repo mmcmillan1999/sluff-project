@@ -12,8 +12,14 @@
     height: 100%; /* App owns the fixed advertising-header offset */
     background-color: #333;
     overflow: hidden;
-    position: relative; /* Ensure proper stacking context */
-    z-index: 1; /* Base z-index for game view */
+    /* position: relative stays — absolute children (chat, drop zones, admin
+       chrome) use this as their containing block. But NEVER give this element
+       a z-index (or transform/filter/opacity): any of those creates a
+       stacking context that flattens EVERY in-game overlay to one layer
+       below the fixed header (z 2000) — full-screen ceremonies like the
+       game-over podium and the insurance prompt were painting UNDER the
+       header no matter their own z-index. */
+    position: relative;
     /* Prevent pull-to-refresh on mobile that would reload and kick from game */
     overscroll-behavior-y: contain;
     touch-action: pan-x pan-y pinch-zoom;

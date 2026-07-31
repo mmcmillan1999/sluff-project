@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { PLACEHOLDER_ID_CLIENT } from '../../constants';
 import { useModalFocus } from '../../hooks/useModalFocus';
 import './GameOverPodium.css';
@@ -300,7 +300,8 @@ const GameOverPodium = ({
     roundHistory = null,
     rematchOffer = null,
     selfPlayerName = null,
-    voiceActive = false
+    voiceActive = false,
+    playSound = null
 }) => {
     const headingId = useId();
     const detailId = useId();
@@ -344,6 +345,36 @@ const GameOverPodium = ({
             setLeaving(false);
         }
     }, [show]);
+
+    // The loss sting: greets the local player when the podium reveals them
+    // off the top step. Once per podium — and only when a winner actually
+    // exists, which keeps it silent for full ties (everyone ranks 1st) and
+    // for spectators (no entry of their own). The forfeiter is spared too:
+    // a voluntary forfeiter stays seated and DOES see this podium, and
+    // needling a player at the moment they conceded is not the joke.
+    // Winner and wash stings are planned to join it.
+    //
+    // The once-guard is consumed even when playSound silently drops the
+    // call (audio locked after a reload straight into the podium): a sting
+    // that fires half a minute late on the player's next tap would land as
+    // a non sequitur, so never-late is deliberate.
+    const lossStingPlayedRef = useRef(false);
+    useEffect(() => {
+        if (!show) {
+            lossStingPlayedRef.current = false;
+            return;
+        }
+        if (lossStingPlayedRef.current || typeof playSound !== 'function') return;
+        if (!selfPlayerName) return;
+        const normalizedSelf = normalizeName(selfPlayerName);
+        if (forfeitNameFrom(forfeit) && normalizeName(forfeitNameFrom(forfeit)) === normalizedSelf) return;
+        const ranked = rankPodiumPlayers({ gameWinner, finalScores, forfeit });
+        const self = ranked.find(entry => normalizeName(entry.name) === normalizedSelf);
+        if (self && !self.isWinner && ranked.some(entry => entry.isWinner)) {
+            lossStingPlayedRef.current = true;
+            playSound('podiumLoss');
+        }
+    }, [show, gameWinner, finalScores, forfeit, selfPlayerName, playSound]);
 
     if (!show) return null;
 

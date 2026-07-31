@@ -204,7 +204,7 @@ describe('GameTableView round presentation sequence', () => {
         expect(within(menu).getByText('Oakley ranch nights')).toBeInTheDocument();
         expect(within(menu).getByText('Cowhide, leather & campfire cards')).toBeInTheDocument();
         expect(menuButton).toHaveAttribute('aria-expanded', 'true');
-        expect(getComputedStyle(menuLayer).zIndex).toBe('2147483000');
+        expect(getComputedStyle(menuLayer).zIndex).toBe('2300');
 
         await user.click(menuLayer.querySelector('.game-menu-backdrop'));
         expect(screen.queryByRole('dialog', { name: 'Game menu' })).not.toBeInTheDocument();

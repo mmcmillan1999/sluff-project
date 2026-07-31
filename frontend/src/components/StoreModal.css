@@ -4,7 +4,10 @@
 .store-overlay {
     position: fixed;
     inset: 0;
-    z-index: 2147483250;
+    /* Above the game menu it opens from (2300); below the connection
+       toast (5000), How To Play (6000), and the orientation scrim (100000)
+       -- the old max-int value buried all three. */
+    z-index: 2350;
     display: grid;
     place-items: center;
     box-sizing: border-box;

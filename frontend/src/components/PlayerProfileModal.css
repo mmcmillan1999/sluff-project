@@ -1,7 +1,9 @@
 .player-profile-overlay {
     position: fixed;
     inset: 0;
-    z-index: 2147483300;
+    /* Above the game menu/store (2300/2350); below the connection toast
+       (5000) and the orientation scrim (100000). */
+    z-index: 2400;
     display: grid;
     place-items: center;
     box-sizing: border-box;
