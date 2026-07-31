@@ -592,11 +592,6 @@ const createDbTables = async (pool) => {
                 user_agent TEXT
             );
         `);
-        await pool.query("DELETE FROM client_errors WHERE created_at < NOW() - INTERVAL '30 days'");
-        await pool.query(`DELETE FROM client_errors WHERE id NOT IN (
-            SELECT id FROM client_errors ORDER BY id DESC LIMIT 5000
-        )`);
-
         await pool.query(`
             CREATE TABLE IF NOT EXISTS funnel_events (
                 id SERIAL PRIMARY KEY,
@@ -803,6 +798,16 @@ const createDbTables = async (pool) => {
         // schema transaction and before recovery can insert refund records.
         await pool.query("ALTER TYPE transaction_type_enum ADD VALUE IF NOT EXISTS 'abandoned_refund'");
         await pool.query("ALTER TYPE transaction_type_enum ADD VALUE IF NOT EXISTS 'game_void_reversal'");
+        // The crash-report trim runs OUT here, after COMMIT, on purpose: by the
+        // end of the migration transaction it holds ACCESS EXCLUSIVE on users
+        // and game_history, and an unbounded DELETE inside it would stall every
+        // login and game write on the still-live old instance during a deploy.
+        // server.js also re-runs this hourly, so growth between deploys is
+        // bounded even if boots are rare.
+        await pool.query("DELETE FROM client_errors WHERE created_at < NOW() - INTERVAL '30 days'");
+        await pool.query(`DELETE FROM client_errors WHERE id NOT IN (
+            SELECT id FROM client_errors ORDER BY id DESC LIMIT 5000
+        )`);
         console.log("✅ Tables checked/created/altered successfully.");
     } catch (err) {
         if (transactionOpen) await pool.query('ROLLBACK');

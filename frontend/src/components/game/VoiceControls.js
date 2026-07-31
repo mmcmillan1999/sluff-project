@@ -209,6 +209,26 @@ const VoiceControls = ({ socket, tableId }) => {
         };
     }, [setLocalMicrophoneMuted, socket, tableId, voiceEnabled]);
 
+    // An admin muted this player mid-session: the server has already removed
+    // them from the signaling room; tear down the local half and say why.
+    useEffect(() => {
+        if (!socket) return undefined;
+        const onEjected = () => {
+            if (voiceRef.current) {
+                voiceRef.current.leave();
+                voiceRef.current = null;
+            }
+            sessionRef.current += 1;
+            microphoneOperationRef.current += 1;
+            setConnectionState('error');
+            setMicrophoneState('muted');
+            setPeers([]);
+            setError('Voice chat ended: your chat access is suspended.');
+        };
+        socket.on('voiceEjected', onEjected);
+        return () => socket.off('voiceEjected', onEjected);
+    }, [socket]);
+
     useEffect(() => {
         const muteForBackground = () => {
             if (document.visibilityState === 'hidden') {

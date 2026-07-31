@@ -100,6 +100,9 @@ function App() {
     const hasConnectedRef = React.useRef(false);
     const errorMessageTimerRef = React.useRef(null);
     const connectionNoticeTimerRef = React.useRef(null);
+    // True from the server's restart notice until we reconnect: the ordinary
+    // disconnect handlers must not stomp "updating" with "connection lost".
+    const serverRestartingRef = React.useRef(false);
 
     const handleLogout = useCallback(() => {
         localStorage.removeItem("sluff_token");
@@ -144,6 +147,10 @@ function App() {
     }, [handleLogout]);
 
     const handleLoginSuccess = (data) => {
+        // Crossing the auth boundary changes who renders /privacy and /terms
+        // (AuthContainer logged out, the overlay logged in). Re-derive from the
+        // path so a document open at login is still open after it.
+        setLegalPage(legalPageFromPath());
         localStorage.setItem("sluff_token", data.token);
         setToken(data.token);
         setUser(data.user);
@@ -220,6 +227,7 @@ function App() {
             socket.emit("requestUserSync");
 
             const onConnect = () => {
+                serverRestartingRef.current = false;
                 if (connectionNoticeTimerRef.current) clearTimeout(connectionNoticeTimerRef.current);
                 if (hasConnectedRef.current) {
                     setConnectionNotice({ kind: 'online', message: 'Back online' });
@@ -232,10 +240,17 @@ function App() {
             const onDisconnect = (reason) => {
                 if (reason === 'io client disconnect') return;
                 if (connectionNoticeTimerRef.current) clearTimeout(connectionNoticeTimerRef.current);
-                setConnectionNotice({ kind: 'reconnecting', message: 'Connection lost. Reconnecting…' });
+                // ~1.2s after the restart notice the socket drops; keep telling
+                // the truth ("updating") instead of reverting to a scary
+                // generic loss message.
+                setConnectionNotice(serverRestartingRef.current
+                    ? { kind: 'reconnecting', message: 'Sluff is updating — back in a moment…' }
+                    : { kind: 'reconnecting', message: 'Connection lost. Reconnecting…' });
             };
             const onReconnectAttempt = () => {
-                setConnectionNotice({ kind: 'reconnecting', message: 'Reconnecting…' });
+                setConnectionNotice(serverRestartingRef.current
+                    ? { kind: 'reconnecting', message: 'Sluff is updating — back in a moment…' }
+                    : { kind: 'reconnecting', message: 'Reconnecting…' });
             };
             const onUpdateUser = (updatedUser) => {
                 // console.log('[DEBUG] updateUser received from server:', updatedUser);
@@ -309,6 +324,7 @@ function App() {
             // A deploy is about to drop this socket; saying so first makes the
             // disconnect read as an update rather than a mystery.
             const onServerRestarting = () => {
+                serverRestartingRef.current = true;
                 if (connectionNoticeTimerRef.current) clearTimeout(connectionNoticeTimerRef.current);
                 setConnectionNotice({ kind: 'reconnecting', message: 'Sluff is updating — back in a moment…' });
             };

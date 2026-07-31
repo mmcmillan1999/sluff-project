@@ -153,6 +153,9 @@ async function initializeApplication() {
     app.use('/api/seasons', createSeasonRoutes(pool, jwt));
     app.use('/api/admin', createAdminRoutes(pool, jwt, io, {
         getLiveGameIds: () => liveGameIdsFromService(gameService),
+        // Registered by gameEvents, which owns the voice rooms: a chat mute
+        // must end a live voice session, not just block the next join.
+        ejectFromVoice: (userId) => gameService.ejectUserFromVoiceRooms?.(userId) ?? 0,
     }));
     app.use('/api/feedback', createFeedbackRoutes(pool, jwt));
     app.use('/api/chat', createChatRoutes(pool, io, jwt));
@@ -160,6 +163,19 @@ async function initializeApplication() {
     app.use('/api/ping', createPingRoutes());
     app.use('/api/metrics', createMetricsRoutes(pool, jwt));
     app.use('/api/errors', createErrorRoutes(pool, jwt));
+    // The crash table is written by a public endpoint; boot-time trimming alone
+    // leaves growth unbounded between deploys. Hourly keeps it at ~5000 rows no
+    // matter how badly a bad build crash-loops in the field.
+    setInterval(async () => {
+        try {
+            await pool.query("DELETE FROM client_errors WHERE created_at < NOW() - INTERVAL '30 days'");
+            await pool.query(`DELETE FROM client_errors WHERE id NOT IN (
+                SELECT id FROM client_errors ORDER BY id DESC LIMIT 5000
+            )`);
+        } catch (error) {
+            console.error('client_errors trim failed:', error.message);
+        }
+    }, 60 * 60 * 1000).unref();
 
     app.get('/health', async (req, res) => {
         try {

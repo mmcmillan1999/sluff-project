@@ -165,6 +165,15 @@ const tableState = {
 };
 if (interactiveTurn) {
     tableState.trickTurnPlayerName = 'You';
+    // The AFK backstop's countdown, previewable without a backend: a short
+    // window means the "Your move · Ns" tail appears seconds after the nudge.
+    // Real servers send 45s; ?afk=<seconds> overrides (0 disables).
+    const afkSeconds = params.get('afk') === null ? 22 : Number(params.get('afk'));
+    if (Number.isFinite(afkSeconds) && afkSeconds > 0) {
+        tableState.afkTimeoutSeconds = afkSeconds;
+        tableState.afkDeadline = Date.now() + afkSeconds * 1000;
+        tableState.serverTime = Date.now();
+    }
 }
 
 // ?prompt=<state> — force each ActionControls popup (and the draw vote

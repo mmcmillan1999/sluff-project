@@ -104,35 +104,47 @@ describe('useTurnNudge AFK countdown and activity pings', () => {
 
     const advance = (ms) => act(() => { vi.advanceTimersByTime(ms); });
 
-    test('counts down to the auto-play window from the last input', () => {
+    test('counts down only once the nudge shows, from the server anchor', () => {
         const { result } = renderHook(() => useTurnNudge({
             actionKey: 'play|1',
             afkTimeoutMs: 45000,
         }));
 
+        // Level 0: nothing displays it, so publishing it would just force a
+        // render per second on a calm table.
         advance(300);
-        expect(result.current.afkSecondsLeft).toBe(45);
+        expect(result.current.afkSecondsLeft).toBe(null);
+
+        advance(NUDGE_AT_MS);
+        expect(result.current.level).toBe(1);
+        expect(result.current.afkSecondsLeft).toBe(40);
         advance(20000);
-        expect(result.current.afkSecondsLeft).toBe(25);
+        expect(result.current.afkSecondsLeft).toBe(20);
         advance(30000);
         expect(result.current.afkSecondsLeft).toBe(0);
     });
 
-    test('input pushes the local countdown anchor forward', () => {
+    test('input hides the countdown and re-anchors it to the ping', () => {
         const { result } = renderHook(() => useTurnNudge({
             actionKey: 'play|1',
             afkTimeoutMs: 45000,
         }));
 
-        advance(30000);
+        advance(30250);
         expect(result.current.afkSecondsLeft).toBe(15);
 
+        // The touch pings the server (extending its clock) and resets the
+        // nudge, so the countdown disappears rather than lying.
         act(() => { window.dispatchEvent(new Event('pointerdown')); });
         advance(300);
-        // The player touched the screen: the server clock is being extended by
-        // the ping, so the display must not keep counting down to a deadline
-        // that no longer exists.
-        expect(result.current.afkSecondsLeft).toBe(45);
+        expect(result.current.level).toBe(0);
+        expect(result.current.afkSecondsLeft).toBe(null);
+
+        // Idle again: the anchor is the PING (the last thing the server
+        // heard), so the window restarts from there.
+        advance(NUDGE_AT_MS);
+        expect(result.current.level).toBe(1);
+        expect(result.current.afkSecondsLeft).toBe(40);
     });
 
     test('a later server deadline wins over the local anchor', () => {
@@ -143,13 +155,14 @@ describe('useTurnNudge AFK countdown and activity pings', () => {
             afkDeadline: serverDeadline,
         }));
 
-        advance(300);
-        expect(result.current.afkSecondsLeft).toBe(60);
+        advance(NUDGE_AT_MS + 250);
+        expect(result.current.afkSecondsLeft).toBe(55);
     });
 
     test('no timeout config means no countdown', () => {
         const { result } = renderHook(() => useTurnNudge({ actionKey: 'play|1' }));
-        advance(1000);
+        advance(NUDGE_AT_MS + 1000);
+        expect(result.current.level).toBe(1);
         expect(result.current.afkSecondsLeft).toBe(null);
     });
 

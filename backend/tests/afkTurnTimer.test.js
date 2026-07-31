@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const {
     DEFAULT_TIMEOUT_MS,
+    MAX_TURN_WINDOWS,
     cheapestLegalCard,
     deadlineFor,
     evaluate,
@@ -201,6 +202,31 @@ function testActivityPingsExtendTheClock() {
     console.log('  activity pings extend the clock, and only for the player on turn');
 }
 
+
+function testScriptedPingsCannotHoldTheTableHostage() {
+    // The ceiling is the difference between "extend while thinking" and
+    // "disable the backstop from devtools": a losing player scripting
+    // socket.emit('turnActivity') every second must not be able to freeze a
+    // funded table until the other players give up and forfeit to them.
+    const engine = engineFor();
+    const start = 1_000_000;
+    evaluate(engine, { now: start });
+
+    let fired = null;
+    for (let now = start + 1000; now <= start + 10 * DEFAULT_TIMEOUT_MS && !fired; now += 1000) {
+        refresh(engine, 1, { now, timeoutMs: DEFAULT_TIMEOUT_MS });
+        if (evaluate(engine, { now, timeoutMs: DEFAULT_TIMEOUT_MS })) fired = now;
+    }
+
+    assert.ok(fired, 'the backstop still fires under continuous scripted pings');
+    assert.equal(
+        (fired - start) / DEFAULT_TIMEOUT_MS,
+        MAX_TURN_WINDOWS,
+        `the siege ends at exactly ${MAX_TURN_WINDOWS} windows`,
+    );
+    console.log('  scripted pings delay the backstop to the cap, never disable it');
+}
+
 function run() {
     testItOnlyWatchesIdleHumans();
     testNothingHappensBeforeTheWindowElapses();
@@ -210,6 +236,7 @@ function run() {
     testCheapestPrefersPointlessThenLow();
     testItFiresOnlyOncePerTurn();
     testActivityPingsExtendTheClock();
+    testScriptedPingsCannotHoldTheTableHostage();
     testDeadlineIsExposedForTheClient();
     console.log('AFK turn timer tests passed.');
 }

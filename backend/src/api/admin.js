@@ -147,6 +147,14 @@ const createAdminRoutes = (pool, jwt, io = null, options = {}) => {
             console.error('[ADMIN] Failed to notify muted player:', emitError.message);
           }
         }
+        // The voice-join gate only blocks NEW sessions; a live one keeps
+        // talking through its established peer connections. End it.
+        try {
+          const ejected = options.ejectFromVoice?.(mutedId) ?? 0;
+          if (ejected > 0) console.log(`[ADMIN] Ejected muted user ${mutedId} from ${ejected} voice room(s)`);
+        } catch (ejectError) {
+          console.error('[ADMIN] Voice ejection failed:', ejectError.message);
+        }
       }
 
       console.log(`[ADMIN] chat report ${reportId} resolved by ${req.user.username}`

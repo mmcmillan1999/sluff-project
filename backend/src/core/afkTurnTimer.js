@@ -18,6 +18,13 @@ const { getLegalMoves } = require('./legalMoves');
 const { CARD_POINT_VALUES } = require('./constants');
 
 const DEFAULT_TIMEOUT_MS = 45_000;
+// A turn can be extended by activity pings to at most this many windows. The
+// pings exist so a THINKING player is not auto-played; without a ceiling they
+// also let a LOSING player script pings forever, holding a funded table
+// hostage — the exact stall the backstop exists to prevent, now with a griefer
+// instead of a sleeper. Four windows is three minutes at the default 45s:
+// generous for the hardest trick, useless as a siege.
+const MAX_TURN_WINDOWS = 4;
 
 // The cheapest legal card is the one that surrenders the fewest points, so the
 // scoring table is the authority — a local copy would silently drift the day
@@ -99,7 +106,7 @@ function evaluate(engine, { now = Date.now(), timeoutMs = DEFAULT_TIMEOUT_MS } =
     }
 
     if (!engine.afkWatch || engine.afkWatch.key !== key) {
-        engine.afkWatch = { key, since: now };
+        engine.afkWatch = { key, since: now, armedAt: now };
         return null;
     }
 
@@ -107,7 +114,7 @@ function evaluate(engine, { now = Date.now(), timeoutMs = DEFAULT_TIMEOUT_MS } =
 
     // Re-arm before acting: whatever happens next, this turn must not fire
     // twice, and the next turn gets a full window.
-    engine.afkWatch = { key, since: now };
+    engine.afkWatch = { key, since: now, armedAt: now };
 
     if (pending.kind === 'bid') {
         return { action: 'bid', userId: pending.userId, bid: 'Pass', playerName: pending.playerName };
@@ -147,16 +154,26 @@ function deadlineFor(engine, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
  *
  * @returns {boolean} whether the clock was extended
  */
-function refresh(engine, userId, { now = Date.now() } = {}) {
+function refresh(engine, userId, { now = Date.now(), timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
     const pending = pendingHumanAction(engine);
     if (!pending || Number(pending.userId) !== Number(userId)) return false;
     if (!engine.afkWatch || engine.afkWatch.key !== turnKey(engine, pending)) return false;
-    engine.afkWatch.since = now;
+    const effectiveTimeout = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_TIMEOUT_MS;
+    // Ceiling: the deadline (since + timeout) may never pass armedAt + the cap,
+    // so scripted pings delay the backstop, they cannot disable it. Watches
+    // armed before this field existed treat their `since` as the arm time.
+    const armedAt = Number.isFinite(engine.afkWatch.armedAt) ? engine.afkWatch.armedAt : engine.afkWatch.since;
+    if (!Number.isFinite(engine.afkWatch.armedAt)) engine.afkWatch.armedAt = armedAt;
+    const latestAllowedSince = armedAt + (MAX_TURN_WINDOWS - 1) * effectiveTimeout;
+    const nextSince = Math.min(now, latestAllowedSince);
+    if (nextSince <= engine.afkWatch.since) return false;
+    engine.afkWatch.since = nextSince;
     return true;
 }
 
 module.exports = {
     CARD_POINTS,
+    MAX_TURN_WINDOWS,
     DEFAULT_TIMEOUT_MS,
     cardCost,
     cheapestLegalCard,

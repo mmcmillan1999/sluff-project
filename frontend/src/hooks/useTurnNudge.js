@@ -57,6 +57,12 @@ export const useTurnNudge = ({
 
         let lastInputAt = Date.now();
         let lastPingAt = 0;
+        // The last moment the SERVER's clock provably moved: the effect start
+        // (the server arms within a heartbeat of the turn changing) or our most
+        // recent ping. Anchoring the countdown to raw inputs overstated the
+        // remaining time by up to a full throttle window, because inputs the
+        // throttle swallowed never reached the server.
+        let lastServerAnchor = Date.now();
         let shownLevel = 0;
         let shownSeconds = null;
 
@@ -68,6 +74,7 @@ export const useTurnNudge = ({
             }
             if (lastInputAt - lastPingAt >= ACTIVITY_PING_MS) {
                 lastPingAt = lastInputAt;
+                lastServerAnchor = lastInputAt;
                 activityRef.current?.();
             }
         };
@@ -83,8 +90,11 @@ export const useTurnNudge = ({
 
             const { deadline, timeoutMs } = afkRef.current;
             let afkSecondsLeft = null;
-            if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
-                const localDeadline = lastInputAt + timeoutMs;
+            // Published only while the nudge shows: computing it every second at
+            // level 0 forced a render per second on a calm table for a number
+            // nothing displays.
+            if (nextLevel > 0 && Number.isFinite(timeoutMs) && timeoutMs > 0) {
+                const localDeadline = lastServerAnchor + timeoutMs;
                 const serverDeadline = Number.isFinite(deadline) ? deadline : 0;
                 afkSecondsLeft = Math.max(
                     0,

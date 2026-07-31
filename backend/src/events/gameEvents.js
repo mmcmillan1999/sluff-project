@@ -119,6 +119,23 @@ const registerGameHandlers = (io, gameService, options = {}) => {
     // the authoritative table seat before using it so a player who left,
     // changed tables, became a spectator, or lost control to another socket
     // cannot remain a signaling target.
+    // A chat mute must also end a LIVE voice session, not just block the next
+    // join — the rooms live in this closure, so the admin route reaches them
+    // through this ejector.
+    gameService.ejectUserFromVoiceRooms = (userId) => {
+        let ejected = 0;
+        for (const [tableId, room] of [...voiceRooms.entries()]) {
+            if (room.has(userId)) {
+                const member = room.get(userId);
+                leaveVoiceRoom(tableId, userId);
+                const memberSocket = member && io.sockets?.sockets?.get(member.socketId);
+                if (memberSocket) memberSocket.emit('voiceEjected', { tableId });
+                ejected += 1;
+            }
+        }
+        return ejected;
+    };
+
     const pruneVoiceRoom = (tableId, engine = gameService.getEngineById(tableId)) => {
         const room = voiceRooms.get(tableId);
         if (!room) return;
@@ -329,6 +346,14 @@ const registerGameHandlers = (io, gameService, options = {}) => {
             // The balance read yields to PostgreSQL. Re-check both seats after
             // it returns because another socket may have requested a start in
             // that window, freezing the roster we are about to mutate.
+            //
+            // The rename hold gets the same treatment: the joinTable entry gate
+            // ran before these awaits, and a rename beginning during the balance
+            // read would otherwise seat the outgoing name.
+            if (gameService.isRenameInFlight?.(socket.user.id)) {
+                socket.emit("error", { message: "One moment — your account is updating. Try again." });
+                return false;
+            }
             const currentExistingPlayer = engineToJoin.players[socket.user.id];
             if (asSpectator && activeSeatIsLocked(engineToJoin, currentExistingPlayer)) {
                 throw new Error('An active player cannot switch to spectator mode during a game.');
@@ -581,7 +606,9 @@ const registerGameHandlers = (io, gameService, options = {}) => {
         // distinguishable from "phone face-down". Only the pending player can
         // extend their own clock, and an extension is not a broadcastable event.
         onTableAction("turnActivity", {}, ({ engine }) => {
-            afkTurnTimer.refresh(engine, socket.user.id);
+            afkTurnTimer.refresh(engine, socket.user.id, {
+                timeoutMs: engine.afkTimeoutMs,
+            });
         });
 
         onTableAction("voiceJoin", {}, async ({ engine }) => {
