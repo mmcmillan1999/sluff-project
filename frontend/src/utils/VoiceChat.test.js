@@ -295,4 +295,44 @@ describe('VoiceChat microphone lifecycle', () => {
         ]);
         expect(onPeersChanged).toHaveBeenLastCalledWith([]);
     });
+
+    test('revives its audio graph from the iOS interrupted state', async () => {
+        const socket = makeSocket();
+        const voice = new VoiceChat(socket, 'table-12');
+        await voice.join();
+        const ctx = audioContexts[0];
+        expect(ctx.resume).not.toHaveBeenCalled();
+
+        // Incoming peer voice routes through this context's gain graph, so an
+        // interruption that is never resumed silences every other player.
+        ctx.state = 'interrupted';
+        ctx.onstatechange();
+        expect(ctx.resume).toHaveBeenCalledTimes(1);
+
+        ctx.state = 'interrupted';
+        voice._resumeAudio();
+        expect(ctx.resume).toHaveBeenCalledTimes(2);
+
+        voice.leave();
+        expect(ctx.onstatechange).toBeNull();
+    });
+
+    test('leaves an interruption alone while the app is backgrounded', async () => {
+        const socket = makeSocket();
+        const voice = new VoiceChat(socket, 'table-12');
+        await voice.join();
+        const ctx = audioContexts[0];
+
+        Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+        try {
+            // Resuming here would queue peer audio to blare from the
+            // background the moment the interruption (e.g. a call) ends.
+            ctx.state = 'interrupted';
+            ctx.onstatechange();
+            expect(ctx.resume).not.toHaveBeenCalled();
+        } finally {
+            delete document.visibilityState;
+        }
+        voice.leave();
+    });
 });

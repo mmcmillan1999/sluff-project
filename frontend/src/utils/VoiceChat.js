@@ -112,6 +112,19 @@ class VoiceChat {
         this.lifecycleToken += 1;
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
         this.audioContext = new AudioContextClass();
+        // All incoming peer audio routes through this context's gain graph, so
+        // an iOS interruption (mic prompt, phone call) that parks it in the
+        // WebKit-specific 'interrupted' state silences every other player.
+        // Recover as soon as the state changes; _resumeAudio also accepts
+        // 'interrupted', and the unlock listeners cover gesture-gated resumes.
+        this.audioContext.onstatechange = () => {
+            const ctx = this.audioContext;
+            if (!ctx) return;
+            if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+            if (ctx.state === 'suspended' || ctx.state === 'interrupted') {
+                ctx.resume().catch(() => {});
+            }
+        };
         this._bindAudioUnlock();
         this._resumeAudio();
 
@@ -146,6 +159,7 @@ class VoiceChat {
         }
         this.peers.clear();
         if (this.audioContext) {
+            this.audioContext.onstatechange = null;
             this.audioContext.close().catch(() => {});
             this.audioContext = null;
         }
@@ -258,7 +272,11 @@ class VoiceChat {
 
     _resumeAudio() {
         if (!this.audioContext) return;
-        const resume = this.audioContext.state === 'suspended'
+        const state = this.audioContext.state;
+        // 'interrupted' is iOS WebKit's session-taken state; resume() from it
+        // behaves like resume() from 'suspended' (queued if the interruption
+        // is still in progress).
+        const resume = (state === 'suspended' || state === 'interrupted')
             ? this.audioContext.resume()
             : Promise.resolve();
         Promise.resolve(resume).catch(() => {}).finally(() => {

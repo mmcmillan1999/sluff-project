@@ -10,6 +10,11 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import VoiceChat from '../../utils/VoiceChat';
+import {
+    clearMicCaptureRefused,
+    rememberMicCaptureRefused,
+    shouldAutoUnmuteMicrophone,
+} from '../../utils/micPermission';
 import { getVoiceEnabled as getVoiceEnabledInitial, setVoiceEnabled, useVoiceEnabled } from '../../utils/voicePreference';
 import './VoiceControls.css';
 
@@ -69,12 +74,34 @@ const VoiceControls = ({ socket, tableId }) => {
     ));
     const [microphoneState, setMicrophoneState] = useState('muted');
     const [error, setError] = useState('');
+    // Quiet, self-dismissing counterpart to `error` for states that are
+    // deliberate rather than broken — e.g. "your mic is off" after a skipped
+    // auto-unmute, which would otherwise be explained by nothing but a small
+    // slashed icon.
+    const [notice, setNotice] = useState('');
     const [peers, setPeers] = useState([]);
     const [mixerOpen, setMixerOpen] = useState(false);
     const voiceRef = useRef(null);
     const sessionRef = useRef(0);
     const microphoneOperationRef = useRef(0);
+    const noticeTimerRef = useRef(null);
+    // Set by the 'Turn on voice' tap so the join it triggers can tell itself
+    // apart from a routine table entry: that tap is the player asking to
+    // talk, so it must bypass the remembered-refusal gate below.
+    const explicitEnableRef = useRef(false);
     const mixerId = useId();
+
+    const showNotice = useCallback((text) => {
+        if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+        setNotice(text);
+        if (text) {
+            noticeTimerRef.current = setTimeout(() => setNotice(''), 6000);
+        }
+    }, []);
+
+    useEffect(() => () => {
+        if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+    }, []);
 
     const setLocalMicrophoneMuted = useCallback(async (
         muted,
@@ -102,10 +129,14 @@ const VoiceControls = ({ socket, tableId }) => {
         } else {
             setMicrophoneState('starting');
             setError('');
+            showNotice('');
         }
 
         try {
             const changed = await voice.setMicrophoneMuted(muted);
+            // Capture succeeded, so any remembered refusal is stale — clear it
+            // even for an operation a newer tap superseded.
+            if (!muted && changed !== false) clearMicCaptureRefused();
             if (!isCurrent()) {
                 // A stale activation may have resolved after a table change,
                 // background event, or newer tap. Never let it stay live.
@@ -125,13 +156,24 @@ const VoiceControls = ({ socket, tableId }) => {
             setMicrophoneState(muted || changed === false ? 'muted' : 'live');
             return changed !== false;
         } catch (micError) {
+            // A refusal happened regardless of whether this operation is
+            // stale. Remembering it stops the auto-join from re-running a
+            // doomed getUserMedia at every table — on iOS that attempt seizes
+            // the audio session and was cutting off all game sound. Only
+            // failures a retry cannot fix ratchet: denial, or a device the OS
+            // is withholding. A TimeoutError deliberately does not — the
+            // player never answered the prompt (or answered it too late), so
+            // asking again next table is honest, not nagging.
+            if (micError?.name === 'NotAllowedError' || micError?.name === 'NotReadableError') {
+                rememberMicCaptureRefused();
+            }
             if (isCurrent()) {
                 setMicrophoneState('muted');
                 setError(microphoneErrorMessage(micError));
             }
             return false;
         }
-    }, []);
+    }, [showNotice]);
 
     useEffect(() => {
         // Opted out (the default): stay entirely inert. No VoiceChat instance,
@@ -146,6 +188,7 @@ const VoiceControls = ({ socket, tableId }) => {
             setConnectionState('off');
             setMicrophoneState('muted');
             setError('');
+            showNotice('');
             setPeers([]);
             setMixerOpen(false);
             return undefined;
@@ -156,6 +199,7 @@ const VoiceControls = ({ socket, tableId }) => {
         setConnectionState('joining');
         setMicrophoneState('starting');
         setError('');
+        showNotice('');
         setPeers([]);
         setMixerOpen(false);
 
@@ -187,8 +231,31 @@ const VoiceControls = ({ socket, tableId }) => {
                 // Going live here is the player's own opt-in taking effect —
                 // they turned voice on, so the mic being open is the thing they
                 // asked for. A blocked prompt affects sending only; receive
-                // voice remains.
-                await setLocalMicrophoneMuted(false, voice, session);
+                // voice remains. But a device that already refused capture is
+                // not asked again automatically: re-prompting nags, and on iOS
+                // the attempt itself seizes the audio session and kills game
+                // sound. The mic button still tries on demand, and the 'Turn
+                // on voice' tap that caused THIS join bypasses the gate — it
+                // is the player asking to talk right now.
+                //
+                // Known limit: iOS Safari's default per-visit 'Ask' still
+                // re-prompts the allow-cohort at their first table each visit
+                // (the flag only exists for refusals). Sound now survives
+                // that prompt, and the Capacitor build is unaffected — native
+                // mic permission persists.
+                const explicitOptIn = explicitEnableRef.current;
+                explicitEnableRef.current = false;
+                const autoUnmute = explicitOptIn || await shouldAutoUnmuteMicrophone();
+                // The await gives a table change, a voice-off toggle, or a
+                // voiceEjected a window to end this session; a stale
+                // continuation must not touch the successor's UI.
+                if (voiceRef.current !== voice || sessionRef.current !== session) return;
+                if (autoUnmute) {
+                    await setLocalMicrophoneMuted(false, voice, session);
+                } else {
+                    setMicrophoneState('muted');
+                    showNotice('Your mic is off — tap the mic button to talk.');
+                }
             } catch (joinError) {
                 if (voiceRef.current !== voice || sessionRef.current !== session) return;
                 voice.leave();
@@ -207,7 +274,7 @@ const VoiceControls = ({ socket, tableId }) => {
             if (voiceRef.current === voice) voiceRef.current = null;
             voice.leave();
         };
-    }, [setLocalMicrophoneMuted, socket, tableId, voiceEnabled]);
+    }, [setLocalMicrophoneMuted, showNotice, socket, tableId, voiceEnabled]);
 
     // An admin muted this player mid-session: the server has already removed
     // them from the signaling room; tear down the local half and say why.
@@ -272,7 +339,10 @@ const VoiceControls = ({ socket, tableId }) => {
                     <button
                         type="button"
                         className="voice-enable-btn"
-                        onClick={() => setVoiceEnabled(true)}
+                        onClick={() => {
+                            explicitEnableRef.current = true;
+                            setVoiceEnabled(true);
+                        }}
                         title="Talk to the other players at this table using your microphone"
                     >
                         <MicrophoneIcon muted />
@@ -326,6 +396,11 @@ const VoiceControls = ({ socket, tableId }) => {
                     </span>
                 )}
                 {error && <p className="voice-error" role="alert">{error}</p>}
+                {!error && notice && (
+                    <span className="voice-connection-status" role="status" aria-live="polite">
+                        {notice}
+                    </span>
+                )}
 
                 {mixerOpen && (
                     <div className="voice-mixer" id={mixerId} role="group" aria-label="Voice player volumes">

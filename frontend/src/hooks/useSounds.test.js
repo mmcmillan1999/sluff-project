@@ -221,3 +221,98 @@ describe('useSounds music channel', () => {
         expect(ctx.sources.some(source => source.loop)).toBe(false);
     });
 });
+
+// iOS WebKit parks a context in the non-standard 'interrupted' state when the
+// system takes the audio session (a mic permission prompt, a phone call,
+// Siri). Every recovery path must treat it exactly like 'suspended', or the
+// game goes silent until page reload.
+describe('useSounds iOS interruption recovery', () => {
+    let originalVisibility;
+
+    beforeEach(() => {
+        contexts.length = 0;
+        localStorage.clear();
+        successfulFetch.mockReset();
+        successfulFetch.mockImplementation(successfulResponse);
+        vi.stubGlobal('AudioContext', MockAudioContext);
+        vi.stubGlobal('fetch', successfulFetch);
+        originalVisibility = Object.getOwnPropertyDescriptor(document, 'visibilityState');
+    });
+
+    afterEach(() => {
+        if (originalVisibility) {
+            Object.defineProperty(document, 'visibilityState', originalVisibility);
+        } else {
+            delete document.visibilityState;
+        }
+        vi.unstubAllGlobals();
+    });
+
+    test('resumes the moment the context reports interrupted', () => {
+        const { result } = renderHook(() => useSounds());
+        act(() => result.current.enableSound());
+        const ctx = contexts[0];
+        expect(ctx.resume).toHaveBeenCalledTimes(1);
+
+        ctx.state = 'interrupted';
+        act(() => ctx.onstatechange());
+        expect(ctx.resume).toHaveBeenCalledTimes(2);
+    });
+
+    test('playSound revives an interrupted context instead of playing into a frozen clock', async () => {
+        const { result } = renderHook(() => useSounds());
+        act(() => result.current.enableSound());
+        const ctx = contexts[0];
+        await waitFor(() => {
+            expect(ctx.decodeAudioData.mock.calls.length).toBeGreaterThanOrEqual(16);
+        });
+
+        ctx.state = 'interrupted';
+        act(() => result.current.playSound('cardPlay'));
+        expect(ctx.resume).toHaveBeenCalledTimes(2);
+    });
+
+    test('the gesture safety net stays armed after the first unlock', () => {
+        renderHook(() => useSounds());
+        act(() => window.dispatchEvent(new Event('pointerdown')));
+        const ctx = contexts[0];
+        const silentSources = () => ctx.sources.filter(source => source.buffer?.silent).length;
+        expect(ctx.resume).toHaveBeenCalledTimes(1);
+        expect(silentSources()).toBe(1);
+
+        // Before this net became persistent, the listeners removed themselves
+        // on the first gesture and a later interruption was unrecoverable by
+        // touch.
+        ctx.state = 'interrupted';
+        act(() => window.dispatchEvent(new Event('pointerdown')));
+        expect(ctx.resume).toHaveBeenCalledTimes(2);
+        // The iOS silent-buffer unlock runs once, not per gesture — a
+        // persistent listener must not mean per-tap Web Audio churn.
+        expect(silentSources()).toBe(1);
+    });
+
+    test('returning to the foreground revives an interrupted context', () => {
+        const { result } = renderHook(() => useSounds());
+        act(() => result.current.enableSound());
+        const ctx = contexts[0];
+
+        ctx.state = 'interrupted';
+        Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+        act(() => document.dispatchEvent(new Event('visibilitychange')));
+        expect(ctx.resume).toHaveBeenCalledTimes(2);
+    });
+
+    test('does not fight the deliberate suspend while backgrounded', () => {
+        const { result } = renderHook(() => useSounds());
+        act(() => result.current.enableSound());
+        const ctx = contexts[0];
+
+        Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+        act(() => document.dispatchEvent(new Event('visibilitychange')));
+        expect(ctx.suspend).toHaveBeenCalledTimes(1);
+
+        // The suspend fires a state change; resuming here would undo it.
+        act(() => ctx.onstatechange());
+        expect(ctx.resume).toHaveBeenCalledTimes(1);
+    });
+});

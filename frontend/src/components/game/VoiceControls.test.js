@@ -117,6 +117,173 @@ describe('VoiceControls', () => {
         expect(voice.setMicrophoneMuted.mock.calls).toEqual([[false], [false]]);
     });
 
+    test('a device that already refused the microphone is not asked again automatically', async () => {
+        const user = userEvent.setup();
+        window.localStorage.setItem('sluff_mic_capture_refused', 'true');
+
+        renderVoice();
+        const voice = await waitFor(() => voiceHarness.instances[0]);
+        const unmuteButton = await screen.findByRole('button', { name: 'Unmute microphone' });
+        await waitFor(() => expect(unmuteButton).toBeEnabled());
+
+        // Auto-join stays listen-only: on iOS the automatic getUserMedia
+        // seizes the audio session and was killing all game sound.
+        expect(voice.join).toHaveBeenCalledTimes(1);
+        expect(voice.setMicrophoneMuted).not.toHaveBeenCalled();
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+        // A deliberate tap still asks, and success clears the memory.
+        await user.click(unmuteButton);
+        await waitFor(() => expect(voice.setMicrophoneMuted).toHaveBeenCalledWith(false));
+        await waitFor(() => {
+            expect(window.localStorage.getItem('sluff_mic_capture_refused')).toBeNull();
+        });
+    });
+
+    test('a refused microphone is remembered so the next table stays quiet about it', async () => {
+        voiceHarness.behavior.setMicrophoneMuted = async (_voice, muted) => {
+            if (!muted) {
+                const blocked = new Error('Permission denied');
+                blocked.name = 'NotAllowedError';
+                throw blocked;
+            }
+            return true;
+        };
+
+        renderVoice();
+        expect(await screen.findByRole('alert')).toHaveTextContent(/microphone access was blocked/i);
+        expect(window.localStorage.getItem('sluff_mic_capture_refused')).toBe('true');
+    });
+
+    test('a granted report alone does not clear the memory — only working capture does', async () => {
+        // Site-level 'granted' says nothing about an OS-level mic block
+        // (Windows privacy toggle, macOS TCC): capture still fails there, and
+        // letting 'granted' clear the flag re-created the doomed attempt plus
+        // error banner at every table.
+        window.localStorage.setItem('sluff_mic_capture_refused', 'true');
+        Object.defineProperty(navigator, 'permissions', {
+            configurable: true,
+            value: { query: vi.fn(async () => ({ state: 'granted' })) },
+        });
+
+        try {
+            renderVoice();
+            const voice = await waitFor(() => voiceHarness.instances[0]);
+            const unmuteButton = await screen.findByRole('button', { name: 'Unmute microphone' });
+            await waitFor(() => expect(unmuteButton).toBeEnabled());
+            expect(voice.setMicrophoneMuted).not.toHaveBeenCalled();
+            expect(window.localStorage.getItem('sluff_mic_capture_refused')).toBe('true');
+            expect(screen.getByRole('status')).toHaveTextContent(/mic is off/i);
+        } finally {
+            delete navigator.permissions;
+        }
+    });
+
+    test('a prompt that times out is not remembered as a refusal', async () => {
+        // The player never answered (or answered too late) — that is not a
+        // denial, and remembering it as one silenced slow-to-Allow players
+        // forever on Safari, where the Permissions API can never self-heal.
+        voiceHarness.behavior.setMicrophoneMuted = async (_voice, muted) => {
+            if (!muted) {
+                const timeout = new Error('Timed out waiting for microphone permission.');
+                timeout.name = 'TimeoutError';
+                throw timeout;
+            }
+            return true;
+        };
+
+        renderVoice();
+        expect(await screen.findByRole('alert')).toHaveTextContent(/timed out/i);
+        expect(window.localStorage.getItem('sluff_mic_capture_refused')).toBeNull();
+    });
+
+    test('a device the OS is withholding is remembered like a denial', async () => {
+        voiceHarness.behavior.setMicrophoneMuted = async (_voice, muted) => {
+            if (!muted) {
+                const unreadable = new Error('Could not start audio source');
+                unreadable.name = 'NotReadableError';
+                throw unreadable;
+            }
+            return true;
+        };
+
+        renderVoice();
+        expect(await screen.findByRole('alert')).toHaveTextContent(/could not start/i);
+        expect(window.localStorage.getItem('sluff_mic_capture_refused')).toBe('true');
+    });
+
+    test("the 'Turn on voice' tap asks even on a device that refused before", async () => {
+        const user = userEvent.setup();
+        window.localStorage.setItem('sluff_voice_enabled', 'false');
+        window.localStorage.setItem('sluff_mic_capture_refused', 'true');
+
+        renderVoice();
+        await user.click(screen.getByRole('button', { name: /turn on voice/i }));
+
+        // The tap is the player asking to talk right now — the remembered
+        // refusal gates only routine table entries, never this.
+        const voice = await waitFor(() => voiceHarness.instances[0]);
+        await waitFor(() => expect(voice.setMicrophoneMuted).toHaveBeenCalledWith(false));
+        await waitFor(() => {
+            expect(window.localStorage.getItem('sluff_mic_capture_refused')).toBeNull();
+        });
+    });
+
+    test('a table change during the permission check cannot touch the new session', async () => {
+        const user = userEvent.setup();
+        window.localStorage.setItem('sluff_mic_capture_refused', 'true');
+        let resolveFirstQuery;
+        const firstQuery = new Promise((resolve) => { resolveFirstQuery = resolve; });
+        Object.defineProperty(navigator, 'permissions', {
+            configurable: true,
+            value: {
+                query: vi.fn()
+                    .mockReturnValueOnce(firstQuery)
+                    .mockResolvedValue({ state: 'prompt' }),
+            },
+        });
+
+        try {
+            const { rerender } = render(<VoiceControls socket={socket} tableId="table-one" />);
+            await waitFor(() => expect(voiceHarness.instances).toHaveLength(1));
+
+            // Table change while the first session's permission check hangs.
+            rerender(<VoiceControls socket={socket} tableId="table-two" />);
+            await waitFor(() => expect(voiceHarness.instances).toHaveLength(2));
+            const unmuteButton = await screen.findByRole('button', { name: 'Unmute microphone' });
+            await waitFor(() => expect(unmuteButton).toBeEnabled());
+            await user.click(unmuteButton);
+            await waitFor(() => {
+                expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeEnabled();
+            });
+
+            // The first session's continuation finally resolves; without the
+            // staleness re-check it would stamp 'muted' over a live mic.
+            await act(async () => { resolveFirstQuery({ state: 'prompt' }); });
+            expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeEnabled();
+        } finally {
+            delete navigator.permissions;
+        }
+    });
+
+    test('a browser that reports denied skips the doomed attempt entirely', async () => {
+        Object.defineProperty(navigator, 'permissions', {
+            configurable: true,
+            value: { query: vi.fn(async () => ({ state: 'denied' })) },
+        });
+
+        try {
+            renderVoice();
+            const voice = await waitFor(() => voiceHarness.instances[0]);
+            const unmuteButton = await screen.findByRole('button', { name: 'Unmute microphone' });
+            await waitFor(() => expect(unmuteButton).toBeEnabled());
+            expect(voice.setMicrophoneMuted).not.toHaveBeenCalled();
+            expect(window.localStorage.getItem('sluff_mic_capture_refused')).toBe('true');
+        } finally {
+            delete navigator.permissions;
+        }
+    });
+
     test('mutes on backgrounding and never auto-unmutes on return', async () => {
         const user = userEvent.setup();
         renderVoice();

@@ -53,6 +53,14 @@ const storedVolume = (key, fallback) => clampVolume(stored(
 ));
 const volumesMatch = (left, right) => Math.abs(left - right) < 0.0001;
 
+// iOS WebKit parks a context in the (once non-standard) 'interrupted' state
+// whenever the system takes the audio session — a microphone permission
+// prompt, a phone call, Siri, another app. It resumes exactly like
+// 'suspended', and a resume() issued mid-interruption is queued by WebKit to
+// settle when the interruption ends. Checking for 'suspended' alone left
+// every interrupted context silent until page reload.
+const isResumable = (ctx) => ctx.state === 'suspended' || ctx.state === 'interrupted';
+
 // Safari has historically supported only the callback form, while modern
 // browsers return a promise. Resolve either API without decoding twice.
 const decodeAudio = (ctx, data) => new Promise((resolve, reject) => {
@@ -229,6 +237,16 @@ export const useSounds = ({ musicActive = false } = {}) => {
             ctxRef.current = ctx;
             gainRef.current = effectsGain;
 
+            // Recover the moment an iOS interruption releases the session,
+            // instead of waiting for the next tap or visibility flip. The
+            // hidden check keeps this from fighting the deliberate
+            // suspend-while-backgrounded below.
+            ctx.onstatechange = () => {
+                if (disposedRef.current || ctxRef.current !== ctx) return;
+                if (!enabledRef.current || document.visibilityState === 'hidden') return;
+                if (isResumable(ctx)) ctx.resume().catch(() => {});
+            };
+
             // Build the music branch separately so a music-specific Web Audio
             // failure leaves the already-connected effects channel usable.
             try {
@@ -258,7 +276,8 @@ export const useSounds = ({ musicActive = false } = {}) => {
         // Must be called from a user gesture (browsers gate audio on interaction).
         const ctx = ensureContext();
         if (!ctx) return;
-        if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+        if (isResumable(ctx)) ctx.resume().catch(() => {});
+        if (enabledRef.current) return;
 
         // iOS needs a real (silent) buffer started inside the gesture to unlock
         // the audio session; resume() alone is insufficient on older versions.
@@ -312,7 +331,7 @@ export const useSounds = ({ musicActive = false } = {}) => {
     useEffect(() => {
         const resumeIfNeeded = () => {
             const ctx = ctxRef.current;
-            if (ctx && ctx.state === 'suspended' && enabledRef.current) {
+            if (ctx && isResumable(ctx) && enabledRef.current) {
                 ctx.resume().catch(() => {});
             }
         };
@@ -337,13 +356,11 @@ export const useSounds = ({ musicActive = false } = {}) => {
     }, []);
 
     // Safety net for refresh/rejoin flows that skip explicit enableSound calls.
+    // Stays armed for the page's life: after the first unlock (which makes
+    // repeat calls nearly free) it doubles as the gesture-side recovery for a
+    // context that iOS interrupted mid-game.
     useEffect(() => {
-        const unlock = () => {
-            enableSound();
-            window.removeEventListener('pointerdown', unlock);
-            window.removeEventListener('keydown', unlock);
-            window.removeEventListener('touchstart', unlock);
-        };
+        const unlock = () => enableSound();
         window.addEventListener('pointerdown', unlock);
         window.addEventListener('keydown', unlock);
         window.addEventListener('touchstart', unlock);
@@ -373,6 +390,7 @@ export const useSounds = ({ musicActive = false } = {}) => {
             musicGainRef.current = null;
             buffersRef.current = {};
             musicLoadPromiseRef.current = null;
+            if (ctx) ctx.onstatechange = null;
             if (ctx && ctx.state !== 'closed' && typeof ctx.close === 'function') {
                 ctx.close().catch(() => {});
             }
@@ -394,7 +412,7 @@ export const useSounds = ({ musicActive = false } = {}) => {
             console.warn(`[sound] "${soundName}" skipped — ${!ctx ? 'no audio context' : 'buffer not loaded'}`);
             return;
         }
-        if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+        if (isResumable(ctx)) ctx.resume().catch(() => {});
         const source = ctx.createBufferSource();
         source.buffer = buffer;
 
