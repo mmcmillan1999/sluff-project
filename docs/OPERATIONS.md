@@ -87,4 +87,30 @@ node scripts/reset-alpha2-wallets.js --execute --expected-hash=HASH --expected-s
 
 - Push/merge to `main` → Netlify builds frontend automatically (Vite, Node 22).
 - Render deploys backend from `main` (`npm start`) — verify auto-deploy setting in Render.
-- No CI; run `npm test` in both `frontend/` and `backend/` before merging to `main`.
+- CI runs both suites plus a gitleaks secret scan on every push (`.github/workflows/`).
+  Still worth running `npm test` locally in `frontend/` and `backend/` first.
+
+### Check nobody is mid-game first
+
+```bash
+cd backend && npm run deploy:check     # exit 0 = clear, exit 1 = a human is playing
+```
+
+**A backend deploy kills every in-flight game.** The server has no SIGTERM
+handler, so Render restarts it outright; `abandonedGameRecovery` then refunds
+the buy-ins, which is why those games show up as *"Abandoned after server
+interruption — funded player buy-ins refunded"*. Nobody loses tokens, but the
+game is gone and the players notice.
+
+The check reports live games (anything with activity in the last 10 minutes)
+split by whether a human is in one, and exits non-zero if so. Bot-only games are
+deliberately not a blocker: the exhibition table restarts itself, and waiting on
+it would mean never deploying.
+
+If it says stop, either wait or save the push for a quiet hour. Frontend-only
+changes are safe any time — Netlify swaps static assets and the backend never
+restarts, so no game is interrupted.
+
+The durable fix is a SIGTERM handler that persists or cleanly parks in-flight
+games instead of dropping them. Not built: engine state lives in memory, so
+saving it is real work rather than a signal handler.

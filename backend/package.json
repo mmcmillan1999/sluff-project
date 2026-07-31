@@ -15,7 +15,8 @@
     "users:prune": "node scripts/prune-inactive-users.js",
     "games:reconcile": "node scripts/reconcile-abandoned-games.js",
     "tokens:audit": "node scripts/audit-token-accounting.js",
-    "tokens:reset-alpha2": "node scripts/reset-alpha2-wallets.js"
+    "tokens:reset-alpha2": "node scripts/reset-alpha2-wallets.js",
+    "deploy:check": "node scripts/deploy-safety-check.js"
   },
   "engines": {
     "node": ">=20"
