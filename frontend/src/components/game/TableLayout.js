@@ -56,7 +56,8 @@ const TableLayout = ({
     suppressActionControls = false,
     onPlayerProfile,
     turnNudgeLevel = 0,
-    turnNudgeCountdown = null
+    turnNudgeCountdown = null,
+    bidHintText = ''
 }) => {
     const tableThemeId = getThemePresentation(currentTableState?.theme).id;
     const [lastTrickVisible, setLastTrickVisible] = useState(false);
@@ -1041,6 +1042,7 @@ const TableLayout = ({
                         roundPresentationComplete={roundPresentationComplete}
                         turnNudgeLevel={turnNudgeLevel}
                         turnNudgeCountdown={turnNudgeCountdown}
+                        bidHintText={bidHintText}
                     />
                 )}
             </div>

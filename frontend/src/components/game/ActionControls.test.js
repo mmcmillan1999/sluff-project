@@ -363,3 +363,41 @@ describe('ActionControls dedicated-state suppression', () => {
         expect(emitEvent).not.toHaveBeenCalledWith('requestNextRound');
     });
 });
+
+describe('ActionControls bid hint', () => {
+    const biddingState = () => makeState({ state: 'Bidding Phase', biddingTurnPlayerName: 'Alice' });
+
+    test('the question mark asks the table for a suggestion', async () => {
+        const user = userEvent.setup();
+        const emitEvent = vi.fn();
+        renderControls(biddingState(), { emitEvent });
+
+        await user.click(screen.getByRole('button', { name: 'Not sure? Get a bid suggestion' }));
+        expect(emitEvent).toHaveBeenCalledWith('requestBidHint');
+    });
+
+    test('the answer lands in an always-mounted status region, button intact', () => {
+        // The live region exists before the text arrives (late-mounted
+        // regions are unreliably announced) and the button survives so
+        // keyboard focus is never dropped mid-prompt.
+        const { rerender } = render(
+            <ActionControls {...defaultProps} currentTableState={biddingState()} bidHintText="" />
+        );
+        expect(screen.getByRole('status')).toBeEmptyDOMElement();
+
+        rerender(
+            <ActionControls
+                {...defaultProps}
+                currentTableState={biddingState()}
+                bidHintText="Because you have 48 points and 6 clubs, you might try a Solo."
+            />
+        );
+        expect(screen.getByRole('status')).toHaveTextContent(/48 points and 6 clubs/);
+        expect(screen.getByRole('button', { name: 'Not sure? Get a bid suggestion' })).toBeInTheDocument();
+    });
+
+    test('no hint chrome for the player waiting on someone else', () => {
+        renderControls(makeState({ state: 'Bidding Phase', biddingTurnPlayerName: 'Cara' }));
+        expect(screen.queryByRole('button', { name: 'Not sure? Get a bid suggestion' })).not.toBeInTheDocument();
+    });
+});

@@ -248,3 +248,56 @@
     color: #ffb46b;
     font-variant-numeric: tabular-nums;
 }
+
+/* Heading + hint button share one centered row; the button sits beside the
+   heading rather than inside it so the heading's accessible name stays
+   clean. */
+.action-prompt__heading-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.8vh;
+}
+
+/* "Not sure?" — asks the table for a bid suggestion. Sized as a touch
+   target despite the small glyph. */
+.action-prompt__hint-btn {
+    display: inline-grid;
+    place-items: center;
+    width: 3.6vh;
+    height: 3.6vh;
+    min-width: 32px;
+    min-height: 32px;
+    margin-left: 1vh;
+    padding: 0;
+    border: 1px solid rgba(226, 184, 84, 0.55);
+    border-radius: 50%;
+    background: rgba(226, 184, 84, 0.12);
+    color: #e2b854;
+    font-family: inherit;
+    font-size: clamp(0.75rem, 1.8vh, 1rem);
+    font-weight: 700;
+    line-height: 1;
+    vertical-align: middle;
+    cursor: pointer;
+}
+
+.action-prompt__hint-btn:hover,
+.action-prompt__hint-btn:focus-visible {
+    background: rgba(226, 184, 84, 0.28);
+}
+
+/* The suggestion itself, one sentence between heading and bid keys. Stays
+   mounted while empty (see the live-region note in ActionControls.js), so
+   the empty state must cost no space. */
+.action-prompt__hint {
+    margin: 0.4vh 0 0.2vh;
+    color: #f3dfae;
+    font-size: clamp(0.72rem, 1.7vh, 0.95rem);
+    font-style: italic;
+    line-height: 1.35;
+}
+
+.action-prompt__hint:empty {
+    margin: 0;
+}

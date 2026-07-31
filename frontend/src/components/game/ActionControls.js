@@ -69,7 +69,8 @@ const ActionControls = ({
     isAdmin,
     quickPlayDecisionRejectionNonce = 0,
     turnNudgeLevel = 0,
-    turnNudgeCountdown = null
+    turnNudgeCountdown = null,
+    bidHintText = ''
 }) => {
     const [inviteCopied, setInviteCopied] = useState(false);
     const [quickPlayDecisionSubmitted, setQuickPlayDecisionSubmitted] = useState(false);
@@ -349,12 +350,28 @@ const ActionControls = ({
                     : -1;
                 return (
                     <PromptShell variant="choice" label="Bidding controls" nudge={turnNudgeLevel}>
-                        <h2 className="action-prompt__heading">
-                            Choose your bid
-                            {turnNudgeLevel > 0 && Number.isFinite(turnNudgeCountdown) && turnNudgeCountdown <= 20 && (
-                                <span className="action-prompt__countdown"> · {Math.max(turnNudgeCountdown, 0)}s</span>
-                            )}
-                        </h2>
+                        <div className="action-prompt__heading-row">
+                            <h2 className="action-prompt__heading">
+                                Choose your bid
+                                {turnNudgeLevel > 0 && Number.isFinite(turnNudgeCountdown) && turnNudgeCountdown <= 20 && (
+                                    <span className="action-prompt__countdown"> · {Math.max(turnNudgeCountdown, 0)}s</span>
+                                )}
+                            </h2>
+                            <button
+                                type="button"
+                                className="action-prompt__hint-btn"
+                                onClick={() => emitEvent('requestBidHint')}
+                                aria-label="Not sure? Get a bid suggestion"
+                                title="Not sure? Get a bid suggestion"
+                            >
+                                ?
+                            </button>
+                        </div>
+                        {/* Always mounted: a live region inserted together
+                            with its content is unreliably announced, and
+                            unmounting the button mid-interaction would drop
+                            keyboard focus to the body. */}
+                        <p className="action-prompt__hint" role="status">{bidHintText}</p>
                         <div className="action-prompt__button-grid action-prompt__button-grid--bids">
                             {BID_HIERARCHY.map(bid => (
                                 <button

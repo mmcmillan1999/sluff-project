@@ -2,6 +2,7 @@ const path = require('path');
 
 const suites = [
     { name: 'BotPlayer', file: './bot.test.js' },
+    { name: 'bid advice', file: './bidAdvice.test.js' },
     { name: 'persistent bot accounts', file: './botAccounts.test.js' },
     { name: 'funded bot accounting', file: './fundedBots.test.js' },
     { name: 'bot credential isolation', file: './botAuthentication.test.js' },

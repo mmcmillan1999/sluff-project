@@ -6,6 +6,7 @@ const { authorizeTableAction, isPlainObject, validators } = require('./socketAct
 const { loadCurrentUserByTokenId } = require('../middleware/requireAuth');
 const { nextChangeAllowedAt } = require('../data/accountIdentity');
 const afkTurnTimer = require('../core/afkTurnTimer');
+const { recommendBid } = require('../core/bidAdvice');
 const { playerProgressFields } = require('../services/tutorialProgress');
 
 const DEFAULT_SOCKET_AUTH_REFRESH_INTERVAL_MS = 60_000;
@@ -609,6 +610,18 @@ const registerGameHandlers = (io, gameService, options = {}) => {
             afkTurnTimer.refresh(engine, socket.user.id, {
                 timeoutMs: engine.afkTimeoutMs,
             });
+        });
+
+        // The bid hint: the same evaluator the table's automated play uses,
+        // answered privately to the asking socket (it is their own hand, but
+        // no one else's business that they asked). Read-only — no game state
+        // changes, so failure needs no recovery.
+        onTableAction("requestBidHint", {}, ({ engine, player }) => {
+            if (engine.state !== 'Bidding Phase') return;
+            const hand = engine.hands[player.playerName] || [];
+            if (hand.length === 0) return;
+            const hint = recommendBid(hand, engine.currentHighestBidDetails?.bid || null);
+            socket.emit('bidHint', { tableId: engine.tableId, ...hint });
         });
 
         onTableAction("voiceJoin", {}, async ({ engine }) => {

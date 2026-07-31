@@ -14,6 +14,7 @@ import ActionControls from './game/ActionControls';
 import InsurancePrompt from './game/InsurancePrompt';
 import BidWinnerSplash from './game/BidWinnerSplash';
 import IosPwaPrompt from './game/IosPwaPrompt';
+import buildBidHintCopy from '../utils/bidHintCopy';
 import {
     END_ROUND_TOTAL_MS,
     ROUND_RECAP_ACTION_MS,
@@ -254,6 +255,27 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         : null;
     const handNudgeLevel = pendingSelfAction?.surface === 'hand' ? turnNudgeLevel : 0;
     const promptNudgeLevel = pendingSelfAction?.surface === 'prompt' ? turnNudgeLevel : 0;
+
+    // The bid hint answer arrives privately on this socket; the copy is
+    // composed here so the prompt only ever handles a finished sentence.
+    const [bidHintText, setBidHintText] = useState('');
+    useEffect(() => {
+        if (!socket) return undefined;
+        const onBidHint = (payload) => {
+            if (payload?.tableId && payload.tableId !== currentTableState?.tableId) return;
+            setBidHintText(buildBidHintCopy(payload));
+        };
+        socket.on('bidHint', onBidHint);
+        return () => socket.off('bidHint', onBidHint);
+    }, [socket, currentTableState?.tableId]);
+    // A hint speaks to one decision: when the turn moves or the phase ends,
+    // it is stale, not advice.
+    const biddingTurnForHint = currentTableState?.state === 'Bidding Phase'
+        ? currentTableState?.biddingTurnPlayerName
+        : null;
+    useEffect(() => {
+        setBidHintText('');
+    }, [biddingTurnForHint]);
 
     useLayoutEffect(() => {
         const previous = dealTransitionRef.current;
@@ -1594,6 +1616,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 onPlayerProfile={setProfilePlayerName}
                 turnNudgeLevel={promptNudgeLevel}
                 turnNudgeCountdown={promptNudgeLevel > 0 ? turnNudgeCountdown : null}
+                bidHintText={bidHintText}
             />
 
             <TutorialCoach

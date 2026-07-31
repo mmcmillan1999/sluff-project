@@ -272,13 +272,24 @@ if (params.get('frogwidow') === '1') {
 }
 
 const noop = () => {};
+// Real handler registry so harness code can answer requests the way the
+// server would (see the requestBidHint interception in HarnessApp).
+const socketHandlers = new Map();
 const fakeSocket = {
     id: 'harness-socket',
     connected: false,
-    on: noop,
-    off: noop,
+    on(event, handler) {
+        if (!socketHandlers.has(event)) socketHandlers.set(event, new Set());
+        socketHandlers.get(event).add(handler);
+    },
+    off(event, handler) {
+        socketHandlers.get(event)?.delete(handler);
+    },
     emit: noop,
     io: { on: noop, off: noop },
+    trigger(event, payload) {
+        socketHandlers.get(event)?.forEach(handler => handler(payload));
+    },
 };
 
 const soundSettings = {
@@ -299,6 +310,20 @@ const HarnessApp = () => {
     const [liveState, setLiveState] = React.useState(tableState);
     const emitEvent = React.useCallback((eventName, payload) => {
         console.log('[harness] emitEvent', eventName, payload);
+        if (eventName === 'requestBidHint') {
+            // Facts mirror the canned hand exactly: AC KC QC JC 10C 9C 8S 7S
+            // AD KD QD = 48 points with six clubs, which the shared backend
+            // evaluator (core/bidAdvice.js) reads as a Solo.
+            fakeSocket.trigger('bidHint', {
+                tableId: 'harness-table',
+                bid: 'Solo',
+                handBid: 'Solo',
+                points: 48,
+                suits: { H: 0, S: 2, C: 6, D: 3 },
+                outbid: false,
+            });
+            return;
+        }
         if (!interactiveTurn || eventName !== 'playCard' || !payload?.card) return;
         setLiveState(prev => {
             if (!prev.hands.You.includes(payload.card)) return prev;

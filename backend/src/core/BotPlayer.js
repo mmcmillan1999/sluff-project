@@ -2,6 +2,7 @@
 
 const gameLogic = require('./logic');
 const { RANKS_ORDER, BID_HIERARCHY, BID_MULTIPLIERS, CARD_POINT_VALUES } = require('./constants');
+const { analyzeHandForBid, recommendBid } = require('./bidAdvice');
 const { getLegalMoves } = require('./legalMoves');
 const { calculateInsuranceMove } = require('./bot-strategies/InsuranceStrategy');
 
@@ -44,11 +45,7 @@ class BotPlayer {
     }
 
     _analyzeHand(hand) {
-        if (!hand || hand.length === 0) return { points: 0, suits: { H: 0, S: 0, C: 0, D: 0 } };
-        const points = gameLogic.calculateCardPoints(hand);
-        const suits = { H: 0, S: 0, C: 0, D: 0 };
-        for (const card of hand) { suits[gameLogic.getSuit(card)]++; }
-        return { points, suits };
+        return analyzeHandForBid(hand);
     }
 
     playCard() {
@@ -125,30 +122,10 @@ class BotPlayer {
     }
 
     decideBid() {
+        // The evaluator lives in bidAdvice.js, shared with the player-facing
+        // bid hint — thresholds and their tuning notes live there.
         const hand = this.engine.hands[this.playerName] || [];
-        const { points, suits } = this._analyzeHand(hand);
-        let potentialBid = "Pass";
-
-        // Tuned July 2026 (simulated single-bot rates ~9% HS / 28% Solo /
-        // 12% Frog / 52% Pass): four hearts only justifies Heart Solo on a
-        // premium hand, and a long side suit alone doesn't justify Solo on
-        // a below-average one. Demoted 4-heart hands fall through to Frog.
-        if ((points > 30 && suits.H >= 5) || (points > 46 && suits.H >= 4)) {
-            potentialBid = "Heart Solo";
-        } else if ((points > 34 && (suits.S >= 5 || suits.C >= 5 || suits.D >= 5)) || (points > 40 && (suits.S >= 4 || suits.C >= 4 || suits.D >= 4))) {
-            potentialBid = "Solo";
-        } else if ((points > 30 && suits.H >= 4) || (points > 40 && suits.H >= 3)) {
-            potentialBid = "Frog";
-        }
-
-        const currentBidDetails = this.engine.currentHighestBidDetails;
-        const currentBidLevel = currentBidDetails ? BID_HIERARCHY.indexOf(currentBidDetails.bid) : -1;
-        const potentialBidLevel = BID_HIERARCHY.indexOf(potentialBid);
-
-        if (potentialBidLevel > currentBidLevel) {
-            return potentialBid;
-        }
-        return "Pass";
+        return recommendBid(hand, this.engine.currentHighestBidDetails?.bid || null).bid;
     }
 
     decideFrogUpgrade() {
