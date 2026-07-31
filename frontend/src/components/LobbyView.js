@@ -108,48 +108,6 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
         }
     }, [lobbyThemes, activeTab]);
 
-    // Keyboard shortcuts for desktop quick actions
-    useEffect(() => {
-        if (!isDesktop) return;
-
-        const handleKeyDown = (e) => {
-            // Only trigger if no input is focused and no modifiers are pressed
-            if (document.activeElement.tagName === 'INPUT' || 
-                document.activeElement.tagName === 'TEXTAREA' ||
-                e.ctrlKey || e.altKey || e.shiftKey || e.metaKey) {
-                return;
-            }
-
-            switch (e.key.toLowerCase()) {
-                case 'l':
-                    e.preventDefault();
-                    handleShowLeaderboard();
-                    break;
-                case 'f':
-                    e.preventDefault();
-                    handleShowFeedback();
-                    break;
-                case 'a':
-                    if (user?.is_admin) {
-                        e.preventDefault();
-                        handleShowAdmin();
-                    }
-                    break;
-                case 'q':
-                    e.preventDefault();
-                    handleLogout();
-                    break;
-                default:
-                    // No action for other keys
-                    break;
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isDesktop, user, handleShowLeaderboard, handleShowFeedback,
-        handleShowAdmin, handleLogout]);
-
     const activeTheme = lobbyThemes.find(theme => theme.id === activeTab);
     const hasTutorialTraining = Number(user?.tutorial_version) >= TUTORIAL_VERSION;
 
@@ -172,7 +130,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
             id: 'player',
             label: 'Player',
             actions: [
-                { id: 'leaderboard', label: 'Leaderboard', shortcut: 'L', onSelect: handleShowLeaderboard },
+                { id: 'leaderboard', label: 'Leaderboard', onSelect: handleShowLeaderboard },
                 { id: 'season-recaps', label: 'Season Recaps', onSelect: handleShowSeasonRecaps },
                 { id: 'ledger', label: 'Token Ledger', onSelect: handleShowTokenLedger },
             ],
@@ -195,7 +153,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
             id: 'support',
             label: 'Support',
             actions: [
-                { id: 'feedback', label: 'Feedback', shortcut: 'F', onSelect: handleShowFeedback },
+                { id: 'feedback', label: 'Feedback', onSelect: handleShowFeedback },
             ],
         },
         {
@@ -208,11 +166,10 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
                 ...(user?.is_admin ? [{
                     id: 'admin',
                     label: 'Admin Tools',
-                    shortcut: 'A',
                     tone: 'admin',
                     onSelect: handleShowAdmin,
                 }] : []),
-                { id: 'logout', label: 'Sign Out', shortcut: 'Q', tone: 'logout', onSelect: handleLogout },
+                { id: 'logout', label: 'Sign Out', tone: 'logout', onSelect: handleLogout },
             ],
         },
     ];
@@ -226,14 +183,12 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
                     key={action.id}
                     className={`${buttonClass}${action.tone ? ` ${action.tone}` : ''}`}
                     disabled={action.disabled}
-                    aria-keyshortcuts={action.shortcut || undefined}
                     onClick={() => {
                         action.onSelect();
                         if (closeMenu && !action.managesMenuState) setShowMenu(false);
                     }}
                 >
                     {action.label}
-                    {action.shortcut && <span className="keyboard-shortcut" aria-hidden="true">{action.shortcut}</span>}
                 </button>
             ))}
         </div>

@@ -813,14 +813,6 @@
     background-color: #6c757d;
   }
   
-  /* Keyboard shortcut hints */
-  .keyboard-shortcut {
-    float: right;
-    opacity: 0.5;
-    font-size: 0.85rem;
-    font-family: monospace;
-  }
-  
   /* Main content area */
   .tables-section {
     grid-column: 2;
