@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import VoiceChat from './VoiceChat';
+import VoiceChat, { resetAudioSessionAccountingForTests } from './VoiceChat';
 
 const deferred = () => {
     let resolve;
@@ -114,6 +114,7 @@ describe('VoiceChat microphone lifecycle', () => {
     beforeEach(() => {
         peerConnections = [];
         audioContexts = [];
+        resetAudioSessionAccountingForTests();
         getUserMedia = vi.fn();
         Object.defineProperty(navigator, 'mediaDevices', {
             configurable: true,
@@ -315,6 +316,150 @@ describe('VoiceChat microphone lifecycle', () => {
 
         voice.leave();
         expect(ctx.onstatechange).toBeNull();
+    });
+
+    test('elevates the audio session for capture and restores playback only when it truly ends', async () => {
+        Object.defineProperty(navigator, 'audioSession', {
+            configurable: true,
+            value: { type: 'playback' },
+        });
+        try {
+            const socket = makeSocket();
+            const voice = new VoiceChat(socket, 'table-12');
+            const { stream } = makeMicrophone();
+            getUserMedia.mockResolvedValue(stream);
+            await voice.join();
+            expect(navigator.audioSession.type).toBe('playback');
+
+            await voice.setMicrophoneMuted(false);
+            expect(navigator.audioSession.type).toBe('play-and-record');
+
+            // A muted-but-held stream is still capturing — no restore yet.
+            await voice.setMicrophoneMuted(true);
+            expect(navigator.audioSession.type).toBe('play-and-record');
+
+            voice.leave();
+            expect(navigator.audioSession.type).toBe('playback');
+        } finally {
+            delete navigator.audioSession;
+        }
+    });
+
+    test('a refused capture never leaves play-and-record declared', async () => {
+        // A stranded play-and-record declaration would duck and reroute game
+        // audio with no capture running — the very thing the denial gate on
+        // auto-unmute exists to prevent.
+        Object.defineProperty(navigator, 'audioSession', {
+            configurable: true,
+            value: { type: 'playback' },
+        });
+        try {
+            const socket = makeSocket();
+            const voice = new VoiceChat(socket, 'table-12');
+            const blocked = new Error('Permission denied');
+            blocked.name = 'NotAllowedError';
+            getUserMedia.mockRejectedValue(blocked);
+            await voice.join();
+
+            await expect(voice.setMicrophoneMuted(false)).rejects.toThrow('Permission denied');
+            expect(navigator.audioSession.type).toBe('playback');
+        } finally {
+            delete navigator.audioSession;
+        }
+    });
+
+    test('a superseded acquire settling late cannot downgrade a newer capture', async () => {
+        Object.defineProperty(navigator, 'audioSession', {
+            configurable: true,
+            value: { type: 'playback' },
+        });
+        try {
+            const socket = makeSocket();
+            const voice = new VoiceChat(socket, 'table-12');
+            const staleAcquire = deferred();
+            const staleMic = makeMicrophone();
+            getUserMedia.mockReturnValueOnce(staleAcquire.promise);
+            await voice.join();
+
+            // Request A hangs on the prompt; the player backgrounds (mute),
+            // returns, and unmutes again — request B — which is granted.
+            const first = voice.setMicrophoneMuted(false);
+            await voice.setMicrophoneMuted(true);
+            const liveMic = makeMicrophone();
+            getUserMedia.mockResolvedValue(liveMic.stream);
+            await voice.setMicrophoneMuted(false);
+            expect(navigator.audioSession.type).toBe('play-and-record');
+
+            // A finally resolves, stale: its stream must be stopped, but the
+            // page-global declaration belongs to B's live capture now.
+            staleAcquire.resolve(staleMic.stream);
+            await expect(first).resolves.toBe(false);
+            expect(staleMic.track.stop).toHaveBeenCalled();
+            expect(navigator.audioSession.type).toBe('play-and-record');
+
+            voice.leave();
+            expect(navigator.audioSession.type).toBe('playback');
+        } finally {
+            delete navigator.audioSession;
+        }
+    });
+
+    test('leave during a pending acquire keeps play-and-record until the prompt settles', async () => {
+        Object.defineProperty(navigator, 'audioSession', {
+            configurable: true,
+            value: { type: 'playback' },
+        });
+        try {
+            const socket = makeSocket();
+            const voice = new VoiceChat(socket, 'table-12');
+            const pending = deferred();
+            const { stream, track } = makeMicrophone();
+            getUserMedia.mockReturnValue(pending.promise);
+            await voice.join();
+
+            const unmute = voice.setMicrophoneMuted(false);
+            voice.leave();
+            // The OS prompt may still be on screen; restoring 'playback' now
+            // would misconfigure the capture a late Allow starts.
+            expect(navigator.audioSession.type).toBe('play-and-record');
+
+            pending.resolve(stream);
+            await expect(unmute).resolves.toBe(false);
+            expect(track.stop).toHaveBeenCalled();
+            expect(navigator.audioSession.type).toBe('playback');
+        } finally {
+            delete navigator.audioSession;
+        }
+    });
+
+    test('a live voice session keeps the release private until the player leaves', async () => {
+        Object.defineProperty(navigator, 'audioSession', {
+            configurable: true,
+            value: { type: 'playback' },
+        });
+        const released = vi.fn();
+        window.addEventListener('sluff:audio-session-released', released);
+        try {
+            const socket = makeSocket();
+            const voice = new VoiceChat(socket, 'table-12');
+            const blocked = new Error('Permission denied');
+            blocked.name = 'NotAllowedError';
+            getUserMedia.mockRejectedValue(blocked);
+            await voice.join();
+
+            await expect(voice.setMicrophoneMuted(false)).rejects.toThrow('Permission denied');
+            // Listen-only peer audio still rides the media channel; releasing
+            // to the game here would let a fully muted game drop the session
+            // to 'ambient' and silence teammates behind the silent switch.
+            expect(navigator.audioSession.type).toBe('playback');
+            expect(released).not.toHaveBeenCalled();
+
+            voice.leave();
+            expect(released).toHaveBeenCalled();
+        } finally {
+            window.removeEventListener('sluff:audio-session-released', released);
+            delete navigator.audioSession;
+        }
     });
 
     test('leaves an interruption alone while the app is backgrounded', async () => {

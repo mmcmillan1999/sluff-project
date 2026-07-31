@@ -1,6 +1,7 @@
 import React from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { useSounds } from './useSounds';
+import VoiceChat, { resetAudioSessionAccountingForTests } from '../utils/VoiceChat';
 
 const MUSIC_URL = '/Music/upbeat-game-loop-v1.mp3';
 
@@ -232,6 +233,7 @@ describe('useSounds iOS interruption recovery', () => {
     beforeEach(() => {
         contexts.length = 0;
         localStorage.clear();
+        resetAudioSessionAccountingForTests();
         successfulFetch.mockReset();
         successfulFetch.mockImplementation(successfulResponse);
         vi.stubGlobal('AudioContext', MockAudioContext);
@@ -246,6 +248,100 @@ describe('useSounds iOS interruption recovery', () => {
             delete document.visibilityState;
         }
         vi.unstubAllGlobals();
+    });
+
+    test('declares the playback audio session so the iOS silent switch cannot mute the game', () => {
+        Object.defineProperty(navigator, 'audioSession', {
+            configurable: true,
+            value: { type: 'auto' },
+        });
+        try {
+            const { result } = renderHook(() => useSounds());
+            act(() => result.current.enableSound());
+            expect(navigator.audioSession.type).toBe('playback');
+        } finally {
+            delete navigator.audioSession;
+        }
+    });
+
+    test('a fully muted game stays off the media channel and returns on unmute', () => {
+        // Claiming 'playback' pauses the player's own music app; a game whose
+        // every channel is muted has no business doing that.
+        localStorage.setItem('sluff_sound_muted', JSON.stringify(true));
+        localStorage.setItem('sluff_music_muted', JSON.stringify(true));
+        Object.defineProperty(navigator, 'audioSession', {
+            configurable: true,
+            value: { type: 'auto' },
+        });
+        try {
+            const { result } = renderHook(() => useSounds({ musicActive: true }));
+            act(() => result.current.enableSound());
+            expect(navigator.audioSession.type).toBe('ambient');
+
+            act(() => result.current.soundSettings.toggleMute());
+            expect(navigator.audioSession.type).toBe('playback');
+        } finally {
+            delete navigator.audioSession;
+        }
+    });
+
+    test('never downgrades an active capture declaration', () => {
+        // Per the Audio Session spec, moving the type off play-and-record
+        // under live capture ENDS the microphone track. VoiceChat owns that
+        // declaration; this hook must keep its hands off until released.
+        // Fully muted settings make the hook WANT 'ambient', so each
+        // assertion below proves restraint (and then the listener) actually
+        // ran rather than passing by coincidence.
+        localStorage.setItem('sluff_sound_muted', JSON.stringify(true));
+        localStorage.setItem('sluff_music_muted', JSON.stringify(true));
+        Object.defineProperty(navigator, 'audioSession', {
+            configurable: true,
+            value: { type: 'play-and-record' },
+        });
+        try {
+            const { result } = renderHook(() => useSounds());
+            act(() => result.current.enableSound());
+            expect(navigator.audioSession.type).toBe('play-and-record');
+
+            // The release announcement hands control back to the hook, which
+            // then applies its own (fully muted -> 'ambient') preference.
+            act(() => {
+                navigator.audioSession.type = 'playback';
+                window.dispatchEvent(new Event('sluff:audio-session-released'));
+            });
+            expect(navigator.audioSession.type).toBe('ambient');
+        } finally {
+            delete navigator.audioSession;
+        }
+    });
+
+    test('a live listen-only voice session pins the media channel over the mute preference', async () => {
+        // Peer voice plays through VoiceChat's WebAudio graph, so even a
+        // fully muted game must not drop the session to 'ambient' while a
+        // voice room is joined — 'ambient' hands peer audio to the silent
+        // switch.
+        localStorage.setItem('sluff_sound_muted', JSON.stringify(true));
+        localStorage.setItem('sluff_music_muted', JSON.stringify(true));
+        Object.defineProperty(navigator, 'audioSession', {
+            configurable: true,
+            value: { type: 'auto' },
+        });
+        const socket = { emit: vi.fn(), on: vi.fn(), off: vi.fn(), connected: true };
+        const voice = new VoiceChat(socket, 'table-7');
+        try {
+            await voice.join();
+            const { result } = renderHook(() => useSounds({ musicActive: true }));
+            act(() => result.current.enableSound());
+            expect(navigator.audioSession.type).toBe('playback');
+
+            // Leaving voice releases the claim; the muted game may now yield
+            // the media channel back to the player's own music app.
+            act(() => voice.leave());
+            expect(navigator.audioSession.type).toBe('ambient');
+        } finally {
+            voice.leave();
+            delete navigator.audioSession;
+        }
     });
 
     test('resumes the moment the context reports interrupted', () => {

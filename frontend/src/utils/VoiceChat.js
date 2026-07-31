@@ -50,6 +50,61 @@ const MAX_VOLUME = 1.5;
 // FOREVER in Chrome — without a timeout the UI would hang on "Joining…".
 const MIC_TIMEOUT_MS = 12000;
 
+// iOS Audio Session dance (no-op elsewhere): the game declares 'playback' so
+// the silent switch cannot mute it (useSounds does the same for SFX/music);
+// capture needs 'play-and-record', declared just before getUserMedia per
+// WebKit guidance. Restoring 'playback' when capture truly stops — or never
+// started — matters twice over: a play-and-record declaration left behind by
+// a DENIED prompt would duck and reroute game audio with no capture running,
+// and WebKit keeps the ducked category sticky while page audio stays audible.
+const setAudioSessionType = (type) => {
+    try {
+        if (navigator.audioSession) navigator.audioSession.type = type;
+    } catch { /* best effort */ }
+};
+
+// The session type is PAGE-global while VoiceChat instances come and go
+// across tables, and an abandoned getUserMedia cannot be cancelled — its late
+// settlement must never stomp the declaration a newer request made (per the
+// Audio Session spec, downgrading the type under live capture ENDS the mic
+// track). Hence module-level accounting: every acquire declares, and a
+// restore happens only when nothing anywhere is pending or held.
+let pendingAcquires = 0;
+let heldStreams = 0;
+// Joined voice rooms, capturing or not: a listen-only player still receives
+// peer audio through this module's WebAudio graph, which the iOS silent
+// switch would mute under 'ambient' — so a live session pins the game to the
+// media channel even when every game sound channel is muted.
+let liveVoiceSessions = 0;
+
+// useSounds consults this before daring to leave the media channel.
+export const isAudioSessionClaimedByVoice = () => (
+    pendingAcquires > 0 || heldStreams > 0 || liveVoiceSessions > 0
+);
+
+const declareCaptureSession = () => {
+    pendingAcquires += 1;
+    setAudioSessionType('play-and-record');
+};
+
+const releaseCaptureSessionIfIdle = () => {
+    if (pendingAcquires > 0 || heldStreams > 0) return;
+    setAudioSessionType('playback');
+    // Only once voice is entirely gone may the game re-evaluate (it prefers
+    // 'ambient' when fully muted, so it stops pausing the player's music
+    // app); announcing earlier would let that downgrade silence peer audio.
+    if (liveVoiceSessions > 0) return;
+    try {
+        window.dispatchEvent(new Event('sluff:audio-session-released'));
+    } catch { /* non-browser environment */ }
+};
+
+export const resetAudioSessionAccountingForTests = () => {
+    pendingAcquires = 0;
+    heldStreams = 0;
+    liveVoiceSessions = 0;
+};
+
 const acquireMic = () => {
     if (!navigator.mediaDevices?.getUserMedia) {
         const unsupported = new Error('Voice chat is not supported in this browser.');
@@ -127,6 +182,13 @@ class VoiceChat {
         };
         this._bindAudioUnlock();
         this._resumeAudio();
+        // Peer voice plays through this context, so claim the media channel:
+        // a listen-only player must hear the table even with the silent
+        // switch on. Never downgrade while a capture is pending or live.
+        liveVoiceSessions += 1;
+        if (pendingAcquires === 0 && heldStreams === 0) {
+            setAudioSessionType('playback');
+        }
 
         this._bindSocket();
         this.joined = true;
@@ -152,6 +214,9 @@ class VoiceChat {
         }
         this._stopMicrophone();
         if (this.joined) {
+            // Guarded by `joined` so a double leave() releases the voice
+            // session claim exactly once, mirroring join()'s early return.
+            liveVoiceSessions = Math.max(0, liveVoiceSessions - 1);
             this.socket.emit('voiceLeave', { tableId: this.tableId });
         }
         for (const userId of [...this.peers.keys()]) {
@@ -165,6 +230,10 @@ class VoiceChat {
         }
         this._unbindAudioUnlock();
         this.joined = false;
+        // A listen-only session never held a stream, so _stopMicrophone had
+        // nothing to release; let the game re-evaluate its session type now
+        // that voice is gone (no-op while another capture is pending/live).
+        releaseCaptureSessionIfIdle();
         this._emitPeers();
     }
 
@@ -195,15 +264,27 @@ class VoiceChat {
 
         const lifecycleToken = this.lifecycleToken;
         const requestToken = ++this.micRequestToken;
+        // Settles the pending-acquire accounting exactly once, even if the
+        // success handler throws mid-body and lands in the catch below.
+        let acquireSettled = false;
+        const settleAcquire = () => {
+            if (acquireSettled) return;
+            acquireSettled = true;
+            pendingAcquires = Math.max(0, pendingAcquires - 1);
+        };
+        declareCaptureSession();
         let request;
         request = acquireMic().then((stream) => {
+            settleAcquire();
             if (!this.joined || this.lifecycleToken !== lifecycleToken
                 || this.micRequestToken !== requestToken) {
                 stream.getTracks().forEach(track => track.stop());
+                releaseCaptureSessionIfIdle();
                 return false;
             }
 
             this.micStream = stream;
+            heldStreams += 1;
             this.microphoneMuted = false;
             this._applyMicrophoneState();
             const track = stream.getAudioTracks()[0];
@@ -216,6 +297,8 @@ class VoiceChat {
             this._broadcastMicrophoneState();
             return true;
         }).catch((error) => {
+            settleAcquire();
+            releaseCaptureSessionIfIdle();
             if (!this.joined || this.lifecycleToken !== lifecycleToken
                 || this.micRequestToken !== requestToken) {
                 return false;
@@ -249,6 +332,10 @@ class VoiceChat {
         this.micStream.getTracks().forEach(track => track.stop());
         this.micStream = null;
         this.microphoneMuted = true;
+        // Capture has truly ended (a muted-but-held stream keeps capturing
+        // with the track disabled, so it does NOT pass through here).
+        heldStreams = Math.max(0, heldStreams - 1);
+        releaseCaptureSessionIfIdle();
     }
 
     // Automatic table entry is not always considered a playback gesture on

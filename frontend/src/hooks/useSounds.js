@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { isAudioSessionClaimedByVoice } from '../utils/VoiceChat';
 
 // Short effects and the music bed share one unlocked Web Audio context so they
 // mix reliably on mobile. Each channel has its own gain node and preferences.
@@ -52,6 +53,7 @@ const storedVolume = (key, fallback) => clampVolume(stored(
     value => typeof value === 'number' && Number.isFinite(value)
 ));
 const volumesMatch = (left, right) => Math.abs(left - right) < 0.0001;
+
 
 // iOS WebKit parks a context in the (once non-standard) 'interrupted' state
 // whenever the system takes the audio session — a microphone permission
@@ -157,6 +159,33 @@ export const useSounds = ({ musicActive = false } = {}) => {
         musicActiveRef.current && !musicMutedRef.current ? musicVolumeRef.current : 0
     ), []);
 
+    // iOS routes Web Audio to the RINGER channel by default, so a phone with
+    // the silent switch on plays no game audio at all — while sound then
+    // "appears" the moment mic capture flips the session to play-and-record,
+    // which the switch does not govern. Declaring the 'playback' session type
+    // (Audio Session API, iOS 17+) moves the game to the media channel, where
+    // every real game lives. Two deliberate boundaries: a fully muted game
+    // drops to 'ambient' so it stops pausing the player's own music app, and
+    // 'play-and-record' is never touched — per the spec, downgrading the type
+    // under live capture ENDS the microphone track (VoiceChat owns that
+    // declaration and announces when it releases it). No-op off iOS.
+    const syncAudioSession = useCallback(() => {
+        try {
+            const session = navigator.audioSession;
+            if (!session || session.type === 'play-and-record') return;
+            const effectsAudible = !mutedRef.current && volumeRef.current > 0;
+            const musicAudible = musicActiveRef.current
+                && !musicMutedRef.current && musicVolumeRef.current > 0;
+            // A live voice session (even listen-only, even capture-idle) pins
+            // the media channel: peer audio plays through WebAudio too, and
+            // 'ambient' would hand it back to the silent switch.
+            const desired = effectsAudible || musicAudible || isAudioSessionClaimedByVoice()
+                ? 'playback'
+                : 'ambient';
+            if (session.type !== desired) session.type = desired;
+        } catch { /* best effort */ }
+    }, []);
+
     const startMusicLoop = useCallback((ctx, buffer) => {
         if (
             disposedRef.current
@@ -229,6 +258,7 @@ export const useSounds = ({ musicActive = false } = {}) => {
 
         let ctx;
         try {
+            syncAudioSession();
             ctx = new Ctx();
             const effectsGain = ctx.createGain();
             setGain(effectsGain, ctx, mutedRef.current ? 0 : volumeRef.current, { immediate: true });
@@ -270,7 +300,7 @@ export const useSounds = ({ musicActive = false } = {}) => {
         }
 
         return ctx;
-    }, [desiredMusicGain, loadEffects, loadMusic]);
+    }, [desiredMusicGain, loadEffects, loadMusic, syncAudioSession]);
 
     const enableSound = useCallback(() => {
         // Must be called from a user gesture (browsers gate audio on interaction).
@@ -310,7 +340,8 @@ export const useSounds = ({ musicActive = false } = {}) => {
             localStorage.setItem('sluff_sound_volume', JSON.stringify(volume));
         } catch { /* private browsing */ }
         setGain(gainRef.current, ctxRef.current, muted ? 0 : volume);
-    }, [muted, volume]);
+        syncAudioSession();
+    }, [muted, volume, syncAudioSession]);
 
     // Persist and apply music activity/preferences without restarting its loop.
     useEffect(() => {
@@ -324,7 +355,15 @@ export const useSounds = ({ musicActive = false } = {}) => {
             ctxRef.current,
             musicActive && !musicMuted ? musicVolume : 0
         );
-    }, [musicActive, musicMuted, musicVolume]);
+        syncAudioSession();
+    }, [musicActive, musicMuted, musicVolume, syncAudioSession]);
+
+    // VoiceChat announces when the page-global capture declaration is fully
+    // released; only then may this hook's preference apply again.
+    useEffect(() => {
+        window.addEventListener('sluff:audio-session-released', syncAudioSession);
+        return () => window.removeEventListener('sluff:audio-session-released', syncAudioSession);
+    }, [syncAudioSession]);
 
     // Pause the shared context while backgrounded and resume it after a mobile
     // app/tab returns. Once unlocked, resuming no longer requires another tap.
