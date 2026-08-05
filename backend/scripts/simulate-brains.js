@@ -206,6 +206,7 @@ const matchups = [
     ['coyote vs counting vs flytrap', seats('coyote', 'counting', 'flytrap')],
     ['sphinx vs counting vs flytrap', seats('sphinx', 'counting', 'flytrap')],
     ['sphinx vs coyote vs classic', seats('sphinx', 'coyote', 'classic')],
+    ['sphinx vs coyote vs flytrap', seats('sphinx', 'coyote', 'flytrap')],
 ];
 for (const [label, seatNames] of matchups) {
     if (filter && !label.toLowerCase().includes(filter)) continue;

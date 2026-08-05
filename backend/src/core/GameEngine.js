@@ -10,7 +10,15 @@ const {
     ROUND_PRESENTATION_ACK_GRACE_MS,
 } = require('./constants');
 const BotPlayer = require('./BotPlayer');
+const { brainNameFor } = require('./bot-brains');
 const { deadlineFor: afkDeadlineFor } = require('./afkTurnTimer');
+
+// Matt's standing seat directive (Aug 5 2026, "until otherwise stated"):
+// Quick Play tables draft one bot from each listed brain before any random
+// pick, so live testing always faces these arms. Empty the list to end the
+// directive. Exhibition and private tables are untouched — their random
+// trios keep the background analytics unbiased.
+const QUICKPLAY_BRAIN_DRAFT = ['sphinx', 'flytrap'];
 const { shuffle } = require('../utils/shuffle');
 const playHandler = require('./handlers/playHandler');
 const scoringHandler = require('./handlers/scoringHandler');
@@ -238,17 +246,36 @@ class GameEngine {
 
         if (usePersistentProfile) {
             if (availableProfiles.length === 0) return;
-            const firstProfileIndex = Math.floor(Math.random() * availableProfiles.length);
-            let profile = null;
-            for (let offset = 0; offset < availableProfiles.length; offset += 1) {
-                const candidate = availableProfiles[(firstProfileIndex + offset) % availableProfiles.length];
-                if (!this.botSeatLease || this.botSeatLease.acquire(candidate.id)) {
-                    profile = candidate;
-                    persistentLeaseAcquired = Boolean(this.botSeatLease);
-                    break;
+            // Seat-draft directive: fill missing draft brains first. Falls
+            // back to the full pool if every draft candidate is unfunded or
+            // already leased elsewhere — a directive never bricks seating.
+            let draftPool = availableProfiles;
+            if (this.tableType === 'quickplay' && QUICKPLAY_BRAIN_DRAFT.length > 0) {
+                const seatedBrains = currentBots.map(bot => brainNameFor(bot.playerName));
+                const missingBrain = QUICKPLAY_BRAIN_DRAFT
+                    .find(brain => !seatedBrains.includes(brain));
+                if (missingBrain) {
+                    const matching = availableProfiles
+                        .filter(candidate => brainNameFor(candidate.username) === missingBrain);
+                    if (matching.length > 0) draftPool = matching;
                 }
             }
+            const pickLeasedProfile = (pool) => {
+                const firstProfileIndex = Math.floor(Math.random() * pool.length);
+                for (let offset = 0; offset < pool.length; offset += 1) {
+                    const candidate = pool[(firstProfileIndex + offset) % pool.length];
+                    if (!this.botSeatLease || this.botSeatLease.acquire(candidate.id)) {
+                        return candidate;
+                    }
+                }
+                return null;
+            };
+            let profile = pickLeasedProfile(draftPool);
+            if (!profile && draftPool !== availableProfiles) {
+                profile = pickLeasedProfile(availableProfiles);
+            }
             if (!profile) return;
+            persistentLeaseAcquired = Boolean(this.botSeatLease);
             botName = profile.username;
             botId = profile.id;
             tokens = hasEligibilityFilter

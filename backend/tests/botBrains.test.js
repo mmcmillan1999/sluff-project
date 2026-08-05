@@ -341,6 +341,42 @@ async function runBotBrainTests() {
         pass('Sealed brains (sphinx, coyote) always answer with a legal card.');
     }
 
+    // 15) Matt's seat directive: Quick Play tables draft one sphinx and one
+    //     flytrap bot before any random pick — and fall back gracefully when
+    //     a draft arm has nobody available.
+    {
+        const GameEngine = require('../src/core/GameEngine');
+        const roster = [
+            { id: 101, username: 'Ace McGraw', tokens: 10 },
+            { id: 102, username: 'Buck Wilder', tokens: 10 },
+            { id: 103, username: 'Doc Shuffle', tokens: 10 },  // sphinx
+            { id: 104, username: 'Mike Knight', tokens: 10 },  // flytrap
+        ];
+        const engine = new GameEngine('qp-draft-test', 'fort-creek', 'QP', () => {}, 'quickplay', roster);
+        engine.addBotPlayer();
+        engine.addBotPlayer();
+        const seatedBrains = Object.values(engine.players)
+            .filter(p => p.isBot)
+            .map(p => brainNameFor(p.playerName))
+            .sort();
+        assert.deepStrictEqual(seatedBrains, ['flytrap', 'sphinx']);
+
+        const thinRoster = [
+            { id: 101, username: 'Ace McGraw', tokens: 10 },
+            { id: 103, username: 'Doc Shuffle', tokens: 10 },
+        ];
+        const fallbackEngine = new GameEngine('qp-draft-fallback', 'fort-creek', 'QP', () => {}, 'quickplay', thinRoster);
+        fallbackEngine.addBotPlayer();
+        fallbackEngine.addBotPlayer();
+        const fallbackBrains = Object.values(fallbackEngine.players)
+            .filter(p => p.isBot)
+            .map(p => brainNameFor(p.playerName))
+            .sort();
+        assert.deepStrictEqual(fallbackBrains, ['classic', 'sphinx'],
+            'a missing draft arm never blocks seating');
+        pass('Quick Play drafts one sphinx and one flytrap bot, with graceful fallback.');
+    }
+
     console.log('All bot brain profile tests passed!');
 }
 
