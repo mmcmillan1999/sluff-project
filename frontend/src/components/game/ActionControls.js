@@ -122,7 +122,23 @@ const ActionControls = ({
         emitEvent('quickPlayDecision', { choice, generation: qpGeneration });
     };
 
-    const bidLabel = (bid) => bid === 'Pass' ? bid : `${bid} · ${BID_MULTIPLIERS[bid]}×`;
+    // Each bid gets a face: emoji + name + multiplier pill on its own keycap
+    // palette. The same emoji reappear beside the nameplates (PlayerSeat's
+    // bid emotes), so the table reads as one language.
+    const BID_VISUALS = {
+        'Pass': { emoji: '✋', slug: 'pass' },
+        'Frog': { emoji: '🐸', slug: 'frog' },
+        'Solo': { emoji: '⚔️', slug: 'solo' },
+        'Heart Solo': { emoji: '❤️‍🔥', slug: 'heart-solo' },
+    };
+
+    const renderBidFace = (bid, name = bid) => (
+        <>
+            <span className="bid-key__emoji" aria-hidden="true">{BID_VISUALS[bid].emoji}</span>
+            <span className="bid-key__name">{name}</span>
+            {bid !== 'Pass' && <span className="bid-key__mult">{BID_MULTIPLIERS[bid]}×</span>}
+        </>
+    );
 
     const renderQuickPlayPregame = () => {
         // Keep one release-compatible fallback while old tables drain during a
@@ -378,11 +394,11 @@ const ActionControls = ({
                                     type="button"
                                     key={bid}
                                     onClick={() => emitEvent('placeBid', { bid })}
-                                    className="game-button keycap action-prompt__button action-prompt__bid-button"
+                                    className={`game-button keycap action-prompt__button action-prompt__bid-button bid-key bid-key--${BID_VISUALS[bid].slug}`}
                                     aria-label={bid === 'Pass' ? 'Pass' : `${bid}, ${BID_MULTIPLIERS[bid]} times scoring multiplier`}
                                     disabled={bid !== 'Pass' && BID_HIERARCHY.indexOf(bid) <= currentHighestBidLevel}
                                 >
-                                    {bidLabel(bid)}
+                                    {renderBidFace(bid)}
                                 </button>
                             ))}
                         </div>
@@ -402,10 +418,23 @@ const ActionControls = ({
                         <h2 className="action-prompt__heading">Solo was bid</h2>
                         <p className="action-prompt__copy">Upgrade Frog to Heart Solo?</p>
                         <div className="action-prompt__button-grid action-prompt__button-grid--decision">
-                            <button type="button" onClick={() => emitEvent('placeBid', { bid: 'Heart Solo' })} className="game-button keycap action-prompt__button action-prompt__button--primary">
-                                Heart Solo · {BID_MULTIPLIERS['Heart Solo']}×
+                            <button
+                                type="button"
+                                onClick={() => emitEvent('placeBid', { bid: 'Heart Solo' })}
+                                className="game-button keycap action-prompt__button bid-key bid-key--heart-solo"
+                                aria-label={`Heart Solo, ${BID_MULTIPLIERS['Heart Solo']} times scoring multiplier`}
+                            >
+                                {renderBidFace('Heart Solo')}
                             </button>
-                            <button type="button" onClick={() => emitEvent('placeBid', { bid: 'Pass' })} className="game-button keycap action-prompt__button">Keep Frog</button>
+                            <button
+                                type="button"
+                                onClick={() => emitEvent('placeBid', { bid: 'Pass' })}
+                                className="game-button keycap action-prompt__button bid-key bid-key--frog"
+                                aria-label="Keep Frog"
+                            >
+                                <span className="bid-key__emoji" aria-hidden="true">🐸</span>
+                                <span className="bid-key__name">Keep Frog</span>
+                            </button>
                         </div>
                     </PromptShell>
                 );

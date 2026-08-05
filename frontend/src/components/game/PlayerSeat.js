@@ -9,6 +9,30 @@ const SCORE_ANIMATION_STATES = new Set([
     'Game Over',
 ]);
 
+// Same emoji as the bid buttons — one visual language across the table.
+const BID_EMOTES = { 'Frog': '🐸', 'Solo': '⚔️', 'Heart Solo': '❤️‍🔥' };
+const BIDDING_STATES = new Set(['Bidding Phase', 'Awaiting Frog Upgrade Decision']);
+
+// What this seat is saying during the auction: zzz once passed, the bid's
+// emoji while holding the high bid, a think while it is their turn.
+const bidEmoteFor = (currentTableState, playerName) => {
+    if (!BIDDING_STATES.has(currentTableState.state)) return null;
+    if (currentTableState.playersWhoPassedThisRound?.includes(playerName)) {
+        return { glyph: '💤', label: `${playerName} passed` };
+    }
+    const highBid = currentTableState.currentHighestBidDetails;
+    if (highBid?.playerName === playerName) {
+        return {
+            glyph: BID_EMOTES[highBid.bid] || '⚔️',
+            label: `${playerName} bid ${highBid.bid}`,
+        };
+    }
+    if (currentTableState.biddingTurnPlayerName === playerName) {
+        return { glyph: '🤔', label: `${playerName} is deciding` };
+    }
+    return null;
+};
+
 const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent, showTrumpIndicator, trumpIndicatorPuck, renderCard, seatPosition, onPlayerProfile }) => {
     if (!playerName) {
         return null; 
@@ -133,6 +157,23 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent, showTrum
                 );
             })()}
             
+            {(() => {
+                const bidEmote = bidEmoteFor(currentTableState, playerName);
+                if (!bidEmote) return null;
+                return (
+                    <div
+                        // Keying on the glyph re-runs the pop animation each
+                        // time this seat's auction status changes.
+                        key={bidEmote.glyph}
+                        className="bid-emote-bubble"
+                        role="img"
+                        aria-label={bidEmote.label}
+                        title={bidEmote.label}
+                    >
+                        {bidEmote.glyph}
+                    </div>
+                );
+            })()}
             {renderOpponentCards()}
             <div className={seatClasses} style={dynamicStyles}>
                 {onPlayerProfile ? (

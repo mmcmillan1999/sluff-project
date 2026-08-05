@@ -301,3 +301,60 @@
 .action-prompt__hint:empty {
     margin: 0;
 }
+
+/* --- Bid keys: emoji face + name + multiplier pill ---------------------
+   Each bid tier gets its own keycap palette, so the choice reads at a
+   glance before the text does. The same emoji reappear as PlayerSeat's
+   bid emotes — one visual language across the table. */
+.action-prompt .bid-key {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.14rem;
+    padding: 0.4rem 0.3rem 0.5rem;
+}
+
+.bid-key__emoji {
+    font-size: clamp(1.1rem, 2.6vh, 1.5rem);
+    line-height: 1;
+    filter: drop-shadow(0 0.1vh 0.18vh rgba(0, 0, 0, 0.35));
+}
+
+.bid-key__name {
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.bid-key__mult {
+    font-size: 0.72em;
+    font-weight: 700;
+    line-height: 1;
+    padding: 0.16em 0.55em;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.3);
+    color: #ffe9a8;
+}
+
+.action-prompt .bid-key--pass {
+    --key-face-top: #6a7074;
+    --key-face-bottom: #45494c;
+    --key-rim: #232628;
+}
+
+.action-prompt .bid-key--frog {
+    --key-face-top: #3fa25c;
+    --key-face-bottom: #1f6e3b;
+    --key-rim: #0d3d1f;
+}
+
+.action-prompt .bid-key--solo {
+    --key-face-top: #3f7fd1;
+    --key-face-bottom: #22518f;
+    --key-rim: #122c50;
+}
+
+.action-prompt .bid-key--heart-solo {
+    --key-face-top: #d0455a;
+    --key-face-bottom: #93222f;
+    --key-rim: #54111a;
+}

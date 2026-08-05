@@ -472,3 +472,48 @@
 
 /* NO MORE MEDIA QUERIES - Everything scales with vh units consistently */
 /* Player seats are always 22vh wide regardless of device or orientation */
+
+/* --- Bid emote bubble ---------------------------------------------------
+   A little speech bubble off the plaque's corner during the auction: zzz
+   for a pass, the bid's emoji for the high bidder, a think for the seat
+   on turn. Same emoji as the bid buttons. */
+.bid-emote-bubble {
+    position: absolute;
+    z-index: 12;
+    top: -1.7vh;
+    right: -1.5vh;
+    min-width: 3.3vh;
+    height: 3.3vh;
+    padding: 0 0.5vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.96);
+    border: 0.12vh solid rgba(30, 30, 40, 0.35);
+    border-radius: 1.7vh;
+    border-bottom-left-radius: 0.35vh;
+    font-size: 1.95vh;
+    line-height: 1;
+    box-shadow: 0 0.25vh 0.5vh rgba(0, 0, 0, 0.35);
+    pointer-events: none;
+    animation: bid-emote-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes bid-emote-pop {
+    from { transform: scale(0); opacity: 0; }
+    60% { transform: scale(1.15); opacity: 1; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+/* The north seat sits under the header — hang its bubble off the bottom
+   corner instead so nothing clips. */
+.player-seat-wrapper-top .bid-emote-bubble {
+    top: auto;
+    bottom: -1.7vh;
+    border-radius: 1.7vh;
+    border-top-left-radius: 0.35vh;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .bid-emote-bubble { animation: none; }
+}
