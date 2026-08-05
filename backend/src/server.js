@@ -255,6 +255,14 @@ async function initializeThenListen({
 function registerShutdownNotice(context = null) {
     process.once('SIGTERM', () => {
         console.log('[SHUTDOWN] SIGTERM received — notifying clients and snapshotting live games.');
+        // Durable proof the signal reached Node (the Aug 2026 live-fire test
+        // showed npm's sh wrapper eating SIGTERM entirely — hence the `exec`
+        // in the start script). Check: SELECT * FROM funnel_events WHERE
+        // name = 'server_sigterm'.
+        const beacon = context?.pool
+            ? context.pool.query("INSERT INTO funnel_events (name) VALUES ('server_sigterm')")
+                .catch(error => console.error('[SHUTDOWN] Beacon write failed:', error.message))
+            : Promise.resolve();
         try {
             io.emit('serverRestarting');
         } catch (error) {
@@ -266,10 +274,13 @@ function registerShutdownNotice(context = null) {
         } catch (error) {
             console.error('[SHUTDOWN] Failed to stop background timers:', error.message);
         }
-        const persist = context?.gameService
-            ? context.gameService.snapshotLiveGamesForShutdown()
-                .catch(error => console.error('[SHUTDOWN] Snapshot pass failed:', error.message))
-            : Promise.resolve();
+        const persist = Promise.all([
+            beacon,
+            context?.gameService
+                ? context.gameService.snapshotLiveGamesForShutdown()
+                    .catch(error => console.error('[SHUTDOWN] Snapshot pass failed:', error.message))
+                : Promise.resolve(),
+        ]);
         const deadline = new Promise(resolve => setTimeout(resolve, 4000));
         // The trailing delay keeps the process alive long enough for the
         // serverRestarting emit to flush even when there is nothing to save.

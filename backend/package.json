@@ -4,7 +4,7 @@
   "description": "Sluff Card Game Server",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js",
+    "start": "exec node src/server.js",
     "dev": "node scripts/dev-server.js",
     "dev:simple": "nodemon src/server.js",
     "kill-port": "node scripts/kill-port.js",
