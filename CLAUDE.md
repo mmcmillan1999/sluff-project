@@ -16,6 +16,11 @@ cd backend && npm test            # game-logic test suite
 Debug overlay in game: `Shift+D`.
 
 ## Deployment (verify before assuming — was down June 2026)
+- **REQUIRED before every push to `main`**: run `cd backend && npm run deploy:check`. Any push
+  redeploys the Render backend, which has no SIGTERM handling — the restart kills every in-flight
+  game (players get refunds via abandoned-game recovery, but their game is gone). The check exits 1
+  while a human is mid-game; bot-only games don't block. If humans are playing, wait for the check
+  to clear or get Matt's explicit go-ahead before pushing.
 - **Frontend**: Netlify, auto-deploys from `main` (`netlify.toml` at repo root, publishes `frontend/build`, Node 22).
 - **Backend**: Render web service (`npm start`). NOT Heroku.
 - **Database**: PostgreSQL on Render via `POSTGRES_CONNECT_STRING`. Schema created at boot by `backend/src/data/createTables.js` (no migration tool).
