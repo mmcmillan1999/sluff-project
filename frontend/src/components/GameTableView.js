@@ -31,7 +31,7 @@ import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
 import { useBidWinnerSplash } from '../hooks/useBidWinnerSplash';
 import TutorialCoach, { FIRST_GAME_TUTORIAL_VERSION } from './game/TutorialCoach';
 import DealAnimation from './game/DealAnimation';
-import { CARDS_PER_PLAYER, WIDOW_CARD_COUNT } from './game/dealSequence';
+import { CARDS_PER_PLAYER, WIDOW_CARD_COUNT, DEAL_CARD_STAGGER_MS } from './game/dealSequence';
 import {
     TUTORIAL_FORFEIT_RECAP_HINT,
     TUTORIAL_RECAP_HINT,
@@ -89,7 +89,7 @@ const stableScoreMapSignature = (scoreMap) => JSON.stringify(
 );
 
 
-const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, handleShowHowToPlay, emitEvent, playSound, socket, handleOpenFeedbackModal, soundSettings, tutorialState, onTutorialAction, onShowTokenLedger }) => {
+const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, handleShowHowToPlay, emitEvent, playSound, playDealSounds, socket, handleOpenFeedbackModal, soundSettings, tutorialState, onTutorialAction, onShowTokenLedger }) => {
     const themePresentation = getThemePresentation(currentTableState?.theme);
     const [seatAssignments, setSeatAssignments] = useState({ self: null, opponentLeft: null, opponentRight: null });
     const [showRoundSummaryModal, setShowRoundSummaryModal] = useState(false);
@@ -941,7 +941,15 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         cardCountRef.current = newCardCount;
         if (lastCompletedTrick && lastCompletedTrick.winnerName === selfPlayerName && trickWinnerRef.current !== lastCompletedTrick.winnerName) playSound('trickWin');
         trickWinnerRef.current = lastCompletedTrick?.winnerName;
-        if (state === 'Bidding Phase' && gameStateRef.current === 'Dealing Pending') playSound('cardDeal');
+        if (state === 'Bidding Phase' && gameStateRef.current === 'Dealing Pending') {
+            // One synthesized flick per dealt card at the animation's cadence
+            // — replaces the looped recording that read as record scratch.
+            playDealSounds?.({
+                cardCount: (currentTableState.playerOrderActive?.length || 3)
+                    * CARDS_PER_PLAYER + WIDOW_CARD_COUNT,
+                staggerMs: DEAL_CARD_STAGGER_MS,
+            });
+        }
         // Bidding accents: play once each time the winning bid escalates, and on all-pass.
         const highBid = currentTableState.currentHighestBidDetails?.bid || null;
         if (highBid && highBid !== highBidRef.current) {
@@ -964,8 +972,8 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         if (state !== "Frog Widow Exchange") {
             setSelectedFrogDiscards([]);
         }
-    }, [currentTableState, selfPlayerName, isSpectator, playSound, playerId]);
-    
+    }, [currentTableState, selfPlayerName, isSpectator, playSound, playDealSounds, playerId]);
+
     // Global keyboard handler for puck debug
     useEffect(() => {
         const handleKeyPress = (e) => {

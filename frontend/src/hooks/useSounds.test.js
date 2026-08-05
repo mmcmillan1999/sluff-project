@@ -11,9 +11,10 @@ const makeGainNode = () => {
         cancelScheduledValues: vi.fn(),
         setValueAtTime: vi.fn((value) => { gain.value = value; }),
         linearRampToValueAtTime: vi.fn((value) => { gain.value = value; }),
+        exponentialRampToValueAtTime: vi.fn((value) => { gain.value = value; }),
         setTargetAtTime: vi.fn((value) => { gain.value = value; }),
     };
-    return { gain, connect: vi.fn() };
+    return { gain, connect: vi.fn(), disconnect: vi.fn() };
 };
 
 const contexts = [];
@@ -22,9 +23,12 @@ class MockAudioContext {
     constructor() {
         this.state = 'suspended';
         this.currentTime = 4;
+        this.sampleRate = 44100;
         this.destination = { kind: 'destination' };
         this.gains = [];
         this.sources = [];
+        this.oscillators = [];
+        this.filters = [];
         this.decodeAudioData = vi.fn((data, onSuccess) => {
             queueMicrotask(() => onSuccess({ decodedUrl: data.url }));
         });
@@ -49,14 +53,16 @@ class MockAudioContext {
         return node;
     }
 
-    createBuffer() {
-        return { silent: true };
+    createBuffer(channels = 1, length = 1) {
+        // A short channel keeps the synth's noise-fill loop cheap in tests.
+        return { silent: true, length, getChannelData: () => new Float32Array(8) };
     }
 
     createBufferSource() {
         const source = {
             buffer: null,
             loop: false,
+            playbackRate: { value: 1 },
             connect: vi.fn(),
             disconnect: vi.fn(),
             start: vi.fn(),
@@ -65,6 +71,36 @@ class MockAudioContext {
         };
         this.sources.push(source);
         return source;
+    }
+
+    createOscillator() {
+        const oscillator = {
+            type: 'sine',
+            frequency: {
+                value: 0,
+                setValueAtTime: vi.fn(),
+                exponentialRampToValueAtTime: vi.fn(),
+            },
+            connect: vi.fn(),
+            disconnect: vi.fn(),
+            start: vi.fn(),
+            stop: vi.fn(),
+            onended: null,
+        };
+        this.oscillators.push(oscillator);
+        return oscillator;
+    }
+
+    createBiquadFilter() {
+        const filter = {
+            type: 'lowpass',
+            frequency: { value: 0, setValueAtTime: vi.fn() },
+            Q: { value: 0 },
+            connect: vi.fn(),
+            disconnect: vi.fn(),
+        };
+        this.filters.push(filter);
+        return filter;
     }
 }
 
@@ -205,7 +241,9 @@ describe('useSounds music channel', () => {
         const ctx = contexts[0];
 
         await waitFor(() => {
-            expect(ctx.decodeAudioData).toHaveBeenCalledTimes(17);
+            // Every SOUND_FILES entry plus the failed music attempt. The deal
+            // is synthesized now, so it no longer appears in this count.
+            expect(ctx.decodeAudioData).toHaveBeenCalledTimes(16);
             expect(errorSpy).toHaveBeenCalledWith(
                 'Failed to load background music:',
                 expect.any(Error)
@@ -410,5 +448,95 @@ describe('useSounds iOS interruption recovery', () => {
         // The suspend fires a state change; resuming here would undo it.
         act(() => ctx.onstatechange());
         expect(ctx.resume).toHaveBeenCalledTimes(1);
+    });
+});
+
+// Repeat-heavy effects get per-firing pitch humanization, and the deal and
+// venue wheel are synthesized voices rather than looped samples.
+describe('useSounds pitch humanization and synthesized voices', () => {
+    let errorSpy;
+
+    beforeEach(() => {
+        contexts.length = 0;
+        localStorage.clear();
+        successfulFetch.mockReset();
+        successfulFetch.mockImplementation(successfulResponse);
+        vi.stubGlobal('AudioContext', MockAudioContext);
+        vi.stubGlobal('fetch', successfulFetch);
+        errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+        errorSpy.mockRestore();
+        vi.restoreAllMocks();
+        vi.unstubAllGlobals();
+    });
+
+    const mountUnlockedHook = () => {
+        const { result } = renderHook(() => useSounds());
+        act(() => result.current.enableSound());
+        return { result, ctx: contexts[0] };
+    };
+
+    test('card plays are born a few percent apart; voice lines stay on pitch', async () => {
+        const { result, ctx } = mountUnlockedHook();
+        // Probe until the effect buffers finish their microtask decode chain.
+        await waitFor(() => {
+            act(() => result.current.playSound('cardPlay'));
+            expect(ctx.sources.some(s => !s.loop && s.buffer?.decodedUrl)).toBe(true);
+        });
+
+        const before = ctx.sources.length;
+        const randoms = [0, 1];
+        vi.spyOn(Math, 'random').mockImplementation(() => randoms.shift() ?? 0.5);
+        act(() => {
+            result.current.playSound('cardPlay');
+            result.current.playSound('cardPlay');
+            result.current.playSound('bidSolo');
+        });
+
+        const rates = ctx.sources.slice(before).map(source => source.playbackRate.value);
+        expect(rates[0]).toBeCloseTo(0.94, 5); // random 0 -> full flat
+        expect(rates[1]).toBeCloseTo(1.06, 5); // random 1 -> full sharp
+        expect(rates[2]).toBe(1);              // speech is never pitch-shifted
+    });
+
+    test('the deal schedules one flick per card across the animation cadence', () => {
+        const { result, ctx } = mountUnlockedHook();
+        const sourcesBefore = ctx.sources.length;
+        const oscillatorsBefore = ctx.oscillators.length;
+
+        act(() => result.current.playDealSounds({ cardCount: 5, staggerMs: 100 }));
+
+        const flicks = ctx.sources.slice(sourcesBefore);
+        expect(flicks).toHaveLength(5);
+        expect(ctx.oscillators.length - oscillatorsBefore).toBe(5); // one thup each
+        const startTimes = flicks.map(source => source.start.mock.calls[0][0]);
+        for (let i = 1; i < startTimes.length; i += 1) {
+            const gap = startTimes[i] - startTimes[i - 1];
+            expect(gap).toBeGreaterThan(0.07);  // the march holds its cadence...
+            expect(gap).toBeLessThan(0.13);     // ...within the human jitter
+        }
+    });
+
+    test('the wheel clicks and clunks, and mute silences the whole voice', () => {
+        const { result, ctx } = mountUnlockedHook();
+        const sourcesBefore = ctx.sources.length;
+        const oscillatorsBefore = ctx.oscillators.length;
+
+        act(() => {
+            result.current.playWheelTick(0.8);
+            result.current.playWheelSettle();
+        });
+        expect(ctx.sources.length).toBe(sourcesBefore + 2);       // two noise hits
+        expect(ctx.oscillators.length).toBe(oscillatorsBefore + 2); // two tones
+
+        act(() => result.current.soundSettings.toggleMute());
+        const mutedSources = ctx.sources.length;
+        act(() => {
+            result.current.playWheelTick(0.8);
+            result.current.playDealSounds({ cardCount: 3 });
+        });
+        expect(ctx.sources.length).toBe(mutedSources);
     });
 });

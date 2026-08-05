@@ -307,6 +307,43 @@ describe('VenueWheel (rim)', () => {
         expect(scene().dataset.atRest).toBe('true');
     });
 
+    test('the flapper clicks per peg crossing and clunks once on settle', () => {
+        const wheelAudio = { tick: vi.fn(), settle: vi.fn() };
+        renderWheel({ wheelAudio });
+
+        // A 200px pull sweeps several 22.5° pegs; the first crossing clicks
+        // and the throttle folds the rest of this frozen-clock drag together.
+        drag(300, 100);
+        expect(wheelAudio.tick).toHaveBeenCalled();
+        const [intensity] = wheelAudio.tick.mock.calls[0];
+        expect(intensity).toBeGreaterThan(0);
+        expect(intensity).toBeLessThanOrEqual(1);
+
+        expect(wheelAudio.settle).not.toHaveBeenCalled();
+        pumpUntilRest();
+        expect(wheelAudio.settle).toHaveBeenCalledTimes(1);
+    });
+
+    test('a tap never clicks or clunks, and no audio hookup stays functional', () => {
+        const wheelAudio = { tick: vi.fn(), settle: vi.fn() };
+        const first = renderWheel({ wheelAudio });
+
+        // Sub-slop wobble is a tap: the wheel snaps silently.
+        nowValue = 0;
+        fireEvent.pointerDown(scene(), { pointerId: 1, clientY: 200 });
+        nowValue = 40;
+        fireEvent.pointerUp(scene(), { pointerId: 1, clientY: 202 });
+        expect(wheelAudio.tick).not.toHaveBeenCalled();
+        expect(wheelAudio.settle).not.toHaveBeenCalled();
+        first.unmount();
+
+        // And the wheel is fully functional with no audio wired at all.
+        renderWheel();
+        drag(300, 100);
+        pumpUntilRest();
+        expect(scene().dataset.atRest).toBe('true');
+    });
+
     test('geometry: a full pull of one face height advances exactly one venue', () => {
         renderWheel();
         // Face height in jsdom falls back to innerHeight * 0.11; apothem

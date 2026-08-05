@@ -68,9 +68,16 @@ function App() {
     const [connectionNotice, setConnectionNotice] = useState(null);
     const [serverVersion, setServerVersion] = useState('');
     const [showMercyWindow, setShowMercyWindow] = useState(false);
-    const { playSound, enableSound, soundSettings } = useSounds({
+    const {
+        playSound, playDealSounds, playWheelTick, playWheelSettle, enableSound, soundSettings,
+    } = useSounds({
         musicActive: Boolean(user) && (view === 'lobby' || view === 'gameTable'),
     });
+    // The venue wheel's flapper-and-clunk voice, bundled for the lobby.
+    const wheelAudio = React.useMemo(
+        () => ({ tick: playWheelTick, settle: playWheelSettle }),
+        [playWheelTick, playWheelSettle],
+    );
     const [showFeedbackModal, setShowFeedbackModal] = useState(false);
     const [showHowToPlay, setShowHowToPlay] = useState(false);
     const [showAccountSettings, setShowAccountSettings] = useState(false);
@@ -712,9 +719,9 @@ function App() {
                 {(() => {
                     switch (view) {
                         case 'lobby':
-                            return <LobbyView user={user} lobbyThemes={lobbyThemes} serverVersion={serverVersion} handleJoinTable={handleJoinTable} handleQuickPlay={handleQuickPlay} handleJoinTableAsSpectator={handleJoinTableAsSpectator} handleLogout={handleLogout} handleRequestFreeToken={handleRequestFreeToken} handleShowLeaderboard={() => setView('leaderboard')} handleShowSeasonRecaps={() => setView('seasonRecaps')} handleShowTokenLedger={() => setView('tokenLedger')} handleShowBulletin={() => setView('bulletin')} handleShowAdmin={handleShowAdmin} handleShowFeedback={() => setView('feedback')} handleShowHowToPlay={handleShowHowToPlay} handleResetTutorial={handleResetTutorial} handleShowAccountSettings={() => setShowAccountSettings(true)} handleShowPrivacy={() => handleShowLegalPage('privacy')} handleShowTerms={() => handleShowLegalPage('terms')} errorMessage={errorMessage} socket={socket} soundSettings={soundSettings} />;
+                            return <LobbyView user={user} lobbyThemes={lobbyThemes} serverVersion={serverVersion} wheelAudio={wheelAudio} handleJoinTable={handleJoinTable} handleQuickPlay={handleQuickPlay} handleJoinTableAsSpectator={handleJoinTableAsSpectator} handleLogout={handleLogout} handleRequestFreeToken={handleRequestFreeToken} handleShowLeaderboard={() => setView('leaderboard')} handleShowSeasonRecaps={() => setView('seasonRecaps')} handleShowTokenLedger={() => setView('tokenLedger')} handleShowBulletin={() => setView('bulletin')} handleShowAdmin={handleShowAdmin} handleShowFeedback={() => setView('feedback')} handleShowHowToPlay={handleShowHowToPlay} handleResetTutorial={handleResetTutorial} handleShowAccountSettings={() => setShowAccountSettings(true)} handleShowPrivacy={() => handleShowLegalPage('privacy')} handleShowTerms={() => handleShowLegalPage('terms')} errorMessage={errorMessage} socket={socket} soundSettings={soundSettings} />;
                         case 'gameTable':
-                            return currentTableState ? <GameTableView user={user} playerId={user.id} currentTableState={currentTableState} handleLeaveTable={handleLeaveTable} handleLogout={handleLogout} handleShowHowToPlay={handleShowHowToPlay} errorMessage={errorMessage} emitEvent={emitEvent} playSound={playSound} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} soundSettings={soundSettings} tutorialState={{ tutorialVersion: Number(user.tutorial_version) || 0, activeVersion: Number(user.tutorial_active_version) || 0, gamesPlayed: Number(user.games_played) || 0 }} onTutorialAction={handleTutorialAction} onShowTokenLedger={() => setView('tokenLedger')} /> : <div>Loading table...</div>;
+                            return currentTableState ? <GameTableView user={user} playerId={user.id} currentTableState={currentTableState} handleLeaveTable={handleLeaveTable} handleLogout={handleLogout} handleShowHowToPlay={handleShowHowToPlay} errorMessage={errorMessage} emitEvent={emitEvent} playSound={playSound} playDealSounds={playDealSounds} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} soundSettings={soundSettings} tutorialState={{ tutorialVersion: Number(user.tutorial_version) || 0, activeVersion: Number(user.tutorial_active_version) || 0, gamesPlayed: Number(user.games_played) || 0 }} onTutorialAction={handleTutorialAction} onShowTokenLedger={() => setView('tokenLedger')} /> : <div>Loading table...</div>;
                         case 'leaderboard':
                             return <LeaderboardView user={user} onReturnToLobby={handleReturnToLobby} handleShowAdmin={handleShowAdmin} onShowTokenLedger={() => setView('tokenLedger')} />;
                         case 'tokenLedger':

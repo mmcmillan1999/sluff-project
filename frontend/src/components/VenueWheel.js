@@ -46,11 +46,22 @@ const DRAG_SLOP_PX = 6;
 
 const mod = (value, count) => ((value % count) + count) % count;
 
+// Two pegs per face: the flapper voice clicks every 22.5°, so a full pull
+// chatters like the Big Wheel and the dying spin taps out one peg at a time
+// right where the tension is.
+const PEG_DEG = FACE_DEG / 2;
+// The flapper can only slap so fast; below this spacing extra crossings fold
+// into one harder click instead of white noise.
+const MIN_TICK_GAP_MS = 28;
+
 const VenueWheel = ({
     themes = [],
     userTokens = 0,
     pendingThemeId = null,
     onPlay,
+    // Optional { tick(intensity), settle() } — the wheel is fully functional
+    // silent, so tests and audio-less environments pass nothing.
+    wheelAudio = null,
 }) => {
     // React state is deliberately coarse: which segment fronts the wheel,
     // and whether it is at rest. The continuous rotation lives in the ref
@@ -79,7 +90,15 @@ const VenueWheel = ({
         samples: [],
         apothem: 200,
         notifiedK: 0,
+        lastPegIndex: 0,
+        lastTickAt: 0,
+        spunSinceRest: false,
     });
+
+    // The audio hooks ride a ref so the imperative hot path never needs to
+    // rebuild its callbacks when the parent re-renders.
+    const wheelAudioRef = useRef(wheelAudio);
+    wheelAudioRef.current = wheelAudio;
 
     // Re-measure when the wheel first gains faces: on a fresh login the
     // themes arrive after mount, and locking the innerHeight fallback in
@@ -125,6 +144,21 @@ const VenueWheel = ({
             rotorRef.current.style.transform =
                 `translateZ(${-motion.apothem}px) rotateX(${value}deg)`;
         }
+        // Peg crossings drive the flapper: the click track IS the rotation,
+        // so it slows and lands exactly with the wheel.
+        const pegIndex = Math.floor(value / PEG_DEG);
+        if (pegIndex !== motion.lastPegIndex) {
+            const crossed = Math.abs(pegIndex - motion.lastPegIndex);
+            motion.lastPegIndex = pegIndex;
+            const audio = wheelAudioRef.current;
+            if (audio?.tick) {
+                const now = performance.now();
+                if (now - motion.lastTickAt >= MIN_TICK_GAP_MS) {
+                    motion.lastTickAt = now;
+                    audio.tick(Math.min(1, 0.35 + crossed * 0.25));
+                }
+            }
+        }
         const k = Math.round(value / FACE_DEG);
         if (k !== motion.notifiedK) {
             motion.notifiedK = k;
@@ -168,6 +202,12 @@ const VenueWheel = ({
                     motion.target = null;
                     motion.lastT = null;
                     setResting(true);
+                    // The settle clunk — only after real motion, never on
+                    // the sub-slop snap of an ignored tap.
+                    if (motion.spunSinceRest) {
+                        motion.spunSinceRest = false;
+                        wheelAudioRef.current?.settle?.();
+                    }
                     return; // at rest
                 }
                 applySpin(motion.spin + remaining * Math.min(1, dt * 8));
@@ -203,6 +243,8 @@ const VenueWheel = ({
         motion.pointerId = null;
         motion.samples = [];
         motion.totalDy = 0;
+        motion.lastPegIndex = 0;
+        motion.spunSinceRest = false;
         setFrontK(0);
         setResting(true);
     }
@@ -218,6 +260,7 @@ const VenueWheel = ({
             return;
         }
         motion.target = targetDeg;
+        motion.spunSinceRest = true;
         setResting(false);
         startLoop();
     }, [prefersReducedMotion, applySpin, startLoop, stopLoop]);
@@ -265,6 +308,7 @@ const VenueWheel = ({
         const velocity = dtSec > 0.008 ? (motion.spin - oldest.spin) / dtSec : 0;
         motion.velocity = Math.max(-MAX_SPEED, Math.min(MAX_SPEED, velocity));
         motion.target = null;
+        motion.spunSinceRest = true;
         startLoop();
     };
 

@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { isAudioSessionClaimedByVoice } from '../utils/VoiceChat';
+import { scheduleDealSounds, wheelClick, wheelSettle } from '../utils/soundSynth';
 
 // Short effects and the music bed share one unlocked Web Audio context so they
 // mix reliably on mobile. Each channel has its own gain node and preferences.
+// The deal is no longer a sample: playDealSounds synthesizes one flick per
+// card on the context clock (the old 3s recording read as record scratch).
 const SOUND_FILES = {
     turnAlert: '/Sounds/turn_alert.mp3',
     cardPlay: '/Sounds/card_play.mp3',
     trickWin: '/Sounds/trick_win.mp3',
-    cardDeal: '/Sounds/card_dealing_3s_v1.mp3',
     trumpBroken: '/Sounds/trump_broken_v6.mp3',
     bidFrog: '/Sounds/bid_frog_v1.mp3',
     // v2: re-recorded (Liam, eleven_v3, 92% speed) — v1's "Solo bid" was
@@ -25,6 +27,17 @@ const SOUND_FILES = {
     podiumLoss: '/Sounds/podium_loss_v1.mp3',
     drumroll: '/Sounds/drumroll_v1.mp3',
     no_peaking_cheater: '/Sounds/no_peaking_cheater.mp3',
+};
+
+// Per-repeat pitch humanization for the percussive effects that fire many
+// times in a row. Sound-design folklore that holds up: identical repeats
+// read as a machine; a few percent of random pitch per hit reads as a hand.
+// Voice lines and one-shot stings are deliberately absent — shifting speech
+// sounds wrong, and a sting that plays once has nothing to vary against.
+const PITCH_VARIANCE = {
+    cardPlay: 0.06,
+    trickWin: 0.04,
+    turnAlert: 0.025,
 };
 
 const MUSIC_FILE = '/Music/upbeat-game-loop-v1.mp3';
@@ -458,6 +471,13 @@ export const useSounds = ({ musicActive = false } = {}) => {
         const source = ctx.createBufferSource();
         source.buffer = buffer;
 
+        // Humanize repeats: each firing of a varied sound is born a few
+        // percent sharp or flat of the last one.
+        const variance = PITCH_VARIANCE[soundName] || 0;
+        if (variance > 0 && source.playbackRate) {
+            source.playbackRate.value = 1 + (Math.random() * 2 - 1) * variance;
+        }
+
         const duration = Number(buffer.duration);
         const trimTo = Number(tailMs) / 1000;
         const offset = Number.isFinite(duration) && Number.isFinite(trimTo) && trimTo > 0 && trimTo < duration
@@ -478,11 +498,49 @@ export const useSounds = ({ musicActive = false } = {}) => {
         source.start(0, offset);
     }, []);
 
+    // Shared preamble for the synthesized voices: same mute/unlock gates as
+    // playSound, returning the live context or null.
+    const synthContext = useCallback(() => {
+        if (mutedRef.current || !enabledRef.current) return null;
+        const ctx = ctxRef.current;
+        if (!ctx || !gainRef.current) return null;
+        if (isResumable(ctx)) ctx.resume().catch(() => {});
+        return ctx;
+    }, []);
+
+    // The deal, synthesized: one flick per card at the animation's cadence,
+    // each with its own pitch/timing/level. Replaces the old 3s recording.
+    const playDealSounds = useCallback(({ cardCount = 36, staggerMs = 115 } = {}) => {
+        const ctx = synthContext();
+        if (!ctx) return;
+        scheduleDealSounds(ctx, gainRef.current, { count: cardCount, staggerMs });
+    }, [synthContext]);
+
+    // The venue wheel's flapper — called per peg crossing, intensity follows
+    // wheel speed, so the click track IS the wheel's motion.
+    const playWheelTick = useCallback((intensity = 1) => {
+        const ctx = synthContext();
+        if (!ctx) return;
+        wheelClick(ctx, gainRef.current, {
+            intensity,
+            pitch: 1 + (Math.random() * 2 - 1) * 0.05,
+        });
+    }, [synthContext]);
+
+    const playWheelSettle = useCallback(() => {
+        const ctx = synthContext();
+        if (!ctx) return;
+        wheelSettle(ctx, gainRef.current);
+    }, [synthContext]);
+
     const toggleMute = useCallback(() => setMuted(current => !current), []);
     const toggleMusicMute = useCallback(() => setMusicMuted(current => !current), []);
 
     return {
         playSound,
+        playDealSounds,
+        playWheelTick,
+        playWheelSettle,
         enableSound,
         soundSettings: {
             muted,

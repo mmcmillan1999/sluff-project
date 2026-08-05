@@ -1,6 +1,9 @@
 // Mock implementation of useSounds hook for testing
 export const useSounds = () => {
     const playSound = vi.fn();
+    const playDealSounds = vi.fn();
+    const playWheelTick = vi.fn();
+    const playWheelSettle = vi.fn();
     const enableSound = vi.fn();
 
     const soundSettings = {
@@ -14,5 +17,5 @@ export const useSounds = () => {
         setMusicVolume: vi.fn(),
     };
 
-    return { playSound, enableSound, soundSettings };
+    return { playSound, playDealSounds, playWheelTick, playWheelSettle, enableSound, soundSettings };
 };

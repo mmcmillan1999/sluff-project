@@ -32,7 +32,7 @@ export const deriveLobbyPlayerStats = (user = {}) => {
     };
 };
 
-const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQuickPlay, handleJoinTableAsSpectator, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowSeasonRecaps, handleShowTokenLedger, handleShowBulletin, handleShowAdmin, handleShowFeedback, handleShowHowToPlay, handleResetTutorial, handleShowAccountSettings, handleShowPrivacy, handleShowTerms, socket, soundSettings }) => {
+const LobbyView = ({ user, lobbyThemes, serverVersion, wheelAudio, handleJoinTable, handleQuickPlay, handleJoinTableAsSpectator, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowSeasonRecaps, handleShowTokenLedger, handleShowBulletin, handleShowAdmin, handleShowFeedback, handleShowHowToPlay, handleResetTutorial, handleShowAccountSettings, handleShowPrivacy, handleShowTerms, socket, soundSettings }) => {
 
     const [activeTab, setActiveTab] = useState('');
     const [showMenu, setShowMenu] = useState(false);
@@ -322,6 +322,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, handleJoinTable, handleQu
                         themes={lobbyThemes || []}
                         userTokens={user.tokens}
                         pendingThemeId={quickPlayPending}
+                        wheelAudio={wheelAudio}
                         onPlay={(themeId) => {
                             setQuickPlayPending(themeId);
                             handleQuickPlay(themeId);
