@@ -146,14 +146,43 @@ async function runBotExhibitionTests() {
         );
 
         const manager = createBotExhibitionManager({ gameService, tableId: 'table-10' });
-        const result = await manager.runNow();
+        assert.deepStrictEqual(manager.tableIds, ['table-10'], 'legacy single-table form still works');
+        const [result] = await manager.runNow();
         assert.strictEqual(result.status, 'started');
+        assert.strictEqual(result.tableId, 'table-10');
 
         // A tick that throws is contained and reported, never unhandled.
         gameService.ensureExhibitionGame = async () => { throw new Error('boom'); };
-        const failed = await manager.runNow();
+        const [failed] = await manager.runNow();
         assert.strictEqual(failed.status, 'error');
         pass('Manager validates config, runs ticks, and contains errors.');
+    }
+
+    {
+        // Multi-table: one manager keeps games going on both stakes tables,
+        // and a failure on one table never blocks the other's tick.
+        const { gameService, starts } = makeService();
+        const manager = createBotExhibitionManager({ gameService });
+        assert.deepStrictEqual(manager.tableIds, ['table-10', 'table-20'], 'defaults cover both stakes tables');
+
+        const results = await manager.runNow();
+        assert.deepStrictEqual(results.map(r => r.status), ['started', 'started']);
+        assert.deepStrictEqual(starts, ['table-10', 'table-20']);
+        for (const tableId of manager.tableIds) {
+            const engine = gameService.getEngineById(tableId);
+            assert.strictEqual(engine.playerOrder.count, 3);
+            assert.ok(engine.playerOrder.allIds.every(id => engine.players[id].isBot));
+        }
+
+        const original = gameService.ensureExhibitionGame.bind(gameService);
+        gameService.ensureExhibitionGame = async (tableId) => {
+            if (tableId === 'table-10') throw new Error('boom');
+            return original(tableId);
+        };
+        const mixed = await manager.runNow();
+        assert.strictEqual(mixed[0].status, 'error');
+        assert.notStrictEqual(mixed[1].status, 'error', 'second table still ticks after the first fails');
+        pass('Runs both stakes tables and isolates per-table failures.');
     }
 
     console.log('All bot exhibition tests passed!');

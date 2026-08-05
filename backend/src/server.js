@@ -40,6 +40,7 @@ const {
     createBotExhibitionManager,
     DEFAULT_EXHIBITION_INTERVAL_MS,
     MINIMUM_EXHIBITION_INTERVAL_MS,
+    DEFAULT_EXHIBITION_TABLE_IDS,
 } = require('./maintenance/botExhibition');
 
 const app = express();
@@ -90,14 +91,22 @@ app.use(express.json({ limit: '100kb' }));
 
 function botExhibitionConfigFromEnvironment() {
     const enabled = process.env.BOT_EXHIBITION_ENABLED !== 'false';
-    const tableId = process.env.BOT_EXHIBITION_TABLE_ID || 'table-10';
+    // The comma-separated list wins; the legacy single-table variable is
+    // still honored so an existing Render override keeps working.
+    const rawTables = process.env.BOT_EXHIBITION_TABLE_IDS
+        || process.env.BOT_EXHIBITION_TABLE_ID
+        || DEFAULT_EXHIBITION_TABLE_IDS.join(',');
+    const tableIds = rawTables.split(',').map(id => id.trim()).filter(Boolean);
+    if (tableIds.length === 0) {
+        throw new Error('BOT_EXHIBITION_TABLE_IDS must name at least one table.');
+    }
     const intervalSeconds = process.env.BOT_EXHIBITION_INTERVAL_SECONDS === undefined
         ? DEFAULT_EXHIBITION_INTERVAL_MS / 1000
         : Number(process.env.BOT_EXHIBITION_INTERVAL_SECONDS);
     if (!Number.isFinite(intervalSeconds) || intervalSeconds * 1000 < MINIMUM_EXHIBITION_INTERVAL_MS) {
         throw new Error('BOT_EXHIBITION_INTERVAL_SECONDS must be at least 10.');
     }
-    return { enabled, tableId, intervalMs: Math.round(intervalSeconds * 1000) };
+    return { enabled, tableIds, intervalMs: Math.round(intervalSeconds * 1000) };
 }
 
 function recoveryTimingFromEnvironment() {
@@ -189,13 +198,14 @@ async function initializeApplication() {
     app.use('/api/bot-insurance', createBotInsuranceStatsRoutes(pool));
     recoveryMonitor.start();
 
-    // Continuous 3-bot exhibition game (analytics feed for round_results).
+    // Continuous 3-bot exhibition games (analytics feed for round_results,
+    // and — on the higher-stakes table — the slow mercy-driven token faucet).
     const exhibitionConfig = botExhibitionConfigFromEnvironment();
     let botExhibition = null;
     if (exhibitionConfig.enabled) {
         botExhibition = createBotExhibitionManager({
             gameService,
-            tableId: exhibitionConfig.tableId,
+            tableIds: exhibitionConfig.tableIds,
             intervalMs: exhibitionConfig.intervalMs,
         });
         botExhibition.start();

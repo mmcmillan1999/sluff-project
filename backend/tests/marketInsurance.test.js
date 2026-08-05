@@ -117,9 +117,13 @@ function runMarketInsuranceTests() {
         pass('Defender decision reads public information only.');
     }
 
-    // 2) A dominating bidder never posts a token ask.
+    // 2) A dominating bidder never posts a token ask. Start the requirement
+    //    at 0 so the quote always differs enough to emit — with a monster
+    //    hand the fair ask can land exactly on the 240 default, where a null
+    //    ("no change needed") would be correct but would hide the quote.
     {
         const engine = mockEngine({ hands: { Bidder: monsterHand } });
+        engine.insurance.bidderRequirement = 0;
         const move = strategy.calculateInsuranceMove(engine, { playerName: 'Bidder' });
         assert.ok(move, 'expected a quote');
         assert.strictEqual(move.settingType, 'bidderRequirement');
