@@ -121,8 +121,12 @@ function restoreEngineFromResume(engine, snapshot) {
             socketId: null,
             tokens: saved.tokens,
             isSpectator: saved.isSpectator === true,
-            // Humans must reconnect; bots are immediately live again.
+            // Humans must reconnect; bots are immediately live again. The
+            // resumePending flag lets the socket action guard adopt the
+            // owner's connection even when it attached before this restore
+            // ran; any reconnect path clears it.
             disconnected: saved.isBot !== true,
+            ...(saved.isBot ? {} : { resumePending: true }),
             ...(saved.isBot ? { isBot: true } : {}),
             ...(saved.wasExplicitSpectator ? { wasExplicitSpectator: true } : {}),
         };

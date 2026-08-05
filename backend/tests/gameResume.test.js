@@ -315,6 +315,38 @@ async function runGameResumeTests() {
         pass('Shutdown persists human games and lets bot-only games restart.');
     }
 
+    // 10) The seat guard self-heals when the registered connection is gone
+    //     (post-resume race, live-fire test three) but still rejects while a
+    //     registered socket is actually connected.
+    {
+        const { authorizeTableAction } = require('../src/events/socketActionGuard');
+        const gameService = createGameServiceWithoutHeartbeat(GameService, mockIo, null);
+        const engine = gameService.getEngineById('table-5');
+        engine.joinTable({ id: 501, username: 'Human' }, 'dead-socket-id');
+        engine.players[501].socketId = 'dead-socket-id'; // no such live socket
+
+        const errors = [];
+        const actingSocket = {
+            id: 'fresh-socket-id',
+            user: { id: 501 },
+            join: () => {},
+            emit: (event, payload) => { if (event === 'error') errors.push(payload.message); },
+        };
+        const healed = authorizeTableAction(actingSocket, gameService, { tableId: 'table-5' });
+        assert.ok(healed, 'the owner’s live socket must be adopted, not rejected');
+        assert.strictEqual(engine.players[501].socketId, 'fresh-socket-id');
+        assert.strictEqual(errors.length, 0);
+
+        // Hijack protection intact: a connected registered socket keeps the seat.
+        mockIo.sockets.sockets.set('live-socket-id', { id: 'live-socket-id', connected: true });
+        engine.players[501].socketId = 'live-socket-id';
+        const rejected = authorizeTableAction(actingSocket, gameService, { tableId: 'table-5' });
+        assert.strictEqual(rejected, null);
+        assert.match(errors[0], /no longer controls/);
+        mockIo.sockets.sockets.delete('live-socket-id');
+        pass('Seat guard adopts the owner’s socket when the registered one is dead.');
+    }
+
     console.log('All game resume tests passed!');
 }
 

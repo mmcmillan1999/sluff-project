@@ -448,6 +448,8 @@ class GameEngine {
         }
         player.disconnected = false;
         player.socketId = socket.id;
+        // A restored seat is claimed the moment any connection reseats it.
+        if (player.resumePending) player.resumePending = false;
         if (tokens !== null) player.tokens = tokens;
         if (this.forfeiture.targetPlayerName === player.playerName) {
              this._clearForfeitTimer();

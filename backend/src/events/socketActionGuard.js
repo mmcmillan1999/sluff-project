@@ -27,7 +27,23 @@ function authorizeTableAction(socket, gameService, payload, options = {}) {
     const player = engine.players?.[socket.user?.id];
     if (requireMembership && !player) return reject(socket, 'You are not at this table.');
     if (requireMembership && player.socketId !== socket.id) {
-        return reject(socket, 'This connection no longer controls that table seat.');
+        // Self-heal instead of reject in exactly two owner-verified cases:
+        // a seat restored from a deploy-resume snapshot that no connection
+        // has claimed yet (resumePending), or a seat whose registered socket
+        // is PROVABLY gone from the io registry. Adopting the acting socket
+        // is what a refresh would do anyway. Everything else fails closed:
+        // an explicitly vacated seat stays vacated, a live registered socket
+        // keeps its seat (the hijack case this guard exists for), and an
+        // unavailable registry never counts as proof of death.
+        const socketsMap = gameService.io?.sockets?.sockets;
+        const registeredSocket = player.socketId ? socketsMap?.get?.(player.socketId) : null;
+        const registeredDead = Boolean(socketsMap && player.socketId
+            && (!registeredSocket || registeredSocket.connected === false));
+        if (player.resumePending !== true && !registeredDead) {
+            return reject(socket, 'This connection no longer controls that table seat.');
+        }
+        socket.join?.(engine.tableId);
+        engine.reconnectPlayer(socket.user.id, socket);
     }
     if (player?.isSpectator && !allowSpectator) {
         return reject(socket, 'Spectators cannot perform this action.');
