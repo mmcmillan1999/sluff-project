@@ -77,8 +77,15 @@ async function runBotBrainTests() {
         assert.strictEqual(brainNameFor('Courtney Sr.'), 'counting');
         assert.strictEqual(brainNameFor('Ace McGraw'), 'classic');
         assert.strictEqual(brainNameFor('TestBot'), 'classic');
-        assert.strictEqual(Object.keys(BRAIN_PROFILES).length, 6);
-        pass('Grampa Blane, Courtney Sr., and Kimba carry the counting brain; the rest stay classic.');
+        // Claude's sealed trial brains (blind-tested by Matt).
+        assert.strictEqual(brainNameFor('Doc Shuffle'), 'sphinx');
+        assert.strictEqual(brainNameFor('Vera Hearts'), 'sphinx');
+        assert.strictEqual(brainNameFor('Lucky Lou'), 'sphinx');
+        assert.strictEqual(brainNameFor('Otis Draw'), 'coyote');
+        assert.strictEqual(brainNameFor('Ginger Snap'), 'coyote');
+        assert.strictEqual(brainNameFor('Benny Bidwell'), 'coyote');
+        assert.strictEqual(Object.keys(BRAIN_PROFILES).length, 12);
+        pass('Five brains resolve: counting, flytrap, sphinx, and coyote trios; the rest stay classic.');
     }
 
     // 2) Matt's overruff rule: partner led, the bid winner trumped with the
@@ -291,6 +298,47 @@ async function runBotBrainTests() {
         const bot = new BotPlayer(3, 'Me', engine);
         assert.strictEqual(bot.playCard(), '6H');
         pass('Classic control group still plays its locked (leaky) line.');
+    }
+
+    // 14) Sealed brains always answer with a legal card — a mis-play would
+    //     stall a live table, so this is the one behavior worth pinning
+    //     without unsealing their strategies.
+    {
+        const scenarios = [
+            {
+                myHand: ['KH', '6H', 'AS', '9D', '7C', '8C', '9C', '6S', '7S', '8S', '9S'],
+                currentTrickCards: [
+                    { userId: 2, playerName: 'Ally', card: 'KD' },
+                    { userId: 1, playerName: 'Bidder', card: 'QD' },
+                ],
+                trickLeaderName: 'Ally',
+            },
+            {
+                myHand: ['AD', 'JD', '10S', '8S', '6C', '7C', '8C', '6H', '7H', '8H', '9H'],
+                currentTrickCards: [],
+                trickLeaderName: 'Me',
+            },
+        ];
+        const { getLegalMoves } = require('../src/core/legalMoves');
+        for (const sealedName of ['Doc Shuffle', 'Otis Draw']) {
+            for (const scenario of scenarios) {
+                const engine = makeEngine(scenario);
+                engine.players[3] = { userId: 3, playerName: sealedName, isBot: true };
+                engine.hands = { [sealedName]: scenario.myHand };
+                engine.trickLeaderId = scenario.currentTrickCards.length ? 2 : 3;
+                const bot = new BotPlayer(3, sealedName, engine);
+                const card = bot.playCard();
+                const legal = getLegalMoves(
+                    scenario.myHand,
+                    scenario.currentTrickCards.length === 0,
+                    engine.leadSuitCurrentTrick,
+                    engine.trumpSuit,
+                    engine.trumpBroken,
+                );
+                assert.ok(legal.includes(card), `${sealedName} offered illegal ${card}`);
+            }
+        }
+        pass('Sealed brains (sphinx, coyote) always answer with a legal card.');
     }
 
     console.log('All bot brain profile tests passed!');

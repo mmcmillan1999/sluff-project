@@ -17,7 +17,8 @@
 const GameEngine = require('../src/core/GameEngine');
 const BotPlayer = require('../src/core/BotPlayer');
 const { PLACEHOLDER_ID } = require('../src/core/constants');
-const { brainNameFor } = require('../src/core/bot-brains');
+const { brainNameFor, registerBrainProfile } = require('../src/core/bot-brains');
+const { shuffle } = require('../src/utils/shuffle');
 
 const MAX_ROUNDS_PER_GAME = 300;
 
@@ -26,7 +27,14 @@ const SEAT_POOL = {
     classic: ['Ace McGraw', 'Buck Wilder', 'Mabel Moon'],
     counting: ['Kimba', 'Grampa Blane', 'Courtney Sr.'],
     flytrap: ['Mike Knight', 'Dolly Deal', 'Rosie Rounds'],
+    // Candidate seats for unassigned brains: registered below so the
+    // production resolver routes them (brains earn real roster names here).
+    coyote: ['Coyote A', 'Coyote B', 'Coyote C'],
+    sphinx: ['Sphinx A', 'Sphinx B', 'Sphinx C'],
 };
+for (const brain of ['coyote', 'sphinx']) {
+    SEAT_POOL[brain].forEach(name => registerBrainProfile(name, brain));
+}
 const seats = (...brains) => brains.map((brain, i) => SEAT_POOL[brain][i % 3]);
 
 function buildEngine(seatNames) {
@@ -138,7 +146,9 @@ function runMatchup(label, seatNames, games) {
     console.log = () => {};
     try {
     for (let i = 0; i < games; i += 1) {
-        const result = playOneGame(seatNames);
+        // Fresh random seating every game (plus the random dealer inside):
+        // no brain ever owes its numbers to a chair.
+        const result = playOneGame(shuffle([...seatNames]));
         roundsTotal += result.rounds;
         result.winners.forEach(w => { wins[w] += 1 / result.winners.length; });
         seatNames.forEach(n => { scoreSum[n] += result.scores[n]; });
@@ -179,6 +189,9 @@ function runMatchup(label, seatNames, games) {
 }
 
 const games = Number(process.argv[2]) || 500;
+// Optional second arg filters matchups by label substring:
+//   node scripts/simulate-brains.js 100000 "flytrap vs counting"
+const filter = (process.argv[3] || '').toLowerCase();
 console.log(`Simulating offline (no server, no database). ${games} games per matchup...`);
 const t0 = Date.now();
 
@@ -188,8 +201,14 @@ const matchups = [
     ['1 flytrap vs 2 classic', seats('flytrap', 'classic', 'classic')],
     ['flytrap vs counting vs classic', seats('flytrap', 'counting', 'classic')],
     ['2 flytrap vs 1 counting', seats('flytrap', 'flytrap', 'counting')],
+    ['1 coyote vs 2 classic', seats('coyote', 'classic', 'classic')],
+    ['1 sphinx vs 2 classic', seats('sphinx', 'classic', 'classic')],
+    ['coyote vs counting vs flytrap', seats('coyote', 'counting', 'flytrap')],
+    ['sphinx vs counting vs flytrap', seats('sphinx', 'counting', 'flytrap')],
+    ['sphinx vs coyote vs classic', seats('sphinx', 'coyote', 'classic')],
 ];
 for (const [label, seatNames] of matchups) {
+    if (filter && !label.toLowerCase().includes(filter)) continue;
     runMatchup(label, seatNames, games);
 }
 console.log(`\nDone in ${((Date.now() - t0) / 1000).toFixed(1)}s.`);

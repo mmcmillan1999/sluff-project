@@ -218,4 +218,7 @@ const playCard = (engine, bot) => {
         : chooseFollow(view, memory, legal, engine, bot);
 };
 
-module.exports = { playCard };
+// buildMemory/trickOrder are shared infrastructure for sibling brains that
+// want the same public-information card memory with different decision
+// policies on top.
+module.exports = { playCard, buildMemory, trickOrder };
