@@ -28,6 +28,10 @@ Debug overlay in game: `Shift+D`.
 ## Architecture map
 - `frontend/src/utils/CardPhysicsEngine.js` — momentum drag physics (~3k lines, the crown jewel).
 - `frontend/src/utils/CardSpacingEngine.js` — CENTER/OVERLAP card spacing math (`docs/CARD_SPACING_LOGIC.md`).
+- Bot insurance (Aug 2026): `backend/src/core/bot-strategies/MarketInsuranceStrategy.js` prices
+  asks/offers from a Monte Carlo rollout (`RolloutEstimator.js`) over public information only
+  (`PublicRoundView.js` is the enforced no-cheating boundary — see `tests/marketInsurance.test.js`).
+  `INSURANCE_STRATEGY=legacy` reverts to `AdaptiveInsuranceStrategy`, which is also the on-error fallback.
 
 ## Conventions
 - Game layout sizes in vh/vw only; cards keep 5:7 aspect ratio; header is 7.5vh.

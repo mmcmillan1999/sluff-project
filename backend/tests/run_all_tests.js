@@ -40,6 +40,7 @@ const suites = [
     { name: 'tutorial persistence', file: './tutorialPersistence.test.js' },
     { name: 'quick-tips read receipts', file: './tips.test.js' },
     { name: 'AI prompt rule contract', file: './aiPromptRules.test.js' },
+    { name: 'market insurance strategy', file: './marketInsurance.test.js' },
 ];
 
 function loadRunner(suite) {

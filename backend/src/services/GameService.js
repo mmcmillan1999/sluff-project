@@ -12,6 +12,7 @@
         BOT_BID_READY_DELAY_MS,
     } = require('../core/constants');
     const AdaptiveInsuranceStrategy = require('../core/bot-strategies/AdaptiveInsuranceStrategy');
+    const MarketInsuranceStrategy = require('../core/bot-strategies/MarketInsuranceStrategy');
 
     const MAX_SETTLEMENT_ATTEMPTS = 3;
     // Settled tables remain available while a human is connected so players can
@@ -60,6 +61,10 @@
             this.terminalCleanupTimers = {};
             this.roundAdvanceTimers = {};
             this.adaptiveInsurance = new AdaptiveInsuranceStrategy(pool, io);
+            // Live insurance brain (July 2026): Monte Carlo market pricing on
+            // public information only. INSURANCE_STRATEGY=legacy reverts to the
+            // adaptive strategy, which also remains the on-error fallback.
+            this.marketInsurance = new MarketInsuranceStrategy(pool, io);
             // The client nudges at 5s and escalates at 15s; this is what
             // happens when that goes unanswered.
             const configuredAfk = Number(process.env.AFK_TURN_TIMEOUT_SECONDS);
@@ -1793,6 +1798,21 @@
             }
         }
 
+        // Market strategy is the live insurance brain; the adaptive strategy
+        // stays available via INSURANCE_STRATEGY=legacy and as the on-error
+        // fallback so an estimator bug can never silence bot insurance play.
+        async _calculateBotInsuranceMove(engine, bot) {
+            if (process.env.INSURANCE_STRATEGY === 'legacy') {
+                return this.adaptiveInsurance.calculateInsuranceMove(engine, bot);
+            }
+            try {
+                return this.marketInsurance.calculateInsuranceMove(engine, bot);
+            } catch (error) {
+                console.error(`[INSURANCE] Market strategy failed for ${bot.playerName}; using legacy fallback:`, error.message);
+                return this.adaptiveInsurance.calculateInsuranceMove(engine, bot);
+            }
+        }
+
         _triggerBots(tableId) {
             const engine = this.getEngineById(tableId);
             if (!engine || engine.pendingBotAction) return;
@@ -1927,8 +1947,7 @@
                         const currentEngine = this.getEngineById(tableId);
                         if (currentEngine && currentEngine.insurance.isActive && !currentEngine.insurance.dealExecuted) {
                             console.log(`[INSURANCE] Bot ${bot.playerName} making insurance decision`);
-                            // Use adaptive strategy instead of fixed strategy
-                            const decision = await this.adaptiveInsurance.calculateInsuranceMove(currentEngine, bot);
+                            const decision = await this._calculateBotInsuranceMove(currentEngine, bot);
                             if (decision) {
                                 currentEngine.updateInsuranceSetting(bot.userId, decision.settingType, decision.value);
                                 this.emitGameState(tableId);
