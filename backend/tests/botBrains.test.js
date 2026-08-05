@@ -77,7 +77,7 @@ async function runBotBrainTests() {
         assert.strictEqual(brainNameFor('Courtney Sr.'), 'counting');
         assert.strictEqual(brainNameFor('Ace McGraw'), 'classic');
         assert.strictEqual(brainNameFor('TestBot'), 'classic');
-        assert.strictEqual(Object.keys(BRAIN_PROFILES).length, 3);
+        assert.strictEqual(Object.keys(BRAIN_PROFILES).length, 6);
         pass('Grampa Blane, Courtney Sr., and Kimba carry the counting brain; the rest stay classic.');
     }
 
@@ -191,6 +191,90 @@ async function runBotBrainTests() {
         const bot = new BotPlayer(3, 'Kimba', engine);
         assert.strictEqual(bot.playCard(), 'AS');
         pass('With trump bled dry, runs the controlled suit top-down (the Midnight Special, mechanically).');
+    }
+
+    // --- The flytrap profile: counting + the Venus-flytrap-of-10s rule ---
+
+    // Rebuild the "Me" seat under a flytrap-roster name.
+    const makeFlytrapEngine = (options) => {
+        const engine = makeEngine(options);
+        engine.players[3] = { userId: 3, playerName: 'Mike Knight', isBot: true };
+        engine.hands = { 'Mike Knight': options.myHand };
+        return engine;
+    };
+
+    // 9) Roster: Mike Knight, Dolly Deal, Rosie Rounds run the flytrap.
+    {
+        assert.strictEqual(brainNameFor('Mike Knight'), 'flytrap');
+        assert.strictEqual(brainNameFor('Dolly Deal'), 'flytrap');
+        assert.strictEqual(brainNameFor('Rosie Rounds'), 'flytrap');
+        pass('Mike Knight, Dolly Deal, and Rosie Rounds carry the flytrap brain.');
+    }
+
+    // 10) The bait: first spade trick ever, a low-looking JS lead, and the
+    //     bot holds A-9. Counting spends the Ace (its only winner); the
+    //     flytrap declines with the 9 and keeps the Ace loaded for the 10.
+    {
+        const scenario = {
+            myHand: ['AS', '9S', '6C'],
+            currentTrickCards: [{ userId: 1, playerName: 'Bidder', card: 'JS' }],
+            trickLeaderName: 'Bidder',
+        };
+        const countingEngine = makeCountingEngine(scenario);
+        assert.strictEqual(new BotPlayer(3, 'Kimba', countingEngine).playCard(), 'AS');
+        const flytrapEngine = makeFlytrapEngine(scenario);
+        assert.strictEqual(new BotPlayer(3, 'Mike Knight', flytrapEngine).playCard(), '9S');
+        pass('Flytrap refuses the first-trick bait that counting falls for.');
+    }
+
+    // 11) Stand-down: the 10 is already on the table — the Ace eats it now.
+    {
+        const engine = makeFlytrapEngine({
+            myHand: ['AS', '9S', '6C'],
+            currentTrickCards: [
+                { userId: 2, playerName: 'Ally', card: '7S' },
+                { userId: 1, playerName: 'Bidder', card: '10S' },
+            ],
+            trickLeaderName: 'Ally',
+        });
+        assert.strictEqual(new BotPlayer(3, 'Mike Knight', engine).playCard(), 'AS');
+        pass('The trap stands down when the 10 shows itself — the Ace takes it.');
+    }
+
+    // 12) Stand-down: the suit has been played before — normal counting play.
+    {
+        const engine = makeFlytrapEngine({
+            myHand: ['AS', '9S', '6C'],
+            capturedTricks: {
+                Bidder: [{ trickNumber: 1, cards: ['KS', 'QS', '8S'], winnerName: 'Bidder' }],
+            },
+            tricksPlayedCount: 1,
+            currentTrickCards: [{ userId: 1, playerName: 'Bidder', card: 'JS' }],
+            trickLeaderName: 'Bidder',
+        });
+        assert.strictEqual(new BotPlayer(3, 'Mike Knight', engine).playCard(), 'AS');
+        pass('Once the suit has already been seen, the exception never fires.');
+    }
+
+    // 13) Stand-down: holding the 10 alongside the Ace disarms the bait
+    //     ("King and under" excludes the 10 by rank), and a long suit
+    //     (three-plus support) fights normally too.
+    {
+        const withTen = makeFlytrapEngine({
+            myHand: ['AS', '10S', '6C'],
+            currentTrickCards: [{ userId: 1, playerName: 'Bidder', card: 'JS' }],
+            trickLeaderName: 'Bidder',
+        });
+        // Counting logic: cheapest sufficient winner is the 10.
+        assert.strictEqual(new BotPlayer(3, 'Mike Knight', withTen).playCard(), '10S');
+
+        const longSuit = makeFlytrapEngine({
+            myHand: ['AS', 'KS', 'QS', '8S'],
+            currentTrickCards: [{ userId: 1, playerName: 'Bidder', card: '7S' }],
+            trickLeaderName: 'Bidder',
+        });
+        assert.strictEqual(new BotPlayer(3, 'Mike Knight', longSuit).playCard(), '8S');
+        pass('Holding the 10 or a long suit disarms the trap; counting logic resumes.');
     }
 
     // 8) The classic brain is untouched by all of the above: same overruff

@@ -20,21 +20,27 @@
 
 const classicBrain = require('./classicBrain');
 const countingBrain = require('./countingBrain');
+const flytrapBrain = require('./flytrapBrain');
 
 const BRAINS = {
     classic: classicBrain,
     counting: countingBrain,
+    flytrap: flytrapBrain,
 };
 
 const DEFAULT_BRAIN = 'classic';
 
-// The trial roster. "Grampa Blane" is the grandpa on the books (there is no
-// Grandpa George in bot accounts) — swap the name here if a different trio
-// should carry the new brain.
+// The trial rosters. "Grampa Blane" is the grandpa on the books (there is no
+// Grandpa George in bot accounts) — swap names here to reassign arms.
+// flytrap = counting plus the Venus-flytrap-of-10s exception (see
+// flytrapBrain.js): refuses first-trick low-lead bait, keeps the Ace loaded.
 const BRAIN_PROFILES = {
     'Grampa Blane': 'counting',
     'Courtney Sr.': 'counting',
     'Kimba': 'counting',
+    'Mike Knight': 'flytrap',
+    'Dolly Deal': 'flytrap',
+    'Rosie Rounds': 'flytrap',
 };
 
 const brainNameFor = (botName) => BRAIN_PROFILES[botName] || DEFAULT_BRAIN;
