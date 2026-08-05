@@ -242,17 +242,17 @@ describe('useSounds music channel', () => {
 
         await waitFor(() => {
             // Every SOUND_FILES entry plus the failed music attempt. The deal
-            // is synthesized now, so it no longer appears in this count.
-            expect(ctx.decodeAudioData).toHaveBeenCalledTimes(16);
+            // and the card play are synthesized now, so neither appears here.
+            expect(ctx.decodeAudioData).toHaveBeenCalledTimes(15);
             expect(errorSpy).toHaveBeenCalledWith(
                 'Failed to load background music:',
                 expect.any(Error)
             );
         });
 
-        act(() => result.current.playSound('cardPlay'));
+        act(() => result.current.playSound('trickWin'));
         const effectSource = ctx.sources.find(
-            source => source.buffer?.decodedUrl === '/Sounds/card_play.mp3'
+            source => source.buffer?.decodedUrl === '/Sounds/trick_win.mp3'
         );
         expect(effectSource).toBeDefined();
         expect(effectSource.connect).toHaveBeenCalledWith(ctx.gains[0]);
@@ -478,11 +478,11 @@ describe('useSounds pitch humanization and synthesized voices', () => {
         return { result, ctx: contexts[0] };
     };
 
-    test('card plays are born a few percent apart; voice lines stay on pitch', async () => {
+    test('sampled repeats are born a few percent apart; voice lines stay on pitch', async () => {
         const { result, ctx } = mountUnlockedHook();
         // Probe until the effect buffers finish their microtask decode chain.
         await waitFor(() => {
-            act(() => result.current.playSound('cardPlay'));
+            act(() => result.current.playSound('trickWin'));
             expect(ctx.sources.some(s => !s.loop && s.buffer?.decodedUrl)).toBe(true);
         });
 
@@ -490,15 +490,34 @@ describe('useSounds pitch humanization and synthesized voices', () => {
         const randoms = [0, 1];
         vi.spyOn(Math, 'random').mockImplementation(() => randoms.shift() ?? 0.5);
         act(() => {
-            result.current.playSound('cardPlay');
-            result.current.playSound('cardPlay');
+            result.current.playSound('trickWin');
+            result.current.playSound('trickWin');
             result.current.playSound('bidSolo');
         });
 
         const rates = ctx.sources.slice(before).map(source => source.playbackRate.value);
-        expect(rates[0]).toBeCloseTo(0.94, 5); // random 0 -> full flat
-        expect(rates[1]).toBeCloseTo(1.06, 5); // random 1 -> full sharp
+        expect(rates[0]).toBeCloseTo(0.96, 5); // random 0 -> full flat
+        expect(rates[1]).toBeCloseTo(1.04, 5); // random 1 -> full sharp
         expect(rates[2]).toBe(1);              // speech is never pitch-shifted
+    });
+
+    test('the card play is a synthesized snap with per-card pitch, not a sample', () => {
+        const { result, ctx } = mountUnlockedHook();
+        const sourcesBefore = ctx.sources.length;
+        const oscillatorsBefore = ctx.oscillators.length;
+
+        act(() => {
+            result.current.playSound('cardPlay');
+            result.current.playSound('cardPlay');
+        });
+
+        const snaps = ctx.sources.slice(sourcesBefore);
+        expect(snaps).toHaveLength(2);                              // two noise brushes
+        expect(ctx.oscillators.length - oscillatorsBefore).toBe(2); // two felt thumps
+        // Synthesized from the shared noise buffer — never a decoded sample.
+        expect(snaps.every(s => !s.buffer?.decodedUrl)).toBe(true);
+        // And each is born with its own pitch.
+        expect(snaps[0].playbackRate.value).not.toBe(snaps[1].playbackRate.value);
     });
 
     test('the deal schedules one flick per card across the animation cadence', () => {

@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { isAudioSessionClaimedByVoice } from '../utils/VoiceChat';
-import { scheduleDealSounds, wheelClick, wheelSettle } from '../utils/soundSynth';
+import { cardSnap, scheduleDealSounds, wheelClick, wheelSettle } from '../utils/soundSynth';
 
 // Short effects and the music bed share one unlocked Web Audio context so they
 // mix reliably on mobile. Each channel has its own gain node and preferences.
-// The deal is no longer a sample: playDealSounds synthesizes one flick per
-// card on the context clock (the old 3s recording read as record scratch).
+// The deal and the card play are no longer samples: both are synthesized on
+// the context clock (their recordings read as record scratch) with per-hit
+// pitch baked in.
 const SOUND_FILES = {
     turnAlert: '/Sounds/turn_alert.mp3',
-    cardPlay: '/Sounds/card_play.mp3',
     trickWin: '/Sounds/trick_win.mp3',
     trumpBroken: '/Sounds/trump_broken_v6.mp3',
     bidFrog: '/Sounds/bid_frog_v1.mp3',
@@ -35,7 +35,6 @@ const SOUND_FILES = {
 // Voice lines and one-shot stings are deliberately absent — shifting speech
 // sounds wrong, and a sting that plays once has nothing to vary against.
 const PITCH_VARIANCE = {
-    cardPlay: 0.06,
     trickWin: 0.04,
     turnAlert: 0.025,
 };
@@ -462,6 +461,16 @@ export const useSounds = ({ musicActive = false } = {}) => {
             return;
         }
         const ctx = ctxRef.current;
+        // The card play is a synthesized voice: every card lands with its own
+        // pitch, and there is no sample left to scratch.
+        if (soundName === 'cardPlay') {
+            if (!ctx || !gainRef.current) return;
+            if (isResumable(ctx)) ctx.resume().catch(() => {});
+            cardSnap(ctx, gainRef.current, {
+                pitch: 1 + (Math.random() * 2 - 1) * 0.07,
+            });
+            return;
+        }
         const buffer = buffersRef.current[soundName];
         if (!ctx || !buffer) {
             console.warn(`[sound] "${soundName}" skipped — ${!ctx ? 'no audio context' : 'buffer not loaded'}`);

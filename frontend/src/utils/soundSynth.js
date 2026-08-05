@@ -104,6 +104,37 @@ export const cardFlick = (ctx, destination, { when = 0, pitch = 1, gain = 1 } = 
 };
 
 /**
+ * One card played onto the felt. Rounder and darker than the deal flick —
+ * a deliberate placement, not a riffle — with the top end kept low because
+ * bright noise zips are exactly what read as record scratch in the old
+ * sample. Also serves as the score ceremonies' counting tick.
+ */
+export const cardSnap = (ctx, destination, { when = 0, pitch = 1, gain = 1 } = {}) => {
+    try {
+        const t = Math.max(when, ctx.currentTime);
+        // The card face brushing the felt.
+        noiseHit(ctx, destination, {
+            t,
+            frequency: 1450 * pitch,
+            q: 1.1,
+            peak: 0.3 * gain,
+            attack: 0.004,
+            decay: 0.05,
+            pitch,
+        });
+        // The weight of the card landing.
+        toneHit(ctx, destination, {
+            t: t + 0.008,
+            from: 225 * pitch,
+            to: 115 * pitch,
+            peak: 0.22 * gain,
+            attack: 0.005,
+            decay: 0.055,
+        });
+    } catch { /* audio is garnish */ }
+};
+
+/**
  * Schedule a full deal as individual flicks on the context clock, matched to
  * the deal animation's cadence. Per-card pitch (±6%), timing (±8ms), and
  * level (±20%) jitter is the whole point: a steady march of similar-but-
