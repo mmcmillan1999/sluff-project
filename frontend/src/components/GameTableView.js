@@ -581,6 +581,9 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         };
         
         const handlePlayerError = ({ message }) => {
+            // App.js heals this one silently with a socket reconnect; showing
+            // the scary message for a self-repairing hiccup only alarms people.
+            if (/no longer controls/i.test(String(message || ''))) return;
             if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
             setPlayerError({ message });
             errorTimerRef.current = setTimeout(() => {

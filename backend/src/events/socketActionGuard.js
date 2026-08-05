@@ -27,19 +27,33 @@ function authorizeTableAction(socket, gameService, payload, options = {}) {
     const player = engine.players?.[socket.user?.id];
     if (requireMembership && !player) return reject(socket, 'You are not at this table.');
     if (requireMembership && player.socketId !== socket.id) {
-        // Self-heal instead of reject in exactly two owner-verified cases:
-        // a seat restored from a deploy-resume snapshot that no connection
-        // has claimed yet (resumePending), or a seat whose registered socket
-        // is PROVABLY gone from the io registry. Adopting the acting socket
-        // is what a refresh would do anyway. Everything else fails closed:
-        // an explicitly vacated seat stays vacated, a live registered socket
-        // keeps its seat (the hijack case this guard exists for), and an
-        // unavailable registry never counts as proof of death.
+        // Self-heal with newest-wins semantics, mirroring the connect-time
+        // reseat policy: the owner's NEWER connection may take the seat over
+        // a dead, zombie, or older registered socket (exactly what a manual
+        // refresh achieves), while an older tab can never snatch the seat
+        // back from a live newer controller. resumePending covers a seat
+        // restored from a deploy snapshot that no connection has claimed
+        // yet. Without an io registry nothing is provable, so fail closed.
         const socketsMap = gameService.io?.sockets?.sockets;
         const registeredSocket = player.socketId ? socketsMap?.get?.(player.socketId) : null;
-        const registeredDead = Boolean(socketsMap && player.socketId
-            && (!registeredSocket || registeredSocket.connected === false));
-        if (player.resumePending !== true && !registeredDead) {
+        const registeredAlive = Boolean(registeredSocket && registeredSocket.connected !== false);
+        const actingIssued = Number(socket.handshake?.issued) || 0;
+        const registeredIssued = Number(registeredSocket?.handshake?.issued) || 0;
+        const mayAdopt = player.resumePending === true
+            || (Boolean(socketsMap) && (!registeredAlive || actingIssued > registeredIssued));
+        if (!mayAdopt) {
+            // Compact forensics for the next occurrence: which condition
+            // failed and how the two connections compared.
+            gameService.pool?.query?.(
+                'INSERT INTO funnel_events (name, session_id) VALUES ($1, $2)',
+                ['seat_guard_reject', [
+                    `u${socket.user?.id}`,
+                    `rp${player.resumePending ? 1 : 0}`,
+                    `reg${registeredSocket ? (registeredAlive ? 'A' : 'D') : 'X'}`,
+                    `ai${actingIssued % 1e7}`,
+                    `ri${registeredIssued % 1e7}`,
+                ].join(' ').slice(0, 64)],
+            ).catch(() => {});
             return reject(socket, 'This connection no longer controls that table seat.');
         }
         socket.join?.(engine.tableId);

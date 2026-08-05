@@ -103,6 +103,9 @@ function App() {
     // True from the server's restart notice until we reconnect: the ordinary
     // disconnect handlers must not stomp "updating" with "connection lost".
     const serverRestartingRef = React.useRef(false);
+    // Throttles the automatic seat-reclaim reconnect so a genuinely
+    // superseded tab cannot fight the live one in a loop.
+    const seatReclaimAtRef = React.useRef(0);
 
     const handleLogout = useCallback(() => {
         localStorage.removeItem("sluff_token");
@@ -290,8 +293,21 @@ function App() {
                 setView('gameTable');
             };
             const onError = (error) => {
-                const msg = error?.message || error || 'Something went wrong.';
-                setErrorMessage(String(msg));
+                const msg = String(error?.message || error || 'Something went wrong.');
+                // A seat-control rejection means this socket predates the
+                // server's view of our seat (typically right after a deploy
+                // resume). A programmatic reconnect performs exactly what a
+                // manual refresh would — the server reseats this connection
+                // on connect — so heal silently instead of showing an error.
+                if (/no longer controls/i.test(msg)) {
+                    if (Date.now() - seatReclaimAtRef.current > 5000) {
+                        seatReclaimAtRef.current = Date.now();
+                        socket.disconnect();
+                        socket.connect();
+                    }
+                    return;
+                }
+                setErrorMessage(msg);
                 // An invite join failure leaves the player in the lobby. Release
                 // the navigation guard so ordinary lobby actions (including the
                 // tutorial offer) are not suppressed for the rest of the session.
