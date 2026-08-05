@@ -33,21 +33,42 @@ function playCard(engine, userId, card) {
         }
     }
     
+    // Human reaction time: turn-open to card-received, measured entirely
+    // server-side so no client can fake it. Bots are excluded — their pace
+    // is scheduler staggering, not thinking.
+    const now = Date.now();
+    const timingEffects = [];
+    if (!player.isBot && engine.gameId && Number.isFinite(engine.turnStartedAt)) {
+        timingEffects.push({
+            type: 'LOG_PLAY_TIMING',
+            payload: {
+                gameId: engine.gameId,
+                userId,
+                actionType: 'play_card',
+                roundNumber: (engine.roundHistory?.length || 0) + 1,
+                trickNumber: engine.tricksPlayedCount + 1,
+                ms: Math.max(0, now - engine.turnStartedAt),
+            },
+        });
+    }
+
     engine.hands[player.playerName] = hand.filter(c => c !== card);
     engine.currentTrickCards.push({ userId, playerName: player.playerName, card });
     if (isLeading) engine.leadSuitCurrentTrick = playedSuit;
     if (playedSuit === engine.trumpSuit) engine.trumpBroken = true;
-    
+
     // Cards per trick = active players this round (3 in a 4-player game,
     // where the dealer sits out) — NOT total seated players.
     const expectedCardsInTrick = engine.playerOrder.turnOrder.length;
     if (engine.currentTrickCards.length === expectedCardsInTrick) {
-        return resolveTrick(engine);
+        engine.turnStartedAt = null;
+        return [...timingEffects, ...resolveTrick(engine)];
     } else {
         const turnOrder = engine.playerOrder.turnOrder;
         const currentTurnPlayerIndex = turnOrder.indexOf(userId);
         engine.trickTurnPlayerId = turnOrder[(currentTurnPlayerIndex + 1) % expectedCardsInTrick];
-        return [{ type: 'BROADCAST_STATE' }];
+        engine.turnStartedAt = now;
+        return [...timingEffects, { type: 'BROADCAST_STATE' }];
     }
 }
 
@@ -93,6 +114,7 @@ function resolveTrick(engine) {
                             engineRef.leadSuitCurrentTrick = null;
                             engineRef.trickTurnPlayerId = winnerId;
                             engineRef.state = "Playing Phase";
+                            engineRef.turnStartedAt = Date.now();
                             return [{ type: 'BROADCAST_STATE' }];
                         }
                         return [];

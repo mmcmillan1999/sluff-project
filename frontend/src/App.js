@@ -244,12 +244,12 @@ function App() {
                 // the truth ("updating") instead of reverting to a scary
                 // generic loss message.
                 setConnectionNotice(serverRestartingRef.current
-                    ? { kind: 'reconnecting', message: 'Sluff is updating — back in a moment…' }
+                    ? { kind: 'reconnecting', message: 'Sluff is updating — back in a moment. Games resume automatically.' }
                     : { kind: 'reconnecting', message: 'Connection lost. Reconnecting…' });
             };
             const onReconnectAttempt = () => {
                 setConnectionNotice(serverRestartingRef.current
-                    ? { kind: 'reconnecting', message: 'Sluff is updating — back in a moment…' }
+                    ? { kind: 'reconnecting', message: 'Sluff is updating — back in a moment. Games resume automatically.' }
                     : { kind: 'reconnecting', message: 'Reconnecting…' });
             };
             const onUpdateUser = (updatedUser) => {
@@ -326,7 +326,7 @@ function App() {
             const onServerRestarting = () => {
                 serverRestartingRef.current = true;
                 if (connectionNoticeTimerRef.current) clearTimeout(connectionNoticeTimerRef.current);
-                setConnectionNotice({ kind: 'reconnecting', message: 'Sluff is updating — back in a moment…' });
+                setConnectionNotice({ kind: 'reconnecting', message: 'Sluff is updating — back in a moment. Games resume automatically.' });
             };
 
             socket.on('connect', onConnect);

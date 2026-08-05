@@ -782,6 +782,42 @@ const createDbTables = async (pool) => {
             FOR EACH ROW EXECUTE FUNCTION reject_standings_snapshot_mutation()
         `);
 
+        // Resume snapshots: one row per live game the dying instance managed
+        // to serialize at SIGTERM. The replacement instance claims rows with
+        // DELETE ... RETURNING (single-shot, race-safe across the rolling
+        // deploy overlap) and restores the games in memory. Rows are always
+        // consumed on first touch; anything unrestorable falls back to the
+        // abandoned-game refund path.
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS live_game_snapshots (
+                game_id INTEGER PRIMARY KEY REFERENCES game_history(game_id) ON DELETE CASCADE,
+                table_id VARCHAR(50) NOT NULL,
+                participant_user_ids INTEGER[] NOT NULL DEFAULT ARRAY[]::integer[],
+                snapshot JSONB NOT NULL,
+                created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        // Per-action think time (Aug 2026): server-side turn-start to
+        // card-received, humans only. The reaction-time distribution is the
+        // definitive human-vs-program signal the jazzachy review lacked.
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS play_timings (
+                id SERIAL PRIMARY KEY,
+                game_id INTEGER REFERENCES game_history(game_id) ON DELETE CASCADE,
+                user_id INTEGER,
+                action_type VARCHAR(20) NOT NULL DEFAULT 'play_card',
+                round_number INTEGER,
+                trick_number INTEGER,
+                ms INTEGER NOT NULL,
+                created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+        await pool.query(`
+            CREATE INDEX IF NOT EXISTS idx_play_timings_user
+            ON play_timings (user_id, created_at);
+        `);
+
         // This must remain the final statement before COMMIT. clock_timestamp()
         // grants legacy/null rows a full grace window from migration completion,
         // while the predicate preserves every non-null heartbeat across deploys.

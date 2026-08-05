@@ -151,9 +151,24 @@ async function initializeApplication() {
         getLiveGameIds: () => liveGameIdsFromService(gameService),
     });
 
+    // Restore any deploy-survival snapshots before recovery repair runs and
+    // before any socket can connect: a restored game must be live (and
+    // heartbeating) by the time refund logic first looks at the ledger.
+    await gameService.restorePendingSnapshots();
+
     // Startup repair and the first live-game heartbeat finish before listen().
     // No socket or HTTP request can race financial reconciliation.
     await recoveryMonitor.runNow();
+
+    // Render's rolling deploy boots this instance BEFORE the old one gets
+    // SIGTERM, so its snapshots usually arrive after we are already serving.
+    // Sweep for them briefly; ten minutes covers any plausible overlap.
+    const resumeSweep = setInterval(() => {
+        gameService.restorePendingSnapshots()
+            .catch(error => console.error('[RESUME] Sweep failed:', error.message));
+    }, 5000);
+    resumeSweep.unref();
+    setTimeout(() => clearInterval(resumeSweep), 10 * 60 * 1000).unref();
 
     registerGameHandlers(io, gameService);
     app.use('/api/auth', createAuthRoutes(pool, bcrypt, jwt, io, gameService));
@@ -219,7 +234,7 @@ async function initializeThenListen({
     httpServer = server,
     port = PORT,
 } = {}) {
-    await initialize();
+    const context = await initialize();
     await new Promise((resolve, reject) => {
         const onError = error => reject(error);
         httpServer.once('error', onError);
@@ -228,32 +243,45 @@ async function initializeThenListen({
             resolve();
         });
     });
+    return context;
 }
 
-// Render sends SIGTERM before replacing the instance, and until now the
-// process just died: sockets dropped mid-trick with no explanation, and the
-// games surfaced later as "Abandoned after server interruption". In-memory
-// engines cannot be saved on the way out, but the clients CAN be told what is
-// happening, so the drop reads as an update instead of a mystery. The refunds
-// stay abandonedGameRecovery's job on the next boot.
-function registerShutdownNotice() {
+// Render sends SIGTERM before replacing the instance. The handler does three
+// things on the way out: tells every client an update is happening (so the
+// drop reads as an update, not a mystery), snapshots every live human game to
+// live_game_snapshots so the replacement instance can restore it mid-trick,
+// and stamps heartbeats so anything unrestorable refunds cleanly later. The
+// whole sequence stays far inside Render's kill window.
+function registerShutdownNotice(context = null) {
     process.once('SIGTERM', () => {
-        console.log('[SHUTDOWN] SIGTERM received — notifying clients, exiting shortly.');
+        console.log('[SHUTDOWN] SIGTERM received — notifying clients and snapshotting live games.');
         try {
             io.emit('serverRestarting');
         } catch (error) {
             console.error('[SHUTDOWN] Failed to notify clients:', error.message);
         }
-        // Long enough for the emit to flush, short enough that Render's kill
-        // window is never in play. Deliberately referenced: the timer IS the
-        // reason the process stays alive to flush.
-        setTimeout(() => process.exit(0), 1200);
+        try {
+            context?.botExhibition?.stop?.();
+            context?.recoveryMonitor?.stop?.();
+        } catch (error) {
+            console.error('[SHUTDOWN] Failed to stop background timers:', error.message);
+        }
+        const persist = context?.gameService
+            ? context.gameService.snapshotLiveGamesForShutdown()
+                .catch(error => console.error('[SHUTDOWN] Snapshot pass failed:', error.message))
+            : Promise.resolve();
+        const deadline = new Promise(resolve => setTimeout(resolve, 4000));
+        // The trailing delay keeps the process alive long enough for the
+        // serverRestarting emit to flush even when there is nothing to save.
+        Promise.race([persist, deadline]).then(() => {
+            setTimeout(() => process.exit(0), 1200);
+        });
     });
 }
 
 async function startServer() {
-    await initializeThenListen();
-    registerShutdownNotice();
+    const context = await initializeThenListen();
+    registerShutdownNotice(context);
     console.log(`Sluff Game Server running on port ${PORT}`);
 }
 

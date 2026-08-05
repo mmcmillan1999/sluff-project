@@ -13,6 +13,7 @@
     } = require('../core/constants');
     const AdaptiveInsuranceStrategy = require('../core/bot-strategies/AdaptiveInsuranceStrategy');
     const MarketInsuranceStrategy = require('../core/bot-strategies/MarketInsuranceStrategy');
+    const { serializeEngineForResume, restoreEngineFromResume } = require('../serialization/gameResume');
 
     const MAX_SETTLEMENT_ATTEMPTS = 3;
     // Settled tables remain available while a human is connected so players can
@@ -1183,6 +1184,115 @@
             return { status: 'started', bots: trio.map(p => p.playerName) };
         }
 
+        // --- Deploy-survival snapshots -----------------------------------
+        // At SIGTERM the dying instance persists every resumable game with a
+        // human participant; bot-only exhibition games just restart. The
+        // heartbeat stamp restarts the recovery grace clock so an unrestored
+        // snapshot still refunds cleanly hours later, never mid-restore.
+        async snapshotLiveGamesForShutdown() {
+            if (!this.pool) return { saved: 0 };
+            let saved = 0;
+            for (const [tableId, engine] of Object.entries(this.engines)) {
+                try {
+                    const hasHuman = Object.values(engine.players)
+                        .some(p => !p.isBot && !p.isSpectator);
+                    if (!hasHuman) continue;
+                    const snapshot = serializeEngineForResume(engine);
+                    if (!snapshot) continue;
+                    const participantIds = snapshot.players
+                        .filter(p => Number.isInteger(p.userId) && p.userId > 0)
+                        .map(p => p.userId);
+                    await this.pool.query(
+                        `INSERT INTO live_game_snapshots (game_id, table_id, participant_user_ids, snapshot)
+                         VALUES ($1, $2, $3, $4)
+                         ON CONFLICT (game_id) DO UPDATE SET
+                             table_id = EXCLUDED.table_id,
+                             participant_user_ids = EXCLUDED.participant_user_ids,
+                             snapshot = EXCLUDED.snapshot,
+                             created_at = CURRENT_TIMESTAMP`,
+                        [engine.gameId, tableId, participantIds, JSON.stringify(snapshot)],
+                    );
+                    await this.pool.query(
+                        `UPDATE game_history SET last_activity_at = NOW()
+                         WHERE game_id = $1 AND outcome = 'In Progress'`,
+                        [engine.gameId],
+                    );
+                    saved += 1;
+                    console.log(`[SHUTDOWN] Snapshotted game #${engine.gameId} on ${tableId} for resume.`);
+                } catch (error) {
+                    console.error(`[SHUTDOWN] Snapshot failed for ${tableId}:`, error.message);
+                }
+            }
+            return { saved };
+        }
+
+        // Claim and restore pending snapshots. Runs once at boot and then on
+        // a short sweep, because Render boots the replacement BEFORE the old
+        // instance receives SIGTERM — the snapshot usually lands after this
+        // process is already serving traffic. DELETE ... RETURNING makes the
+        // claim single-shot even if two instances briefly overlap.
+        async restorePendingSnapshots({ maxAgeMs = 15 * 60 * 1000 } = {}) {
+            if (!this.pool) return { restored: 0 };
+            let rows;
+            try {
+                ({ rows } = await this.pool.query(`
+                    SELECT s.game_id, s.table_id, g.outcome,
+                        EXTRACT(EPOCH FROM (NOW() - s.created_at)) * 1000 AS age_ms
+                    FROM live_game_snapshots s
+                    LEFT JOIN game_history g ON g.game_id = s.game_id`));
+            } catch (error) {
+                console.error('[RESUME] Snapshot scan failed:', error.message);
+                return { restored: 0 };
+            }
+            let restored = 0;
+            for (const row of rows) {
+                try {
+                    const claim = await this.pool.query(
+                        'DELETE FROM live_game_snapshots WHERE game_id = $1 RETURNING snapshot',
+                        [row.game_id],
+                    );
+                    if (claim.rows.length === 0) continue; // another instance took it
+                    if (row.outcome !== 'In Progress') {
+                        console.log(`[RESUME] Skipping game #${row.game_id}: already settled (${row.outcome}).`);
+                        continue;
+                    }
+                    if (Number(row.age_ms) > maxAgeMs) {
+                        console.log(`[RESUME] Skipping game #${row.game_id}: snapshot too old; leaving it to recovery.`);
+                        continue;
+                    }
+                    const engine = this.getEngineById(row.table_id);
+                    if (!engine || !restoreEngineFromResume(engine, claim.rows[0].snapshot)) {
+                        console.log(`[RESUME] Could not restore game #${row.game_id} on ${row.table_id}; recovery will refund it.`);
+                        continue;
+                    }
+                    restored += 1;
+                    console.log(`[RESUME] Restored game #${row.game_id} on ${row.table_id} (${engine.state}).`);
+                    this._rebindSocketsForEngine(engine);
+                    this.emitGameState(row.table_id);
+                    this.io.emit('lobbyState', this.getLobbyState());
+                    this._triggerBots(row.table_id);
+                    this._reconcileAutomaticNextRoundTimer(row.table_id);
+                } catch (error) {
+                    console.error(`[RESUME] Restore failed for game #${row.game_id}:`, error.message);
+                }
+            }
+            return { restored };
+        }
+
+        // Players whose sockets connected before a late restore are sitting
+        // in the lobby; re-seat every authenticated socket that belongs to
+        // the restored game so their next state broadcast lands mid-trick.
+        _rebindSocketsForEngine(engine) {
+            const sockets = this.io?.sockets?.sockets;
+            if (!sockets || typeof sockets.values !== 'function') return;
+            for (const socket of sockets.values()) {
+                const userId = socket.user?.id;
+                if (!userId || !engine.players[userId]) continue;
+                socket.join?.(engine.tableId);
+                engine.reconnectPlayer(userId, socket);
+            }
+        }
+
         async requestRematch(tableId, userId) {
             await this._performAction(tableId, (engine) => engine.requestRematch(userId));
             const engine = this.getEngineById(tableId);
@@ -1561,6 +1671,23 @@
                                 if (playerSocket) playerSocket.emit("requestUserSync");
                             }
                         });
+                        break;
+                    case 'LOG_PLAY_TIMING':
+                        // Fire-and-forget: reaction-time analytics must never
+                        // delay a card landing on the table.
+                        this.pool?.query(
+                            `INSERT INTO play_timings
+                             (game_id, user_id, action_type, round_number, trick_number, ms)
+                             VALUES ($1,$2,$3,$4,$5,$6)`,
+                            [
+                                effect.payload.gameId,
+                                effect.payload.userId,
+                                effect.payload.actionType,
+                                effect.payload.roundNumber,
+                                effect.payload.trickNumber,
+                                Math.round(effect.payload.ms),
+                            ],
+                        ).catch(err => console.error('[PLAY-TIMING] insert failed:', err.message));
                         break;
                     case 'LOG_ROUND_RESULT':
                         // Fire-and-forget analytics write; a database hiccup

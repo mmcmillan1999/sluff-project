@@ -37,6 +37,16 @@ class PlayerList {
     }
 
     /**
+     * Restore both orderings verbatim from a resume snapshot. Join order and
+     * the round's turn order are authoritative saved state — recomputing them
+     * from the dealer could disagree with the tricks already played.
+     */
+    restore(allIds, turnOrder) {
+        this._playerIds = Array.isArray(allIds) ? [...allIds] : [];
+        this._turnOrder = Array.isArray(turnOrder) ? [...turnOrder] : [];
+    }
+
+    /**
      * Sets the turn order based on the dealer's position.
      * This is the ONLY place where the order is shuffled/recalculated.
      * @param {number} dealerId

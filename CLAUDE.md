@@ -17,10 +17,11 @@ Debug overlay in game: `Shift+D`.
 
 ## Deployment (verify before assuming — was down June 2026)
 - **REQUIRED before every push to `main`**: run `cd backend && npm run deploy:check`. Any push
-  redeploys the Render backend, which has no SIGTERM handling — the restart kills every in-flight
-  game (players get refunds via abandoned-game recovery, but their game is gone). The check exits 1
-  while a human is mid-game; bot-only games don't block. If humans are playing, wait for the check
-  to clear or get Matt's explicit go-ahead before pushing.
+  redeploys the Render backend. Since Aug 2026 the SIGTERM handler snapshots live human games to
+  `live_game_snapshots` and the new instance restores them (boot pass + 10-min sweep, see
+  `src/serialization/gameResume.js`) — but resume is best-effort, so the check still applies: it
+  exits 1 while a human is mid-game (bot-only games don't block). If humans are playing, wait for
+  the check to clear or get Matt's explicit go-ahead before pushing.
 - **Frontend**: Netlify, auto-deploys from `main` (`netlify.toml` at repo root, publishes `frontend/build`, Node 22).
 - **Backend**: Render web service (`npm start`). NOT Heroku.
 - **Database**: PostgreSQL on Render via `POSTGRES_CONNECT_STRING`. Schema created at boot by `backend/src/data/createTables.js` (no migration tool).
@@ -33,6 +34,8 @@ Debug overlay in game: `Shift+D`.
 ## Architecture map
 - `frontend/src/utils/CardPhysicsEngine.js` — momentum drag physics (~3k lines, the crown jewel).
 - `frontend/src/utils/CardSpacingEngine.js` — CENTER/OVERLAP card spacing math (`docs/CARD_SPACING_LOGIC.md`).
+- `play_timings` table (Aug 2026): server-measured human think time per card play (turn-open →
+  card-received, bots excluded) — the reaction-time distribution is the bot-detection signal.
 - Bot insurance (Aug 2026): `backend/src/core/bot-strategies/MarketInsuranceStrategy.js` prices
   asks/offers from a Monte Carlo rollout (`RolloutEstimator.js`) over public information only
   (`PublicRoundView.js` is the enforced no-cheating boundary — see `tests/marketInsurance.test.js`).

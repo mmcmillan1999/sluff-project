@@ -867,6 +867,7 @@ class GameEngine {
             this.playoutVote.isActive = false;
             this.playoutVote.timer = 0;
             this.playoutVote.resolution = 'play';
+            this.turnStartedAt = Date.now();
             return this._effects([{ type: 'BROADCAST_STATE' }]);
         }
 
@@ -922,6 +923,7 @@ class GameEngine {
                     this.drawRequest.isActive = false;
                     this.drawRequest.timer = 0;
                     this.state = 'Playing Phase';
+                    this.turnStartedAt = Date.now();
                 }
                 this.emitLobbyUpdateCallback([{ type: 'BROADCAST_STATE' }]);
             } else {
@@ -962,6 +964,7 @@ class GameEngine {
                     onTimeout: (engineRef) => {
                         if (engineRef.state !== "DrawDeclined") return [];
                         engineRef.state = "Playing Phase";
+                        engineRef.turnStartedAt = Date.now();
                         return [{ type: 'BROADCAST_STATE' }];
                     }
                 }}
@@ -1080,6 +1083,11 @@ class GameEngine {
         });
         this.bidderCardPoints = 0; this.defenderCardPoints = 0;
         this.allCardsPlayedThisRound = [];
+        // Server-side think-time clock: stamped whenever the acting player's
+        // turn actually opens (play phase entry, next seat mid-trick, linger
+        // and vote windows closing). playHandler reads it to log human
+        // reaction times to play_timings.
+        this.turnStartedAt = null;
     }
     
     _clearForfeitTimer() {
@@ -1173,6 +1181,7 @@ class GameEngine {
             onTimeout: (engineRef) => {
                 if (engineRef.state !== "Bid Announcement") return [];
                 engineRef.state = "Playing Phase";
+                engineRef.turnStartedAt = Date.now();
                 return [{ type: 'BROADCAST_STATE' }];
             }
         }};
