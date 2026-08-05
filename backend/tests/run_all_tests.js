@@ -42,6 +42,7 @@ const suites = [
     { name: 'AI prompt rule contract', file: './aiPromptRules.test.js' },
     { name: 'market insurance strategy', file: './marketInsurance.test.js' },
     { name: 'game resume and play timing', file: './gameResume.test.js' },
+    { name: 'bot brain profiles', file: './botBrains.test.js' },
 ];
 
 function loadRunner(suite) {

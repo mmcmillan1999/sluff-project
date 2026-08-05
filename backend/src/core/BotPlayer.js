@@ -1,124 +1,30 @@
 // backend/src/core/BotPlayer.js
 
 const gameLogic = require('./logic');
-const { RANKS_ORDER, BID_HIERARCHY, BID_MULTIPLIERS, CARD_POINT_VALUES } = require('./constants');
+const { BID_HIERARCHY, BID_MULTIPLIERS } = require('./constants');
 const { analyzeHandForBid, recommendBid } = require('./bidAdvice');
-const { getLegalMoves } = require('./legalMoves');
 const { calculateInsuranceMove } = require('./bot-strategies/InsuranceStrategy');
+const { brainFor } = require('./bot-brains');
 
-const getRankValue = (card) => RANKS_ORDER.indexOf(gameLogic.getRank(card));
-
-const chooseForcedTrump = (trumpCards) => {
-    if (trumpCards.length === 2) {
-        const trumpTen = trumpCards.find(card => gameLogic.getRank(card) === '10');
-        if (trumpTen) return trumpTen;
-    }
-
-    return [...trumpCards].sort((a, b) => getRankValue(a) - getRankValue(b))[0];
-};
+const getRankValue = (card) => require('./constants').RANKS_ORDER.indexOf(gameLogic.getRank(card));
 
 class BotPlayer {
     constructor(userId, name, engine) {
         this.userId = userId;
         this.playerName = name;
-        this.engine = engine; 
-    }
-
-    // True only when it is certain the defense already owns this trick:
-    // I am a defender, I am last to act, and the current winner is the
-    // other defender. Never fires when the bot is the bidder (no teammate),
-    // when the bidder still acts behind us, or when the bidder is winning
-    // (starving the bidder with low cards remains correct there).
-    _fellowDefenderHasTrickLocked() {
-        const bidderName = this.engine.bidWinnerInfo?.playerName;
-        if (!bidderName || bidderName === this.playerName) return false;
-        const trickCards = this.engine.currentTrickCards || [];
-        const isLastToAct = trickCards.length === 2; // three active seats
-        if (!isLastToAct) return false;
-        const currentWinner = gameLogic.determineTrickWinner(
-            trickCards,
-            this.engine.leadSuitCurrentTrick,
-            this.engine.trumpSuit,
-        );
-        const winnerName = currentWinner?.playerName;
-        return Boolean(winnerName) && winnerName !== bidderName && winnerName !== this.playerName;
+        this.engine = engine;
     }
 
     _analyzeHand(hand) {
         return analyzeHandForBid(hand);
     }
 
+    // Card play is delegated to the bot's brain profile (bot-brains/):
+    // 'classic' — the locked original tree — for every bot by default, the
+    // 'counting' trial brain for the named A/B group. Bidding, trump choice,
+    // discards, and insurance stay shared so the experiment isolates play.
     playCard() {
-        const hand = this.engine.hands[this.playerName];
-        if (!hand || hand.length === 0) return null;
-
-        const isLeading = this.engine.currentTrickCards.length === 0;
-        const legalPlays = getLegalMoves(hand, isLeading, this.engine.leadSuitCurrentTrick, this.engine.trumpSuit, this.engine.trumpBroken);
-        if (legalPlays.length === 0) return null;
-
-        let cardToPlay;
-
-        if (isLeading) {
-            const allPastTricks = Object.values(this.engine.capturedTricks).flat();
-            const allPlayedCards = allPastTricks.flatMap(trick => trick.cards);
-            const isAceGone = (suit) => allPlayedCards.includes('A' + suit);
-
-            const aces = legalPlays.filter(card => gameLogic.getRank(card) === 'A');
-            if (aces.length > 0) {
-                cardToPlay = aces[0];
-            } else {
-                const safeTens = legalPlays.filter(card => gameLogic.getRank(card) === '10' && isAceGone(gameLogic.getSuit(card)));
-                if (safeTens.length > 0) {
-                    cardToPlay = safeTens[0];
-                } else {
-                    const junkCards = legalPlays.filter(card => CARD_POINT_VALUES[gameLogic.getRank(card)] === 0);
-                    if (junkCards.length > 0) {
-                        cardToPlay = junkCards.sort((a, b) => getRankValue(a) - getRankValue(b))[0];
-                    } else {
-                        cardToPlay = legalPlays.sort((a, b) => CARD_POINT_VALUES[gameLogic.getRank(a)] - CARD_POINT_VALUES[gameLogic.getRank(b)])[0];
-                    }
-                }
-            }
-        } else {
-            const leadSuit = this.engine.leadSuitCurrentTrick;
-            const trumpSuit = this.engine.trumpSuit;
-            const isVoidInLeadSuit = !hand.some(card => gameLogic.getSuit(card) === leadSuit);
-            const isForcedToTrumpNonTrumpLead = Boolean(
-                leadSuit
-                && trumpSuit
-                && leadSuit !== trumpSuit
-                && isVoidInLeadSuit
-                && legalPlays.every(card => gameLogic.getSuit(card) === trumpSuit)
-            );
-
-            if (isForcedToTrumpNonTrumpLead) {
-                const trumpCards = hand.filter(card => gameLogic.getSuit(card) === trumpSuit);
-                cardToPlay = chooseForcedTrump(trumpCards);
-            } else if (this._fellowDefenderHasTrickLocked()) {
-                // Third-seat team play: the trick already belongs to my fellow
-                // defender, so take the money — dump the highest-point legal
-                // card onto it (Ace before 10: an Ace saved for later can
-                // always be trumped; the points on this trick are certain).
-                cardToPlay = [...legalPlays].sort((a, b) => {
-                    const pointsDiff = CARD_POINT_VALUES[gameLogic.getRank(b)] - CARD_POINT_VALUES[gameLogic.getRank(a)];
-                    if (pointsDiff !== 0) return pointsDiff;
-                    return getRankValue(a) - getRankValue(b); // equal points: shed the lowest rank
-                })[0];
-            } else {
-                const winningPlays = legalPlays.filter(myCard => {
-                    const potentialTrick = [...this.engine.currentTrickCards, { card: myCard, userId: this.userId }];
-                    const winner = gameLogic.determineTrickWinner(potentialTrick, leadSuit, trumpSuit);
-                    return winner.userId === this.userId;
-                });
-
-                if (winningPlays.length > 0) {
-                    cardToPlay = winningPlays.sort((a, b) => getRankValue(b) - getRankValue(a))[0];
-                } else {
-                    cardToPlay = legalPlays.sort((a, b) => getRankValue(a) - getRankValue(b))[0];
-                }
-            }
-        }
-        return cardToPlay;
+        return brainFor(this.playerName).playCard(this.engine, this);
     }
 
     decideBid() {
