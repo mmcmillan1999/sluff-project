@@ -699,6 +699,53 @@ describe('GameOverPodium loss sting', () => {
         expect(playSound).not.toHaveBeenCalled();
     });
 
+    test('the wash player (2nd of 3) is spared — only dead last is stung', () => {
+        const playSound = vi.fn();
+        render(
+            <GameOverPodium
+                gameWinner="Cara"
+                finalScores={scores}
+                selfPlayerName="Alice"
+                playSound={playSound}
+            />
+        );
+        expect(playSound).not.toHaveBeenCalled();
+    });
+
+    test('in 4-player only 4th place is stung, not 2nd or 3rd', () => {
+        const fourScores = { Cara: 140, Alice: 118, Bob: 102, Dana: 66 };
+        for (const [name, expected] of [['Alice', 0], ['Bob', 0], ['Dana', 1]]) {
+            const playSound = vi.fn();
+            const { unmount } = render(
+                <GameOverPodium
+                    gameWinner="Cara"
+                    finalScores={fourScores}
+                    selfPlayerName={name}
+                    playSound={playSound}
+                />
+            );
+            expect(playSound).toHaveBeenCalledTimes(expected);
+            unmount();
+        }
+    });
+
+    test('a shared bottom rank stays silent for both', () => {
+        const tiedBottom = { Cara: 150, Alice: 85, Bob: 85 };
+        for (const name of ['Alice', 'Bob']) {
+            const playSound = vi.fn();
+            const { unmount } = render(
+                <GameOverPodium
+                    gameWinner="Cara"
+                    finalScores={tiedBottom}
+                    selfPlayerName={name}
+                    playSound={playSound}
+                />
+            );
+            expect(playSound).not.toHaveBeenCalled();
+            unmount();
+        }
+    });
+
     test('the forfeiter is spared the needle', () => {
         // A voluntary forfeiter stays seated and sees this podium; every
         // other player is ranked a winner, so without the explicit guard

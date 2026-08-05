@@ -347,10 +347,14 @@ const GameOverPodium = ({
     }, [show]);
 
     // The loss sting: greets the local player when the podium reveals them
-    // off the top step. Once per podium — and only when a winner actually
-    // exists, which keeps it silent for full ties (everyone ranks 1st) and
-    // for spectators (no entry of their own). The forfeiter is spared too:
-    // a voluntary forfeiter stays seated and DOES see this podium, and
+    // on the BOTTOM step — dead last, and only dead last (3rd of 3, 4th of
+    // 4). Wash players and everyone mid-table are spared; the needle is for
+    // the one player who actually paid out. Once per podium — and only when
+    // a winner actually exists, which keeps it silent for full ties and for
+    // spectators (no entry of their own). A shared bottom rank also stays
+    // silent: splitting last place already softens the blow, and there is
+    // no single "loser" for the joke to land on. The forfeiter is spared
+    // too: a voluntary forfeiter stays seated and DOES see this podium, and
     // needling a player at the moment they conceded is not the joke.
     // Winner and wash stings are planned to join it.
     //
@@ -370,7 +374,10 @@ const GameOverPodium = ({
         if (forfeitNameFrom(forfeit) && normalizeName(forfeitNameFrom(forfeit)) === normalizedSelf) return;
         const ranked = rankPodiumPlayers({ gameWinner, finalScores, forfeit });
         const self = ranked.find(entry => normalizeName(entry.name) === normalizedSelf);
-        if (self && !self.isWinner && ranked.some(entry => entry.isWinner)) {
+        if (!self || self.isWinner || !ranked.some(entry => entry.isWinner)) return;
+        const bottomRank = Math.max(...ranked.map(entry => entry.rank));
+        const bottomEntries = ranked.filter(entry => entry.rank === bottomRank);
+        if (self.rank === bottomRank && bottomEntries.length === 1) {
             lossStingPlayedRef.current = true;
             playSound('podiumLoss');
         }
