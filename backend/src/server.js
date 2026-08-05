@@ -169,6 +169,7 @@ async function initializeApplication() {
     }, 5000);
     resumeSweep.unref();
     setTimeout(() => clearInterval(resumeSweep), 10 * 60 * 1000).unref();
+    const stopResumeSweep = () => clearInterval(resumeSweep);
 
     registerGameHandlers(io, gameService);
     app.use('/api/auth', createAuthRoutes(pool, bcrypt, jwt, io, gameService));
@@ -226,7 +227,7 @@ async function initializeApplication() {
         botExhibition.start();
     }
 
-    return { gameService, pool, recoveryMonitor, botExhibition };
+    return { gameService, pool, recoveryMonitor, botExhibition, stopResumeSweep };
 }
 
 async function initializeThenListen({
@@ -269,6 +270,11 @@ function registerShutdownNotice(context = null) {
             console.error('[SHUTDOWN] Failed to notify clients:', error.message);
         }
         try {
+            // The sweep MUST die before the snapshot pass writes anything:
+            // a surviving tick would claim this instance's own snapshot,
+            // fail the restore against the still-live engine, and destroy
+            // the row the successor needs.
+            context?.stopResumeSweep?.();
             context?.botExhibition?.stop?.();
             context?.recoveryMonitor?.stop?.();
         } catch (error) {

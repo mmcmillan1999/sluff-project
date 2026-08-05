@@ -257,7 +257,34 @@ async function runGameResumeTests() {
         pass('GameService restores a claimed snapshot into the live table map.');
     }
 
-    // 8) Shutdown snapshots only games with human participants.
+    // 8) The sweep never claims the snapshot of a game THIS instance is
+    //    running — at shutdown that race destroyed the row the successor
+    //    needed (live-fire test two, Aug 5 2026).
+    {
+        const queries = [];
+        const fakePool = {
+            query: async (sql) => {
+                queries.push(sql);
+                if (/SELECT s\.game_id/.test(sql)) {
+                    return { rows: [{ game_id: 4242, table_id: 'table-3', outcome: 'In Progress', age_ms: 500 }] };
+                }
+                return { rows: [] };
+            },
+        };
+        const gameService = createGameServiceWithoutHeartbeat(GameService, mockIo, null);
+        gameService.pool = fakePool;
+        const engine = gameService.getEngineById('table-3');
+        engine.gameStarted = true;
+        engine.gameId = 4242;
+
+        const result = await gameService.restorePendingSnapshots();
+        assert.strictEqual(result.restored, 0);
+        assert.ok(!queries.some(sql => /DELETE FROM live_game_snapshots/.test(sql)),
+            'a snapshot of a locally-live game must never be claimed');
+        pass('The sweep leaves this instance’s own live-game snapshot for the successor.');
+    }
+
+    // 9) Shutdown snapshots only games with human participants.
     {
         const humanGame = newEngine();
         driveToPlayingPhase(humanGame, [

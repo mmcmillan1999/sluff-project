@@ -1247,6 +1247,14 @@
             let restored = 0;
             for (const row of rows) {
                 try {
+                    // Never claim the snapshot of a game THIS instance is
+                    // running: at shutdown the dying instance's own sweep can
+                    // race its snapshot pass, consume the row, fail the
+                    // restore (the game is still live here), and leave the
+                    // successor nothing. Learned the hard way, Aug 5 2026.
+                    const liveEngine = this.getEngineById(row.table_id);
+                    if (liveEngine?.gameStarted && liveEngine.gameId === row.game_id) continue;
+
                     const claim = await this.pool.query(
                         'DELETE FROM live_game_snapshots WHERE game_id = $1 RETURNING snapshot',
                         [row.game_id],
