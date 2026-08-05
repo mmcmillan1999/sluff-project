@@ -36,10 +36,22 @@ const renderSeat = (stateOverrides = {}) => render(
     />,
 );
 
-test('the high bidder wears their bid, and the emoji matches the bid tier', () => {
+test('the Frog bidder wears the frog logo (heart overhead — the hearts hint)', () => {
     renderSeat({ currentHighestBidDetails: { playerName: 'River Ace', bid: 'Frog' } });
     const bubble = screen.getByRole('img', { name: 'River Ace bid Frog' });
-    expect(bubble).toHaveTextContent('🐸');
+    expect(bubble.querySelector('img')).toHaveAttribute('src', '/assets/trump-pucks/FrogTrumpPuck.png');
+});
+
+test('the Solo bidder wears the three choosable trump suits', () => {
+    renderSeat({ currentHighestBidDetails: { playerName: 'River Ace', bid: 'Solo' } });
+    const bubble = screen.getByRole('img', { name: 'River Ace bid Solo' });
+    expect(bubble).toHaveTextContent('♦♠♣');
+});
+
+test('the Heart Solo bidder wears three hearts', () => {
+    renderSeat({ currentHighestBidDetails: { playerName: 'River Ace', bid: 'Heart Solo' } });
+    const bubble = screen.getByRole('img', { name: 'River Ace bid Heart Solo' });
+    expect(bubble).toHaveTextContent('♥♥♥');
 });
 
 test('a passed player snoozes even when it is not their turn', () => {

@@ -320,6 +320,52 @@
     filter: drop-shadow(0 0.1vh 0.18vh rgba(0, 0, 0, 0.35));
 }
 
+/* The frog logo rides a white chip so the line art reads on any key color. */
+.bid-key__chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: clamp(1.5rem, 3.4vh, 1.95rem);
+    height: clamp(1.5rem, 3.4vh, 1.95rem);
+    background: #fff;
+    border-radius: 22%;
+    box-shadow: 0 0.12em 0.2em rgba(0, 0, 0, 0.35);
+}
+
+.bid-key__frog-art {
+    width: 88%;
+    height: 88%;
+    object-fit: contain;
+}
+
+/* Three mini cards, fanned: the choosable trumps for Solo, hearts ×3 for
+   Heart Solo. */
+.bid-key__suits {
+    display: inline-flex;
+    align-items: center;
+}
+
+.bid-key__suit-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: clamp(0.95rem, 2.1vh, 1.2rem);
+    height: clamp(1.25rem, 2.8vh, 1.6rem);
+    background: #fff;
+    border-radius: 0.16em;
+    box-shadow: 0 0.1em 0.18em rgba(0, 0, 0, 0.35);
+    font-size: clamp(0.8rem, 1.8vh, 1rem);
+    line-height: 1;
+}
+
+.bid-key__suit-chip:nth-child(1) { transform: rotate(-10deg) translateY(0.08em); }
+.bid-key__suit-chip:nth-child(2) { z-index: 1; }
+.bid-key__suit-chip:nth-child(3) { transform: rotate(10deg) translateY(0.08em); }
+.bid-key__suit-chip + .bid-key__suit-chip { margin-left: -0.18em; }
+
+.bid-suit--red { color: #c8102e; }
+.bid-suit--black { color: #16161e; }
+
 .bid-key__name {
     font-weight: 700;
     letter-spacing: 0.02em;

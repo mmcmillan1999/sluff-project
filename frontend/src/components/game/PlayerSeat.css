@@ -517,3 +517,21 @@
 @media (prefers-reduced-motion: reduce) {
     .bid-emote-bubble { animation: none; }
 }
+
+/* Bid-emote faces that aren't a single emoji: the frog logo and the suit
+   runs. The bubble is white, so the line art and suit colors read as-is. */
+.bid-emote-bubble__frog {
+    width: 2.7vh;
+    height: 2.7vh;
+    object-fit: contain;
+}
+
+.bid-emote-suits {
+    font-size: 1.7vh;
+    letter-spacing: 0.12vh;
+    line-height: 1;
+    font-weight: 700;
+}
+
+.bid-emote-suit--red { color: #c8102e; }
+.bid-emote-suit--black { color: #16161e; }

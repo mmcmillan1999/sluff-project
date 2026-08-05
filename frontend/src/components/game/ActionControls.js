@@ -122,19 +122,38 @@ const ActionControls = ({
         emitEvent('quickPlayDecision', { choice, generation: qpGeneration });
     };
 
-    // Each bid gets a face: emoji + name + multiplier pill on its own keycap
-    // palette. The same emoji reappear beside the nameplates (PlayerSeat's
-    // bid emotes), so the table reads as one language.
-    const BID_VISUALS = {
-        'Pass': { emoji: '✋', slug: 'pass' },
-        'Frog': { emoji: '🐸', slug: 'frog' },
-        'Solo': { emoji: '⚔️', slug: 'solo' },
-        'Heart Solo': { emoji: '❤️‍🔥', slug: 'heart-solo' },
+    // Each bid gets a face that says what the bid MEANS: the frog logo (heart
+    // overhead — hearts trump, widow help) for Frog, the three choosable
+    // trump suits fanned like mini cards for Solo, three hearts for Heart
+    // Solo. PlayerSeat's bid emotes mirror these, so the table reads as one
+    // language.
+    const BID_SLUGS = { 'Pass': 'pass', 'Frog': 'frog', 'Solo': 'solo', 'Heart Solo': 'heart-solo' };
+    const BID_FACES = {
+        'Pass': <span className="bid-key__emoji" aria-hidden="true">✋</span>,
+        'Frog': (
+            <span className="bid-key__chip" aria-hidden="true">
+                <img src="/assets/trump-pucks/FrogTrumpPuck.png" alt="" className="bid-key__frog-art" />
+            </span>
+        ),
+        'Solo': (
+            <span className="bid-key__suits" aria-hidden="true">
+                <span className="bid-key__suit-chip bid-suit--red">♦</span>
+                <span className="bid-key__suit-chip bid-suit--black">♠</span>
+                <span className="bid-key__suit-chip bid-suit--black">♣</span>
+            </span>
+        ),
+        'Heart Solo': (
+            <span className="bid-key__suits" aria-hidden="true">
+                <span className="bid-key__suit-chip bid-suit--red">♥</span>
+                <span className="bid-key__suit-chip bid-suit--red">♥</span>
+                <span className="bid-key__suit-chip bid-suit--red">♥</span>
+            </span>
+        ),
     };
 
     const renderBidFace = (bid, name = bid) => (
         <>
-            <span className="bid-key__emoji" aria-hidden="true">{BID_VISUALS[bid].emoji}</span>
+            {BID_FACES[bid]}
             <span className="bid-key__name">{name}</span>
             {bid !== 'Pass' && <span className="bid-key__mult">{BID_MULTIPLIERS[bid]}×</span>}
         </>
@@ -394,7 +413,7 @@ const ActionControls = ({
                                     type="button"
                                     key={bid}
                                     onClick={() => emitEvent('placeBid', { bid })}
-                                    className={`game-button keycap action-prompt__button action-prompt__bid-button bid-key bid-key--${BID_VISUALS[bid].slug}`}
+                                    className={`game-button keycap action-prompt__button action-prompt__bid-button bid-key bid-key--${BID_SLUGS[bid]}`}
                                     aria-label={bid === 'Pass' ? 'Pass' : `${bid}, ${BID_MULTIPLIERS[bid]} times scoring multiplier`}
                                     disabled={bid !== 'Pass' && BID_HIERARCHY.indexOf(bid) <= currentHighestBidLevel}
                                 >
@@ -432,7 +451,7 @@ const ActionControls = ({
                                 className="game-button keycap action-prompt__button bid-key bid-key--frog"
                                 aria-label="Keep Frog"
                             >
-                                <span className="bid-key__emoji" aria-hidden="true">🐸</span>
+                                {BID_FACES['Frog']}
                                 <span className="bid-key__name">Keep Frog</span>
                             </button>
                         </div>

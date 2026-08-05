@@ -9,26 +9,45 @@ const SCORE_ANIMATION_STATES = new Set([
     'Game Over',
 ]);
 
-// Same emoji as the bid buttons — one visual language across the table.
-const BID_EMOTES = { 'Frog': '🐸', 'Solo': '⚔️', 'Heart Solo': '❤️‍🔥' };
+// Same faces as the bid buttons — one visual language across the table:
+// the frog logo for Frog, the choosable trump suits for Solo, hearts ×3
+// for Heart Solo.
+const BID_EMOTES = {
+    'Frog': {
+        key: 'frog',
+        node: <img className="bid-emote-bubble__frog" src="/assets/trump-pucks/FrogTrumpPuck.png" alt="" />,
+    },
+    'Solo': {
+        key: 'solo',
+        node: (
+            <span className="bid-emote-suits">
+                <span className="bid-emote-suit--red">♦</span>
+                <span className="bid-emote-suit--black">♠</span>
+                <span className="bid-emote-suit--black">♣</span>
+            </span>
+        ),
+    },
+    'Heart Solo': {
+        key: 'heart-solo',
+        node: <span className="bid-emote-suits bid-emote-suit--red">♥♥♥</span>,
+    },
+};
 const BIDDING_STATES = new Set(['Bidding Phase', 'Awaiting Frog Upgrade Decision']);
 
 // What this seat is saying during the auction: zzz once passed, the bid's
-// emoji while holding the high bid, a think while it is their turn.
+// face while holding the high bid, a think while it is their turn.
 const bidEmoteFor = (currentTableState, playerName) => {
     if (!BIDDING_STATES.has(currentTableState.state)) return null;
     if (currentTableState.playersWhoPassedThisRound?.includes(playerName)) {
-        return { glyph: '💤', label: `${playerName} passed` };
+        return { key: 'pass', node: '💤', label: `${playerName} passed` };
     }
     const highBid = currentTableState.currentHighestBidDetails;
     if (highBid?.playerName === playerName) {
-        return {
-            glyph: BID_EMOTES[highBid.bid] || '⚔️',
-            label: `${playerName} bid ${highBid.bid}`,
-        };
+        const face = BID_EMOTES[highBid.bid];
+        if (face) return { ...face, label: `${playerName} bid ${highBid.bid}` };
     }
     if (currentTableState.biddingTurnPlayerName === playerName) {
-        return { glyph: '🤔', label: `${playerName} is deciding` };
+        return { key: 'think', node: '🤔', label: `${playerName} is deciding` };
     }
     return null;
 };
@@ -162,15 +181,15 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent, showTrum
                 if (!bidEmote) return null;
                 return (
                     <div
-                        // Keying on the glyph re-runs the pop animation each
-                        // time this seat's auction status changes.
-                        key={bidEmote.glyph}
+                        // Keying on the status re-runs the pop animation each
+                        // time this seat's auction standing changes.
+                        key={bidEmote.key}
                         className="bid-emote-bubble"
                         role="img"
                         aria-label={bidEmote.label}
                         title={bidEmote.label}
                     >
-                        {bidEmote.glyph}
+                        {bidEmote.node}
                     </div>
                 );
             })()}
