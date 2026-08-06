@@ -22,6 +22,9 @@ const SOUND_FILES = {
     suitClubs: '/Sounds/suit_clubs_v1.mp3',
     suitDiamonds: '/Sounds/suit_diamonds_v1.mp3',
     roundEnd: '/Sounds/round_end_v1.mp3',
+    // Matt's temp Midnight Special song (16.08s) — underscores the whole
+    // production; the effects bed (horn/chug) is synthesized over it.
+    midnightSong: '/Sounds/midnight_special_song_v1.mp3',
     // Rubbing it in: greets a player who finished the game off the top step.
     // Winner and wash stings are planned to join it.
     podiumLoss: '/Sounds/podium_loss_v1.mp3',
@@ -542,11 +545,19 @@ export const useSounds = ({ musicActive = false } = {}) => {
         wheelSettle(ctx, gainRef.current);
     }, [synthContext]);
 
-    // The Midnight Special — the full production: horn, chug, and the
-    // traditional chorus, all on the shared clock the animation reads.
+    // The Midnight Special — the full production: Matt's song clip from
+    // the first frame, with the synthesized horn and chug bedded over it,
+    // all on the shared clock the animation reads.
     const playMidnightSpecial = useCallback(() => {
         const ctx = synthContext();
         if (!ctx) return;
+        const song = buffersRef.current.midnightSong;
+        if (song) {
+            const source = ctx.createBufferSource();
+            source.buffer = song;
+            source.connect(gainRef.current);
+            source.start(0);
+        }
         midnightSpecialScore(ctx, gainRef.current);
     }, [synthContext]);
 

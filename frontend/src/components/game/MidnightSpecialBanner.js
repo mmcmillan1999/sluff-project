@@ -21,8 +21,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import './MidnightSpecialBanner.css';
 import { MIDNIGHT_TIMELINE } from '../../utils/soundSynth';
 
-const SMOKE_EVERY_MS = 180;
-const CAR_SPACING = 0.055; // of perimeter length, per car
+const SMOKE_EVERY_MS = 110;
 
 const LYRICS = [
     { at: MIDNIGHT_TIMELINE.line1, text: '♪ Let the Midnight Special…' },
@@ -159,6 +158,12 @@ const MidnightSpecialBanner = ({ playerName }) => {
             height: bounds.height - inset.y * 2,
         };
         const radius = Math.min(rect.width, rect.height) * 0.16;
+        // Couple the cars by PIXEL length, not perimeter fraction — a
+        // laptop's huge loop must not stretch the consist apart.
+        const perimeterPx = 2 * (rect.width - 2 * radius)
+            + 2 * (rect.height - 2 * radius)
+            + 2 * Math.PI * radius;
+        const carSpacing = (window.innerHeight * 0.105) / perimeterPx;
 
         const startedAt = performance.now();
         let lastSmokeAt = 0;
@@ -185,16 +190,20 @@ const MidnightSpecialBanner = ({ playerName }) => {
                     if (!el) return null;
                     const p = roundedRectPoint(param, rect, radius);
                     el.style.opacity = String(opacity);
-                    // Top view: pieces center ON the rail and rotate to the
-                    // heading; the roof signs counter-rotate (via --heading)
-                    // so they read at every angle.
                     el.style.transform =
                         `translate3d(${p.x}px, ${p.y}px, 0) translate(-50%, -50%) rotate(${p.angle}deg)`;
-                    el.style.setProperty('--heading', String(p.angle));
+                    // Roof signs stay painted ALONG the car (like real rolling
+                    // stock) and only flip 180° when the heading would render
+                    // them upside-down — never askew from the car's fit.
+                    const heading = ((p.angle % 360) + 360) % 360;
+                    el.style.setProperty(
+                        '--sign-flip',
+                        heading > 90 && heading <= 270 ? '180deg' : '0deg',
+                    );
                     return p;
                 };
                 const enginePos = place(engineRef.current, s);
-                carRefs.current.forEach((car, i) => place(car, s - CAR_SPACING * (i + 1)));
+                carRefs.current.forEach((car, i) => place(car, s - carSpacing * (i + 1)));
 
                 // Smoke off the stack.
                 if (enginePos && now - lastSmokeAt > SMOKE_EVERY_MS && smokeLayerRef.current && fadeOut > 0.3) {

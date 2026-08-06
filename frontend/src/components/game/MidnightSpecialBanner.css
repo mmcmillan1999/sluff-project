@@ -235,24 +235,25 @@
     border-radius: 0.3vh;
     padding: 0.22vh 0.55vh;
     white-space: nowrap;
-    /* Stay readable the whole way around the loop: undo the car's heading. */
-    transform: rotate(calc(var(--heading, 0) * -1deg));
+    /* Painted along the car like real rolling stock: flips 180° only when
+       the heading would render it upside-down, set by the animation loop. */
+    transform: rotate(var(--sign-flip, 0deg));
 }
 
 /* Smoke: spawned at the stack by the animation loop, rises and disperses. */
 .midnight-smoke {
     position: absolute;
-    width: 3.4vh;
-    height: 3.4vh;
+    width: 4.6vh;
+    height: 4.6vh;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(230, 232, 242, 0.85), rgba(230, 232, 242, 0));
+    background: radial-gradient(circle, rgba(232, 234, 244, 0.95), rgba(232, 234, 244, 0));
     transform: translate(-50%, -50%);
-    animation: midnight-smoke-drift 1.9s ease-out forwards;
+    animation: midnight-smoke-drift 2.3s ease-out forwards;
 }
 
 @keyframes midnight-smoke-drift {
-    from { opacity: 0.8; transform: translate(-50%, -50%) scale(0.6); }
-    to { opacity: 0; transform: translate(-80%, -320%) scale(2.4); }
+    from { opacity: 0.95; transform: translate(-50%, -50%) scale(0.55); }
+    to { opacity: 0; transform: translate(-85%, -360%) scale(2.9); }
 }
 
 .midnight-special__smoke-layer {

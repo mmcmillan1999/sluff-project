@@ -242,8 +242,9 @@ describe('useSounds music channel', () => {
 
         await waitFor(() => {
             // Every SOUND_FILES entry plus the failed music attempt. The deal
-            // and the card play are synthesized now, so neither appears here.
-            expect(ctx.decodeAudioData).toHaveBeenCalledTimes(15);
+            // and the card play are synthesized (absent); the Midnight
+            // Special song clip is present.
+            expect(ctx.decodeAudioData).toHaveBeenCalledTimes(16);
             expect(errorSpy).toHaveBeenCalledWith(
                 'Failed to load background music:',
                 expect.any(Error)

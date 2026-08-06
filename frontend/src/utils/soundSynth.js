@@ -216,20 +216,19 @@ export const MIDNIGHT_TIMELINE = {
     total: 16.8,
 };
 
-const NOTE = { D4: 293.66, E4: 329.63, G4: 392.0, A4: 440.0, B4: 493.88, C5: 523.25 };
-
 /**
- * The whole number: a powerful two-blast steam horn, the drive-wheel chug
- * underneath, and a whistle-organ lead singing the traditional chorus
- * melody on cue.
+ * The effects bed under Matt's song clip: a POWERFUL two-blast steam horn
+ * (dense minor cluster plus a sub-octave for chest) and the drive-wheel
+ * chug. The song itself is an audio file (midnight_special_song_v1.mp3,
+ * 16.08s — nearly the full production) started by useSounds at t=0 on the
+ * same clock; the old synthesized melody is gone.
  */
 export const midnightSpecialScore = (ctx, destination, { when = 0 } = {}) => {
     try {
         const t0 = Math.max(when, ctx.currentTime);
 
-        // The horn: a real locomotive chord is a dense minor cluster. Two
-        // blasts — a short warning and the long departure — with the tail
-        // sagging as the steam gives out.
+        // The horn: chord cluster + a half-frequency sub underneath so it
+        // hits like a locomotive, not a kazoo.
         const hornChord = [233, 277, 311, 370];
         const blast = (start, length, peak) => {
             for (const freq of hornChord) {
@@ -241,7 +240,7 @@ export const midnightSpecialScore = (ctx, destination, { when = 0 } = {}) => {
                 }
                 const filter = ctx.createBiquadFilter();
                 filter.type = 'lowpass';
-                filter.frequency.setValueAtTime(1400, start);
+                filter.frequency.setValueAtTime(1600, start);
                 const env = envelope(ctx, start, peak, 0.05, length);
                 osc.connect(filter);
                 filter.connect(env);
@@ -250,9 +249,19 @@ export const midnightSpecialScore = (ctx, destination, { when = 0 } = {}) => {
                 osc.stop(start + length + 0.1);
                 osc.onended = () => { try { env.disconnect(); } catch { /* best effort */ } };
             }
+            // The sub: half the root, pure weight.
+            const sub = ctx.createOscillator();
+            sub.type = 'sawtooth';
+            sub.frequency.setValueAtTime(hornChord[0] * 0.5, start);
+            const subEnv = envelope(ctx, start, peak * 0.8, 0.05, length);
+            sub.connect(subEnv);
+            subEnv.connect(destination);
+            sub.start(start);
+            sub.stop(start + length + 0.1);
+            sub.onended = () => { try { subEnv.disconnect(); } catch { /* best effort */ } };
         };
-        blast(t0 + MIDNIGHT_TIMELINE.horn, 0.55, 0.1);
-        blast(t0 + MIDNIGHT_TIMELINE.horn + 0.8, 1.7, 0.12);
+        blast(t0 + MIDNIGHT_TIMELINE.horn, 0.55, 0.22);
+        blast(t0 + MIDNIGHT_TIMELINE.horn + 0.8, 1.7, 0.26);
 
         // The chug: steady eighth-note drive from the moment the train rolls
         // on until the fade, accented in pairs like real side rods.
@@ -270,42 +279,8 @@ export const midnightSpecialScore = (ctx, destination, { when = 0 } = {}) => {
             });
         }
 
-        // The chorus, as a whistle-organ lead: triangle body + a quiet upper
-        // octave for shine. Traditional melody, our arrangement.
-        const sing = (start, notes) => {
-            let cursor = t0 + start;
-            for (const [freq, length] of notes) {
-                for (const [mult, peak] of [[1, 0.11], [2, 0.03]]) {
-                    const osc = ctx.createOscillator();
-                    osc.type = 'triangle';
-                    osc.frequency.setValueAtTime(freq * mult, cursor);
-                    const env = envelope(ctx, cursor, peak, 0.05, length * 0.92);
-                    osc.connect(env);
-                    env.connect(destination);
-                    osc.start(cursor);
-                    osc.stop(cursor + length + 0.1);
-                    osc.onended = () => { try { env.disconnect(); } catch { /* best effort */ } };
-                }
-                cursor += length;
-            }
-        };
-        const { D4, E4, G4, A4, B4, C5 } = NOTE;
-        // "Let the Mid-night Spe-cial"
-        const call = [[D4, 0.3], [G4, 0.42], [G4, 0.3], [A4, 0.42], [B4, 0.85]];
-        // "shine a light on me"
-        const answer = [[B4, 0.34], [A4, 0.34], [G4, 0.5], [E4, 0.5], [G4, 1.1]];
-        // "shine its ev-er-lov-in' light on me"
-        const finale = [
-            [B4, 0.3], [C5, 0.3], [B4, 0.3], [A4, 0.3],
-            [G4, 0.42], [A4, 0.42], [E4, 0.5], [G4, 1.5],
-        ];
-        sing(MIDNIGHT_TIMELINE.line1, call);
-        sing(MIDNIGHT_TIMELINE.spotlight, answer);
-        sing(MIDNIGHT_TIMELINE.line2, call);
-        sing(MIDNIGHT_TIMELINE.line3, finale);
-
         // A last far-off horn as the train fades.
-        blast(t0 + MIDNIGHT_TIMELINE.fade + 0.2, 1.2, 0.05);
+        blast(t0 + MIDNIGHT_TIMELINE.fade + 0.2, 1.2, 0.09);
     } catch { /* audio is garnish */ }
 };
 
