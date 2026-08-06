@@ -818,6 +818,19 @@ const createDbTables = async (pool) => {
             ON play_timings (user_id, created_at);
         `);
 
+        // Personalized champion stings ("All hail your champion, NAME!"),
+        // generated once per name via ElevenLabs and cached here — the mp3 is
+        // small and the roster is finite, so the TTS bill stays a one-time
+        // cost per player.
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS champion_lines (
+                name_key VARCHAR(80) PRIMARY KEY,
+                display_name VARCHAR(80) NOT NULL,
+                audio BYTEA NOT NULL,
+                created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
         // This must remain the final statement before COMMIT. clock_timestamp()
         // grants legacy/null rows a full grace window from migration completion,
         // while the predicate preserves every non-null heartbeat across deploys.

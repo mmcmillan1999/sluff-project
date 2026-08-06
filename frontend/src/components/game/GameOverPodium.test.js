@@ -645,10 +645,119 @@ describe('GameOverPodium', () => {
         );
         expect(screen.queryByRole('button', { name: /Round-by-round/ })).not.toBeInTheDocument();
     });
+
+    test('honors Midnight Special riders on the podium and in the history', async () => {
+        const user = userEvent.setup();
+        const riddenHistory = [
+            { roundNumber: 1, bidType: 'Solo', bidderName: 'Cara', bidderCardPoints: 72, dealExecuted: false, pointChanges: { Cara: 24, Alice: -12, Bob: -12 }, midnightSpecial: 'Cara' },
+            { roundNumber: 2, bidType: 'Frog', bidderName: 'Alice', bidderCardPoints: 55, dealExecuted: false, pointChanges: { Alice: -8, Bob: 4, Cara: 4 } },
+            { roundNumber: 3, bidType: 'Heart Solo', bidderName: 'Cara', bidderCardPoints: 80, dealExecuted: false, pointChanges: { Cara: 30, Alice: -15, Bob: -15 }, midnightSpecial: 'Cara' },
+        ];
+        render(
+            <GameOverPodium
+                gameWinner="Cara"
+                finalScores={baseScores}
+                roundHistory={riddenHistory}
+                onRematch={vi.fn()}
+                onLobby={vi.fn()}
+            />
+        );
+
+        // Cara rode twice: her podium step wears the train with a tally.
+        const badge = screen.getByLabelText('Rode the Midnight Special 2 times');
+        expect(badge).toHaveTextContent('🚂 ×2');
+        // Nobody else gets a badge for zero rides.
+        expect(screen.queryByLabelText('Rode the Midnight Special')).not.toBeInTheDocument();
+
+        await user.click(screen.getByRole('button', { name: /Round-by-round/ }));
+        const table = screen.getByRole('table');
+        expect(within(table).getAllByLabelText('Cara rode the Midnight Special')).toHaveLength(2);
+    });
+
+    test('omits the ride badge entirely when no round had a Special', () => {
+        render(
+            <GameOverPodium
+                gameWinner="Cara"
+                finalScores={baseScores}
+                roundHistory={roundHistory}
+                onRematch={vi.fn()}
+                onLobby={vi.fn()}
+            />
+        );
+        expect(screen.queryByLabelText(/Rode the Midnight Special/)).not.toBeInTheDocument();
+    });
 });
 
-describe('GameOverPodium loss sting', () => {
+describe('GameOverPodium stings', () => {
     const scores = { Cara: 127, Alice: 104, Bob: 91 };
+
+    test('the sole real winner is greeted with the champion sting, once', () => {
+        const playSound = vi.fn();
+        const { rerender } = render(
+            <GameOverPodium
+                gameWinner="Cara"
+                finalScores={scores}
+                selfPlayerName="Cara"
+                playSound={playSound}
+            />
+        );
+        expect(playSound).toHaveBeenCalledTimes(1);
+        expect(playSound).toHaveBeenCalledWith('podiumWin');
+
+        rerender(
+            <GameOverPodium
+                gameWinner="Cara"
+                finalScores={scores}
+                selfPlayerName="Cara"
+                playSound={playSound}
+                statusMessage="Settled."
+            />
+        );
+        expect(playSound).toHaveBeenCalledTimes(1);
+    });
+
+    test('the champion sting prefers the personalized line when provided', () => {
+        const playSound = vi.fn();
+        const playChampionSting = vi.fn();
+        render(
+            <GameOverPodium
+                gameWinner="Cara"
+                finalScores={scores}
+                selfPlayerName="Cara"
+                playSound={playSound}
+                playChampionSting={playChampionSting}
+            />
+        );
+        expect(playChampionSting).toHaveBeenCalledTimes(1);
+        expect(playSound).not.toHaveBeenCalled();
+    });
+
+    test('a victory by forfeit gets no champion fanfare', () => {
+        const playSound = vi.fn();
+        render(
+            <GameOverPodium
+                gameWinner="Cara & Alice"
+                finalScores={scores}
+                forfeit={{ forfeitingPlayerName: 'Bob' }}
+                selfPlayerName="Cara"
+                playSound={playSound}
+            />
+        );
+        expect(playSound).not.toHaveBeenCalled();
+    });
+
+    test('a shared victory stays quiet — the line is written for one champion', () => {
+        const playSound = vi.fn();
+        render(
+            <GameOverPodium
+                gameWinner="Cara & Alice"
+                finalScores={{ Cara: 127, Alice: 127, Bob: 66 }}
+                selfPlayerName="Cara"
+                playSound={playSound}
+            />
+        );
+        expect(playSound).not.toHaveBeenCalled();
+    });
 
     test('plays once for the local player who lost, and only once', () => {
         const playSound = vi.fn();
@@ -675,19 +784,8 @@ describe('GameOverPodium loss sting', () => {
         expect(playSound).toHaveBeenCalledTimes(1);
     });
 
-    test('stays silent for the winner and for a spectator', () => {
+    test('a spectator with no entry of their own hears nothing', () => {
         const playSound = vi.fn();
-        const { unmount } = render(
-            <GameOverPodium
-                gameWinner="Cara"
-                finalScores={scores}
-                selfPlayerName="Cara"
-                playSound={playSound}
-            />
-        );
-        expect(playSound).not.toHaveBeenCalled();
-        unmount();
-
         render(
             <GameOverPodium
                 gameWinner="Cara"

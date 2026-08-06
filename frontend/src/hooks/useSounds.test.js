@@ -241,10 +241,10 @@ describe('useSounds music channel', () => {
         const ctx = contexts[0];
 
         await waitFor(() => {
-            // Every SOUND_FILES entry plus the failed music attempt. The deal
-            // and the card play are synthesized (absent); the Midnight
-            // Special song clip is present.
-            expect(ctx.decodeAudioData).toHaveBeenCalledTimes(16);
+            // Every SOUND_FILES entry (now including the podium win and draw wash
+            // stings) plus the failed music attempt. The deal and card play are
+            // synthesized (absent); the Midnight Special song clip is present.
+            expect(ctx.decodeAudioData).toHaveBeenCalledTimes(19);
             expect(errorSpy).toHaveBeenCalledWith(
                 'Failed to load background music:',
                 expect.any(Error)
@@ -399,7 +399,7 @@ describe('useSounds iOS interruption recovery', () => {
         act(() => result.current.enableSound());
         const ctx = contexts[0];
         await waitFor(() => {
-            expect(ctx.decodeAudioData.mock.calls.length).toBeGreaterThanOrEqual(16);
+            expect(ctx.decodeAudioData.mock.calls.length).toBeGreaterThanOrEqual(19);
         });
 
         ctx.state = 'interrupted';

@@ -301,7 +301,8 @@ const GameOverPodium = ({
     rematchOffer = null,
     selfPlayerName = null,
     voiceActive = false,
-    playSound = null
+    playSound = null,
+    playChampionSting = null
 }) => {
     const headingId = useId();
     const detailId = useId();
@@ -346,48 +347,84 @@ const GameOverPodium = ({
         }
     }, [show]);
 
-    // The loss sting: greets the local player when the podium reveals them
-    // on the BOTTOM step — dead last, and only dead last (3rd of 3, 4th of
-    // 4). Wash players and everyone mid-table are spared; the needle is for
-    // the one player who actually paid out. Once per podium — and only when
-    // a winner actually exists, which keeps it silent for full ties and for
+    // The podium stings, one per player per podium at most:
+    //
+    // WIN — greets the local player on the top step, but only for a victory
+    // they actually played out: a win handed over by someone's forfeit gets
+    // no fanfare (crowing over a concession is not the moment), and shared
+    // victories stay quiet too — the line is written for one champion.
+    //
+    // LOSS — the needle for the BOTTOM step: dead last, and only dead last
+    // (3rd of 3, 4th of 4). Wash players and everyone mid-table are spared;
+    // the needle is for the one player who actually paid out. Only when a
+    // winner actually exists, which keeps it silent for full ties and for
     // spectators (no entry of their own). A shared bottom rank also stays
     // silent: splitting last place already softens the blow, and there is
     // no single "loser" for the joke to land on. The forfeiter is spared
     // too: a voluntary forfeiter stays seated and DOES see this podium, and
     // needling a player at the moment they conceded is not the joke.
-    // Winner and wash stings are planned to join it.
+    //
+    // (The wash sting lives with the draw modal — drawn games never reach
+    // this podium.)
     //
     // The once-guard is consumed even when playSound silently drops the
     // call (audio locked after a reload straight into the podium): a sting
     // that fires half a minute late on the player's next tap would land as
     // a non sequitur, so never-late is deliberate.
-    const lossStingPlayedRef = useRef(false);
+    const stingPlayedRef = useRef(false);
     useEffect(() => {
         if (!show) {
-            lossStingPlayedRef.current = false;
+            stingPlayedRef.current = false;
             return;
         }
-        if (lossStingPlayedRef.current || typeof playSound !== 'function') return;
+        if (stingPlayedRef.current || typeof playSound !== 'function') return;
         if (!selfPlayerName) return;
         const normalizedSelf = normalizeName(selfPlayerName);
-        if (forfeitNameFrom(forfeit) && normalizeName(forfeitNameFrom(forfeit)) === normalizedSelf) return;
+        const forfeitName = forfeitNameFrom(forfeit);
+        if (forfeitName && normalizeName(forfeitName) === normalizedSelf) return;
         const ranked = rankPodiumPlayers({ gameWinner, finalScores, forfeit });
         const self = ranked.find(entry => normalizeName(entry.name) === normalizedSelf);
-        if (!self || self.isWinner || !ranked.some(entry => entry.isWinner)) return;
+        if (!self || !ranked.some(entry => entry.isWinner)) return;
+
+        if (self.isWinner) {
+            const soleWinner = ranked.filter(entry => entry.isWinner).length === 1;
+            if (soleWinner && !forfeitName) {
+                stingPlayedRef.current = true;
+                // Personalized when available ("All hail your champion,
+                // NAME!" over the anthem); the generic mix otherwise.
+                if (typeof playChampionSting === 'function') {
+                    playChampionSting();
+                } else {
+                    playSound('podiumWin');
+                }
+            }
+            return;
+        }
+
         const bottomRank = Math.max(...ranked.map(entry => entry.rank));
         const bottomEntries = ranked.filter(entry => entry.rank === bottomRank);
         if (self.rank === bottomRank && bottomEntries.length === 1) {
-            lossStingPlayedRef.current = true;
+            stingPlayedRef.current = true;
             playSound('podiumLoss');
         }
-    }, [show, gameWinner, finalScores, forfeit, selfPlayerName, playSound]);
+    }, [show, gameWinner, finalScores, forfeit, selfPlayerName, playSound, playChampionSting]);
 
     if (!show) return null;
 
     const entries = rankPodiumPlayers({ gameWinner, finalScores, forfeit });
     const outcome = outcomeCopy(entries, forfeit, gameWinner);
     const rounds = Array.isArray(roundHistory) ? roundHistory : [];
+    // Midnight Special rides, tallied per player across the whole game from
+    // the round history stamps. Riders wear the train on their podium step.
+    const midnightRides = rounds.reduce((tally, round) => {
+        if (round?.midnightSpecial) {
+            tally[round.midnightSpecial] = (tally[round.midnightSpecial] || 0) + 1;
+        }
+        return tally;
+    }, {});
+    const rideLabel = (count) => (count === 1
+        ? 'Rode the Midnight Special'
+        : `Rode the Midnight Special ${count} times`);
     // Column order follows the podium standings so a player can scan one row.
     const historyPlayers = entries.map(e => e.name).filter(name => name !== PLACEHOLDER_ID_CLIENT);
     const normalizedTokenSettlement = normalizeTokenSettlement(tokenSettlement);
@@ -457,6 +494,15 @@ const GameOverPodium = ({
                                         {entry.score === null ? '—' : entry.score}
                                         <span className="game-over-podium__score-unit"> pts</span>
                                     </span>
+                                    {midnightRides[entry.name] > 0 && (
+                                        <span
+                                            className="game-over-podium__midnight"
+                                            title={rideLabel(midnightRides[entry.name])}
+                                            aria-label={rideLabel(midnightRides[entry.name])}
+                                        >
+                                            🚂{midnightRides[entry.name] > 1 && ` ×${midnightRides[entry.name]}`}
+                                        </span>
+                                    )}
                                 </div>
                                 <div className={`game-over-podium__step game-over-podium__step--rank-${Math.min(entry.rank, 4)}`}>
                                     <span className="game-over-podium__rank">{entry.rankLabel}</span>
@@ -559,9 +605,10 @@ const GameOverPodium = ({
                                                 <tr key={round.roundNumber}>
                                                     <td>{round.roundNumber}</td>
                                                     <td className="game-over-podium__history-bid">
-                                                        <span title={`${round.bidderName} · ${round.bidType} · ${round.bidderCardPoints} card pts${round.dealExecuted ? ' · insured' : ''}`}>
+                                                        <span title={`${round.bidderName} · ${round.bidType} · ${round.bidderCardPoints} card pts${round.dealExecuted ? ' · insured' : ''}${round.midnightSpecial ? ` · ${round.midnightSpecial} rode the Midnight Special` : ''}`}>
                                                             {BID_ABBR[round.bidType] || round.bidType}
                                                             {round.dealExecuted && <span className="game-over-podium__history-ins" aria-label="insurance deal"> ⛨</span>}
+                                                            {round.midnightSpecial && <span className="game-over-podium__history-midnight" aria-label={`${round.midnightSpecial} rode the Midnight Special`}> 🚂</span>}
                                                         </span>
                                                     </td>
                                                     {historyPlayers.map(name => {

@@ -1106,8 +1106,11 @@ class GameEngine {
         this._clearPlayoutTimer();
         this.playoutVote = this._newPlayoutVote();
         this.roundWrappedEarly = false;
-        // One Midnight Special celebration per round, at most.
+        // One Midnight Special celebration per round, at most. The rider's
+        // name is stamped onto the round's history entry at scoring so the
+        // podium can honor repeat riders across the whole game.
         this.midnightSpecialFired = false;
+        this.midnightSpecialRider = null;
         this.rematchOffer = this._newRematchOffer();
         this.drawCountdown = null;
         Object.values(this.players).forEach(p => {

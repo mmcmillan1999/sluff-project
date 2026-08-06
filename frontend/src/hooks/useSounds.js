@@ -25,9 +25,18 @@ const SOUND_FILES = {
     // Matt's temp Midnight Special song (16.08s) — underscores the whole
     // production; the effects bed (horn/chug) is synthesized over it.
     midnightSong: '/Sounds/midnight_special_song_v1.mp3',
-    // Rubbing it in: greets a player who finished the game off the top step.
-    // Winner and wash stings are planned to join it.
+    // The podium's voice (all premade Liam, eleven_v3): the needle for the
+    // sole bottom step, the champion's greeting on the top step, and the
+    // deadpan shrug when a draw sends everyone home with their buy-ins.
     podiumLoss: '/Sounds/podium_loss_v1.mp3',
+    // Champion sting fallback: Liam's generic proclamation pre-mixed over
+    // the anthem (no sampled masters — see generate-podium-stings.js).
+    podiumWin: '/Sounds/podium_win_mix_v1.mp3',
+    // The bare anthem bed: playChampionSting layers the winner's
+    // personalized line (fetched from the server) over this live.
+    podiumWinAnthem: '/Sounds/podium_win_anthem_v1.mp3',
+    // v2: Matt's audition pick — "[sighs] A wash. All that drama... for nothing."
+    drawWash: '/Sounds/draw_wash_v2.mp3',
     drumroll: '/Sounds/drumroll_v1.mp3',
     no_peaking_cheater: '/Sounds/no_peaking_cheater.mp3',
 };
@@ -545,6 +554,55 @@ export const useSounds = ({ musicActive = false } = {}) => {
         wheelSettle(ctx, gainRef.current);
     }, [synthContext]);
 
+    // The personalized champion sting. GameTableView prefetches the winner's
+    // line the moment the game ends (the server speaks only the name it
+    // knows won); by podium time it is decoded and ready to ride the anthem.
+    const championLineRef = useRef({ key: null, buffer: null });
+    const prefetchChampionLine = useCallback(async (tableId, fetchLine) => {
+        const ctx = ctxRef.current;
+        if (!ctx || !tableId || typeof fetchLine !== 'function') return;
+        if (championLineRef.current.key === tableId) return; // once per game
+        championLineRef.current = { key: tableId, buffer: null };
+        try {
+            const bytes = await fetchLine(tableId);
+            if (!bytes || championLineRef.current.key !== tableId) return;
+            const buffer = await new Promise((resolve, reject) => {
+                // Callback form for Safari's older decodeAudioData.
+                ctx.decodeAudioData(bytes, resolve, reject);
+            });
+            if (championLineRef.current.key === tableId) {
+                championLineRef.current.buffer = buffer;
+            }
+        } catch { /* fallback sting covers it */ }
+    }, []);
+
+    // Play the champion moment: the anthem bed with the personalized line
+    // landing over its swell (same 1.2s pocket as the pre-mixed sting), or
+    // the generic mix when no personalized line arrived.
+    const playChampionSting = useCallback(() => {
+        const ctx = synthContext();
+        if (!ctx) return;
+        const line = championLineRef.current.buffer;
+        const anthem = buffersRef.current.podiumWinAnthem;
+        if (!line || !anthem) {
+            playSound('podiumWin');
+            return;
+        }
+        const bed = ctx.createBufferSource();
+        bed.buffer = anthem;
+        bed.connect(gainRef.current);
+        bed.start(0);
+        const shout = ctx.createBufferSource();
+        shout.buffer = line;
+        // The proclamation cuts through the bed, like the pre-mixed recipe.
+        const boost = ctx.createGain();
+        boost.gain.value = 2.2;
+        shout.connect(boost);
+        boost.connect(gainRef.current);
+        shout.onended = () => { try { boost.disconnect(); } catch { /* best effort */ } };
+        shout.start(ctx.currentTime + 1.2);
+    }, [synthContext, playSound]);
+
     // The Midnight Special — the full production: Matt's song clip from
     // the first frame, with the synthesized horn and chug bedded over it,
     // all on the shared clock the animation reads.
@@ -570,6 +628,8 @@ export const useSounds = ({ musicActive = false } = {}) => {
         playWheelTick,
         playWheelSettle,
         playMidnightSpecial,
+        prefetchChampionLine,
+        playChampionSting,
         enableSound,
         soundSettings: {
             muted,

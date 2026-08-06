@@ -2,19 +2,20 @@
 
 Ideas accepted but not scheduled. Move items out when work starts.
 
-## The Midnight Special 🌙🚂 — v1 SHIPPED Aug 6 2026
+## The Midnight Special 🌙🚂 — SHIPPED Aug 6 2026
 
 **Shipped:** `backend/src/core/midnightSpecial.js` proves the strict claim
-(leader wins every remaining trick vs best defense; opponents bled of trump;
-run rides a second suit; ≥3 tricks left) after each resolved trick, fires a
-`midnightSpecial` table event once per round; the client sweeps a night sky
-across the felt with a train and a synthesized two-chime whistle
-(`midnightWhistle` in soundSynth.js — no licensing exposure).
+(leader wins every remaining trick vs best defense; ≥3 tricks left; run rides
+a second suit) after each resolved trick, fires a `midnightSpecial` table
+event once per round. Defenders may still hold trump — boss-trump extraction
+is part of the proof (the Aug 6 rewrite; Matt's Heart Solo pinned it). The
+client runs the full production: nightfall, the top-view train looping the
+felt with MIDNIGHT/SPECIAL cars, smoke, karaoke chorus lines, a spotlight on
+the runner, Matt's temp song clip (`midnight_special_song_v1.mp3`) over a
+synthesized horn/chug bed (`midnightSpecialScore`).
 
-**Remaining ideas:** a tolerance knob (fire one guarded-honor early, matching
-how the table lore *feels*); swap the synth sting for a real "Midnight
-Special" cover if licensing is ever sorted; a podium stat line ("rode the
-Midnight Special ×2").
+**Remaining ideas:** replace the temp song clip when Matt finds a keeper;
+a real licensed cover if that ever gets sorted.
 
 ### Original notes
 
@@ -50,5 +51,16 @@ unstoppable second-suit run.
 
 ## Parked earlier
 
-- Playout-vote adversarial review (owed since July 27 — see memory).
-- Winner and wash podium stings to join the loss sting.
+- ~~Playout-vote adversarial review~~ — completed Aug 6 2026: all five
+  flagged risk areas verified safe (state-guarded timers, executor-routed
+  timeout effects, agreement-driven wrap scoring, resume evaporation);
+  five adversarial regressions added to `tests/playoutVote.test.js`.
+- ~~Winner and wash podium stings~~ — built Aug 6 2026: `podiumWin` greets
+  the sole real champion on the podium (forfeit wins and shared victories
+  stay quiet); `drawWash` shrugs a settled draw away at DrawComplete. Three
+  Liam takes of each await Matt's audition in `frontend/public/Sounds`
+  (`podium_win_v*` / `draw_wash_v*`, v1 wired; gitignored — the winners
+  need `git add -f`). Generator: `backend/scripts/generate-podium-stings.js`.
+- ~~Midnight Special podium stat~~ — built Aug 6 2026: the rider is stamped
+  onto each round-history entry; the podium tallies rides per player (🚂 ×N
+  under the score) and marks ridden rounds in the round-by-round table.

@@ -43,6 +43,10 @@ const COPY_FIELDS = [
     'trickLeaderId', 'lastCompletedTrick', 'tricksPlayedCount', 'capturedTricks',
     'bidderCardPoints', 'defenderCardPoints', 'allCardsPlayedThisRound',
     'insurance', 'roundSummary', 'roundWrappedEarly',
+    // Midnight Special: the once-per-round guard must survive a deploy (or a
+    // restored round could celebrate the same run twice), and the rider stamp
+    // feeds the round-history entry written at scoring.
+    'midnightSpecialFired', 'midnightSpecialRider',
 ];
 
 /**

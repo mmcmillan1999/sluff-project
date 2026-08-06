@@ -73,6 +73,9 @@ function calculateRoundScores(engine) {
         bidderCardPoints: roundData.finalBidderPoints,
         dealExecuted: Boolean(engine.insurance.dealExecuted),
         pointChanges: { ...roundData.pointChanges },
+        // Who rode the Midnight Special this round, if anyone — the podium
+        // tallies rides across the game from these entries.
+        ...(engine.midnightSpecialRider ? { midnightSpecial: engine.midnightSpecialRider } : {}),
     };
     engine.roundHistory.push(roundEntry);
     // A round wrapped early by the playout vote has partial trick data:

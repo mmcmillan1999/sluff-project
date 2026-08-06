@@ -195,47 +195,39 @@ async function runMidnightSpecialTests() {
         pass('Once-per-round, deal-settled, short-ending, and all-trump guards hold.');
     }
 
-    // 9) Through the engine: resolving a trick that creates the claim emits
-    //    the table event exactly once.
+    // 9) Through the engine for real: the final card of a trick resolves via
+    //    playCard, the claim proves, the table event fires exactly once, and
+    //    the rider's name is stamped for the round-history podium tally.
     {
         const engine = makeEngine({
             tricksPlayedCount: 6,
             hands: {
                 Runner: ['AS', '10S', 'KS', '6S'],
                 DefA: ['QS', '9S', '6D', '7D'],
-                DefB: ['8S', '7S', '8D', '9D'],
+                DefB: ['8S', '7S', '8D', '7C', '9D'],
             },
         });
-        // Simulate resolveTrick's tail conditions: state machinery pieces
-        // the handler needs.
+        engine.state = 'Playing Phase';
+        engine.trickTurnPlayerId = 3;
+        engine.leadSuitCurrentTrick = 'D';
         engine.currentTrickCards = [
             { userId: 1, playerName: 'Runner', card: 'AD' },
             { userId: 2, playerName: 'DefA', card: '6C' },
-            { userId: 3, playerName: 'DefB', card: '7C' },
         ];
-        engine.leadSuitCurrentTrick = 'D';
         engine.capturedTricks = {};
         engine.bidWinnerInfo = { userId: 1, playerName: 'Runner', bid: 'Solo' };
         engine.bidderCardPoints = 0;
         engine.defenderCardPoints = 0;
-        engine.hands.Runner = ['AS', '10S', 'KS', '6S'];
 
-        const effects = playHandler.playCard.length // reach resolve via module internals
-            ? (() => {
-                // Drive resolveTrick indirectly: playCard requires full
-                // turn machinery, so call the detector contractually the way
-                // the handler does after a resolved trick.
-                engine.tricksPlayedCount += 1; // trick resolved
-                engine.trickLeaderId = 1;
-                const hit = detectMidnightSpecial(engine);
-                if (hit) engine.midnightSpecialFired = true;
-                return hit ? [{ type: 'EMIT_TO_TABLE', payload: { event: 'midnightSpecial', data: hit } }] : [];
-            })()
-            : [];
-        assert.strictEqual(effects.length, 1);
-        assert.strictEqual(effects[0].payload.event, 'midnightSpecial');
+        const effects = playHandler.playCard(engine, 3, '9D');
+        const announcement = effects.filter(e => e.type === 'EMIT_TO_TABLE'
+            && e.payload?.event === 'midnightSpecial');
+        assert.strictEqual(announcement.length, 1, 'the resolved trick announces the Special');
+        assert.strictEqual(announcement[0].payload.data.playerName, 'Runner');
+        assert.strictEqual(engine.midnightSpecialFired, true);
+        assert.strictEqual(engine.midnightSpecialRider, 'Runner', 'the rider is stamped for the podium');
         assert.strictEqual(detectMidnightSpecial(engine), null, 'fires once');
-        pass('The resolved-trick path announces the Special once to the table.');
+        pass('The resolved-trick path announces the Special once and stamps the rider.');
     }
 
     console.log('All Midnight Special tests passed!');

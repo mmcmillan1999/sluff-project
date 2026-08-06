@@ -44,6 +44,7 @@ const suites = [
     { name: 'game resume and play timing', file: './gameResume.test.js' },
     { name: 'bot brain profiles', file: './botBrains.test.js' },
     { name: 'Midnight Special detector', file: './midnightSpecial.test.js' },
+    { name: 'champion line service', file: './championLine.test.js' },
 ];
 
 function loadRunner(suite) {

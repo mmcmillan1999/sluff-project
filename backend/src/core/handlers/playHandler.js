@@ -107,7 +107,10 @@ function resolveTrick(engine) {
         // nobody can stop. Detected as a proven claim (see midnightSpecial.js)
         // and announced to the table exactly once per round.
         const midnightSpecial = detectMidnightSpecial(engine);
-        if (midnightSpecial) engine.midnightSpecialFired = true;
+        if (midnightSpecial) {
+            engine.midnightSpecialFired = true;
+            engine.midnightSpecialRider = midnightSpecial.playerName;
+        }
         const effects = [
             ...(midnightSpecial ? [{
                 type: 'EMIT_TO_TABLE',

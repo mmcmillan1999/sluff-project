@@ -550,6 +550,26 @@ export const markTipSeen = async (tipId) => {
     return data;
 };
 
+// --- Sound Service Calls ---
+
+/**
+ * The winner's personalized champion sting for a finished game at this
+ * table. Resolves to an ArrayBuffer of mp3 audio, or null whenever no
+ * personalized line applies (shared win, forfeit, TTS unavailable) — the
+ * caller falls back to the generic sting on null.
+ */
+export const fetchChampionLine = async (tableId) => {
+    try {
+        const response = await configuredFetch(
+            `/api/sounds/champion-line/${encodeURIComponent(tableId)}`, 'GET',
+        );
+        if (response.status !== 200) return null;
+        return await response.arrayBuffer();
+    } catch {
+        return null;
+    }
+};
+
 // --- Feedback Service Calls ---
 
 export const submitFeedback = async (feedbackData) => {

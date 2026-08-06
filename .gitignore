@@ -75,6 +75,7 @@ backend/backups/
 frontend/public/sound-audition.html
 frontend/public/Sounds/*_v*.mp3
 frontend/public/Sounds/*_v*.webm
+backend/scripts/champion-audition/
 
 # Capacitor native shells (generated on a Mac via `npx cap add ios`)
 # The Xcode/Gradle projects are committed, but their generated artifacts are not.

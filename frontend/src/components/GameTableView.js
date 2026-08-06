@@ -23,7 +23,7 @@ import {
 import LobbyChat from './LobbyChat';
 import AdminObserverMode from './AdminObserverMode';
 import PlayerHandAnchorDebug from './game/PlayerHandAnchorDebug';
-import { getLobbyChatHistory } from '../services/api';
+import { getLobbyChatHistory, fetchChampionLine } from '../services/api';
 import SoundControls from './game/SoundControls';
 import { useModalFocus } from '../hooks/useModalFocus';
 import { shareInvite, getInviteUrl } from '../utils/tableInvites';
@@ -90,7 +90,7 @@ const stableScoreMapSignature = (scoreMap) => JSON.stringify(
 );
 
 
-const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, handleShowHowToPlay, emitEvent, playSound, playDealSounds, playMidnightSpecial, socket, handleOpenFeedbackModal, soundSettings, tutorialState, onTutorialAction, onShowTokenLedger }) => {
+const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, handleShowHowToPlay, emitEvent, playSound, playDealSounds, playMidnightSpecial, prefetchChampionLine, playChampionSting, socket, handleOpenFeedbackModal, soundSettings, tutorialState, onTutorialAction, onShowTokenLedger }) => {
     const themePresentation = getThemePresentation(currentTableState?.theme);
     const [seatAssignments, setSeatAssignments] = useState({ self: null, opponentLeft: null, opponentRight: null });
     const [showRoundSummaryModal, setShowRoundSummaryModal] = useState(false);
@@ -705,6 +705,24 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         insuranceWasActiveRef.current = active;
     }, [currentTableState?.insurance?.isActive]);
 
+    // One wash sting per settled draw (see the DrawComplete effect below).
+    const drawWashStungRef = useRef(false);
+
+    // The moment the game ends, prefetch the winner's personalized champion
+    // line so it is decoded before the podium reveals. The server decides
+    // whether a line applies (sole real winner, name speakable) — a quiet
+    // 204 here simply leaves the generic sting to play.
+    useEffect(() => {
+        if (!currentTableState?.roundSummary?.isGameOver) return;
+        if (currentTableState.roundSummary.forfeit) return;
+        prefetchChampionLine?.(currentTableState.tableId, fetchChampionLine);
+    }, [
+        currentTableState?.roundSummary?.isGameOver,
+        currentTableState?.roundSummary?.forfeit,
+        currentTableState?.tableId,
+        prefetchChampionLine,
+    ]);
+
     useEffect(() => {
         if (currentTableState) {
             const { state, drawRequest } = currentTableState;
@@ -718,8 +736,17 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 setShowIosPwaPrompt(false);
                 setShowStoreModal(false);
             }
+            // The wash sting: the moment a draw settles, Liam shrugs the game
+            // away. Drawn games never reach the podium, so the wash lives
+            // here with the draw modal — once per settled draw, players only.
+            if (state === 'DrawComplete' && !drawWashStungRef.current && !isSpectator) {
+                drawWashStungRef.current = true;
+                playSound('drawWash');
+            } else if (state !== 'DrawComplete') {
+                drawWashStungRef.current = false;
+            }
         }
-    }, [currentTableState, isSpectator]);
+    }, [currentTableState, isSpectator, playSound]);
 
     // Post-deal playout vote: surfaces the moment the insurance deal locks
     // the round, and closes anything that would cover it.
@@ -1613,6 +1640,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 selfPlayerName={selfPlayerName}
                 voiceActive={tableVoiceAvailable}
                 playSound={playSound}
+                playChampionSting={playChampionSting}
                 onRematch={(terminalSettlementBlocked || isSpectator)
                     ? undefined
                     : () => {
