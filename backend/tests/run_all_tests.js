@@ -43,6 +43,7 @@ const suites = [
     { name: 'market insurance strategy', file: './marketInsurance.test.js' },
     { name: 'game resume and play timing', file: './gameResume.test.js' },
     { name: 'bot brain profiles', file: './botBrains.test.js' },
+    { name: 'Midnight Special detector', file: './midnightSpecial.test.js' },
 ];
 
 function loadRunner(suite) {

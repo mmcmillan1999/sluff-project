@@ -14,6 +14,7 @@ import ActionControls from './game/ActionControls';
 import InsurancePrompt from './game/InsurancePrompt';
 import BidWinnerSplash from './game/BidWinnerSplash';
 import IosPwaPrompt from './game/IosPwaPrompt';
+import MidnightSpecialBanner from './game/MidnightSpecialBanner';
 import buildBidHintCopy from '../utils/bidHintCopy';
 import {
     END_ROUND_TOTAL_MS,
@@ -89,7 +90,7 @@ const stableScoreMapSignature = (scoreMap) => JSON.stringify(
 );
 
 
-const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, handleShowHowToPlay, emitEvent, playSound, playDealSounds, socket, handleOpenFeedbackModal, soundSettings, tutorialState, onTutorialAction, onShowTokenLedger }) => {
+const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, handleShowHowToPlay, emitEvent, playSound, playDealSounds, playMidnightSpecial, socket, handleOpenFeedbackModal, soundSettings, tutorialState, onTutorialAction, onShowTokenLedger }) => {
     const themePresentation = getThemePresentation(currentTableState?.theme);
     const [seatAssignments, setSeatAssignments] = useState({ self: null, opponentLeft: null, opponentRight: null });
     const [showRoundSummaryModal, setShowRoundSummaryModal] = useState(false);
@@ -117,6 +118,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const [touchStartX, setTouchStartX] = useState(null);
     const SWIPE_CLOSE_THRESHOLD = 50; 
     const [playerError, setPlayerError] = useState(null);
+    const [midnightSpecial, setMidnightSpecial] = useState(null);
     const [chatMessages, setChatMessages] = useState([]);
     const [observedPlayerId, setObservedPlayerId] = useState(playerId);
     const [isObserverMode, setIsObserverMode] = useState(false);
@@ -152,6 +154,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const roundPresentationAckRef = useRef(null);
     const roundPresentationConfirmedAckRef = useRef(null);
     const errorTimerRef = useRef(null);
+    const midnightTimerRef = useRef(null);
     const dropZoneRef = useRef(null);
     const dealTransitionRef = useRef({
         tableId: currentTableState?.tableId ?? null,
@@ -603,11 +606,25 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         const handleMessageHidden = ({ messageId }) => {
             setChatMessages(prev => prev.filter(msg => msg.id !== messageId));
         };
+        // The server proved someone's run is unstoppable: night sky, train,
+        // whistle. Display only — the round keeps playing underneath.
+        const handleMidnightSpecial = ({ playerName }) => {
+            if (!playerName) return;
+            if (midnightTimerRef.current) clearTimeout(midnightTimerRef.current);
+            setMidnightSpecial({ playerName });
+            playMidnightSpecial?.();
+            midnightTimerRef.current = setTimeout(() => {
+                setMidnightSpecial(null);
+                midnightTimerRef.current = null;
+            }, 6500);
+        };
+
         socket.on('new_lobby_message', handleNewChatMessage);
         socket.on('lobby_message_hidden', handleMessageHidden);
         socket.on('error', handlePlayerError);
         socket.on('drawDeclined', handleDrawDeclined);
         socket.on('quickPlayDecisionRejected', handleQuickPlayDecisionRejected);
+        socket.on('midnightSpecial', handleMidnightSpecial);
 
         return () => {
             socket.off('new_lobby_message', handleNewChatMessage);
@@ -615,9 +632,11 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             socket.off('error', handlePlayerError);
             socket.off('drawDeclined', handleDrawDeclined);
             socket.off('quickPlayDecisionRejected', handleQuickPlayDecisionRejected);
+            socket.off('midnightSpecial', handleMidnightSpecial);
             if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+            if (midnightTimerRef.current) clearTimeout(midnightTimerRef.current);
         };
-    }, [socket]);
+    }, [socket, playMidnightSpecial]);
 
     // Keyboard accessibility: close the top-most utility first and support debug toggles.
     useEffect(() => {
@@ -1473,6 +1492,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             />
 
             <IosPwaPrompt show={showIosPwaPrompt} onClose={() => setShowIosPwaPrompt(false)} />
+            {midnightSpecial && <MidnightSpecialBanner playerName={midnightSpecial.playerName} />}
 
 
             {/* Debug: Check admin status (log removed to avoid console spam) */}

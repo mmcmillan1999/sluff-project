@@ -3,6 +3,7 @@
 const gameLogic = require('../logic');
 const { SUITS } = require('../constants');
 const scoringHandler = require('./scoringHandler');
+const { detectMidnightSpecial } = require('../midnightSpecial');
 
 function playCard(engine, userId, card) {
     // Playing Phase is the only state in which a card may leave a hand.  This
@@ -102,7 +103,16 @@ function resolveTrick(engine) {
     } else {
         engine.state = "TrickCompleteLinger";
         const winnerId = winnerInfo.userId;
+        // The Midnight Special: the trick winner is about to lead a run
+        // nobody can stop. Detected as a proven claim (see midnightSpecial.js)
+        // and announced to the table exactly once per round.
+        const midnightSpecial = detectMidnightSpecial(engine);
+        if (midnightSpecial) engine.midnightSpecialFired = true;
         const effects = [
+            ...(midnightSpecial ? [{
+                type: 'EMIT_TO_TABLE',
+                payload: { event: 'midnightSpecial', data: midnightSpecial },
+            }] : []),
             { type: 'BROADCAST_STATE' },
             { 
                 type: 'START_TIMER',

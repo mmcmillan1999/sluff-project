@@ -2,7 +2,21 @@
 
 Ideas accepted but not scheduled. Move items out when work starts.
 
-## The Midnight Special 🌙🚂
+## The Midnight Special 🌙🚂 — v1 SHIPPED Aug 6 2026
+
+**Shipped:** `backend/src/core/midnightSpecial.js` proves the strict claim
+(leader wins every remaining trick vs best defense; opponents bled of trump;
+run rides a second suit; ≥3 tricks left) after each resolved trick, fires a
+`midnightSpecial` table event once per round; the client sweeps a night sky
+across the felt with a train and a synthesized two-chime whistle
+(`midnightWhistle` in soundSynth.js — no licensing exposure).
+
+**Remaining ideas:** a tolerance knob (fire one guarded-honor early, matching
+how the table lore *feels*); swap the synth sting for a real "Midnight
+Special" cover if licensing is ever sorted; a podium stat line ("rode the
+Midnight Special ×2").
+
+### Original notes
 
 **What it is (Matt's decades-old table lore):** the moment a player's *second*
 suit becomes unstoppable. The bid winner runs, say, six hearts (trump) and

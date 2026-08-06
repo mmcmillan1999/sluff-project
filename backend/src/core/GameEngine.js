@@ -1103,6 +1103,8 @@ class GameEngine {
         this._clearPlayoutTimer();
         this.playoutVote = this._newPlayoutVote();
         this.roundWrappedEarly = false;
+        // One Midnight Special celebration per round, at most.
+        this.midnightSpecialFired = false;
         this.rematchOffer = this._newRematchOffer();
         this.drawCountdown = null;
         Object.values(this.players).forEach(p => {

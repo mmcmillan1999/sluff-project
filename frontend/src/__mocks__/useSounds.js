@@ -4,6 +4,7 @@ export const useSounds = () => {
     const playDealSounds = vi.fn();
     const playWheelTick = vi.fn();
     const playWheelSettle = vi.fn();
+    const playMidnightSpecial = vi.fn();
     const enableSound = vi.fn();
 
     const soundSettings = {
@@ -17,5 +18,5 @@ export const useSounds = () => {
         setMusicVolume: vi.fn(),
     };
 
-    return { playSound, playDealSounds, playWheelTick, playWheelSettle, enableSound, soundSettings };
+    return { playSound, playDealSounds, playWheelTick, playWheelSettle, playMidnightSpecial, enableSound, soundSettings };
 };

@@ -196,6 +196,50 @@ export const wheelClick = (ctx, destination, { when = 0, intensity = 1, pitch = 
 };
 
 /**
+ * The Midnight Special: a two-chime train whistle — short toot, long
+ * bending wail — over a soft chugga underneath. Synthesized (no sampled
+ * masters, no licensing) and unmistakably a train.
+ */
+export const midnightWhistle = (ctx, destination, { when = 0 } = {}) => {
+    try {
+        const t = Math.max(when, ctx.currentTime);
+        // A train chime is two-to-three notes sounded together; a minor
+        // third plus a sixth reads instantly as "whistle".
+        const chord = [311, 370, 523];
+        const blow = (start, length, peak) => {
+            for (const freq of chord) {
+                const osc = ctx.createOscillator();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(freq, start);
+                // The wail bends down as the steam fades.
+                if (osc.frequency.exponentialRampToValueAtTime) {
+                    osc.frequency.exponentialRampToValueAtTime(freq * 0.94, start + length);
+                }
+                const env = envelope(ctx, start, peak, 0.06, length);
+                osc.connect(env);
+                env.connect(destination);
+                osc.start(start);
+                osc.stop(start + length + 0.1);
+                osc.onended = () => { try { env.disconnect(); } catch { /* best effort */ } };
+            }
+        };
+        blow(t, 0.28, 0.12);          // toot
+        blow(t + 0.45, 1.5, 0.14);    // toooooot
+        // The chugga: eight soft low noise pulses driving underneath.
+        for (let i = 0; i < 8; i += 1) {
+            noiseHit(ctx, destination, {
+                t: t + 0.1 + i * 0.22,
+                frequency: 260,
+                q: 0.9,
+                peak: i % 2 === 0 ? 0.1 : 0.06,
+                attack: 0.012,
+                decay: 0.09,
+            });
+        }
+    } catch { /* audio is garnish */ }
+};
+
+/**
  * The wheel coming to rest: one low, satisfied clunk.
  */
 export const wheelSettle = (ctx, destination, { when = 0 } = {}) => {
