@@ -1,9 +1,12 @@
 // backend/tests/midnightSpecial.test.js
 //
 // The Midnight Special detector: fires only on a PROVEN claim — the leader
-// wins every remaining trick against best defense, opponents bled of trump,
-// riding a second suit. Matt's canonical A-10-J example pins the strict
-// boundary: while the guarded King still breathes, the train has not left.
+// wins every remaining trick against best defense, riding a second suit.
+// Defenders may still hold trump: boss trumps that extract it by force are
+// part of the proof (Matt's Aug 2026 Heart Solo pinned this — A-K-Q of
+// trump over J-8-7-6 plus the top three diamonds IS the train). Matt's
+// canonical A-10-J example pins the other boundary: while the guarded King
+// still breathes, the train has not left.
 
 const assert = require('assert');
 const { detectMidnightSpecial } = require('../src/core/midnightSpecial');
@@ -122,7 +125,48 @@ async function runMidnightSpecialTests() {
         pass('Leader trumps plus a second-suit run still count.');
     }
 
-    // 6) Guards: fires once per round, never after an executed insurance
+    // 6) The field case (Matt's Heart Solo, Aug 2026): six tricks out, the
+    //    runner holds A-K-Q of trump and A-10-K of diamonds while the
+    //    defenders still hold FOUR trumps (J-8-7 and a lone 6) — all beneath
+    //    the Q, so three boss-trump leads extract every one by force and
+    //    the top-three diamonds ride out clean. The old "defenders bled of
+    //    trump" precondition refused this; the proof must accept it.
+    {
+        const engine = makeEngine({
+            tricksPlayedCount: 5,
+            trumpSuit: 'H',
+            hands: {
+                Runner: ['AH', 'KH', 'QH', 'AD', '10D', 'KD'],
+                DefA: ['JH', '8H', '7H', 'QD', 'JD', '7D'],
+                DefB: ['6H', '7C', 'JC', '6D', '8D', '9D'],
+            },
+        });
+        const result = detectMidnightSpecial(engine);
+        assert.ok(result, 'boss trumps that extract by force ARE the claim');
+        assert.strictEqual(result.playerName, 'Runner');
+        assert.strictEqual(result.tricksRemaining, 6);
+        pass('Boss-trump extraction over live defender trump fires the Special.');
+    }
+
+    // 7) The same position with the 10 of trump LIVE in a defender's hand
+    //    (in the real game it was buried in the widow): now the K and Q of
+    //    trump can both be overtaken, the extraction never completes, and
+    //    strictly there is no claim.
+    {
+        const engine = makeEngine({
+            tricksPlayedCount: 5,
+            trumpSuit: 'H',
+            hands: {
+                Runner: ['AH', 'KH', 'QH', 'AD', '10D', 'KD'],
+                DefA: ['10H', '8H', '7H', 'QD', 'JD', '7D'],
+                DefB: ['6H', 'JH', '7C', '6D', '8D', '9D'],
+            },
+        });
+        assert.strictEqual(detectMidnightSpecial(engine), null);
+        pass('A live guarded 10 of trump still holds the train.');
+    }
+
+    // 8) Guards: fires once per round, never after an executed insurance
     //    deal, never on short endings, never on pure trump cash-outs.
     {
         const claimHands = {
@@ -151,7 +195,7 @@ async function runMidnightSpecialTests() {
         pass('Once-per-round, deal-settled, short-ending, and all-trump guards hold.');
     }
 
-    // 7) Through the engine: resolving a trick that creates the claim emits
+    // 9) Through the engine: resolving a trick that creates the claim emits
     //    the table event exactly once.
     {
         const engine = makeEngine({

@@ -3,19 +3,22 @@
 // The Midnight Special: the moment a player's SECOND suit becomes the train
 // nobody can stop. Decades-old table lore, now a checkable fact — we detect
 // it as a proven claim: the player on lead wins every remaining trick no
-// matter what the defense does, because the opponents' trump is bled dry
-// and the leader's controlled run (plus any trump still in hand) covers
-// everything left. Strict by design: zero false celebrations.
+// matter what the defense does. Defenders MAY still hold trump — the proof
+// itself covers extraction: boss trumps pull their trumps by force, and any
+// line where a defender could ever take a trick (a higher card in the led
+// suit, a forced ruff of a side-suit lead) kills the claim on the spot.
+// Strict by design: zero false celebrations.
 //
 // The proof search is tiny because of two dominance facts:
 //   - The leader should always lead the TOP card of a suit (a lower card of
 //     the same suit is never a better claim try), so at most one candidate
 //     lead per suit.
-//   - A trumpless defender's best resistance is mechanical: if any legal
-//     card BEATS the led card the claim is dead on the spot; otherwise
-//     keeping their highest cards is weakly optimal, so they shed the
-//     lowest of the suit they must follow — and when discarding, only the
-//     CHOICE OF SUIT matters (lowest within it, ≤4 branches).
+//   - A defender's best resistance is mechanical: if any legal response
+//     BEATS the led card (higher in-suit card, or the must-trump ruff of a
+//     side-suit lead) the claim is dead on the spot; otherwise keeping
+//     their highest cards is weakly optimal, so they shed the lowest of
+//     the suit they must follow — and when discarding, only the CHOICE OF
+//     SUIT matters (lowest within it, ≤4 branches).
 //
 // Fired once per round via engine.midnightSpecialFired.
 
@@ -59,16 +62,23 @@ const provesClaim = (leaderHand, defenderHands, trumpSuit, budget) => {
             const suits = bySuit(hand);
             const following = suits[suit] || [];
             if (following.length > 0) {
-                // Must follow. If their best beats the led card (trump leads
-                // cannot be beaten by trumpless hands), the claim dies here.
-                if (suit !== trumpSuit && rankValue(following[0]) > ledRank) {
+                // Must follow. If their best card of the led suit beats the
+                // led card (works for trump leads too — a higher trump takes
+                // a trump lead), the claim dies here.
+                if (rankValue(following[0]) > ledRank) {
                     beaten = true;
                     break;
                 }
                 responses.push([following[following.length - 1]]); // shed lowest
+            } else if (suit !== trumpSuit && (suits[trumpSuit] || []).length > 0) {
+                // Void in a side suit while holding trump: the must-trump
+                // rule forces a ruff, and any trump beats a side-suit lead.
+                beaten = true;
+                break;
             } else {
-                // Void (and trumpless by precondition): they choose which
-                // suit to shed from — every choice must still lose.
+                // Void with nothing forced (no trump, or trump itself was
+                // led and they have none): they choose which suit to shed
+                // from — every choice must still lose.
                 const options = Object.values(suits)
                     .map(cards => cards[cards.length - 1]);
                 responses.push(options.length > 0 ? options : [null]);
@@ -117,12 +127,9 @@ const detectMidnightSpecial = (engine) => {
         .filter(name => name && name !== leaderName);
     const defenderHands = defenderNames.map(name => engine.hands[name] || []);
 
-    // The signature precondition: the OTHER hands are bled of trump.
-    if (defenderHands.some(hand => hand.some(card => gameLogic.getSuit(card) === trumpSuit))) {
-        return null;
-    }
-    // And the run must ride a second suit — at least two non-trump cards
-    // still to play (pure trump cash-outs are not the Special).
+    // The run must ride a second suit — at least two non-trump cards
+    // still to play (pure trump cash-outs are not the Special). Defender
+    // trump does NOT gate detection: the proof search covers extraction.
     const sideCards = leaderHand.filter(card => gameLogic.getSuit(card) !== trumpSuit);
     if (sideCards.length < 2) return null;
 
