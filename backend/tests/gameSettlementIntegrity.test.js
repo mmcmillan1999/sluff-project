@@ -9,7 +9,10 @@ const {
 } = GameService;
 const transactionManager = require('../src/data/transactionManager');
 const { validators } = require('../src/events/socketActionGuard');
-const { ROUND_PRESENTATION_ACK_GRACE_MS } = require('../src/core/constants');
+const {
+    ROUND_PRESENTATION_ACK_GRACE_MS,
+    ROUND_ADVANCE_QUORUM_GRACE_MS,
+} = require('../src/core/constants');
 const {
     buildDrawSettlement,
     buildForfeitSettlement,
@@ -894,6 +897,11 @@ async function testSharedResultPresentationGate() {
     assert.equal(result.accepted, true);
     assert.equal(service.getStateForSocket(engine, aliceSocket).viewerRoundPresentationAcknowledged, true);
     assert.equal(service.getStateForSocket(engine, bobSocket).viewerRoundPresentationAcknowledged, false);
+    assert.equal(
+        engine.isRoundPresentationAdvanceReady(),
+        false,
+        'a partial quorum keeps the base presentation lock',
+    );
     result = service.ackRoundPresentation(
         engine.tableId,
         2,
@@ -901,9 +909,11 @@ async function testSharedResultPresentationGate() {
         bobSocket.id,
     );
     assert.equal(result.allConnectedHumansPresented, true);
-
-    engine.requestNextRound(dealerBot.userId);
-    assert.equal(engine.state, 'Awaiting Next Round Trigger', 'acknowledgements cannot bypass the base presentation lock');
+    assert.equal(
+        engine.isRoundPresentationAdvanceReady(),
+        true,
+        'a full acknowledgement quorum releases the base lock before the clock elapses',
+    );
 
     // Begin a ready presentation generation. Starting a new generation clears
     // every prior acknowledgement, and a stale generation cannot restore one.
@@ -1136,18 +1146,28 @@ async function testAutomaticNextRoundLifecycle() {
     service.io.sockets.sockets.delete('auto-cara');
     service.emitGameState(engine.tableId);
     assert.equal(engine.roundSummary.allConnectedHumansPresented, true);
-    assert.equal(timers.length, 2, 'disconnect recomputation moves a newly satisfied quorum to the base lock');
-    assert.equal(timers[1].duration, 18_000);
+    assert.equal(timers.length, 2, 'disconnect recomputation moves a newly satisfied quorum to the short advance beat');
+    assert.equal(timers[1].duration, ROUND_ADVANCE_QUORUM_GRACE_MS);
     const readyTimer = timers[1];
     now.value += 250;
     service.emitGameState(engine.tableId);
     assert.equal(timers.length, 2, 'an already queued quorum timer is stable as the service clock advances');
 
-    now.value = engine.roundSummary.presentationReadyAt;
+    // The quorum beat lands well BEFORE the 18s base clock: the advance must
+    // not wait it out. A bot dealer's stale base-clock schedule would block
+    // every bot action after the early advance, so it must be cleared.
+    now.value += ROUND_ADVANCE_QUORUM_GRACE_MS;
+    assert.ok(
+        now.value < engine.roundSummary.presentationReadyAt,
+        'the early-advance scenario really is ahead of the base clock',
+    );
+    const staleBotTimer = setTimeout(() => {}, 60_000);
+    engine.pendingBotAction = staleBotTimer;
     await fallbackTimer.callback();
     assert.equal(engine.state, 'Awaiting Next Round Trigger', 'a superseded fallback callback is inert');
     await readyTimer.callback();
     assert.equal(engine.state, 'Dealing Pending');
+    assert.equal(engine.pendingBotAction, null, 'an early advance clears the stale bot dealer schedule');
     assert.deepEqual(engine.hands, {}, 'automatic setup never deals cards');
     assert.equal(service.roundAdvanceTimers[engine.tableId], undefined, 'leaving Awaiting clears the presentation timer');
 

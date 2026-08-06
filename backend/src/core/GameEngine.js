@@ -722,11 +722,14 @@ class GameEngine {
         // DrawComplete and old/legacy summaries intentionally have no shared
         // presentation fields and retain their previous immediate behavior.
         if (!Number.isFinite(presentationReadyAt)) return true;
+        // A full quorum releases the lock immediately: every connected human
+        // has finished their ceremony, so the base clock is only a ceiling
+        // for tables still waiting on someone's presentation.
+        if (this.roundSummary.allConnectedHumansPresented === true) return true;
         if (now < presentationReadyAt) return false;
 
         const presentationForceReadyAt = this.roundSummary?.presentationForceReadyAt;
-        return this.roundSummary.allConnectedHumansPresented === true
-            || (Number.isFinite(presentationForceReadyAt) && now >= presentationForceReadyAt);
+        return Number.isFinite(presentationForceReadyAt) && now >= presentationForceReadyAt;
     }
 
     reset() {

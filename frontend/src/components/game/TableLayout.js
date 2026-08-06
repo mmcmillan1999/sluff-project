@@ -9,7 +9,7 @@ import {
     BANNER_START_MS, DRUMROLL_TAIL_MS,
     WIDOW_TO_CENTER_START_MS, WIDOW_TO_CENTER_MS,
     WIDOW_FLIP_START_MS, WIDOW_FLIP_MS,
-    WIDOW_TO_PILE_MS, WIDOW_OVERLAY_TO_PILE_MS,
+    WIDOW_TO_PILE_MS, WIDOW_OVERLAY_TO_PILE_MS, WIDOW_SETTLE_FADE_MS,
 } from '../../config/endRoundTiming';
 import './KeyAndModal.css';
 import './TableLayout.css';
@@ -346,6 +346,16 @@ const TableLayout = ({
             });
         }, WIDOW_OVERLAY_TO_PILE_MS);
         endRoundTimersRef.current.push(toPile);
+
+        // As they land, fade them into the face-down pile — the same treatment
+        // the final trick's cards get, so no face-up card outlives the landing.
+        const settle = setTimeout(() => {
+            cards.forEach((el) => {
+                el.style.transition = `opacity ${WIDOW_SETTLE_FADE_MS}ms ease-out`;
+                el.style.opacity = '0';
+            });
+        }, WIDOW_OVERLAY_TO_PILE_MS + WIDOW_TO_PILE_MS);
+        endRoundTimersRef.current.push(settle);
 
         return undefined;
     }, [widowCelebrationActive]);

@@ -14,7 +14,8 @@
 //   3250   widow cards held face-down in center (drumroll anticipation)
 //   4250   widow cards flip face-up + round-end fanfare plays
 //   5100   widow cards fly to the awarded team's pile
-//   5600   recap modal appears
+//   5600   widow cards land and fade into the pile (like the trick cards)
+//   5850   recap modal appears — after the landing has finished on screen
 
 export const FINAL_TRICK_HOLD_MS = 630;   // hold before a completed trick flies
 export const FINAL_TRICK_FLY_MS = 1200;   // trick fly duration
@@ -43,8 +44,16 @@ export const WIDOW_TO_PILE_START_MS = WIDOW_FLIP_START_MS + WIDOW_FLIP_MS + WIDO
 // Delay (from when the overlay mounts) before the widow flies to the pile.
 export const WIDOW_OVERLAY_TO_PILE_MS = WIDOW_TO_CENTER_MS + WIDOW_ANTICIPATION_MS + WIDOW_FLIP_MS + WIDOW_REVEALED_HOLD_MS; // 2350
 
+// As the widow lands on the pile it fades in, same treatment as the final
+// trick's cards — otherwise a face-up card sits on the pile forever.
+export const WIDOW_SETTLE_FADE_MS = 150;
+
+// The recap waits out the landing + fade plus a small cushion, so the last
+// beat of the celebration is never cut off by the modal.
+export const RECAP_CUSHION_MS = 250;
+
 // Total before the recap modal is allowed to appear.
-export const END_ROUND_TOTAL_MS = WIDOW_TO_PILE_START_MS + WIDOW_TO_PILE_MS; // 5600
+export const END_ROUND_TOTAL_MS = WIDOW_TO_PILE_START_MS + WIDOW_TO_PILE_MS + RECAP_CUSHION_MS; // 5850
 
 // Players get ten seconds to study the recap before score counting begins.
 // They may add four ten-second extensions, capping this reading window at 50s.

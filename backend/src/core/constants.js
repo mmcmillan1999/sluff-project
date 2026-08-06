@@ -10,8 +10,14 @@ const BID_MULTIPLIERS = { "Frog": 1, "Solo": 2, "Heart Solo": 3 };
 const PLACEHOLDER_ID = "ScoreAbsorber";
 // The natural finale is 9.2s, the longest score count is 3.55s, and settled
 // totals remain visible for at least 5s. Shared state transitions stay locked
-// until every normally animated client has had that full reading window.
+// until every normally animated client has had that full reading window —
+// but this is a CEILING, not a floor: a full acknowledgement quorum (every
+// connected human's ceremony finished) releases the lock early.
 const ROUND_PRESENTATION_LOCK_MS = 18_000;
+// Once the last connected human acknowledges their presentation, the next
+// round follows after this short beat — long enough for the landed chips to
+// settle on the eye, short enough that the table never feels stalled.
+const ROUND_ADVANCE_QUORUM_GRACE_MS = 1_200;
 // A vanished/backgrounded client must not pin a live table forever. The longest
 // interactive recap can now take about 47.75s from the final trick (9.2s finale
 // + up to 30s review + 3.55s count + 5s reading time). The base 18s lock plus
@@ -60,6 +66,7 @@ module.exports = {
     PLACEHOLDER_ID,
     ROUND_PRESENTATION_LOCK_MS,
     ROUND_PRESENTATION_ACK_GRACE_MS,
+    ROUND_ADVANCE_QUORUM_GRACE_MS,
     DEAL_PRESENTATION_DURATION_MS,
     BOT_BID_AFTER_DEAL_BUFFER_MS,
     BOT_BID_READY_DELAY_MS,

@@ -9,6 +9,7 @@
         TABLE_COSTS,
         SERVER_VERSION,
         ROUND_PRESENTATION_LOCK_MS,
+        ROUND_ADVANCE_QUORUM_GRACE_MS,
         BOT_BID_READY_DELAY_MS,
     } = require('../core/constants');
     const AdaptiveInsuranceStrategy = require('../core/bot-strategies/AdaptiveInsuranceStrategy');
@@ -299,8 +300,12 @@
                 ?? summary.allConnectedHumansPresented === true;
             const presentationForceReadyAt = Number(summary.presentationForceReadyAt);
             const mode = allConnectedHumansPresented ? 'quorum' : 'force';
+            // A satisfied quorum means every connected human's ceremony is
+            // done — advance after a short beat rather than sitting out the
+            // rest of the base lock. The force deadline stays the bound for
+            // tables still waiting on an absent acknowledgement.
             const dueAt = allConnectedHumansPresented
-                ? Math.max(now, presentationReadyAt)
+                ? now + ROUND_ADVANCE_QUORUM_GRACE_MS
                 : (Number.isFinite(presentationForceReadyAt)
                     ? Math.max(now, presentationForceReadyAt)
                     : null);
@@ -357,6 +362,19 @@
                 // as far as Dealing Pending; dealing remains a separate action.
                 const dealerOfRoundId = current.roundSummary.dealerOfRoundId;
                 await this.requestNextRound(tableId, dealerOfRoundId);
+                // A bot dealer may still be holding its own long-scheduled
+                // requestNextRound (pinned to the old base clock). That stale
+                // pending action would block every bot action — including the
+                // deal itself — until it fired, so clear it and let the bot
+                // loop reschedule against the advanced state immediately.
+                const advanced = this.getEngineById(tableId);
+                if (advanced === record.engine
+                    && advanced.state !== 'Awaiting Next Round Trigger'
+                    && advanced.pendingBotAction) {
+                    clearTimeout(advanced.pendingBotAction);
+                    advanced.pendingBotAction = null;
+                    this._triggerBots(tableId);
+                }
                 this._reconcileAutomaticNextRoundTimer(tableId);
             }, Math.max(0, dueAt - now));
             record.handle?.unref?.();
@@ -1992,8 +2010,14 @@
                 const playDelay = isCourtney ? 2400 : 1200;
                 const presentationReadyAt = Number(engine.roundSummary?.presentationReadyAt);
                 const legacyRoundEndDelay = isCourtney ? 20000 : 14000;
+                // If the presentation already released (acknowledgement quorum
+                // or an elapsed clock), the bot dealer moves at its normal
+                // pace; otherwise it waits out the shared clock as a backup to
+                // the automatic advance timer.
                 const roundEndDelay = Number.isFinite(presentationReadyAt)
-                    ? Math.max(500, presentationReadyAt - Date.now() + (isCourtney ? 1500 : 750))
+                    ? (engine.isRoundPresentationAdvanceReady()
+                        ? (isCourtney ? 1500 : 750)
+                        : Math.max(500, presentationReadyAt - Date.now() + (isCourtney ? 1500 : 750)))
                     : legacyRoundEndDelay;
         
                 if (engine.state === 'Dealing Pending' && engine.dealer == botUserId) {
