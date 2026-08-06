@@ -1,82 +1,279 @@
-/* The Midnight Special: a night-sky ribbon crosses the upper felt while the
-   train runs it. Overlay only — never blocks play. Sizes in vh per house
-   rules; sits below modals, above the felt. */
+/* The Midnight Special, full production. Night falls over the felt, the
+   train runs the table perimeter with signed cars, smoke drifts, and on
+   "shine a light on me" the spotlight veil drops with its beam on the
+   runner. Overlay only — pointer-events none throughout; play continues
+   underneath. Sizes in vh/vw per house rules. */
 
 .midnight-special {
     position: fixed;
-    top: 12vh;
-    left: 0;
-    right: 0;
+    inset: 0;
     z-index: 60;
     pointer-events: none;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.6vh;
-    padding: 2vh 0 2.4vh;
-    background: linear-gradient(180deg,
-        rgba(8, 10, 34, 0) 0%,
-        rgba(8, 10, 34, 0.92) 18%,
-        rgba(16, 20, 56, 0.94) 55%,
-        rgba(8, 10, 34, 0.92) 82%,
-        rgba(8, 10, 34, 0) 100%);
-    animation: midnight-arrive 0.5s ease-out, midnight-depart 0.8s ease-in 5.6s forwards;
+    overflow: hidden;
+    transition: opacity 1.6s ease-in;
 }
 
-.midnight-special__sky {
-    position: relative;
-    width: 100%;
-    height: 5vh;
+.midnight-special.is-fading { opacity: 0; }
+
+/* Night sweeps in: a deep blue veil that leaves the table readable. */
+.midnight-special__nightfall {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 45%,
+        rgba(10, 14, 44, 0.32) 0%,
+        rgba(8, 10, 34, 0.62) 70%,
+        rgba(4, 5, 20, 0.82) 100%);
+    animation: midnight-nightfall 1.2s ease-out both;
+}
+
+@keyframes midnight-nightfall {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
 .midnight-special__moon {
     position: absolute;
-    right: 6vw;
-    top: 0;
-    font-size: 3.4vh;
-    filter: drop-shadow(0 0 1.2vh rgba(255, 244, 180, 0.8));
+    top: 9.5vh;
+    right: 7vw;
+    font-size: 4.2vh;
+    filter: drop-shadow(0 0 1.6vh rgba(255, 244, 180, 0.85));
+    animation: midnight-nightfall 1.6s ease-out both;
 }
 
-.midnight-special__train {
+.midnight-special__titles {
     position: absolute;
-    top: 0.6vh;
-    left: -20vw;
-    font-size: 3.8vh;
-    /* The engine faces left, so it drives right-to-left across the sky. */
-    animation: midnight-run 5.4s linear 0.3s forwards;
-}
-
-@keyframes midnight-run {
-    from { left: 105vw; }
-    to { left: -25vw; }
+    top: 13vh;
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.8vh;
+    animation: midnight-nightfall 0.9s ease-out both;
 }
 
 .midnight-special__title {
     font-family: 'Oswald', sans-serif;
-    font-size: 3.2vh;
+    font-size: 3.4vh;
     font-weight: 700;
     letter-spacing: 0.35em;
     color: #ffe9a8;
-    text-shadow: 0 0 1.6vh rgba(255, 214, 90, 0.55), 0 0.2vh 0.4vh rgba(0, 0, 0, 0.8);
+    text-shadow: 0 0 1.8vh rgba(255, 214, 90, 0.6), 0 0.2vh 0.4vh rgba(0, 0, 0, 0.85);
 }
 
 .midnight-special__subtitle {
     font-size: 1.9vh;
     color: #cdd3ff;
     letter-spacing: 0.06em;
-    text-shadow: 0 0.2vh 0.4vh rgba(0, 0, 0, 0.8);
+    text-shadow: 0 0.2vh 0.4vh rgba(0, 0, 0, 0.85);
 }
 
-@keyframes midnight-arrive {
-    from { opacity: 0; transform: translateY(-2vh); }
-    to { opacity: 1; transform: translateY(0); }
+/* Karaoke lines: each swap re-pops. */
+.midnight-special__lyric {
+    font-family: 'Oswald', sans-serif;
+    font-size: 2.5vh;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    color: #fff3c8;
+    text-shadow: 0 0 1.4vh rgba(255, 220, 120, 0.55), 0 0.2vh 0.4vh rgba(0, 0, 0, 0.9);
+    animation: midnight-lyric-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-@keyframes midnight-depart {
-    to { opacity: 0; }
+@keyframes midnight-lyric-pop {
+    from { transform: scale(0.85); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+/* The spotlight: darkness everywhere except the beam on the runner. */
+.midnight-special__spotlight {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle 14vh at var(--spot-x) var(--spot-y),
+        rgba(255, 244, 200, 0.0) 0%,
+        rgba(255, 244, 200, 0.0) 55%,
+        rgba(3, 4, 16, 0.55) 78%,
+        rgba(3, 4, 16, 0.82) 100%);
+    animation: midnight-spot-on 0.5s ease-out both;
+}
+
+.midnight-special__spotlight::after {
+    /* The bright ring of the beam itself, pulsing gently. */
+    content: '';
+    position: absolute;
+    left: var(--spot-x);
+    top: var(--spot-y);
+    width: 24vh;
+    height: 24vh;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: radial-gradient(circle,
+        rgba(255, 246, 205, 0.28) 0%,
+        rgba(255, 246, 205, 0.1) 45%,
+        transparent 70%);
+    animation: midnight-spot-pulse 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes midnight-spot-on {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes midnight-spot-pulse {
+    from { transform: translate(-50%, -50%) scale(1); }
+    to { transform: translate(-50%, -50%) scale(1.12); }
+}
+
+/* --- The train ------------------------------------------------------- */
+/* Engine and cars are positioned imperatively (rAF along the perimeter
+   path); everything here is their look. Each piece anchors at its
+   bottom-center so rotation hugs the rail. */
+
+/* TOP VIEW: the loop is a model railway seen from above, so pieces center
+   on the rail, rotate to their heading, and never read upside-down. The
+   engine's front (smokebox, beam) points +x — the direction of travel at
+   heading 0. */
+.midnight-train__engine,
+.midnight-train__car {
+    position: absolute;
+    left: 0;
+    top: 0;
+    opacity: 0;
+    transform-origin: 50% 50%;
+    will-change: transform, opacity;
+    filter: drop-shadow(0.3vh 0.5vh 0.7vh rgba(0, 0, 0, 0.55));
+}
+
+.midnight-train__boiler {
+    position: relative;
+    width: 9.5vh;
+    height: 3.4vh;
+    background: linear-gradient(180deg, #3a3f4f 0%, #232734 45%, #12141d 100%);
+    border: 0.18vh solid #4a5065;
+    border-radius: 1.7vh / 50%;
+}
+
+/* The round smokebox face at the front. */
+.midnight-train__smokebox {
+    position: absolute;
+    right: -0.4vh;
+    top: 50%;
+    width: 3vh;
+    height: 3vh;
+    transform: translateY(-50%);
+    border-radius: 50%;
+    background: radial-gradient(circle at 40% 40%, #4d5366, #191c26 75%);
+    border: 0.18vh solid #565c72;
+}
+
+/* Stack (smoke spawns from the loop at the engine's position). */
+.midnight-train__stack {
+    position: absolute;
+    right: 2.2vh;
+    top: 50%;
+    width: 1.4vh;
+    height: 1.4vh;
+    transform: translateY(-50%);
+    border-radius: 50%;
+    background: radial-gradient(circle at 40% 40%, #20242f, #0b0d13 75%);
+    border: 0.15vh solid #3c4152;
+}
+
+/* Cab roof at the rear. */
+.midnight-train__cab-roof {
+    position: absolute;
+    left: 0.5vh;
+    top: 50%;
+    width: 2.6vh;
+    height: 4.1vh;
+    transform: translateY(-50%);
+    background: linear-gradient(180deg, #494f63, #22252f);
+    border: 0.16vh solid #575d73;
+    border-radius: 0.5vh;
+}
+
+/* Headlight beam sweeping ahead of the engine. */
+.midnight-train__beam {
+    position: absolute;
+    left: calc(50% + 4vh);
+    top: 50%;
+    width: 9vh;
+    height: 7vh;
+    transform: translateY(-50%);
+    clip-path: polygon(0 42%, 100% 0, 100% 100%, 0 58%);
+    background: linear-gradient(90deg,
+        rgba(255, 240, 180, 0.5),
+        rgba(255, 240, 180, 0.12) 60%,
+        rgba(255, 240, 180, 0));
+    pointer-events: none;
+}
+
+.midnight-train__car-roof {
+    position: relative;
+    width: 8vh;
+    height: 3.2vh;
+    /* Roof planks running the car's length. */
+    background:
+        repeating-linear-gradient(0deg,
+            rgba(255, 255, 255, 0.05) 0 0.35vh,
+            rgba(0, 0, 0, 0.12) 0.35vh 0.7vh),
+        linear-gradient(180deg, #5f2525 0%, #431616 60%, #2f0e0e 100%);
+    border: 0.18vh solid #7a4a32;
+    border-radius: 0.6vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.midnight-train__car-sign {
+    font-family: 'Oswald', sans-serif;
+    font-size: 1.15vh;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    color: #ffe9a8;
+    background: rgba(12, 8, 4, 0.78);
+    border: 0.12vh solid rgba(255, 233, 168, 0.55);
+    border-radius: 0.3vh;
+    padding: 0.22vh 0.55vh;
+    white-space: nowrap;
+    /* Stay readable the whole way around the loop: undo the car's heading. */
+    transform: rotate(calc(var(--heading, 0) * -1deg));
+}
+
+/* Smoke: spawned at the stack by the animation loop, rises and disperses. */
+.midnight-smoke {
+    position: absolute;
+    width: 3.4vh;
+    height: 3.4vh;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(230, 232, 242, 0.85), rgba(230, 232, 242, 0));
+    transform: translate(-50%, -50%);
+    animation: midnight-smoke-drift 1.9s ease-out forwards;
+}
+
+@keyframes midnight-smoke-drift {
+    from { opacity: 0.8; transform: translate(-50%, -50%) scale(0.6); }
+    to { opacity: 0; transform: translate(-80%, -320%) scale(2.4); }
+}
+
+.midnight-special__smoke-layer {
+    position: absolute;
+    inset: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .midnight-special { animation: midnight-arrive 0.3s ease-out; }
-    .midnight-special__train { animation: none; left: 10vw; }
+    .midnight-train, .midnight-special__smoke-layer { display: none; }
+    .midnight-special__spotlight::after { animation: none; }
+    .midnight-special__lyric { animation: none; }
+}
+
+/* Admin test trigger: third stop on the spider-button rail. */
+.admin-midnight-btn {
+    top: calc(7.5vh + env(safe-area-inset-top, 0px) + 0.5vh + 108px);
+    border-color: rgba(255, 214, 90, 0.55);
+    background: rgba(20, 18, 8, 0.85);
+}
+
+.admin-midnight-btn:hover,
+.admin-midnight-btn:focus-visible {
+    border-color: rgba(255, 233, 168, 0.9);
 }

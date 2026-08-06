@@ -135,7 +135,12 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent, showTrum
     };
 
     return (
-        <div className={`player-seat-wrapper player-seat-wrapper-${seatPosition || 'unknown'}`}>
+        <div
+            className={`player-seat-wrapper player-seat-wrapper-${seatPosition || 'unknown'}`}
+            // Overlay anchors (e.g., the Midnight Special spotlight) find
+            // seats by player without coupling to layout classes.
+            data-seat-player={playerName}
+        >
             {/* Dealer puck - top left ear */}
             {isDealer && (
                 <div className="seat-puck dealer-puck-ear">

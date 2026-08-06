@@ -14,7 +14,7 @@ import ActionControls from './game/ActionControls';
 import InsurancePrompt from './game/InsurancePrompt';
 import BidWinnerSplash from './game/BidWinnerSplash';
 import IosPwaPrompt from './game/IosPwaPrompt';
-import MidnightSpecialBanner from './game/MidnightSpecialBanner';
+import MidnightSpecialBanner, { MIDNIGHT_SPECIAL_TOTAL_MS } from './game/MidnightSpecialBanner';
 import buildBidHintCopy from '../utils/bidHintCopy';
 import {
     END_ROUND_TOTAL_MS,
@@ -119,6 +119,19 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const SWIPE_CLOSE_THRESHOLD = 50; 
     const [playerError, setPlayerError] = useState(null);
     const [midnightSpecial, setMidnightSpecial] = useState(null);
+    // Shared by the server event and the admin test button (🚂). The runId
+    // keys the banner so every trigger — including a repeated admin test —
+    // mounts a fresh production with fresh phase timers.
+    const triggerMidnightSpecial = useCallback((playerName) => {
+        if (!playerName) return;
+        if (midnightTimerRef.current) clearTimeout(midnightTimerRef.current);
+        setMidnightSpecial({ playerName, runId: Date.now() });
+        playMidnightSpecial?.();
+        midnightTimerRef.current = setTimeout(() => {
+            setMidnightSpecial(null);
+            midnightTimerRef.current = null;
+        }, MIDNIGHT_SPECIAL_TOTAL_MS);
+    }, [playMidnightSpecial]);
     const [chatMessages, setChatMessages] = useState([]);
     const [observedPlayerId, setObservedPlayerId] = useState(playerId);
     const [isObserverMode, setIsObserverMode] = useState(false);
@@ -606,18 +619,9 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         const handleMessageHidden = ({ messageId }) => {
             setChatMessages(prev => prev.filter(msg => msg.id !== messageId));
         };
-        // The server proved someone's run is unstoppable: night sky, train,
-        // whistle. Display only — the round keeps playing underneath.
-        const handleMidnightSpecial = ({ playerName }) => {
-            if (!playerName) return;
-            if (midnightTimerRef.current) clearTimeout(midnightTimerRef.current);
-            setMidnightSpecial({ playerName });
-            playMidnightSpecial?.();
-            midnightTimerRef.current = setTimeout(() => {
-                setMidnightSpecial(null);
-                midnightTimerRef.current = null;
-            }, 6500);
-        };
+        // The server proved someone's run is unstoppable: the full Midnight
+        // Special production. Display only — the round keeps playing under it.
+        const handleMidnightSpecial = ({ playerName }) => triggerMidnightSpecial(playerName);
 
         socket.on('new_lobby_message', handleNewChatMessage);
         socket.on('lobby_message_hidden', handleMessageHidden);
@@ -636,7 +640,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
             if (midnightTimerRef.current) clearTimeout(midnightTimerRef.current);
         };
-    }, [socket, playMidnightSpecial]);
+    }, [socket, triggerMidnightSpecial]);
 
     // Keyboard accessibility: close the top-most utility first and support debug toggles.
     useEffect(() => {
@@ -1492,7 +1496,12 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             />
 
             <IosPwaPrompt show={showIosPwaPrompt} onClose={() => setShowIosPwaPrompt(false)} />
-            {midnightSpecial && <MidnightSpecialBanner playerName={midnightSpecial.playerName} />}
+            {midnightSpecial && (
+                <MidnightSpecialBanner
+                    key={midnightSpecial.runId}
+                    playerName={midnightSpecial.playerName}
+                />
+            )}
 
 
             {/* Debug: Check admin status (log removed to avoid console spam) */}
@@ -1516,6 +1525,15 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                         title="Widow spider — she hunts your finger"
                     >
                         🕷
+                    </button>
+                    <button
+                        type="button"
+                        className="admin-spider-btn admin-midnight-btn"
+                        onClick={() => triggerMidnightSpecial(selfPlayerName || user?.username || 'Conductor')}
+                        aria-label="Run the Midnight Special celebration"
+                        title="Midnight Special — full production test"
+                    >
+                        🚂
                     </button>
                 </>
             )}

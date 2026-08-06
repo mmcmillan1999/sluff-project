@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { isAudioSessionClaimedByVoice } from '../utils/VoiceChat';
-import { cardSnap, midnightWhistle, scheduleDealSounds, wheelClick, wheelSettle } from '../utils/soundSynth';
+import { cardSnap, midnightSpecialScore, scheduleDealSounds, wheelClick, wheelSettle } from '../utils/soundSynth';
 
 // Short effects and the music bed share one unlocked Web Audio context so they
 // mix reliably on mobile. Each channel has its own gain node and preferences.
@@ -542,12 +542,12 @@ export const useSounds = ({ musicActive = false } = {}) => {
         wheelSettle(ctx, gainRef.current);
     }, [synthContext]);
 
-    // The Midnight Special train whistle — an unstoppable run just left the
-    // station.
+    // The Midnight Special — the full production: horn, chug, and the
+    // traditional chorus, all on the shared clock the animation reads.
     const playMidnightSpecial = useCallback(() => {
         const ctx = synthContext();
         if (!ctx) return;
-        midnightWhistle(ctx, gainRef.current);
+        midnightSpecialScore(ctx, gainRef.current);
     }, [synthContext]);
 
     const toggleMute = useCallback(() => setMuted(current => !current), []);
