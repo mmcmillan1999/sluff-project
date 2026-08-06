@@ -212,6 +212,13 @@
     letter-spacing: 0.08em;
 }
 
+/* Real-money price tag: store gold instead of the freebie green. */
+.store-price-chip--priced {
+    color: #f1c963;
+    background: rgba(122, 89, 20, 0.3);
+    border-color: rgba(241, 201, 99, 0.45);
+}
+
 .store-use-button {
     min-width: 92px;
     min-height: 38px;

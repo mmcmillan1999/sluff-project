@@ -20,6 +20,11 @@ export const DECK_SKINS = [
         id: 'mcmillan',
         name: 'McMillan Crest',
         description: 'Clan claymore and motto over dress-tartan gold.',
+        // Priced for launch; free to try while the alpha shelves are open.
+        // Ownership truth lives server-side (player_entitlements /
+        // /api/store) — this is display metadata for the shelf card.
+        priceUsd: 4.99,
+        entitlement: 'deck-mcmillan',
     },
 ];
 

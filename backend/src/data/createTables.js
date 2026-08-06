@@ -818,6 +818,23 @@ const createDbTables = async (pool) => {
             ON play_timings (user_id, created_at);
         `);
 
+        // Durable ownership of paid content (cosmetics first). One row per
+        // player per entitlement, whatever rail granted it: Apple/Google IAP,
+        // Stripe on the web, an admin grant, or the alpha grandfathering.
+        // external_ref holds the store transaction id so refunds can be
+        // traced back and revoked.
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS player_entitlements (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                entitlement_key VARCHAR(60) NOT NULL,
+                source VARCHAR(20) NOT NULL,
+                external_ref TEXT,
+                granted_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (user_id, entitlement_key)
+            );
+        `);
+
         // Personalized champion stings ("All hail your champion, NAME!"),
         // generated once per name via ElevenLabs and cached here — the mp3 is
         // small and the roster is finite, so the TTS bill stays a one-time

@@ -2,6 +2,28 @@
 
 Ideas accepted but not scheduled. Move items out when work starts.
 
+## In-app purchases — foundation SHIPPED Aug 6 2026, rails pending Matt's accounts
+
+Decision: gear for IAP from the start. First SKU: McMillan Crest deck at
+$4.99 (cosmetics are the clean digital good; never sell tokens without
+revisiting gambling optics). Built: `player_entitlements` table,
+`services/entitlements.js` (idempotent grants, refund revocation),
+`core/products.js` catalog (Apple `com.playsluff.deck.mcmillan`, Google
+`deck_mcmillan`), `/api/store` (shelf + admin grant/revoke), store UI price
+chip. Alpha stays free-to-try; ownership enforcement flips when a purchase
+rail exists.
+
+**Blocked on Matt's accounts** (checklist delivered Aug 6): Apple Developer
+Program + Paid Apps agreement + Small Business Program; Play Console +
+payments profile + 15% tier; privacy/terms pages on playsluff.com.
+
+**Then build, in order:** Capacitor shell (+ Capgo live updates so web pushes
+skip store review) → store listings + IAP products → server verification
+endpoints in `api/store.js` (App Store Server API + Play Developer API,
+funneling into the same entitlement grants) → flip the paywall (grandfather
+alpha testers who equipped the McMillan back — Matt's call) → later: Stripe
+rail for web sales, AdMob + app-ads.txt if ads ever happen.
+
 ## The Midnight Special 🌙🚂 — SHIPPED Aug 6 2026
 
 **Shipped:** `backend/src/core/midnightSpecial.js` proves the strict claim

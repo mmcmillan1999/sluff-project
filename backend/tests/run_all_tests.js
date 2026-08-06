@@ -45,6 +45,7 @@ const suites = [
     { name: 'bot brain profiles', file: './botBrains.test.js' },
     { name: 'Midnight Special detector', file: './midnightSpecial.test.js' },
     { name: 'champion line service', file: './championLine.test.js' },
+    { name: 'store entitlements', file: './entitlements.test.js' },
 ];
 
 function loadRunner(suite) {

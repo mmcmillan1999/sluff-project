@@ -24,6 +24,7 @@ import LobbyChat from './LobbyChat';
 import AdminObserverMode from './AdminObserverMode';
 import PlayerHandAnchorDebug from './game/PlayerHandAnchorDebug';
 import { getLobbyChatHistory, fetchChampionLine } from '../services/api';
+import { haptic } from '../utils/haptics';
 import SoundControls from './game/SoundControls';
 import { useModalFocus } from '../hooks/useModalFocus';
 import { shareInvite, getInviteUrl } from '../utils/tableInvites';
@@ -749,11 +750,13 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     }, [currentTableState, isSpectator, playSound]);
 
     // Post-deal playout vote: surfaces the moment the insurance deal locks
-    // the round, and closes anything that would cover it.
+    // the round, and closes anything that would cover it. The gavel lands
+    // in the hand too (haptic only — the popup is its own fanfare).
     useEffect(() => {
         const shouldShow = Boolean(currentTableState?.playoutVote?.isActive) && !isSpectator;
         setShowPlayoutVoteModal(shouldShow);
         if (shouldShow) {
+            haptic('dealStruck');
             setChatOpen(false);
             setShowGameMenu(false);
             setShowInsurancePrompt(false);

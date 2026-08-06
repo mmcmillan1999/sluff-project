@@ -20,7 +20,11 @@ describe('StoreModal', () => {
         expect(within(dialog).getByText('Lightning Strike')).toBeInTheDocument();
         expect(within(dialog).getByText('Shatterglass')).toBeInTheDocument();
         expect(within(dialog).getByText('Fault Line')).toBeInTheDocument();
-        expect(within(dialog).getAllByText('FREE')).toHaveLength(5);
+        // Four free items; the McMillan deck wears its launch price (still
+        // equippable during alpha).
+        expect(within(dialog).getAllByText('FREE')).toHaveLength(4);
+        expect(within(dialog).getByText('$4.99')).toBeInTheDocument();
+        expect(within(dialog).getByTitle('Free to try during alpha')).toBeInTheDocument();
     });
 
     test('marks the current loadout equipped and swaps on Use', async () => {

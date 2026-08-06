@@ -52,7 +52,7 @@ const FxPreview = ({ fxId, playKey }) => (
     </div>
 );
 
-const StoreItem = ({ name, description, preview, equipped, onUse, onPreview }) => (
+const StoreItem = ({ name, description, preview, equipped, priceUsd, onUse, onPreview }) => (
     <div className={`store-item ${equipped ? 'is-equipped' : ''}`}>
         <button
             type="button"
@@ -67,7 +67,13 @@ const StoreItem = ({ name, description, preview, equipped, onUse, onPreview }) =
             <p>{description}</p>
         </div>
         <div className="store-item-actions">
-            <span className="store-price-chip">FREE</span>
+            {priceUsd ? (
+                <span className="store-price-chip store-price-chip--priced" title="Free to try during alpha">
+                    ${priceUsd.toFixed(2)}
+                </span>
+            ) : (
+                <span className="store-price-chip">FREE</span>
+            )}
             <button
                 type="button"
                 className="store-use-button"
@@ -129,7 +135,7 @@ const StoreModal = ({ show, onClose }) => {
                     <div>
                         <p className="store-kicker">Sluff Store</p>
                         <h2>Table Style</h2>
-                        <p className="store-note">Alpha shelves — everything is free while we stock up.</p>
+                        <p className="store-note">Alpha shelves — priced items are free to try until launch.</p>
                     </div>
                 </header>
 
@@ -146,6 +152,7 @@ const StoreModal = ({ show, onClose }) => {
                                 description={skin.description}
                                 preview={<DeckPreview skinId={skin.id} />}
                                 equipped={cosmetics.deckSkin === skin.id}
+                                priceUsd={skin.priceUsd}
                                 onUse={() => setCosmetic('deckSkin', skin.id)}
                             />
                         ))}

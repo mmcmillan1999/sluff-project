@@ -20,6 +20,7 @@ const createFeedbackRoutes = require('./api/feedback');
 const createChatRoutes = require('./api/chat');
 const createTipsRoutes = require('./api/tips');
 const createSoundsRoutes = require('./api/sounds');
+const createStoreRoutes = require('./api/store');
 const createDbTables = require('./data/createTables');
 const { ensureBotAccounts } = require('./data/botAccounts');
 const createPingRoutes = require('./api/ping');
@@ -187,6 +188,7 @@ async function initializeApplication() {
     app.use('/api/chat', createChatRoutes(pool, io, jwt));
     app.use('/api/tips', createTipsRoutes(pool, jwt));
     app.use('/api/sounds', createSoundsRoutes(pool, jwt, gameService));
+    app.use('/api/store', createStoreRoutes(pool, jwt));
     app.use('/api/ping', createPingRoutes());
     app.use('/api/metrics', createMetricsRoutes(pool, jwt));
     app.use('/api/errors', createErrorRoutes(pool, jwt));

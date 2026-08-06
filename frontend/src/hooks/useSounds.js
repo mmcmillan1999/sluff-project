@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { isAudioSessionClaimedByVoice } from '../utils/VoiceChat';
 import { cardSnap, midnightSpecialScore, scheduleDealSounds, wheelClick, wheelSettle } from '../utils/soundSynth';
+import { haptic, hapticDealRun, hapticWheelTick } from '../utils/haptics';
 
 // Short effects and the music bed share one unlocked Web Audio context so they
 // mix reliably on mobile. Each channel has its own gain node and preferences.
@@ -49,6 +50,18 @@ const SOUND_FILES = {
 const PITCH_VARIANCE = {
     trickWin: 0.04,
     turnAlert: 0.025,
+};
+
+// Sounds that carry a physical layer: firing the sound fires the matching
+// haptic cue (utils/haptics.js). Haptics inherit playSound's gates — an
+// in-game mute silences the buzz along with the audio.
+const SOUND_HAPTICS = {
+    cardPlay: 'cardPlay',
+    turnAlert: 'turnAlert',
+    trickWin: 'trickWin',
+    trumpBroken: 'trumpBroken',
+    podiumWin: 'podiumWin',
+    podiumLoss: 'podiumLoss',
 };
 
 const MUSIC_FILE = '/Music/upbeat-game-loop-v1.mp3';
@@ -472,6 +485,7 @@ export const useSounds = ({ musicActive = false } = {}) => {
             console.warn(`[sound] "${soundName}" skipped — audio not unlocked yet (no user gesture)`);
             return;
         }
+        if (SOUND_HAPTICS[soundName]) haptic(SOUND_HAPTICS[soundName]);
         const ctx = ctxRef.current;
         // The card play is a synthesized voice: every card lands with its own
         // pitch, and there is no sample left to scratch.
@@ -535,6 +549,7 @@ export const useSounds = ({ musicActive = false } = {}) => {
         const ctx = synthContext();
         if (!ctx) return;
         scheduleDealSounds(ctx, gainRef.current, { count: cardCount, staggerMs });
+        hapticDealRun({ cardCount, staggerMs });
     }, [synthContext]);
 
     // The venue wheel's flapper — called per peg crossing, intensity follows
@@ -546,6 +561,8 @@ export const useSounds = ({ musicActive = false } = {}) => {
             intensity,
             pitch: 1 + (Math.random() * 2 - 1) * 0.05,
         });
+        // The flapper in the fingertips: haptic detents at the wheel's speed.
+        hapticWheelTick(intensity);
     }, [synthContext]);
 
     const playWheelSettle = useCallback(() => {
@@ -588,6 +605,7 @@ export const useSounds = ({ musicActive = false } = {}) => {
             playSound('podiumWin');
             return;
         }
+        haptic('podiumWin');
         const bed = ctx.createBufferSource();
         bed.buffer = anthem;
         bed.connect(gainRef.current);
@@ -617,6 +635,8 @@ export const useSounds = ({ musicActive = false } = {}) => {
             source.start(0);
         }
         midnightSpecialScore(ctx, gainRef.current);
+        // The horn in the hand, then the drive wheels.
+        haptic('midnightSpecial');
     }, [synthContext]);
 
     const toggleMute = useCallback(() => setMuted(current => !current), []);
