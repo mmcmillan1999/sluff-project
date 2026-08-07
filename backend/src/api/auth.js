@@ -195,14 +195,19 @@ module.exports = function(pool, bcrypt, jwt, io, gameService) {
             `;
             await client.query(updateTokenQuery, [verificationToken, expirationTime, newUserId]);
 
+            // Deliverability-first template (Aug 2026): iCloud silently
+            // discarded the old version — hype subject, <h1>, and an
+            // inline-styled fake button over a tokenized link are exactly
+            // what phishing filters pattern-match. Plain prose, and the
+            // link's visible text IS its address.
             const verificationUrl = `${process.env.CLIENT_ORIGIN}/verify-email?token=${verificationToken}`;
-            const emailSubject = "Welcome to Sluff! Please Verify Your Email";
-            const emailText = `Thank you for registering for Sluff! Please verify your email by clicking the following link: ${verificationUrl}`;
+            const emailSubject = "Your Sluff verification link";
+            const emailText = `Hi ${username},\n\nYour Sluff account is ready. To finish signing up, open this link:\n\n${verificationUrl}\n\nThe link is valid for 24 hours. If you did not create this account, you can ignore this email.`;
             const emailHtml = `
-                <h1>Welcome to Sluff!</h1>
-                <p>Thank you for registering. Please click the link below to verify your email address and activate your account:</p>
-                <a href="${verificationUrl}" style="padding: 10px 15px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">Verify Email</a>
-                <p>If you did not register for this account, you can safely ignore this email.</p>
+                <p>Hi ${username},</p>
+                <p>Your Sluff account is ready. To finish signing up, open this link:</p>
+                <p><a href="${verificationUrl}">${verificationUrl}</a></p>
+                <p>The link is valid for 24 hours. If you did not create this account, you can ignore this email.</p>
             `;
 
             // Commit the account BEFORE attempting email delivery. A transient
@@ -564,9 +569,9 @@ module.exports = function(pool, bcrypt, jwt, io, gameService) {
                 try {
                     await sendEmail({
                         to: user.email,
-                        subject: "Sluff Password Reset Request",
-                        text: `You requested a password reset. Click this link to reset your password: ${resetUrl}`,
-                        html: `<h1>Password Reset Request</h1><p>You requested a password reset for your Sluff account. Please click the link below to set a new password. This link is valid for one hour.</p><a href="${resetUrl}" style="padding: 10px 15px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">Reset Password</a><p>If you did not request this, you can safely ignore this email.</p>`,
+                        subject: "Your Sluff password reset link",
+                        text: `Hi ${user.username},\n\nHere is the password reset link you requested:\n\n${resetUrl}\n\nThe link is valid for one hour. If you did not request this, you can ignore this email.`,
+                        html: `<p>Hi ${user.username},</p><p>Here is the password reset link you requested:</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>The link is valid for one hour. If you did not request this, you can ignore this email.</p>`,
                     });
                 } catch (emailError) {
                     // If the email provider is unavailable the reset token can't be
@@ -674,9 +679,9 @@ module.exports = function(pool, bcrypt, jwt, io, gameService) {
                     const verificationUrl = `${process.env.CLIENT_ORIGIN}/verify-email?token=${verificationToken}`;
                     await sendEmail({
                         to: user.email,
-                        subject: "Resent: Please Verify Your Email for Sluff",
-                        text: `We received a request to resend your verification email. Please verify your email by clicking the following link: ${verificationUrl}`,
-                        html: `<h1>Verify Your Email</h1><p>We received a request to resend the verification email for your Sluff account. Please click the link below to activate your account.</p><a href="${verificationUrl}" style="padding: 10px 15px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">Verify Email</a><p>If you did not request this, you can safely ignore this email.</p>`,
+                        subject: "Your Sluff verification link",
+                        text: `Hi ${user.username},\n\nHere is a fresh verification link for your Sluff account:\n\n${verificationUrl}\n\nThe link is valid for 24 hours. If you did not request this, you can ignore this email.`,
+                        html: `<p>Hi ${user.username},</p><p>Here is a fresh verification link for your Sluff account:</p><p><a href="${verificationUrl}">${verificationUrl}</a></p><p>The link is valid for 24 hours. If you did not request this, you can ignore this email.</p>`,
                     });
                 }
             }
