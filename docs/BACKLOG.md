@@ -2,6 +2,27 @@
 
 Ideas accepted but not scheduled. Move items out when work starts.
 
+## New-player teaching — learner mode v1 built Aug 6 2026, follow-ups parked
+
+Adversarial review (agent, Aug 6) found the rank order (10 beats K) was
+documented NOWHERE player-facing, card values unlearnable in the moment,
+and the TutorialCoach triple-gated so Quick Play novices got nothing.
+Shipped v1: `components/game/coach/` — CoachCallout (anchored tips +
+pointing hand + spotlight veil), learnerLessons picker, LearnerCoach
+(< 3 games, any venue, receipts via /api/tips); card-point badges on card
+faces via renderCard (gold A/10, parchment K/Q/J, duds bare); rank-order
+sentence added to How to Play.
+
+**Parked follow-ups from the review:**
+- The 10-lead interceptor (warn before leading a 10 whose ace is live —
+  hooks into fast-lift / flick drag-start; wants careful physics testing).
+- Insurance first-touch tour (spotlight the ask row, then the own slider).
+- Migrate the Academy TutorialCoach's banner lessons onto CoachCallout
+  anchors; extend school past round 1.
+- "Card helper" menu toggle (veterans opt in, learners opt out).
+- Vocabulary passes: define widow/trump-broken/sluff in-game; label the
+  Academy progress bars; give the tips beacon real teaching content.
+
 ## In-app purchases — foundation SHIPPED Aug 6 2026, rails pending Matt's accounts
 
 Decision: gear for IAP from the start. First SKU: McMillan Crest deck at

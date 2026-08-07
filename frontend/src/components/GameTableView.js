@@ -25,10 +25,12 @@ import AdminObserverMode from './AdminObserverMode';
 import PlayerHandAnchorDebug from './game/PlayerHandAnchorDebug';
 import { getLobbyChatHistory, fetchChampionLine } from '../services/api';
 import { haptic } from '../utils/haptics';
+import LearnerCoach from './game/coach/LearnerCoach';
+import { isLearner } from './game/coach/learnerLessons';
 import SoundControls from './game/SoundControls';
 import { useModalFocus } from '../hooks/useModalFocus';
 import { shareInvite, getInviteUrl } from '../utils/tableInvites';
-import { SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS } from '../constants';
+import { SUIT_SYMBOLS, SUIT_COLORS, SUIT_BACKGROUNDS, CARD_POINT_VALUES } from '../constants';
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
 import { useBidWinnerSplash } from '../hooks/useBidWinnerSplash';
 import TutorialCoach, { FIRST_GAME_TUTORIAL_VERSION } from './game/TutorialCoach';
@@ -396,6 +398,11 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 : previousPresentation
         ));
     }, []);
+
+    // Learner mode: the first few games get card-point badges on every card
+    // face and anchored micro-lessons at teachable moments — in ANY venue,
+    // unlike the Academy's guided coach. Retires itself at three games.
+    const learnerMode = !isSpectator && isLearner(tutorialState);
 
     const tutorialCoachActive = Boolean(
         tutorialState?.activeVersion === FIRST_GAME_TUTORIAL_VERSION
@@ -1165,6 +1172,15 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         const color = SUIT_COLORS[suit] || 'black';
         const backgroundColor = SUIT_BACKGROUNDS[suit] || '#fbfaf4';
         const cardClasses = ['card-display', className].filter(Boolean).join(' ');
+        // Learner mode: card points on the face itself, everywhere a card
+        // renders. Gold for the big boys (A=11, 10=10), parchment for the
+        // small points (K/Q/J) — duds wear nothing, which teaches too.
+        const pointValue = CARD_POINT_VALUES[rank] || 0;
+        const pointBadge = learnerMode && !small && pointValue > 0 && rank !== '?' ? (
+            <span className={`card-point-badge${pointValue >= 10 ? ' card-point-badge--big' : ''}`}>
+                {pointValue}
+            </span>
+        ) : null;
         const cardContent = (
             <>
                 <div style={{
@@ -1191,6 +1207,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                     <span style={{ lineHeight: '1' }}>{rank !== '?' && rank}</span>
                     <span className="card-symbol" style={{ lineHeight: '1', marginTop: '-2px' }}>{symbol}</span>
                 </div>
+                {pointBadge}
             </>
         );
         
@@ -1713,6 +1730,16 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 roundPresentationPhase={roundPresentationPhase}
                 onAction={onTutorialAction}
                 tutorialVersion={FIRST_GAME_TUTORIAL_VERSION}
+            />
+
+            {/* Anchored micro-lessons for the first few games in ANY venue —
+                the Academy coach above stays the guided track; this one meets
+                Quick Play novices where they actually are. */}
+            <LearnerCoach
+                active={learnerMode && !tutorialCoachActive}
+                currentTableState={currentTableState}
+                selfPlayerName={selfPlayerName}
+                userId={playerId}
             />
             
             <footer className="game-footer">

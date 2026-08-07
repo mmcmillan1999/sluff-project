@@ -151,7 +151,7 @@ const HowToPlayModal = ({ show, onClose, returnFocusSelector, onStartGuidedGame 
                             <li>If you have neither the led suit nor trump, you may sluff any card.</li>
                             <li>You cannot lead trump until trump has been broken, unless your hand contains only trump.</li>
                         </ul>
-                        <p>Highest trump wins; otherwise, the highest card of the led suit wins. To play, deliberately flick a legal card toward the center. A card that is not truly thrown settles back into your hand.</p>
+                        <p>Highest trump wins; otherwise, the highest card of the led suit wins. Card order, low to high: <strong>6&nbsp;7&nbsp;8&nbsp;9&nbsp;J&nbsp;Q&nbsp;K&nbsp;10&nbsp;A</strong> — yes, the 10 beats the King. To play, deliberately flick a legal card toward the center. A card that is not truly thrown settles back into your hand.</p>
                     </section>
 
                     <section className="rules-section">

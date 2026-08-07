@@ -599,3 +599,27 @@
 
 /* NO MEDIA QUERIES - Everything scales consistently with vh units */
 /* All elements maintain their proportions across all devices */
+
+/* Learner-mode card point badges: gold pills for the big boys (A, 10),
+   parchment for the small points (K/Q/J); duds wear nothing. Bottom-left
+   corner — the indexes own top-left and bottom-right. */
+.card-point-badge {
+    position: absolute;
+    bottom: 2px;
+    left: 3px;
+    padding: 0.15vh 0.55vh;
+    border-radius: 0.9vh;
+    background: rgba(58, 64, 70, 0.14);
+    color: #4a5056;
+    font-family: 'Oswald', sans-serif;
+    font-size: 1.15vh;
+    font-weight: 600;
+    line-height: 1.3;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+}
+
+.card-point-badge--big {
+    background: rgba(20, 26, 34, 0.85);
+    color: #f6cf74;
+}

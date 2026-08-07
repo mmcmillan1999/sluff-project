@@ -1,0 +1,104 @@
+/* The anchored teaching callout, its pointing hand, and the spotlight veil.
+   Sits above the insurance panel (2500) and below the welcome modal (3200);
+   nothing here ever intercepts a touch except the dismiss button. */
+
+.coach-callout-root {
+    position: fixed;
+    inset: 0;
+    z-index: 2550;
+    pointer-events: none;
+}
+
+/* Everything dims except the thing being talked about. Short-lived and
+   gentle — lessons only, never turn pressure. */
+.coach-spotlight {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(
+        circle var(--coach-spot-r, 12vh) at var(--coach-spot-x) var(--coach-spot-y),
+        rgba(6, 10, 18, 0) 0%,
+        rgba(6, 10, 18, 0) 62%,
+        rgba(6, 10, 18, 0.32) 82%,
+        rgba(6, 10, 18, 0.42) 100%
+    );
+    animation: coach-veil-in 0.25s ease-out both;
+}
+
+@keyframes coach-veil-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* The deictic hand: taps toward the anchor twice, then settles. */
+.coach-pointer {
+    position: absolute;
+    transform: translate(-50%, 0.4vh);
+    font-size: 3.4vh;
+    line-height: 1;
+    filter: drop-shadow(0 0.25vh 0.4vh rgba(0, 0, 0, 0.5));
+    animation: coach-pointer-tap 0.9s ease-in-out 2;
+}
+
+.coach-pointer--below {
+    transform: translate(-50%, calc(-100% - 0.4vh)) rotate(180deg);
+}
+
+@keyframes coach-pointer-tap {
+    0%, 100% { margin-top: 0; }
+    50% { margin-top: -0.8vh; }
+}
+
+.coach-callout {
+    position: absolute;
+    transform: translateX(-50%);
+    z-index: 2600;
+    max-width: min(82vw, 26rem);
+    padding: 1.1vh 3.4vh 1.1vh 1.5vh;
+    background: rgba(20, 26, 34, 0.96);
+    border: 0.12vh solid rgba(246, 207, 116, 0.55);
+    border-radius: 1vh;
+    box-shadow: 0 0.5vh 1.4vh rgba(0, 0, 0, 0.5);
+    color: #f2ecdd;
+    font-family: 'Merriweather', serif;
+    font-size: 1.65vh;
+    line-height: 1.45;
+    animation: coach-callout-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes coach-callout-pop {
+    from { transform: translateX(-50%) scale(0.85); opacity: 0; }
+    to { transform: translateX(-50%) scale(1); opacity: 1; }
+}
+
+.coach-callout-body strong {
+    color: #f6cf74;
+    font-family: 'Oswald', sans-serif;
+    letter-spacing: 0.04em;
+}
+
+.coach-callout-dismiss {
+    position: absolute;
+    top: 0.3vh;
+    right: 0.5vh;
+    width: 2.6vh;
+    height: 2.6vh;
+    padding: 0;
+    border: none;
+    background: none;
+    color: rgba(242, 236, 221, 0.7);
+    font-size: 2vh;
+    line-height: 1;
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.coach-callout-dismiss:hover,
+.coach-callout-dismiss:focus-visible {
+    color: #f6cf74;
+}
+
+.coach-reduced-motion .coach-spotlight,
+.coach-reduced-motion .coach-pointer,
+.coach-reduced-motion .coach-callout {
+    animation: none;
+}
