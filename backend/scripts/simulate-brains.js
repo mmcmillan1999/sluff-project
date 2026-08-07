@@ -23,16 +23,16 @@ const { shuffle } = require('../src/utils/shuffle');
 const MAX_ROUNDS_PER_GAME = 300;
 
 // One seat name per brain arm (names drive brain resolution in production).
+// classic retired from the live roster Aug 6, so its sim seats are synthetic
+// names registered here — same mechanism the sphinx/coyote auditions used.
 const SEAT_POOL = {
-    classic: ['Ace McGraw', 'Buck Wilder', 'Mabel Moon'],
+    classic: ['Classic A', 'Classic B', 'Classic C'],
     counting: ['Kimba', 'Grampa Blane', 'Courtney Sr.'],
     flytrap: ['Mike Knight', 'Dolly Deal', 'Rosie Rounds'],
-    // Candidate seats for unassigned brains: registered below so the
-    // production resolver routes them (brains earn real roster names here).
     coyote: ['Coyote A', 'Coyote B', 'Coyote C'],
     sphinx: ['Sphinx A', 'Sphinx B', 'Sphinx C'],
 };
-for (const brain of ['coyote', 'sphinx']) {
+for (const brain of ['classic', 'coyote', 'sphinx']) {
     SEAT_POOL[brain].forEach(name => registerBrainProfile(name, brain));
 }
 const seats = (...brains) => brains.map((brain, i) => SEAT_POOL[brain][i % 3]);
@@ -188,28 +188,35 @@ function runMatchup(label, seatNames, games) {
     }
 }
 
-const games = Number(process.argv[2]) || 500;
-// Optional second arg filters matchups by label substring:
-//   node scripts/simulate-brains.js 100000 "flytrap vs counting"
-const filter = (process.argv[3] || '').toLowerCase();
-console.log(`Simulating offline (no server, no database). ${games} games per matchup...`);
-const t0 = Date.now();
+// The game driver is reusable (scripts/simulate-bids.js rotates bid
+// strategies through the same loop), so the CLI only runs when this file
+// is the entry point.
+if (require.main === module) {
+    const games = Number(process.argv[2]) || 500;
+    // Optional second arg filters matchups by label substring:
+    //   node scripts/simulate-brains.js 100000 "flytrap vs counting"
+    const filter = (process.argv[3] || '').toLowerCase();
+    console.log(`Simulating offline (no server, no database). ${games} games per matchup...`);
+    const t0 = Date.now();
 
-const matchups = [
-    ['1 counting vs 2 classic', seats('counting', 'classic', 'classic')],
-    ['2 counting vs 1 classic', seats('counting', 'counting', 'classic')],
-    ['1 flytrap vs 2 classic', seats('flytrap', 'classic', 'classic')],
-    ['flytrap vs counting vs classic', seats('flytrap', 'counting', 'classic')],
-    ['2 flytrap vs 1 counting', seats('flytrap', 'flytrap', 'counting')],
-    ['1 coyote vs 2 classic', seats('coyote', 'classic', 'classic')],
-    ['1 sphinx vs 2 classic', seats('sphinx', 'classic', 'classic')],
-    ['coyote vs counting vs flytrap', seats('coyote', 'counting', 'flytrap')],
-    ['sphinx vs counting vs flytrap', seats('sphinx', 'counting', 'flytrap')],
-    ['sphinx vs coyote vs classic', seats('sphinx', 'coyote', 'classic')],
-    ['sphinx vs coyote vs flytrap', seats('sphinx', 'coyote', 'flytrap')],
-];
-for (const [label, seatNames] of matchups) {
-    if (filter && !label.toLowerCase().includes(filter)) continue;
-    runMatchup(label, seatNames, games);
+    const matchups = [
+        ['1 counting vs 2 classic', seats('counting', 'classic', 'classic')],
+        ['2 counting vs 1 classic', seats('counting', 'counting', 'classic')],
+        ['1 flytrap vs 2 classic', seats('flytrap', 'classic', 'classic')],
+        ['flytrap vs counting vs classic', seats('flytrap', 'counting', 'classic')],
+        ['2 flytrap vs 1 counting', seats('flytrap', 'flytrap', 'counting')],
+        ['1 coyote vs 2 classic', seats('coyote', 'classic', 'classic')],
+        ['1 sphinx vs 2 classic', seats('sphinx', 'classic', 'classic')],
+        ['coyote vs counting vs flytrap', seats('coyote', 'counting', 'flytrap')],
+        ['sphinx vs counting vs flytrap', seats('sphinx', 'counting', 'flytrap')],
+        ['sphinx vs coyote vs classic', seats('sphinx', 'coyote', 'classic')],
+        ['sphinx vs coyote vs flytrap', seats('sphinx', 'coyote', 'flytrap')],
+    ];
+    for (const [label, seatNames] of matchups) {
+        if (filter && !label.toLowerCase().includes(filter)) continue;
+        runMatchup(label, seatNames, games);
+    }
+    console.log(`\nDone in ${((Date.now() - t0) / 1000).toFixed(1)}s.`);
 }
-console.log(`\nDone in ${((Date.now() - t0) / 1000).toFixed(1)}s.`);
+
+module.exports = { playOneGame, buildEngine, runMatchup, SEAT_POOL, seats };

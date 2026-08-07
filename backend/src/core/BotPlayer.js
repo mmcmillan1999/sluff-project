@@ -2,7 +2,7 @@
 
 const gameLogic = require('./logic');
 const { BID_HIERARCHY, BID_MULTIPLIERS } = require('./constants');
-const { analyzeHandForBid, recommendBid } = require('./bidAdvice');
+const { analyzeHandForBid, recommendBidFor } = require('./bidAdvice');
 const { calculateInsuranceMove } = require('./bot-strategies/InsuranceStrategy');
 const { brainFor } = require('./bot-brains');
 
@@ -29,9 +29,11 @@ class BotPlayer {
 
     decideBid() {
         // The evaluator lives in bidAdvice.js, shared with the player-facing
-        // bid hint — thresholds and their tuning notes live there.
+        // bid hint — thresholds and their tuning notes live there. The
+        // strategy resolves per bot name (sim-rotated candidates; production
+        // default until a winner is crowned).
         const hand = this.engine.hands[this.playerName] || [];
-        return recommendBid(hand, this.engine.currentHighestBidDetails?.bid || null).bid;
+        return recommendBidFor(this.playerName, hand, this.engine.currentHighestBidDetails?.bid || null).bid;
     }
 
     decideFrogUpgrade() {
