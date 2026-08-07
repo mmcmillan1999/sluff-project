@@ -3,6 +3,7 @@
 const assert = require('assert');
 // --- PATH CORRECTION ---
 const BotPlayer = require('../src/core/BotPlayer');
+const { registerBrainProfile, BRAIN_PROFILES } = require('../src/core/bot-brains');
 
 // Mock the engine object the bot needs to read from
 class MockEngine {
@@ -22,6 +23,13 @@ function runBotTests() {
     console.log('Running BotPlayer.js tests...');
     let testCounter = 1;
     const pass = (testName) => console.log(`  ✔ Test ${testCounter++}: ${testName}`);
+
+    // This suite is the CLASSIC brain's spec (the original playCard tree,
+    // retired from the live roster but locked as the simulator baseline).
+    // The default brain moved to counting when classic retired, so the
+    // fixture bot pins itself to the brain these behaviors document —
+    // scoped to this run so no other suite inherits the registration.
+    registerBrainProfile('TestBot', 'classic');
 
     // Test: Bot should decide to bid Heart Solo
     let hand1 = ['AH', 'KH', 'QH', 'JH', '10H', 'AS', 'KS', 'QS', 'JS', '10S', '6C'];
@@ -221,6 +229,7 @@ function runBotTests() {
     assert.strictEqual(playBot.playCard(), '6S');
     pass('With only junk to dump, sheds the lowest-rank card onto the partner\'s trick.');
 
+    delete BRAIN_PROFILES['TestBot'];
     console.log('  ✔ All BotPlayer.js tests passed!');
 }
 

@@ -283,6 +283,33 @@ const ClaudeLanding = ({ inviteTableId, onRegister, onLogin, onNavigate }) => {
                     <button type="button" className="cl-btn cl-btn-primary cl-btn-big" onClick={handleRegisterCta}>
                         {primaryCta}
                     </button>
+
+                    {/* Pre-launch teasers: swapped for the official linked
+                        badges the day the store listings go live. */}
+                    <div className="cl-store-row" aria-label="Mobile apps coming soon">
+                        <div className="cl-store-badge" aria-label="Coming soon to the App Store">
+                            <svg className="cl-store-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M12 6.6c1-1.5 2.7-1.7 2.7-1.7s.2 1.6-.9 3c-1.2 1.5-2.7 1.4-2.7 1.4s-.3-1.4.9-2.7zM14.9 10c-1.5-.1-2.4.8-3.1.8-.8 0-1.8-.8-3-.8-1.6 0-3.4 1.3-3.4 4 0 2.8 2.2 6.2 3.7 6.2.7 0 1.6-.7 2.7-.7 1 0 1.7.7 2.7.7 1.5 0 3.2-3 3.5-4.4-1.6-.7-2.3-1.8-2.3-3.1 0-1.4.9-2.3 1.5-2.6-.6-.7-1.6-1.1-2.3-1.1z" />
+                            </svg>
+                            <span className="cl-store-copy">
+                                <small>Coming soon on the</small>
+                                <strong>App Store</strong>
+                            </span>
+                        </div>
+                        <div className="cl-store-badge" aria-label="Coming soon to Google Play">
+                            <svg className="cl-store-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M6 4.4c0-.8.9-1.3 1.6-.9l11.2 7.6c.6.4.6 1.4 0 1.8L7.6 20.5c-.7.4-1.6-.1-1.6-.9V4.4z" />
+                            </svg>
+                            <span className="cl-store-copy">
+                                <small>Coming soon on</small>
+                                <strong>Google Play</strong>
+                            </span>
+                        </div>
+                    </div>
+                    <p className="cl-store-note">
+                        The apps are in the works — until then, the full game plays free in
+                        your browser, right now.
+                    </p>
                 </section>
             </main>
 

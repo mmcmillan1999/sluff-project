@@ -663,6 +663,12 @@ const createDbTables = async (pool) => {
         await pool.query(`
             ALTER TABLE round_results ADD COLUMN IF NOT EXISTS player_results JSONB;
         `);
+        // The bidder's brain at play time (bots only; NULL for humans).
+        // Recorded rather than derived so roster reassignments never rewrite
+        // history; per-seat brains live inside player_results rows.
+        await pool.query(`
+            ALTER TABLE round_results ADD COLUMN IF NOT EXISTS bidder_brain VARCHAR(20);
+        `);
         await pool.query(`
             CREATE INDEX IF NOT EXISTS idx_round_results_bid_type
             ON round_results(bid_type);

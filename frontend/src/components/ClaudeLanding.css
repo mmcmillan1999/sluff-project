@@ -687,6 +687,66 @@
     font-size: 1.08rem;
 }
 
+/* ---------- Store badges (pre-launch teasers) ---------- */
+/* The familiar dark-badge silhouette with our own glyphs and "coming soon"
+   copy. The official linked badge art replaces these at launch — Apple and
+   Google only license their badges for live listings. */
+
+.claude-landing .cl-store-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 14px;
+    margin-top: 34px;
+}
+
+.claude-landing .cl-store-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 18px 9px 14px;
+    background: var(--cl-night);
+    border: 1px solid rgba(196, 210, 198, 0.35);
+    border-radius: 10px;
+    color: var(--cl-cream);
+    opacity: 0.92;
+    cursor: default;
+    user-select: none;
+}
+
+.claude-landing .cl-store-glyph {
+    width: 26px;
+    height: 26px;
+    fill: var(--cl-cream);
+    flex: 0 0 auto;
+}
+
+.claude-landing .cl-store-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    line-height: 1.15;
+}
+
+.claude-landing .cl-store-copy small {
+    font-size: 0.62rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--cl-mist);
+}
+
+.claude-landing .cl-store-copy strong {
+    font-size: 1.06rem;
+    font-weight: 600;
+}
+
+.claude-landing .cl-store-note {
+    color: var(--cl-ink-soft);
+    font-size: 0.88rem;
+    max-width: 34em;
+    margin: 14px auto 0;
+}
+
 /* ---------- Footer ---------- */
 
 .claude-landing .cl-footer {

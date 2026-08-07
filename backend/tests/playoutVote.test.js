@@ -6,6 +6,7 @@
 
 const assert = require('assert');
 const GameEngine = require('../src/core/GameEngine');
+const scoringHandler = require('../src/core/handlers/scoringHandler');
 const { serializeEngineForResume, restoreEngineFromResume } = require('../src/serialization/gameResume');
 
 // Freeze interval creation so the 30s vote timer never really ticks; the
@@ -316,6 +317,24 @@ function runPlayoutVoteTests() {
             engine.submitPlayoutVote(3, 'wrap');
             assert.strictEqual(engine.roundHistory.at(-1).midnightSpecial, 'Alice');
             pass('An early wrap still stamps the round\'s Midnight Special rider.');
+        }
+
+        // A played-out round records each bot's BRAIN at play time in
+        // round_results — recorded, not derived, so roster reassignments
+        // (classic's retirement) can never rewrite history. Humans carry no
+        // brain field, and a human bidder logs a null bidderBrain.
+        {
+            const engine = makeMidRoundEngine({ botNames: ['Bob', 'Carol'] });
+            engine.gameId = 4242;
+            const effects = scoringHandler.calculateRoundScores(engine);
+            const log = effects.find(e => e.type === 'LOG_ROUND_RESULT');
+            assert.ok(log, 'a played-out round logs to round_results');
+            assert.strictEqual(log.payload.bidderBrain, null, 'human bidder -> null brain');
+            const rows = Object.fromEntries(log.payload.playerResults.map(r => [r.name, r]));
+            assert.ok(!('brain' in rows.Alice), 'humans carry no brain field');
+            assert.strictEqual(rows.Bob.brain, 'counting', 'bots record their live brain');
+            assert.strictEqual(rows.Carol.brain, 'counting');
+            pass('Round results record each bot\'s brain at play time.');
         }
 
         // A deploy mid-vote: the snapshot carries the executed deal but not

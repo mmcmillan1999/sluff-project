@@ -13,12 +13,12 @@ const BotPlayer = require('./BotPlayer');
 const { brainNameFor } = require('./bot-brains');
 const { deadlineFor: afkDeadlineFor } = require('./afkTurnTimer');
 
-// Matt's standing seat directive (Aug 5 2026, "until otherwise stated"):
-// Quick Play tables draft one bot from each listed brain before any random
-// pick, so live testing always faces these arms. Empty the list to end the
-// directive. Exhibition and private tables are untouched — their random
-// trios keep the background analytics unbiased.
-const QUICKPLAY_BRAIN_DRAFT = ['sphinx', 'flytrap'];
+// Quick Play seat-draft directive: list brain names here to force one bot
+// from each listed brain into every Quick Play table before any random
+// pick. Empty = fully random seating. Matt's Aug 5 sphinx+flytrap testing
+// directive ended Aug 6 ("make the bot matchmaking random again") — the
+// lever stays for the next live test.
+const QUICKPLAY_BRAIN_DRAFT = [];
 const { shuffle } = require('../utils/shuffle');
 const playHandler = require('./handlers/playHandler');
 const scoringHandler = require('./handlers/scoringHandler');

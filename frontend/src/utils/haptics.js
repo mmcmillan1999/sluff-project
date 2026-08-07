@@ -126,6 +126,29 @@ export const hapticDealRun = ({ cardCount = 36, staggerMs = 115 } = {}) => {
 };
 
 /**
+ * A custom one-off buzz for call sites that shape their own escalation
+ * (the turn call-up uses this): a web vibration pattern, plus how the
+ * native driver should express the same moment — an impact style and how
+ * many taps of it. On web, firing preempts any pattern already running.
+ */
+export const buzz = ({ pattern = [20], nativeStyle = 'MEDIUM', nativeTaps = 1, gapMs = 90 } = {}) => {
+    if (!getHapticsEnabled()) return;
+    try {
+        const native = nativeHaptics();
+        if (native) {
+            const style = String(nativeStyle).toUpperCase();
+            const taps = Math.max(1, Number(nativeTaps) || 1);
+            for (let i = 0; i < taps; i += 1) {
+                if (i === 0) native.impact?.({ style });
+                else setTimeout(() => { try { native.impact?.({ style }); } catch { /* garnish */ } }, i * gapMs);
+            }
+            return;
+        }
+        if (canVibrate()) navigator.vibrate(pattern);
+    } catch { /* haptics are garnish */ }
+};
+
+/**
  * One wheel peg crossing the flapper. Intensity follows wheel speed like
  * the click sound — full-speed pegs thump, dying pegs tick.
  */

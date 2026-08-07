@@ -7,6 +7,7 @@ import {
     haptic,
     hapticDealRun,
     hapticWheelTick,
+    buzz,
     getHapticsEnabled,
     setHapticsEnabled,
     HAPTIC_CUES,
@@ -94,5 +95,27 @@ describe('haptics', () => {
         hapticWheelTick(1);
         hapticWheelTick(0.2);
         expect(navigator.vibrate.mock.calls.map(([ms]) => ms)).toEqual([12, 7]);
+    });
+
+    test('buzz plays custom escalation shapes on web and native alike', () => {
+        vi.useFakeTimers();
+        navigator.vibrate = vi.fn();
+        buzz({ pattern: [30, 70, 30, 70, 30], nativeStyle: 'Heavy', nativeTaps: 3 });
+        expect(navigator.vibrate).toHaveBeenCalledWith([30, 70, 30, 70, 30]);
+
+        const impact = vi.fn();
+        window.Capacitor = {
+            isNativePlatform: () => true,
+            Plugins: { Haptics: { impact } },
+        };
+        buzz({ pattern: [18, 90, 18], nativeStyle: 'Medium', nativeTaps: 2 });
+        vi.runAllTimers();
+        expect(impact.mock.calls).toEqual([[{ style: 'MEDIUM' }], [{ style: 'MEDIUM' }]]);
+        expect(navigator.vibrate).toHaveBeenCalledTimes(1);
+
+        setHapticsEnabled(false);
+        buzz({ pattern: [50] });
+        expect(impact).toHaveBeenCalledTimes(2);
+        expect(navigator.vibrate).toHaveBeenCalledTimes(1);
     });
 });

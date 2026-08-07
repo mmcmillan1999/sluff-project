@@ -2,6 +2,7 @@
 
 const gameLogic = require('../logic');
 const { ROUND_PRESENTATION_LOCK_MS } = require('../constants');
+const { brainNameFor } = require('../bot-brains');
 
 function calculateRoundScores(engine) {
     const effects = [];
@@ -97,6 +98,11 @@ function calculateRoundScores(engine) {
                 name,
                 userId: Number.isInteger(p.userId) ? p.userId : null,
                 isBot: Boolean(p.isBot),
+                // The brain is recorded AT PLAY TIME, not derived later:
+                // roster reassignments (classic retired Aug 6) would silently
+                // rewrite history if queries joined names against the current
+                // BRAIN_PROFILES. Humans carry no brain field.
+                ...(p.isBot ? { brain: brainNameFor(p.playerName) } : {}),
                 isBidder,
                 // The bidder's stance is their ask; a defender's is their offer.
                 insurancePosition: isBidder
@@ -121,6 +127,9 @@ function calculateRoundScores(engine) {
                     || { Frog: 1, Solo: 2, 'Heart Solo': 3 }[roundData.bidType] || 1,
                 bidderUserId: Number.isInteger(bidderPlayer?.userId) ? bidderPlayer.userId : null,
                 bidderIsBot: Boolean(bidderPlayer?.isBot),
+                // Top-level for the most common query: brain make/set rates
+                // as the bidder. Null for human bidders.
+                bidderBrain: bidderPlayer?.isBot ? brainNameFor(bidderPlayer.playerName) : null,
                 bidderCardPoints: roundData.finalBidderPoints,
                 dealExecuted,
                 bidderRequirement: engine.insurance?.bidderRequirement ?? null,

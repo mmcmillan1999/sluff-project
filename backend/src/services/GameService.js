@@ -1721,9 +1721,9 @@
                         this.pool.query(
                             `INSERT INTO round_results
                              (game_id, round_number, player_mode, bid_type, bid_multiplier,
-                              bidder_user_id, bidder_is_bot, bidder_card_points, deal_executed,
+                              bidder_user_id, bidder_is_bot, bidder_brain, bidder_card_points, deal_executed,
                               bidder_requirement, defender_offers, point_changes, player_results, all_human)
-                             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+                             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
                             [
                                 effect.payload.gameId,
                                 effect.payload.roundNumber,
@@ -1732,6 +1732,7 @@
                                 effect.payload.bidMultiplier,
                                 effect.payload.bidderUserId,
                                 effect.payload.bidderIsBot,
+                                effect.payload.bidderBrain ?? null,
                                 effect.payload.bidderCardPoints,
                                 effect.payload.dealExecuted,
                                 effect.payload.bidderRequirement,

@@ -8,7 +8,7 @@
 
 const assert = require('assert');
 const BotPlayer = require('../src/core/BotPlayer');
-const { brainNameFor, BRAIN_PROFILES } = require('../src/core/bot-brains');
+const { brainNameFor, BRAIN_PROFILES, registerBrainProfile } = require('../src/core/bot-brains');
 
 // A fuller mock than bot.test.js uses: the counting brain reads the public
 // round view, which wants seats, trick attribution, and captured tricks.
@@ -70,22 +70,31 @@ async function runBotBrainTests() {
     let testCounter = 1;
     const pass = (name) => console.log(`  ✔ Test ${testCounter++}: ${name}`);
 
-    // 1) Profile resolution: the trial trio counts cards, everyone else is classic.
+    // 1) Profile resolution: classic is retired from live play — the whole
+    //    20-bot roster splits evenly, five per surviving arm, and unknown
+    //    names land on counting rather than the retired control.
     {
         assert.strictEqual(brainNameFor('Kimba'), 'counting');
         assert.strictEqual(brainNameFor('Grampa Blane'), 'counting');
-        assert.strictEqual(brainNameFor('Courtney Sr.'), 'counting');
-        assert.strictEqual(brainNameFor('Ace McGraw'), 'classic');
-        assert.strictEqual(brainNameFor('TestBot'), 'classic');
+        assert.strictEqual(brainNameFor('Ace McGraw'), 'counting');
+        assert.strictEqual(brainNameFor('Buck Wilder'), 'flytrap');
+        assert.strictEqual(brainNameFor('Jack Highwater'), 'flytrap');
         // Claude's sealed trial brains (blind-tested by Matt).
         assert.strictEqual(brainNameFor('Doc Shuffle'), 'sphinx');
-        assert.strictEqual(brainNameFor('Vera Hearts'), 'sphinx');
-        assert.strictEqual(brainNameFor('Lucky Lou'), 'sphinx');
+        assert.strictEqual(brainNameFor('Cliff'), 'sphinx');
+        assert.strictEqual(brainNameFor('Mabel Moon'), 'sphinx');
         assert.strictEqual(brainNameFor('Otis Draw'), 'coyote');
-        assert.strictEqual(brainNameFor('Ginger Snap'), 'coyote');
-        assert.strictEqual(brainNameFor('Benny Bidwell'), 'coyote');
-        assert.strictEqual(Object.keys(BRAIN_PROFILES).length, 12);
-        pass('Five brains resolve: counting, flytrap, sphinx, and coyote trios; the rest stay classic.');
+        assert.strictEqual(brainNameFor('Frankie Four'), 'coyote');
+        assert.strictEqual(brainNameFor('Ruby Rook'), 'coyote');
+        assert.strictEqual(brainNameFor('TestBot'), 'counting', 'unknown names never get the retired classic');
+        assert.strictEqual(Object.keys(BRAIN_PROFILES).length, 20);
+        const armCounts = Object.values(BRAIN_PROFILES).reduce((tally, brain) => {
+            tally[brain] = (tally[brain] || 0) + 1;
+            return tally;
+        }, {});
+        assert.deepStrictEqual(armCounts, { counting: 5, flytrap: 5, sphinx: 5, coyote: 5 });
+        assert.ok(!Object.values(BRAIN_PROFILES).includes('classic'), 'no live bot plays classic');
+        pass('Classic is retired: 20 bots split five per arm, unknowns default to counting.');
     }
 
     // 2) Matt's overruff rule: partner led, the bid winner trumped with the
@@ -284,9 +293,11 @@ async function runBotBrainTests() {
         pass('Holding the 10 or a long suit disarms the trap; counting logic resumes.');
     }
 
-    // 8) The classic brain is untouched by all of the above: same overruff
-    //    scenario, classic bot still bleeds the low trump (locked behavior).
+    // 8) The classic brain is retired from the roster but stays LOCKED as
+    //    the simulator's baseline: registered under an audition-style name,
+    //    it still bleeds the low trump in the same overruff scenario.
     {
+        registerBrainProfile('Me', 'classic'); // the fixture's seat name
         const engine = makeEngine({
             myHand: ['KH', '6H', 'AS'],
             currentTrickCards: [
@@ -297,7 +308,8 @@ async function runBotBrainTests() {
         });
         const bot = new BotPlayer(3, 'Me', engine);
         assert.strictEqual(bot.playCard(), '6H');
-        pass('Classic control group still plays its locked (leaky) line.');
+        delete BRAIN_PROFILES['Me'];
+        pass('Classic stays locked as the sim baseline, playing its old leaky line.');
     }
 
     // 14) Sealed brains always answer with a legal card — a mis-play would
@@ -341,40 +353,32 @@ async function runBotBrainTests() {
         pass('Sealed brains (sphinx, coyote) always answer with a legal card.');
     }
 
-    // 15) Matt's seat directive: Quick Play tables draft one sphinx and one
-    //     flytrap bot before any random pick — and fall back gracefully when
-    //     a draft arm has nobody available.
+    // 15) Quick Play seating is fully random again (the Aug 5 sphinx+flytrap
+    //     directive ended Aug 6): with an empty QUICKPLAY_BRAIN_DRAFT no
+    //     brain is forced — any funded bot can take any seat.
     {
         const GameEngine = require('../src/core/GameEngine');
+        // A roster where the old draft could never have produced two
+        // counting bots — but random seating can, and across many seatings
+        // every roster member must show up at least once.
         const roster = [
-            { id: 101, username: 'Ace McGraw', tokens: 10 },
-            { id: 102, username: 'Buck Wilder', tokens: 10 },
+            { id: 101, username: 'Ace McGraw', tokens: 10 },   // counting
+            { id: 102, username: 'Grandma Joe', tokens: 10 },  // counting
             { id: 103, username: 'Doc Shuffle', tokens: 10 },  // sphinx
             { id: 104, username: 'Mike Knight', tokens: 10 },  // flytrap
         ];
-        const engine = new GameEngine('qp-draft-test', 'fort-creek', 'QP', () => {}, 'quickplay', roster);
-        engine.addBotPlayer();
-        engine.addBotPlayer();
-        const seatedBrains = Object.values(engine.players)
-            .filter(p => p.isBot)
-            .map(p => brainNameFor(p.playerName))
-            .sort();
-        assert.deepStrictEqual(seatedBrains, ['flytrap', 'sphinx']);
-
-        const thinRoster = [
-            { id: 101, username: 'Ace McGraw', tokens: 10 },
-            { id: 103, username: 'Doc Shuffle', tokens: 10 },
-        ];
-        const fallbackEngine = new GameEngine('qp-draft-fallback', 'fort-creek', 'QP', () => {}, 'quickplay', thinRoster);
-        fallbackEngine.addBotPlayer();
-        fallbackEngine.addBotPlayer();
-        const fallbackBrains = Object.values(fallbackEngine.players)
-            .filter(p => p.isBot)
-            .map(p => brainNameFor(p.playerName))
-            .sort();
-        assert.deepStrictEqual(fallbackBrains, ['classic', 'sphinx'],
-            'a missing draft arm never blocks seating');
-        pass('Quick Play drafts one sphinx and one flytrap bot, with graceful fallback.');
+        const seatedNames = new Set();
+        for (let round = 0; round < 60; round += 1) {
+            const engine = new GameEngine(`qp-random-${round}`, 'fort-creek', 'QP', () => {}, 'quickplay', roster);
+            engine.addBotPlayer();
+            engine.addBotPlayer();
+            Object.values(engine.players)
+                .filter(p => p.isBot)
+                .forEach(p => seatedNames.add(p.playerName));
+        }
+        assert.strictEqual(seatedNames.size, roster.length,
+            'random seating reaches the whole roster — nothing is drafted first');
+        pass('Quick Play seating is fully random again — no brain is forced into the game.');
     }
 
     console.log('All bot brain profile tests passed!');

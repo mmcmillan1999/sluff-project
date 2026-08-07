@@ -1,19 +1,14 @@
 // backend/src/core/bot-brains/index.js
 //
 // Bot brain profiles for A/B testing card play. Every bot resolves its brain
-// by name at play time:
+// by name at play time. The classic control was RETIRED from live play on
+// Aug 6 2026 (Matt's call: it lost every arm of the trial) — it remains in
+// BRAINS as the simulator's fixed baseline, but no roster bot plays it.
 //
-//   classic  — the original ~70-line playCard tree, LOCKED as the control
-//              group. All bots default here.
-//   counting — full card-played memory (PublicRoundView: boss tracking, void
-//              inference, trump accounting) with Matt's refinements: win with
-//              the cheapest sufficient card IF the bigger card stays safe to
-//              cash later, overruff instead of wasting low trump under a
-//              made trick, schmear a partner's secure boss from any seat.
-//
-// The trial group is deliberately three named principals so round_results
-// (player_results keyed by name/userId) separates the arms with no extra
-// plumbing: compare points-per-round and set rates between the groups.
+// The live roster is split EVENLY, five bots per brain: counting, flytrap,
+// sphinx, coyote. The original trial trios kept their arms so their
+// round_results series stay unbroken; the eight freed classic bots were
+// dealt round-robin into the four arms.
 //
 // Bidding, trump choice, discards, and insurance stay SHARED across brains —
 // the A/B isolates card play, so a difference in outcomes means card play.
@@ -32,29 +27,42 @@ const BRAINS = {
     sphinx: sphinxBrain,
 };
 
-const DEFAULT_BRAIN = 'classic';
+// Unknown names (future bot accounts not yet assigned below) get a solid
+// modern brain, never the retired classic.
+const DEFAULT_BRAIN = 'counting';
 
-// The trial rosters. "Grampa Blane" is the grandpa on the books (there is no
-// Grandpa George in bot accounts) — swap names here to reassign arms.
-// flytrap = counting plus the Venus-flytrap-of-10s exception (see
-// flytrapBrain.js): refuses first-trick low-lead bait, keeps the Ace loaded.
+// The full 20-bot roster, five per arm. "Grampa Blane" is the grandpa on
+// the books (there is no Grandpa George in bot accounts) — swap names here
+// to reassign arms. flytrap = counting plus the Venus-flytrap-of-10s
+// exception (see flytrapBrain.js): refuses first-trick low-lead bait, keeps
+// the Ace loaded. sphinx and coyote are Claude's sealed entries (Aug 5
+// 2026) — Matt is blind-testing these, so the strategies are documented
+// only in their own source files.
 const BRAIN_PROFILES = {
+    // counting
     'Grampa Blane': 'counting',
     'Courtney Sr.': 'counting',
     'Kimba': 'counting',
+    'Ace McGraw': 'counting',
+    'Grandma Joe': 'counting',
+    // flytrap
     'Mike Knight': 'flytrap',
     'Dolly Deal': 'flytrap',
     'Rosie Rounds': 'flytrap',
-    // Claude's sealed entries (Aug 5 2026) — Matt is blind-testing these, so
-    // the strategies are documented only in their own source files. Both
-    // cleared the audition gate against classic offline (sphinx 44% solo win
-    // rate vs two classics over 3k games, coyote 35.7% over 20k).
+    'Buck Wilder': 'flytrap',
+    'Jack Highwater': 'flytrap',
+    // sphinx (sealed)
     'Doc Shuffle': 'sphinx',
     'Vera Hearts': 'sphinx',
     'Lucky Lou': 'sphinx',
+    'Cliff': 'sphinx',
+    'Mabel Moon': 'sphinx',
+    // coyote (sealed)
     'Otis Draw': 'coyote',
     'Ginger Snap': 'coyote',
     'Benny Bidwell': 'coyote',
+    'Frankie Four': 'coyote',
+    'Ruby Rook': 'coyote',
 };
 
 const brainNameFor = (botName) => BRAIN_PROFILES[botName] || DEFAULT_BRAIN;
