@@ -1744,14 +1744,14 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                     nudgeCountdown={handNudgeLevel > 0 ? turnNudgeCountdown : null}
                 />
                 <div className="footer-controls-wrapper">
+                    {/* Points live on the trick plates now (none at all on
+                        Eaglewood), so the footer keeps only the trick count. */}
                     {['Playing Phase', 'TrickCompleteLinger'].includes(currentTableState.state) && currentTableState.bidWinnerInfo && (
                         <div
                             className="round-status-hud"
-                            title={`${currentTableState.bidWinnerInfo.playerName}: ${currentTableState.bidderCardPoints || 0} card points; ${currentTableState.tricksPlayedCount || 0} of 11 tricks complete`}
+                            title={`${currentTableState.tricksPlayedCount || 0} of 11 tricks complete`}
                         >
                             <span>Tricks {currentTableState.tricksPlayedCount || 0}/11</span>
-                            <span className="round-status-divider" aria-hidden="true">·</span>
-                            <span className="round-status-bidder">{currentTableState.bidWinnerInfo.playerName} {currentTableState.bidderCardPoints || 0}/60</span>
                         </div>
                     )}
                     <InsuranceControls

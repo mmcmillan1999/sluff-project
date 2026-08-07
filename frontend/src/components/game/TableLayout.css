@@ -364,6 +364,30 @@
     line-height: 1;
 }
 
+/* Tricks over points beside the pile (points hidden on Eaglewood — the
+   plate falls back to the bare count there). */
+.trick-pile-stats {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3vh;
+}
+
+.trick-pile-stats .trick-pile-count {
+    padding-bottom: 0.3vh;
+    border-bottom: 0.12vh solid rgba(255, 255, 255, 0.35);
+}
+
+.trick-pile-points {
+    color: #f6cf74;
+    font-family: 'Oswald', sans-serif;
+    text-shadow: 0.12vh 0.12vh 0.25vh black;
+    font-size: 1.45vh;
+    font-weight: 600;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
 .progress-bar-area {
     display: none;
 }

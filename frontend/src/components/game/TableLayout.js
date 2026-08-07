@@ -13,7 +13,7 @@ import {
 } from '../../config/endRoundTiming';
 import './KeyAndModal.css';
 import './TableLayout.css';
-import { SUIT_SYMBOLS } from '../../constants';
+import { SUIT_SYMBOLS, CARD_POINT_VALUES } from '../../constants';
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion';
 import { deriveTrickPlatePlacement } from './trickPlatePlacement';
 import { getThemePresentation } from '../../config/themePresentation';
@@ -509,24 +509,40 @@ const TableLayout = ({
     };
     
     const renderTrickTallyPiles = () => {
-        const { bidWinnerInfo, playerOrderActive, lastCompletedTrick } = currentTableState;
+        const { bidWinnerInfo, playerOrderActive, lastCompletedTrick, theme } = currentTableState;
         // Use the lagged counts so the stack grows only once the magnet lands.
         const capturedTricks = laggedCapturedTricks;
         if (!bidWinnerInfo) return null;
-        
+
+        // Eaglewood is the counting-house: no points shown anywhere — players
+        // keep the tally in their heads, like the family always did.
+        const showPoints = theme !== 'dans-deck';
+
         const bidderName = bidWinnerInfo.playerName;
         const defenderNames = playerOrderActive.filter(name => name !== bidderName);
         const bidderTricksCount = capturedTricks[bidderName]?.length || 0;
         const defenderTricksCount = defenderNames.reduce((acc, pName) => acc + (capturedTricks[pName]?.length || 0), 0);
 
+        // Points from the same lagged tricks the stacks grow from, so the
+        // number lands together with the cards' magnet flight.
+        const teamPoints = (names) => names.reduce((sum, pName) => (
+            sum + (capturedTricks[pName] || []).reduce((trickSum, trick) => (
+                trickSum + (trick.cards || []).reduce((cardSum, card) => (
+                    cardSum + (CARD_POINT_VALUES[String(card).slice(0, -1)] || 0)
+                ), 0)
+            ), 0)
+        ), 0);
+        const bidderPoints = teamPoints([bidderName]);
+        const defenderPoints = teamPoints(defenderNames);
+
         const lastWinnerName = lastCompletedTrick?.winnerName;
         const bidderWonLast = lastWinnerName === bidderName;
         const defenderWonLast = lastWinnerName && !bidderWonLast;
-        
+
         const { bidderPileClass, defenderPileClass } = platePlacement;
         if (!bidderPileClass || !defenderPileClass) return null;
 
-        const TrickPile = ({ count }) => (
+        const TrickPile = ({ count, points }) => (
             <div className="trick-pile">
                 <div className="trick-pile-content-wrapper">
                     <div className="trick-pile-cards">
@@ -534,38 +550,49 @@ const TableLayout = ({
                             renderCard(null, { isFaceDown: true, style: { opacity: 0.3 }, small: true })
                         ) : (
                             Array.from({ length: count }).map((_, i) => (
-                                <div key={i} style={{ 
+                                <div key={i} style={{
                                     position: 'absolute',
                                     top: 0,
                                     left: 0,
-                                    transform: `translateY(-${i * 2}px)` 
+                                    transform: `translateY(-${i * 2}px)`
                                 }}>
                                     {renderCard(null, { isFaceDown: true, small: true })}
                                 </div>
                             ))
                         )}
                     </div>
-                    <span className="trick-pile-count">{count}</span>
+                    {showPoints ? (
+                        <span className="trick-pile-stats">
+                            <span className="trick-pile-count">{count}</span>
+                            <span className="trick-pile-points">{points}</span>
+                        </span>
+                    ) : (
+                        <span className="trick-pile-count">{count}</span>
+                    )}
                 </div>
             </div>
         );
+
+        const pileLabel = (who, count, points) => (showPoints
+            ? `${who} trick pile, ${count} tricks, ${points} card points`
+            : `${who} trick pile, ${count} tricks`);
 
         return (
             <>
                 {/* Render bidder pile in its assigned position */}
                 <div className={`trick-pile-container ${bidderPileClass}`}>
-                    <div className={`trick-pile-base bidder-base ${bidderWonLast ? 'pulsating-gold' : ''}`} onClick={() => handleTrickPileClick('bidder', bidderPileClass)} onKeyDown={(event) => activateOnKey(event, () => handleTrickPileClick('bidder', bidderPileClass))} role="button" tabIndex={lastCompletedTrick ? 0 : -1} aria-disabled={!lastCompletedTrick} aria-label={`Bidder trick pile, ${bidderTricksCount} tricks`}>
-                        <TrickPile count={bidderTricksCount} />
+                    <div className={`trick-pile-base bidder-base ${bidderWonLast ? 'pulsating-gold' : ''}`} onClick={() => handleTrickPileClick('bidder', bidderPileClass)} onKeyDown={(event) => activateOnKey(event, () => handleTrickPileClick('bidder', bidderPileClass))} role="button" tabIndex={lastCompletedTrick ? 0 : -1} aria-disabled={!lastCompletedTrick} aria-label={pileLabel('Bidder', bidderTricksCount, bidderPoints)}>
+                        <TrickPile count={bidderTricksCount} points={bidderPoints} />
                     </div>
                 </div>
-                
+
                 {/* Render defender pile in its assigned position */}
                 <div className={`trick-pile-container ${defenderPileClass}`}>
-                    <div className={`trick-pile-base defender-base ${defenderWonLast ? 'pulsating-blue' : ''}`} onClick={() => handleTrickPileClick('defender', defenderPileClass)} onKeyDown={(event) => activateOnKey(event, () => handleTrickPileClick('defender', defenderPileClass))} role="button" tabIndex={lastCompletedTrick ? 0 : -1} aria-disabled={!lastCompletedTrick} aria-label={`Team trick pile, ${defenderTricksCount} tricks`}>
-                        <TrickPile count={defenderTricksCount} />
+                    <div className={`trick-pile-base defender-base ${defenderWonLast ? 'pulsating-blue' : ''}`} onClick={() => handleTrickPileClick('defender', defenderPileClass)} onKeyDown={(event) => activateOnKey(event, () => handleTrickPileClick('defender', defenderPileClass))} role="button" tabIndex={lastCompletedTrick ? 0 : -1} aria-disabled={!lastCompletedTrick} aria-label={pileLabel('Team', defenderTricksCount, defenderPoints)}>
+                        <TrickPile count={defenderTricksCount} points={defenderPoints} />
                     </div>
                 </div>
-                
+
                 {/* Widow will be rendered separately using widowPileClass */}
             </>
         );
@@ -1017,22 +1044,18 @@ const TableLayout = ({
                 {renderPlayedCardsOnTable()}
                 {renderCardDropZones()}
 
-                {/* Compact tricks/points readout for portrait phones. The
-                    footer HUD (.round-status-hud) is display:none under 850px,
-                    which meant phone players never saw the trick count or the
-                    bidder's points at all — the two numbers that say how the
-                    round is going. Bottom-left felt is empty at every phone
-                    size (verified in zoomlab); desktop keeps the footer HUD
-                    and hides this one. */}
+                {/* Compact tricks readout for portrait phones (the footer HUD
+                    is display:none under 850px). Points moved onto the trick
+                    plates themselves (Aug 2026) — and Eaglewood shows none at
+                    all, so this line stays points-free everywhere. */}
                 {['Playing Phase', 'TrickCompleteLinger'].includes(currentTableState.state)
                     && currentTableState.bidWinnerInfo && (
                     <div
                         className="mobile-status-hud"
                         aria-hidden="true"
-                        title={`${currentTableState.bidWinnerInfo.playerName}: ${currentTableState.bidderCardPoints || 0} of 60 card points; ${currentTableState.tricksPlayedCount || 0} of 11 tricks complete`}
+                        title={`${currentTableState.tricksPlayedCount || 0} of 11 tricks complete`}
                     >
                         <span className="mobile-status-line">Tricks {currentTableState.tricksPlayedCount || 0}/11</span>
-                        <span className="mobile-status-line mobile-status-bid">Bid {currentTableState.bidderCardPoints || 0}/60</span>
                     </div>
                 )}
                 
