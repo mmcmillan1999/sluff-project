@@ -46,6 +46,7 @@ const suites = [
     { name: 'Midnight Special detector', file: './midnightSpecial.test.js' },
     { name: 'champion line service', file: './championLine.test.js' },
     { name: 'store entitlements', file: './entitlements.test.js' },
+    { name: 'frog discards', file: './frogDiscards.test.js' },
 ];
 
 function loadRunner(suite) {

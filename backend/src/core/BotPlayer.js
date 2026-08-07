@@ -3,6 +3,7 @@
 const gameLogic = require('./logic');
 const { BID_HIERARCHY, BID_MULTIPLIERS } = require('./constants');
 const { analyzeHandForBid, recommendBidFor } = require('./bidAdvice');
+const { frogDiscardStrategyFor } = require('./frogDiscards');
 const { calculateInsuranceMove } = require('./bot-strategies/InsuranceStrategy');
 const { brainFor } = require('./bot-brains');
 
@@ -60,11 +61,10 @@ class BotPlayer {
     }
 
     submitFrogDiscards() {
+        // Strategy resolves per bot name (frogDiscards.js registry) — the
+        // sim rotates candidates; production runs the default.
         const hand = this.engine.hands[this.playerName] || [];
-        const sortedHand = hand
-            .filter(card => gameLogic.getSuit(card) !== 'H')
-            .sort((a, b) => getRankValue(a) - getRankValue(b));
-        return sortedHand.slice(0, 3);
+        return frogDiscardStrategyFor(this.playerName)(hand);
     }
 
     makeInsuranceDecision() {

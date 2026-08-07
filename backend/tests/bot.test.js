@@ -61,10 +61,13 @@ function runBotTests() {
     assert.strictEqual(frogBot.decideBid(), 'Frog');
     frogEngine.hands.TestBot.push('QD', 'KS', '10S');
     const frogDiscards = frogBot.submitFrogDiscards();
-    assert.deepStrictEqual(frogDiscards, ['9D', '9S', '9C']);
+    // The matt discard chain (frogDiscards.js): both ace suits strip to
+    // their bare-ace/A-10 cores — 9C leaves the AC-10C lock, 9D and QD
+    // leave AD alone (an effective void that banks the queen's 3 points).
+    assert.deepStrictEqual(frogDiscards.sort(), ['9C', '9D', 'QD'].sort());
     assert.strictEqual(new Set(frogDiscards).size, 3);
     assert.ok(frogDiscards.every(card => !card.endsWith('H')));
-    pass('A Frog-bidding bot preserves every heart when choosing its three discards.');
+    pass('A Frog-bidding bot preserves every heart and strips to its ace cores.');
     
     // Test: Bot should decide to Pass
     let hand4 = ['6H', '7H', '8H', '9H', '6D', '7D', '8D', '9D', '6C', '7C', '8C'];
