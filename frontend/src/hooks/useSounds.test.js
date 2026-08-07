@@ -560,3 +560,56 @@ describe('useSounds pitch humanization and synthesized voices', () => {
         expect(ctx.sources.length).toBe(mutedSources);
     });
 });
+
+describe('useSounds champion sting cache', () => {
+    let errorSpy;
+
+    beforeEach(() => {
+        contexts.length = 0;
+        localStorage.clear();
+        successfulFetch.mockReset();
+        successfulFetch.mockImplementation(successfulResponse);
+        vi.stubGlobal('AudioContext', MockAudioContext);
+        vi.stubGlobal('fetch', successfulFetch);
+        errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+        errorSpy.mockRestore();
+        vi.restoreAllMocks();
+        vi.unstubAllGlobals();
+    });
+
+    test("a rematch cannot replay the previous game's champion line", async () => {
+        const { result } = renderHook(() => useSounds());
+        act(() => result.current.enableSound());
+        const ctx = contexts[0];
+        await waitFor(() => {
+            expect(ctx.decodeAudioData.mock.calls.length).toBeGreaterThanOrEqual(19);
+        });
+        const startedCount = () => ctx.sources
+            .reduce((total, source) => total + source.start.mock.calls.length, 0);
+
+        // Game 1: the line arrives and rides the anthem — bed + shout.
+        const fetchGame1 = vi.fn(async () => ({ url: '/champion/mcsaddle' }));
+        await act(async () => { await result.current.prefetchChampionLine('t1:100', fetchGame1); });
+        expect(fetchGame1).toHaveBeenCalledTimes(1);
+        const beforeFirstSting = startedCount();
+        act(() => result.current.playChampionSting());
+        expect(startedCount()).toBe(beforeFirstSting + 2);
+
+        // The same game's key again: cached, no refetch.
+        await act(async () => { await result.current.prefetchChampionLine('t1:100', fetchGame1); });
+        expect(fetchGame1).toHaveBeenCalledTimes(1);
+
+        // The rematch at the SAME table: new game key, and this game has no
+        // personalized line (204). The stale buffer must not ride again —
+        // the generic pre-mixed sting plays instead (a single source).
+        const fetchGame2 = vi.fn(async () => null);
+        await act(async () => { await result.current.prefetchChampionLine('t1:200', fetchGame2); });
+        expect(fetchGame2).toHaveBeenCalledTimes(1);
+        const beforeSecondSting = startedCount();
+        act(() => result.current.playChampionSting());
+        expect(startedCount()).toBe(beforeSecondSting + 1);
+    });
+});

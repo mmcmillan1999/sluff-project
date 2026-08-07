@@ -74,6 +74,12 @@ const VoiceControls = ({ socket, tableId }) => {
     ));
     const [microphoneState, setMicrophoneState] = useState('muted');
     const [error, setError] = useState('');
+    // The lasting signal for a refused microphone is the mic button itself
+    // (an attention ring, see .voice-self-btn.is-blocked) rather than a
+    // permanent banner parked next to the player's name. The banner text
+    // still appears, but briefly — the button carries the state, and a tap
+    // on it re-asks for the microphone.
+    const [micBlocked, setMicBlocked] = useState(false);
     // Quiet, self-dismissing counterpart to `error` for states that are
     // deliberate rather than broken — e.g. "your mic is off" after a skipped
     // auto-unmute, which would otherwise be explained by nothing but a small
@@ -85,6 +91,7 @@ const VoiceControls = ({ socket, tableId }) => {
     const sessionRef = useRef(0);
     const microphoneOperationRef = useRef(0);
     const noticeTimerRef = useRef(null);
+    const errorTimerRef = useRef(null);
     // Set by the 'Turn on voice' tap so the join it triggers can tell itself
     // apart from a routine table entry: that tap is the player asking to
     // talk, so it must bypass the remembered-refusal gate below.
@@ -99,8 +106,20 @@ const VoiceControls = ({ socket, tableId }) => {
         }
     }, []);
 
+    // Capture failures explain themselves once, then get out of the way —
+    // the mic button's blocked state remains as the durable signal. Errors
+    // set directly through setError (join failure, suspension) still persist.
+    const showTransientError = useCallback((text) => {
+        if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+        setError(text);
+        if (text) {
+            errorTimerRef.current = setTimeout(() => setError(''), 8000);
+        }
+    }, []);
+
     useEffect(() => () => {
         if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+        if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
     }, []);
 
     const setLocalMicrophoneMuted = useCallback(async (
@@ -136,7 +155,10 @@ const VoiceControls = ({ socket, tableId }) => {
             const changed = await voice.setMicrophoneMuted(muted);
             // Capture succeeded, so any remembered refusal is stale — clear it
             // even for an operation a newer tap superseded.
-            if (!muted && changed !== false) clearMicCaptureRefused();
+            if (!muted && changed !== false) {
+                clearMicCaptureRefused();
+                setMicBlocked(false);
+            }
             if (!isCurrent()) {
                 // A stale activation may have resolved after a table change,
                 // background event, or newer tap. Never let it stay live.
@@ -169,11 +191,16 @@ const VoiceControls = ({ socket, tableId }) => {
             }
             if (isCurrent()) {
                 setMicrophoneState('muted');
-                setError(microphoneErrorMessage(micError));
+                showTransientError(microphoneErrorMessage(micError));
+                // Failures a tap might fix keep the button glowing; a missing
+                // or unsupported microphone gets the message alone.
+                if (['NotAllowedError', 'NotReadableError', 'TimeoutError'].includes(micError?.name)) {
+                    setMicBlocked(true);
+                }
             }
             return false;
         }
-    }, [showNotice]);
+    }, [showNotice, showTransientError]);
 
     useEffect(() => {
         // Opted out (the default): stay entirely inert. No VoiceChat instance,
@@ -187,6 +214,7 @@ const VoiceControls = ({ socket, tableId }) => {
             }
             setConnectionState('off');
             setMicrophoneState('muted');
+            setMicBlocked(false);
             setError('');
             showNotice('');
             setPeers([]);
@@ -198,6 +226,7 @@ const VoiceControls = ({ socket, tableId }) => {
         microphoneOperationRef.current += 1;
         setConnectionState('joining');
         setMicrophoneState('starting');
+        setMicBlocked(false);
         setError('');
         showNotice('');
         setPeers([]);
@@ -213,7 +242,10 @@ const VoiceControls = ({ socket, tableId }) => {
             onError: (micError) => {
                 if (voiceRef.current === voice && sessionRef.current === session) {
                     setMicrophoneState('muted');
-                    setError(microphoneErrorMessage(micError));
+                    showTransientError(microphoneErrorMessage(micError));
+                    if (['NotAllowedError', 'NotReadableError', 'TimeoutError'].includes(micError?.name)) {
+                        setMicBlocked(true);
+                    }
                 }
             },
         });
@@ -253,7 +285,10 @@ const VoiceControls = ({ socket, tableId }) => {
                 if (autoUnmute) {
                     await setLocalMicrophoneMuted(false, voice, session);
                 } else {
+                    // A remembered refusal: the mic button carries the state
+                    // (and a tap on it re-asks), the notice just says so once.
                     setMicrophoneState('muted');
+                    setMicBlocked(true);
                     showNotice('Your mic is off — tap the mic button to talk.');
                 }
             } catch (joinError) {
@@ -317,7 +352,10 @@ const VoiceControls = ({ socket, tableId }) => {
     const microphoneLive = microphoneState === 'live';
     const microphoneStarting = microphoneState === 'starting';
     const voiceJoined = connectionState === 'joined';
-    const microphoneLabel = microphoneLive ? 'Mute microphone' : 'Unmute microphone';
+    const showBlocked = micBlocked && !microphoneLive && !microphoneStarting;
+    const microphoneLabel = showBlocked
+        ? 'Microphone blocked — tap to ask again'
+        : (microphoneLive ? 'Mute microphone' : 'Unmute microphone');
 
     const toggleMicrophone = () => {
         if (!voiceJoined || microphoneStarting) return;
@@ -363,10 +401,11 @@ const VoiceControls = ({ socket, tableId }) => {
             <div className="voice-primary-row">
                 <button
                     type="button"
-                    className={`voice-self-btn${microphoneLive ? ' is-live' : ' is-muted'}`}
+                    className={`voice-self-btn${microphoneLive ? ' is-live' : ' is-muted'}${showBlocked ? ' is-blocked' : ''}`}
                     onClick={toggleMicrophone}
                     disabled={!voiceJoined || microphoneStarting}
                     aria-label={connectionState === 'joining' ? 'Connecting table voice' : microphoneLabel}
+                    title={showBlocked ? 'Microphone blocked — tap to ask again' : undefined}
                     aria-pressed={!microphoneLive}
                 >
                     <MicrophoneIcon muted={!microphoneLive} />

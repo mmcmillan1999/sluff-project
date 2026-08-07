@@ -71,6 +71,29 @@
     color: #d6c8aa;
 }
 
+/* A refused microphone: the button itself is the durable signal (the banner
+   only appears briefly). An amber attention ring breathes gently until a tap
+   re-asks for the mic and capture succeeds. */
+.voice-self-btn.is-blocked {
+    border-color: rgba(244, 185, 93, 0.95);
+    color: #f4b95d;
+    box-shadow: 0 0 0 3px rgba(227, 169, 61, 0.22), 0 4px 15px rgba(0, 0, 0, 0.48);
+    animation: voice-blocked-breathe 2.4s ease-in-out infinite;
+}
+
+.voice-self-btn.is-blocked .voice-icon-slash {
+    stroke: #f4b95d;
+}
+
+@keyframes voice-blocked-breathe {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(227, 169, 61, 0.22), 0 4px 15px rgba(0, 0, 0, 0.48); }
+    50% { box-shadow: 0 0 0 6px rgba(227, 169, 61, 0.09), 0 4px 15px rgba(0, 0, 0, 0.48); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .voice-self-btn.is-blocked { animation: none; }
+}
+
 .voice-self-btn:disabled,
 .voice-mixer-btn:disabled {
     cursor: wait;

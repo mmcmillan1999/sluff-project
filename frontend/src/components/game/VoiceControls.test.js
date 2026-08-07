@@ -108,12 +108,17 @@ describe('VoiceControls', () => {
 
         expect(await screen.findByRole('alert')).toHaveTextContent(/microphone access was blocked/i);
         expect(voice.leave).not.toHaveBeenCalled();
-        expect(screen.getByRole('button', { name: 'Unmute microphone' })).toBeEnabled();
+        // The mic button wears the durable blocked state — attention ring on,
+        // still enabled, and its label invites the retry.
+        const blockedButton = screen.getByRole('button', { name: /microphone blocked/i });
+        expect(blockedButton).toBeEnabled();
+        expect(blockedButton).toHaveClass('is-blocked');
         expect(screen.getByRole('button', { name: 'Open voice settings' })).toBeEnabled();
 
-        await user.click(screen.getByRole('button', { name: 'Unmute microphone' }));
+        await user.click(blockedButton);
         await waitFor(() => expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeEnabled());
         expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Mute microphone' })).not.toHaveClass('is-blocked');
         expect(voice.setMicrophoneMuted.mock.calls).toEqual([[false], [false]]);
     });
 
@@ -123,8 +128,10 @@ describe('VoiceControls', () => {
 
         renderVoice();
         const voice = await waitFor(() => voiceHarness.instances[0]);
-        const unmuteButton = await screen.findByRole('button', { name: 'Unmute microphone' });
+        // The remembered refusal shows on the button itself, not a banner.
+        const unmuteButton = await screen.findByRole('button', { name: /microphone blocked/i });
         await waitFor(() => expect(unmuteButton).toBeEnabled());
+        expect(unmuteButton).toHaveClass('is-blocked');
 
         // Auto-join stays listen-only: on iOS the automatic getUserMedia
         // seizes the audio session and was killing all game sound.
@@ -155,6 +162,30 @@ describe('VoiceControls', () => {
         expect(window.localStorage.getItem('sluff_mic_capture_refused')).toBe('true');
     });
 
+    test('the blocked banner dismisses itself while the mic button stays lit', async () => {
+        voiceHarness.behavior.setMicrophoneMuted = async (_voice, muted) => {
+            if (!muted) {
+                const blocked = new Error('Permission denied');
+                blocked.name = 'NotAllowedError';
+                throw blocked;
+            }
+            return true;
+        };
+
+        renderVoice();
+        expect(await screen.findByRole('alert')).toHaveTextContent(/microphone access was blocked/i);
+        const blockedButton = screen.getByRole('button', { name: /microphone blocked/i });
+        expect(blockedButton).toHaveClass('is-blocked');
+
+        // The banner explains once and gets out of the way; the button keeps
+        // carrying the state (and the retry) after it goes.
+        await waitFor(
+            () => expect(screen.queryByRole('alert')).not.toBeInTheDocument(),
+            { timeout: 10_000 },
+        );
+        expect(screen.getByRole('button', { name: /microphone blocked/i })).toHaveClass('is-blocked');
+    }, 15_000);
+
     test('a granted report alone does not clear the memory — only working capture does', async () => {
         // Site-level 'granted' says nothing about an OS-level mic block
         // (Windows privacy toggle, macOS TCC): capture still fails there, and
@@ -169,7 +200,7 @@ describe('VoiceControls', () => {
         try {
             renderVoice();
             const voice = await waitFor(() => voiceHarness.instances[0]);
-            const unmuteButton = await screen.findByRole('button', { name: 'Unmute microphone' });
+            const unmuteButton = await screen.findByRole('button', { name: /microphone blocked/i });
             await waitFor(() => expect(unmuteButton).toBeEnabled());
             expect(voice.setMicrophoneMuted).not.toHaveBeenCalled();
             expect(window.localStorage.getItem('sluff_mic_capture_refused')).toBe('true');
@@ -250,7 +281,7 @@ describe('VoiceControls', () => {
             // Table change while the first session's permission check hangs.
             rerender(<VoiceControls socket={socket} tableId="table-two" />);
             await waitFor(() => expect(voiceHarness.instances).toHaveLength(2));
-            const unmuteButton = await screen.findByRole('button', { name: 'Unmute microphone' });
+            const unmuteButton = await screen.findByRole('button', { name: /microphone blocked/i });
             await waitFor(() => expect(unmuteButton).toBeEnabled());
             await user.click(unmuteButton);
             await waitFor(() => {
@@ -275,7 +306,7 @@ describe('VoiceControls', () => {
         try {
             renderVoice();
             const voice = await waitFor(() => voiceHarness.instances[0]);
-            const unmuteButton = await screen.findByRole('button', { name: 'Unmute microphone' });
+            const unmuteButton = await screen.findByRole('button', { name: /microphone blocked/i });
             await waitFor(() => expect(unmuteButton).toBeEnabled());
             expect(voice.setMicrophoneMuted).not.toHaveBeenCalled();
             expect(window.localStorage.getItem('sluff_mic_capture_refused')).toBe('true');

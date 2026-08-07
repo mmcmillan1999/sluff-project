@@ -712,14 +712,19 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     // The moment the game ends, prefetch the winner's personalized champion
     // line so it is decoded before the podium reveals. The server decides
     // whether a line applies (sole real winner, name speakable) — a quiet
-    // 204 here simply leaves the generic sting to play.
+    // 204 here simply leaves the generic sting to play. Keyed by THIS
+    // game's presentation clock, never by table alone: a rematch reuses the
+    // table, and a table-keyed cache once hailed the previous champion.
     useEffect(() => {
         if (!currentTableState?.roundSummary?.isGameOver) return;
         if (currentTableState.roundSummary.forfeit) return;
-        prefetchChampionLine?.(currentTableState.tableId, fetchChampionLine);
+        const tableId = currentTableState.tableId;
+        const gameKey = `${tableId}:${currentTableState.roundSummary.presentationReadyAt ?? 'legacy'}`;
+        prefetchChampionLine?.(gameKey, () => fetchChampionLine(tableId));
     }, [
         currentTableState?.roundSummary?.isGameOver,
         currentTableState?.roundSummary?.forfeit,
+        currentTableState?.roundSummary?.presentationReadyAt,
         currentTableState?.tableId,
         prefetchChampionLine,
     ]);

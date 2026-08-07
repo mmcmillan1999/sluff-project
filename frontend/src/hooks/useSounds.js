@@ -574,20 +574,26 @@ export const useSounds = ({ musicActive = false } = {}) => {
     // The personalized champion sting. GameTableView prefetches the winner's
     // line the moment the game ends (the server speaks only the name it
     // knows won); by podium time it is decoded and ready to ride the anthem.
+    //
+    // gameKey must identify THIS game's ending, not just the table: this
+    // hook lives at the app level and survives rematches, so a table-keyed
+    // cache once hailed the PREVIOUS game's champion by name.
     const championLineRef = useRef({ key: null, buffer: null });
-    const prefetchChampionLine = useCallback(async (tableId, fetchLine) => {
+    const prefetchChampionLine = useCallback(async (gameKey, fetchLine) => {
         const ctx = ctxRef.current;
-        if (!ctx || !tableId || typeof fetchLine !== 'function') return;
-        if (championLineRef.current.key === tableId) return; // once per game
-        championLineRef.current = { key: tableId, buffer: null };
+        if (!ctx || !gameKey || typeof fetchLine !== 'function') return;
+        if (championLineRef.current.key === gameKey) return; // once per game
+        // Reset FIRST: a stale buffer from an earlier game must never
+        // outlive the key change, even if this fetch fails or returns 204.
+        championLineRef.current = { key: gameKey, buffer: null };
         try {
-            const bytes = await fetchLine(tableId);
-            if (!bytes || championLineRef.current.key !== tableId) return;
+            const bytes = await fetchLine();
+            if (!bytes || championLineRef.current.key !== gameKey) return;
             const buffer = await new Promise((resolve, reject) => {
                 // Callback form for Safari's older decodeAudioData.
                 ctx.decodeAudioData(bytes, resolve, reject);
             });
-            if (championLineRef.current.key === tableId) {
+            if (championLineRef.current.key === gameKey) {
                 championLineRef.current.buffer = buffer;
             }
         } catch { /* fallback sting covers it */ }
