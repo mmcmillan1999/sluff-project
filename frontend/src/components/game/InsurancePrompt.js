@@ -162,6 +162,7 @@ const InsurancePrompt = ({ show, insuranceState, selfPlayerName, emitEvent, onCl
                 <p className="insurance-explainer" id="insurance-explainer">
                     Trade the unknown trick result for a known point exchange. The deal locks
                     the instant the defenders&rsquo; combined offers meet the bidder&rsquo;s ask.
+                    No deal? Nothing happens — the tricks decide as usual.
                 </p>
 
                 {/* Live deal board: ask − offers = gap */}

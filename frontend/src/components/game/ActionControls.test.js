@@ -96,8 +96,8 @@ describe('ActionControls portrait prompt presentation', () => {
         const grid = container.querySelector('.action-prompt__button-grid--bids');
         expect(grid).toBeInTheDocument();
         expect(grid.querySelectorAll('button')).toHaveLength(4);
-        expect(screen.getByRole('button', { name: 'Frog, 1 times scoring multiplier' })).toBeDisabled();
-        expect(screen.getByRole('button', { name: 'Solo, 2 times scoring multiplier' })).toBeEnabled();
+        expect(screen.getByRole('button', { name: /Frog — hearts trump/ })).toBeDisabled();
+        expect(screen.getByRole('button', { name: /Solo — pick the trump suit/ })).toBeEnabled();
         grid.querySelectorAll('button').forEach(button => {
             expect(button).toHaveClass('action-prompt__button');
         });
@@ -111,7 +111,7 @@ describe('ActionControls portrait prompt presentation', () => {
 
         expect(screen.getByRole('region', { name: 'Frog upgrade decision' })).toHaveAttribute('data-prompt-variant', 'choice');
         expect(screen.getByRole('button', { name: /Heart Solo/ })).toHaveClass('action-prompt__button');
-        expect(screen.getByRole('button', { name: 'Keep Frog' })).toHaveClass('action-prompt__button');
+        expect(screen.getByRole('button', { name: /Let the Solo play/ })).toHaveClass('action-prompt__button');
     });
 
     test('uses the portrait card panel for trump without exposing a raw state label', async () => {

@@ -15,7 +15,7 @@ describe('buildBidHintCopy', () => {
                 side: { suit: 'S', length: 2, hasA: true, has10: false, hasK: false },
             },
             outbid: false,
-        })).toBe('With 5 hearts and the ace and ten of hearts, you own enough of the table — a Heart Solo is on.');
+        })).toBe('With 5 hearts and the ace and ten of hearts, a Heart Solo is on — hearts become trump and you play alone at triple stakes.');
     });
 
     test('cites the side suit and its ownership for a Solo', () => {
@@ -28,7 +28,7 @@ describe('buildBidHintCopy', () => {
                 side: { suit: 'C', length: 6, hasA: true, has10: true, hasK: true },
             },
             outbid: false,
-        })).toBe('Your 6 clubs come with the ace, ten, and king of clubs — a Solo is worth a look.');
+        })).toBe("Your 6 clubs come with the ace, ten, and king of clubs — a Solo is worth a look: you'd pick clubs as trump and play alone at double stakes.");
     });
 
     test('explains the widow angle for a Frog', () => {
@@ -41,7 +41,7 @@ describe('buildBidHintCopy', () => {
                 side: { suit: 'S', length: 3, hasA: false, has10: false, hasK: false },
             },
             outbid: false,
-        })).toBe('Your hearts carry the ace of hearts, and the widow can grow them — you might try a Frog.');
+        })).toBe('Your hearts carry the ace of hearts — you might try a Frog: hearts become trump and you trade three cards with the face-down widow.');
     });
 
     test('teaches the no-aces lesson on a pass', () => {
@@ -54,7 +54,7 @@ describe('buildBidHintCopy', () => {
                 side: { suit: 'D', length: 2, hasA: false, has10: true, hasK: false },
             },
             outbid: false,
-        })).toBe('No aces means nothing in your hand owns a suit — kings and queens get outranked by the ace AND the ten.'
+        })).toBe('No aces means nothing in your hand outranks the other players — kings and queens get beaten by the ace AND the ten.'
             + " And an unguarded 10 is bait — without its ace, someone else's ace takes it. Passing is the safe call.");
     });
 
@@ -68,7 +68,7 @@ describe('buildBidHintCopy', () => {
                 side: { suit: 'S', length: 6, hasA: false, has10: false, hasK: true },
             },
             outbid: false,
-        })).toBe("Your 6 spades run long, but you don't own enough of the table to back a bid. Passing is the safe call.");
+        })).toBe("Your 6 spades run long, but they don't outrank enough of what's out there to back a bid. Passing is the safe call.");
     });
 
     test('keeps a plain pass gentle', () => {
@@ -81,7 +81,7 @@ describe('buildBidHintCopy', () => {
                 side: { suit: 'S', length: 3, hasA: true, has10: false, hasK: false },
             },
             outbid: false,
-        })).toBe('With 14 points and no suit you truly own, passing is the safe call.');
+        })).toBe('With 14 points and no suit that outranks the table, passing is the safe call.');
     });
 
     test('explains an outbid hand instead of suggesting an illegal bid', () => {

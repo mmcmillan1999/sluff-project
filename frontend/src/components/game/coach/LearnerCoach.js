@@ -10,7 +10,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import CoachCallout from './CoachCallout';
-import { pickLearnerLesson } from './learnerLessons';
+import { pickLearnerLesson, explainTrick } from './learnerLessons';
 import { getSeenTips, markTipSeen } from '../../../services/api';
 
 // Same storage shape as TipsBeacon: one receipts pool per account.
@@ -86,19 +86,44 @@ const LearnerCoach = ({ currentTableState, selfPlayerName, userId = null, active
         });
     }, [userId]);
 
-    if (!active || !lesson) return null;
+    // The every-trick narrator: who took it and why, each linger, no
+    // receipts — the whole learner game explains itself. One-shot lessons
+    // take the stage when both would speak.
+    const explainer = active ? explainTrick(currentTableState) : null;
+    const [spokenExplainerKey, setSpokenExplainerKey] = useState(null);
 
-    return (
-        <CoachCallout
-            anchor={lesson.anchor}
-            side={lesson.side}
-            spotlight={Boolean(lesson.spotlight)}
-            autoDismissMs={9000}
-            onDismiss={handleDismiss}
-        >
-            <strong>{lesson.copy.strong}</strong> {lesson.copy.text}
-        </CoachCallout>
-    );
+    if (!active) return null;
+
+    if (lesson) {
+        return (
+            <CoachCallout
+                anchor={lesson.anchor}
+                side={lesson.side}
+                spotlight={Boolean(lesson.spotlight)}
+                autoDismissMs={9000}
+                onDismiss={handleDismiss}
+            >
+                <strong>{lesson.copy.strong}</strong> {lesson.copy.text}
+            </CoachCallout>
+        );
+    }
+
+    if (explainer && explainer.key !== spokenExplainerKey) {
+        return (
+            <CoachCallout
+                key={explainer.key}
+                anchor={explainer.anchor}
+                side="top"
+                pointer="none"
+                autoDismissMs={3400}
+                onDismiss={() => setSpokenExplainerKey(explainer.key)}
+            >
+                {explainer.text}
+            </CoachCallout>
+        );
+    }
+
+    return null;
 };
 
 export default LearnerCoach;

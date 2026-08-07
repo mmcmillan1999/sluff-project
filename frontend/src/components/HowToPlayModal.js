@@ -128,7 +128,7 @@ const HowToPlayModal = ({ show, onClose, returnFocusSelector, onStartGuidedGame 
                             <li>Play 11 tricks. The trick winner leads the next trick.</li>
                             <li>Count card points. More than 60 succeeds, fewer than 60 fails, and exactly 60 exchanges no score.</li>
                         </ol>
-                        <p>Round score movement is the bidder's distance from 60 multiplied by the bid multiplier. A game ends when a score reaches zero or below; the highest remaining score wins.</p>
+                        <p>The bidder settles their distance from 60, times the bid multiplier, with <em>each</em> opponent — win and both defenders pay you; fail and you pay every seat, the widow's share included. A game ends when a score reaches zero or below; the highest remaining score wins.</p>
                     </section>
 
                     <section className="rules-section">
@@ -148,7 +148,7 @@ const HowToPlayModal = ({ show, onClose, returnFocusSelector, onStartGuidedGame 
                         <ul>
                             <li>Follow the led suit whenever you can.</li>
                             <li>If you cannot follow suit, you must play trump when you have it.</li>
-                            <li>If you have neither the led suit nor trump, you may sluff any card.</li>
+                            <li>If you have neither the led suit nor trump, you may sluff any card — throwing off a card you can't win with is where the game gets its name.</li>
                             <li>You cannot lead trump until trump has been broken, unless your hand contains only trump.</li>
                         </ul>
                         <p>Highest trump wins; otherwise, the highest card of the led suit wins. Card order, low to high: <strong>6&nbsp;7&nbsp;8&nbsp;9&nbsp;J&nbsp;Q&nbsp;K&nbsp;10&nbsp;A</strong> — yes, the 10 beats the King. To play, deliberately flick a legal card toward the center. A card that is not truly thrown settles back into your hand.</p>

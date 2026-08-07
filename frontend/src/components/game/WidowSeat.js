@@ -21,7 +21,10 @@ const WidowSeat = ({
     
     return (
         <div className="player-seat-wrapper">
-            <div className="widow-seat-container">
+            <div
+                className="widow-seat-container"
+                title="Three cards dealt face-down. The winning bid decides who gets their points."
+            >
                 <div className="widow-seat-plate">
                     <div className="widow-name-row">
                         <div className="widow-name">WIDOW</div>

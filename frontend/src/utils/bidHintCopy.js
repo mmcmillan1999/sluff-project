@@ -50,18 +50,18 @@ export const buildBidHintCopy = (hint) => {
         case 'Heart Solo': {
             const owns = ownershipPhrase(heartFacts, 'hearts')
                 || `${aces} aces backing them`;
-            return `With ${hearts} hearts and ${owns}, you own enough of the table — a Heart Solo is on.`;
+            return `With ${hearts} hearts and ${owns}, a Heart Solo is on — hearts become trump and you play alone at triple stakes.`;
         }
         case 'Solo': {
             const name = SUIT_NAMES[sideFacts.suit] || 'trump';
             const owns = ownershipPhrase(sideFacts, name)
                 || `${aces} aces beside them`;
-            return `Your ${sideFacts.length || 'long'} ${name} come with ${owns} — a Solo is worth a look.`;
+            return `Your ${sideFacts.length || 'long'} ${name} come with ${owns} — a Solo is worth a look: you'd pick ${name} as trump and play alone at double stakes.`;
         }
         case 'Frog': {
             const owns = ownershipPhrase(heartFacts, 'hearts')
                 || `${aces} aces behind them`;
-            return `Your hearts carry ${owns}, and the widow can grow them — you might try a Frog.`;
+            return `Your hearts carry ${owns} — you might try a Frog: hearts become trump and you trade three cards with the face-down widow.`;
         }
         default: {
             const best = longestSuit(suits, ['S', 'C', 'D', 'H']);
@@ -69,12 +69,12 @@ export const buildBidHintCopy = (hint) => {
                 ? " And an unguarded 10 is bait — without its ace, someone else's ace takes it."
                 : '';
             if (aces === 0) {
-                return `No aces means nothing in your hand owns a suit — kings and queens get outranked by the ace AND the ten.${tenWarning} Passing is the safe call.`;
+                return `No aces means nothing in your hand outranks the other players — kings and queens get beaten by the ace AND the ten.${tenWarning} Passing is the safe call.`;
             }
             if (best && best.count >= LONG_SUIT_MIN) {
-                return `Your ${best.count} ${SUIT_NAMES[best.suit]} run long, but you don't own enough of the table to back a bid.${tenWarning} Passing is the safe call.`;
+                return `Your ${best.count} ${SUIT_NAMES[best.suit]} run long, but they don't outrank enough of what's out there to back a bid.${tenWarning} Passing is the safe call.`;
             }
-            return `With ${points} points and no suit you truly own, passing is the safe call.${tenWarning ? tenWarning : ''}`;
+            return `With ${points} points and no suit that outranks the table, passing is the safe call.${tenWarning ? tenWarning : ''}`;
         }
     }
 };

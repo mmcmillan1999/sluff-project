@@ -1,7 +1,7 @@
 // The learner-mode lesson picker: fires the right lesson at the right
 // moment, one at a time, never twice, and only from public client state.
 
-import { pickLearnerLesson, isLearner, LEARNER_GAMES } from './learnerLessons';
+import { pickLearnerLesson, explainTrick, isLearner, LEARNER_GAMES } from './learnerLessons';
 
 const baseState = (overrides = {}) => ({
     state: 'Playing Phase',
@@ -33,6 +33,42 @@ describe('pickLearnerLesson', () => {
         expect(lesson.id).toBe('learner-card-points-2026-08');
         expect(lesson.anchor).toBe('.player-hand-container');
         expect(lesson.spotlight).toBe(true);
+    });
+
+    test('the teams lesson leads once a bidder exists, naming trump, from both chairs', () => {
+        const asDefender = pickLearnerLesson(baseState({
+            bidWinnerInfo: { playerName: 'Ann', bid: 'Solo' },
+            playerOrderActive: ['Ann', 'Me', 'Bea'],
+        }), 'Me', seen());
+        expect(asDefender.id).toBe('learner-teams-2026-08');
+        expect(asDefender.anchor).toBe('[data-seat-player="Ann"]');
+        expect(asDefender.copy.strong).toMatch(/Ann plays alone/i);
+        expect(asDefender.copy.text).toMatch(/you and Bea are a TEAM/i);
+        expect(asDefender.copy.text).toMatch(/Hearts are trump/);
+
+        const asBidder = pickLearnerLesson(baseState({
+            bidWinnerInfo: { playerName: 'Me', bid: 'Frog' },
+            playerOrderActive: ['Ann', 'Me', 'Bea'],
+        }), 'Me', seen());
+        expect(asBidder.copy.strong).toMatch(/you play alone/i);
+        expect(asBidder.copy.text).toMatch(/Hearts are your trump/);
+    });
+
+    test('the trump lock and insurance lessons cover the last silent enforcements', () => {
+        const lock = pickLearnerLesson(baseState({
+            hands: { Me: ['AH', '7H', 'KD', '9S'] }, // holds trump + off-suit
+            trumpBroken: false,
+        }), 'Me', seen('learner-card-points-2026-08'));
+        expect(lock.id).toBe('learner-trump-lock-2026-08');
+        expect(lock.copy.text).toMatch(/stay locked until someone trumps/i);
+
+        const ins = pickLearnerLesson(baseState({
+            trickTurnPlayerName: 'Ann', // not my turn — no forced-play lesson
+            insurance: { isActive: true, dealExecuted: false },
+        }), 'Me', seen('learner-card-points-2026-08'));
+        expect(ins.id).toBe('learner-insurance-2026-08');
+        expect(ins.copy.strong).toMatch(/optional/i);
+        expect(ins.copy.text).toMatch(/cards decide the round as normal/i);
     });
 
     test('explains the forced trump the moment the UI enforces it', () => {
@@ -131,6 +167,36 @@ describe('pickLearnerLesson', () => {
         expect(pickLearnerLesson(baseState({ drawRequest: { isActive: true } }), 'Me', seen())).toBeNull();
         expect(pickLearnerLesson(null, 'Me', seen())).toBeNull();
         expect(pickLearnerLesson(baseState(), null, seen())).toBeNull();
+    });
+
+    test('explainTrick narrates every linger: winner, reason, points', () => {
+        const trumped = explainTrick(baseState({
+            state: 'TrickCompleteLinger',
+            lastCompletedTrick: {
+                winnerName: 'Bea',
+                cards: [
+                    { playerName: 'Me', card: 'KS' },
+                    { playerName: 'Ann', card: '9S' },
+                    { playerName: 'Bea', card: '6H' },
+                ],
+            },
+        }));
+        expect(trumped.anchor).toBe('[data-seat-player="Bea"]');
+        expect(trumped.text).toMatch(/Bea takes it — trumped in with hearts \(\+4 pts\)/);
+
+        const plain = explainTrick(baseState({
+            state: 'TrickCompleteLinger',
+            lastCompletedTrick: {
+                winnerName: 'Ann',
+                cards: [
+                    { playerName: 'Me', card: '7D' },
+                    { playerName: 'Ann', card: 'QD' },
+                    { playerName: 'Bea', card: '8D' },
+                ],
+            },
+        }));
+        expect(plain.text).toMatch(/Ann takes it — highest diamond \(\+3 pts\)/);
+        expect(explainTrick(baseState())).toBeNull();
     });
 
     test('lesson ids satisfy the receipts API pattern', () => {

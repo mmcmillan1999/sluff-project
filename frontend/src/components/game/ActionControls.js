@@ -70,7 +70,9 @@ const ActionControls = ({
     quickPlayDecisionRejectionNonce = 0,
     turnNudgeLevel = 0,
     turnNudgeCountdown = null,
-    bidHintText = ''
+    bidHintText = '',
+    // Learner mode: show the one-line bid primer above the bid keys.
+    learnerMode = false
 }) => {
     const [inviteCopied, setInviteCopied] = useState(false);
     const [quickPlayDecisionSubmitted, setQuickPlayDecisionSubmitted] = useState(false);
@@ -128,6 +130,13 @@ const ActionControls = ({
     // Solo. PlayerSeat's bid emotes mirror these, so the table reads as one
     // language.
     const BID_SLUGS = { 'Pass': 'pass', 'Frog': 'frog', 'Solo': 'solo', 'Heart Solo': 'heart-solo' };
+    // What each key actually commits you to — the label a first-timer needs.
+    const BID_COMMITMENTS = {
+        'Pass': 'Pass — sit this auction out, costs nothing',
+        'Frog': 'Frog — hearts trump, swap three cards with the widow, 1 times stakes',
+        'Solo': 'Solo — pick the trump suit, play alone, 2 times stakes',
+        'Heart Solo': 'Heart Solo — hearts trump, play alone, 3 times stakes',
+    };
     const BID_FACES = {
         'Pass': <span className="bid-key__emoji" aria-hidden="true">✋</span>,
         'Frog': (
@@ -407,6 +416,12 @@ const ActionControls = ({
                             unmounting the button mid-interaction would drop
                             keyboard focus to the body. */}
                         <p className="action-prompt__hint" role="status">{bidHintText}</p>
+                        {learnerMode && (
+                            <p className="action-prompt__bid-primer">
+                                Bid = play alone vs. the other two for most of the
+                                120 points. Pass costs nothing.
+                            </p>
+                        )}
                         <div className="action-prompt__button-grid action-prompt__button-grid--bids">
                             {BID_HIERARCHY.map(bid => (
                                 <button
@@ -414,7 +429,7 @@ const ActionControls = ({
                                     key={bid}
                                     onClick={() => emitEvent('placeBid', { bid })}
                                     className={`game-button keycap action-prompt__button action-prompt__bid-button bid-key bid-key--${BID_SLUGS[bid]}`}
-                                    aria-label={bid === 'Pass' ? 'Pass' : `${bid}, ${BID_MULTIPLIERS[bid]} times scoring multiplier`}
+                                    aria-label={BID_COMMITMENTS[bid]}
                                     disabled={bid !== 'Pass' && BID_HIERARCHY.indexOf(bid) <= currentHighestBidLevel}
                                 >
                                     {renderBidFace(bid)}
@@ -434,14 +449,14 @@ const ActionControls = ({
             if (!isSpectator && currentTableState.biddingTurnPlayerName === selfPlayerName) {
                 return (
                     <PromptShell variant="choice" label="Frog upgrade decision" nudge={turnNudgeLevel}>
-                        <h2 className="action-prompt__heading">Solo was bid</h2>
-                        <p className="action-prompt__copy">Upgrade Frog to Heart Solo?</p>
+                        <h2 className="action-prompt__heading">Solo outbids your Frog</h2>
+                        <p className="action-prompt__copy">Take the round back with Heart Solo (3×), or step aside and let the Solo play.</p>
                         <div className="action-prompt__button-grid action-prompt__button-grid--decision">
                             <button
                                 type="button"
                                 onClick={() => emitEvent('placeBid', { bid: 'Heart Solo' })}
                                 className="game-button keycap action-prompt__button bid-key bid-key--heart-solo"
-                                aria-label={`Heart Solo, ${BID_MULTIPLIERS['Heart Solo']} times scoring multiplier`}
+                                aria-label="Heart Solo — hearts trump, alone, 3 times stakes"
                             >
                                 {renderBidFace('Heart Solo')}
                             </button>
@@ -449,10 +464,10 @@ const ActionControls = ({
                                 type="button"
                                 onClick={() => emitEvent('placeBid', { bid: 'Pass' })}
                                 className="game-button keycap action-prompt__button bid-key bid-key--frog"
-                                aria-label="Keep Frog"
+                                aria-label="Let the Solo play — your Frog stands down"
                             >
                                 {BID_FACES['Frog']}
-                                <span className="bid-key__name">Keep Frog</span>
+                                <span className="bid-key__name">Let Solo Play</span>
                             </button>
                         </div>
                     </PromptShell>

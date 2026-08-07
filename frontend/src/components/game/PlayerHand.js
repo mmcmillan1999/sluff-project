@@ -48,7 +48,9 @@ const PlayerHand = ({
     // Turn call-up level for hand-owned decisions: 0 calm, 1 nudge, 2 urgent.
     nudgeLevel = 0,
     // Seconds until the AFK backstop plays for this player, or null.
-    nudgeCountdown = null
+    nudgeCountdown = null,
+    // Learner coach suggestion: this card wears a gentle gold ring.
+    suggestedCard = null
 }) => {
     // Use local state only if not provided from parent
     const [localSelectedDiscards, setLocalSelectedDiscards] = useState([]);
@@ -877,7 +879,7 @@ const PlayerHand = ({
                         <div
                             id={`card-${card}`}
                             key={card}
-                            className={`player-hand-card-wrapper ${isBeingDragged ? 'is-dragging' : ''}${isFastMode && isLegal ? ' fast-play' : ''}${isFastLifted ? ' is-fast-lifted' : ''}`}
+                            className={`player-hand-card-wrapper ${isBeingDragged ? 'is-dragging' : ''}${isFastMode && isLegal ? ' fast-play' : ''}${isFastLifted ? ' is-fast-lifted' : ''}${suggestedCard === card && isLegal ? ' coach-suggested' : ''}`}
                             style={dynamicStyle}
                             onMouseDown={(e) => !isFastMode && isLegal && handleDragStart(e, card)}
                             onClick={isFastMode && isLegal ? () => handleFastClick(card) : undefined}

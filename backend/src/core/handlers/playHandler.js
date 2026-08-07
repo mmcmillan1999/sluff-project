@@ -117,10 +117,13 @@ function resolveTrick(engine) {
                 payload: { event: 'midnightSpecial', data: midnightSpecial },
             }] : []),
             { type: 'BROADCAST_STATE' },
-            { 
+            {
                 type: 'START_TIMER',
                 payload: {
-                    duration: 2200, // hold the completed trick so the cards can animate onto the winning pile
+                    // Hold the completed trick so the cards can animate onto
+                    // the winning pile — stretched on learner tables so the
+                    // coach's post-mortem can actually be read.
+                    duration: Number(engine.trickLingerMs) > 0 ? Number(engine.trickLingerMs) : 2200,
                     onTimeout: (engineRef) => {
                         if (engineRef.state === "TrickCompleteLinger") {
                             engineRef.currentTrickCards = [];

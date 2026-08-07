@@ -290,8 +290,23 @@
 /* The suggestion itself, one sentence between heading and bid keys. Stays
    mounted while empty (see the live-region note in ActionControls.js), so
    the empty state must cost no space. */
+/* The bid suggestion floats ABOVE the prompt instead of growing it — the
+   prompt is top-anchored, so in-flow text pushed the bid keys down into
+   the player's hand (and off short screens). Stays mounted while empty so
+   the live region announces reliably; the empty state wears no chrome. */
 .action-prompt__hint {
-    margin: 0.4vh 0 0.2vh;
+    position: absolute;
+    bottom: calc(100% + 0.7vh);
+    left: 50%;
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: min(82vw, 24rem);
+    margin: 0;
+    padding: 0.7vh 1.2vh;
+    background: rgba(16, 22, 30, 0.95);
+    border: 0.12vh solid rgba(238, 202, 118, 0.4);
+    border-radius: 0.8vh;
+    box-shadow: 0 0.4vh 1vh rgba(0, 0, 0, 0.45);
     color: #f3dfae;
     font-size: clamp(0.72rem, 1.7vh, 0.95rem);
     font-style: italic;
@@ -299,7 +314,10 @@
 }
 
 .action-prompt__hint:empty {
-    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    box-shadow: none;
 }
 
 /* --- Bid keys: emoji face + name + multiplier pill ---------------------

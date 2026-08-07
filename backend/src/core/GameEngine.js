@@ -72,6 +72,12 @@ class GameEngine {
         this.playerMode = null;
         this.roundHistory = [];
         this.dealer = null;
+        // Learner pacing (set per game by GameService._applyLearnerPacing):
+        // slows bots and stretches the trick linger when a nearly-new human
+        // is seated, and names the seats that get coach suggestions.
+        this.botPaceMultiplier = 1;
+        this.trickLingerMs = 2200;
+        this.learnerUserIds = [];
         this.internalTimers = {};
         this.bots = {};
         // Production supplies persistent bot principals so bot seats participate

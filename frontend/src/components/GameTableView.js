@@ -26,7 +26,7 @@ import PlayerHandAnchorDebug from './game/PlayerHandAnchorDebug';
 import { getLobbyChatHistory, fetchChampionLine } from '../services/api';
 import { haptic } from '../utils/haptics';
 import LearnerCoach from './game/coach/LearnerCoach';
-import { isLearner } from './game/coach/learnerLessons';
+import { cardHelperActive, setCardHelperOverride } from './game/coach/learnerLessons';
 import SoundControls from './game/SoundControls';
 import { useModalFocus } from '../hooks/useModalFocus';
 import { shareInvite, getInviteUrl } from '../utils/tableInvites';
@@ -401,8 +401,14 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
 
     // Learner mode: the first few games get card-point badges on every card
     // face and anchored micro-lessons at teachable moments — in ANY venue,
-    // unlike the Academy's guided coach. Retires itself at three games.
-    const learnerMode = !isSpectator && isLearner(tutorialState);
+    // unlike the Academy's guided coach. Retires itself at three games; the
+    // "Card helper" menu toggle overrides in either direction.
+    const [cardHelperNonce, setCardHelperNonce] = useState(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const learnerMode = useMemo(
+        () => !isSpectator && cardHelperActive(tutorialState),
+        [isSpectator, tutorialState, cardHelperNonce],
+    );
 
     const tutorialCoachActive = Boolean(
         tutorialState?.activeVersion === FIRST_GAME_TUTORIAL_VERSION
@@ -1354,6 +1360,20 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 <div className="game-menu-actions">
                     <div className="game-menu-section">
                         <button onClick={() => { handleShowHowToPlay(); setShowGameMenu(false); }} className="game-menu-button">How to Play</button>
+                        <button
+                            onClick={() => {
+                                setCardHelperOverride(learnerMode ? 'off' : 'on');
+                                setCardHelperNonce(n => n + 1);
+                            }}
+                            className="game-menu-button"
+                            aria-pressed={learnerMode}
+                        >
+                            Card helper: {learnerMode ? 'On' : 'Off'}
+                        </button>
+                        <p className="game-menu-helper">
+                            Point values on every card plus coaching tips on the felt.
+                            On automatically for your first three games.
+                        </p>
                         <button onClick={handleShareInvite} className="game-menu-button invite">Invite Friends</button>
                         <button
                             onClick={() => {
@@ -1709,6 +1729,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 selectedFrogDiscards={selectedFrogDiscards}
                 showDebugAnchors={showAnchorDebug}
                 quickPlayDecisionRejectionNonce={quickPlayDecisionRejectionNonce}
+                learnerMode={learnerMode}
                 roundPresentationComplete={roundPresentationPhase === 'settled'
                     && sharedPresentationReady
                     && serverRoundPresentationReady}
@@ -1769,6 +1790,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                     showDebug={false}
                     nudgeLevel={handNudgeLevel}
                     nudgeCountdown={handNudgeLevel > 0 ? turnNudgeCountdown : null}
+                    suggestedCard={learnerMode ? currentTableState.viewerSuggestedCard || null : null}
                 />
                 <div className="footer-controls-wrapper">
                     {/* Points live on the trick plates now (none at all on

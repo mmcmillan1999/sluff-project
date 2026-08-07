@@ -47,6 +47,9 @@ const COPY_FIELDS = [
     // restored round could celebrate the same run twice), and the rider stamp
     // feeds the round-history entry written at scoring.
     'midnightSpecialFired', 'midnightSpecialRider',
+    // Learner pacing: a resumed learner table keeps its slow bots, long
+    // linger, and coach-suggestion roster.
+    'botPaceMultiplier', 'trickLingerMs', 'learnerUserIds',
 ];
 
 /**

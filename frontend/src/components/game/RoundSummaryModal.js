@@ -602,7 +602,7 @@ const RoundSummaryModal = ({
                     defenderPoints={finalDefenderPoints}
                 />
                 <div className="point-calculation-recap">
-                    Δ60: {rawDifference} pts × {bidMultiplier}x ({bidType}) = {exchangeValue} pts
+                    {rawDifference} past 60 × {bidMultiplier} ({bidType}) = {exchangeValue} pts — settled with each opponent
                 </div>
                 {!insuranceDealWasMade && renderScoreTotals()}
             </div>

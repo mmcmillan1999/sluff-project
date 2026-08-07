@@ -232,3 +232,23 @@
         transition: none !important;
     }
 }
+
+/* The learner coach's suggested card: a calm gold ring with a slow breath —
+   advisory, clearly different from the urgent turn-nudge treatments. */
+.player-hand-card-wrapper.coach-suggested .card-display,
+.player-hand-card-wrapper.coach-suggested .card-back-container {
+    box-shadow: 0 0 0 0.35vh rgba(246, 207, 116, 0.9), 0 0 1.6vh rgba(246, 207, 116, 0.45) !important;
+    animation: coach-suggested-breathe 2s ease-in-out infinite;
+}
+
+@keyframes coach-suggested-breathe {
+    0%, 100% { box-shadow: 0 0 0 0.35vh rgba(246, 207, 116, 0.9), 0 0 1.6vh rgba(246, 207, 116, 0.45); }
+    50% { box-shadow: 0 0 0 0.35vh rgba(246, 207, 116, 0.65), 0 0 2.4vh rgba(246, 207, 116, 0.25); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .player-hand-card-wrapper.coach-suggested .card-display,
+    .player-hand-card-wrapper.coach-suggested .card-back-container {
+        animation: none;
+    }
+}

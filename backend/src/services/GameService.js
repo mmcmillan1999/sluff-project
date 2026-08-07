@@ -12,6 +12,7 @@
         ROUND_ADVANCE_QUORUM_GRACE_MS,
         BOT_BID_READY_DELAY_MS,
     } = require('../core/constants');
+    const { BRAINS } = require('../core/bot-brains');
     const AdaptiveInsuranceStrategy = require('../core/bot-strategies/AdaptiveInsuranceStrategy');
     const MarketInsuranceStrategy = require('../core/bot-strategies/MarketInsuranceStrategy');
     const { serializeEngineForResume, restoreEngineFromResume } = require('../serialization/gameResume');
@@ -200,6 +201,22 @@
                 && engine.roundPresentationAcknowledgements instanceof Set
                 && engine.roundPresentationAcknowledgements.has(String(userId))
             );
+            // Learner seats get a coach suggestion for their own turn — their
+            // hand, their eyes only, computed by the counting brain (never
+            // the sealed ones). Advisory: the client shows it as a nudge.
+            try {
+                if (Array.isArray(engine.learnerUserIds)
+                    && engine.learnerUserIds.includes(userId)
+                    && engine.state === 'Playing Phase'
+                    && engine.trickTurnPlayerId != null
+                    && engine.players[engine.trickTurnPlayerId]?.userId === userId
+                    && !engine.playoutVote?.isActive
+                    && !engine.drawRequest?.isActive) {
+                    const playerName = engine.players[engine.trickTurnPlayerId].playerName;
+                    const suggestion = BRAINS.counting.playCard(engine, { playerName, engine });
+                    if (suggestion) state.viewerSuggestedCard = suggestion;
+                }
+            } catch { /* a coaching hiccup must never break state delivery */ }
             return state;
         }
 
@@ -1907,9 +1924,47 @@
                                 err,
                             );
                         }
+
+                        // Learner pacing: when a nearly-new human is seated
+                        // (fewer than three finished games), the whole table
+                        // slows down — bots think longer and the completed
+                        // trick lingers longer, so lessons can land. Failure
+                        // here must never disturb a started game.
+                        try {
+                            await this._applyLearnerPacing(engine);
+                        } catch (err) {
+                            console.error(`[LEARNER] Pacing lookup failed for ${tableId}:`, err.message);
+                        }
                         break;
                     }
                 }
+            }
+        }
+
+        // Learner pacing + coaching roster: humans with fewer than three
+        // finished games (wins+losses+washes) mark the game as a learner
+        // table — bots slow to half speed, the trick linger stretches, and
+        // the state serializer includes a suggested card for those seats.
+        async _applyLearnerPacing(engine) {
+            const humanIds = Object.values(engine?.players || {})
+                .filter(player => !player.isBot && !player.isSpectator && Number.isInteger(player.userId))
+                .map(player => player.userId);
+            engine.learnerUserIds = [];
+            engine.botPaceMultiplier = 1;
+            engine.trickLingerMs = 2200;
+            if (humanIds.length === 0 || !this.pool) return;
+            const { rows } = await this.pool.query(
+                `SELECT id, COALESCE(wins,0) + COALESCE(losses,0) + COALESCE(washes,0) AS games_played
+                 FROM users WHERE id = ANY($1::int[])`,
+                [humanIds],
+            );
+            engine.learnerUserIds = rows
+                .filter(row => Number(row.games_played) < 3)
+                .map(row => Number(row.id));
+            if (engine.learnerUserIds.length > 0) {
+                engine.botPaceMultiplier = 2;
+                engine.trickLingerMs = 3600;
+                console.log(`[LEARNER] ${engine.tableId}: learner table (users ${engine.learnerUserIds.join(', ')}) — bots at half speed.`);
             }
         }
 
@@ -2008,8 +2063,11 @@
                 const bot = engine.bots[botId];
                 const botUserId = bot.userId;
                 const isCourtney = bot.playerName === "Courtney Sr.";
-                const standardDelay = isCourtney ? 2000 : 1000;
-                const playDelay = isCourtney ? 2400 : 1200;
+                // Learner tables run at half speed so new players can read
+                // the felt (and the coach) between plays.
+                const pace = Number(engine.botPaceMultiplier) > 1 ? Number(engine.botPaceMultiplier) : 1;
+                const standardDelay = (isCourtney ? 2000 : 1000) * pace;
+                const playDelay = (isCourtney ? 2400 : 1200) * pace;
                 const presentationReadyAt = Number(engine.roundSummary?.presentationReadyAt);
                 const legacyRoundEndDelay = isCourtney ? 20000 : 14000;
                 // If the presentation already released (acknowledgement quorum
