@@ -9,13 +9,19 @@ const {
     buildNormalGameSettlement,
 } = require('../settlement/gameSettlement');
 
-const BOT_MERCY_THRESHOLD = 5;
+// The bot refill floor sits BELOW Shirecliff's 5-token buy-in on purpose
+// (Matt, Aug 6 2026): a refilled bot can always afford Fort Creek (1), but
+// must WIN at least two net tokens before the mid-stakes room will seat it
+// — the table ladder becomes a fitness sort across the bot brains.
+const BOT_MERCY_THRESHOLD = 3;
 
 // Caller must hold the users row lock and an open transaction. This is kept
-// server-internal: public mercy requests still use handleMercyTokenRequest and
-// cannot assert that a human principal is a bot. A normal mercy grant also
-// counts against this hourly window because both paths share the same ledger
-// type and policy.
+// server-internal: public mercy requests still use handleMercyTokenRequest
+// (which keeps its one-per-hour human policy) and cannot assert that a
+// principal is a bot. Bots get no wait period (Matt, Aug 6 2026 — "I see
+// some broke bots out there"): a bot below the floor refills straight TO
+// the floor, every time the funding gate finds it short. The inflow stays
+// bounded — it only fires below the floor, only as fast as games start.
 async function maybeGrantAutomaticBotMercyWithinTransaction(
     client,
     { userId, username, isBot, currentTokens },
@@ -26,33 +32,18 @@ async function maybeGrantAutomaticBotMercyWithinTransaction(
         return { granted: false, reason: 'balance_not_below_threshold', currentTokens: balance };
     }
 
-    const rateLimitResult = await client.query(
-        `SELECT COUNT(*) AS mercy_count, MAX(transaction_time) AS last_mercy_time
-         FROM transactions
-         WHERE user_id = $1
-           AND transaction_type = 'free_token_mercy'
-           AND transaction_time > NOW() - INTERVAL '1 hour'`,
-        [userId],
-    );
-    if (Number(rateLimitResult.rows[0]?.mercy_count || 0) > 0) {
-        return {
-            granted: false,
-            reason: 'hourly_limit',
-            currentTokens: balance,
-            lastMercyTime: rateLimitResult.rows[0]?.last_mercy_time || null,
-        };
-    }
-
+    const grantAmount = Number((BOT_MERCY_THRESHOLD - balance).toFixed(2));
     await client.query(
         `INSERT INTO transactions (user_id, transaction_type, amount, description)
-         VALUES ($1, 'free_token_mercy', 1, $2)`,
-        [userId, `Automatic mercy token for bot ${username || userId} below 5 tokens`],
+         VALUES ($1, 'free_token_mercy', $2, $3)`,
+        [userId, grantAmount, `Automatic mercy refill for bot ${username || userId} back to ${BOT_MERCY_THRESHOLD} tokens`],
     );
     return {
         granted: true,
         reason: 'granted',
         previousBalance: balance,
-        currentTokens: balance + 1,
+        grantAmount,
+        currentTokens: BOT_MERCY_THRESHOLD,
     };
 }
 
@@ -569,9 +560,9 @@ async function settleGameTransaction(pool, settlement) {
             }
         }
 
-        // A funded bot that finishes below five gets one normal mercy ledger
-        // entry, subject to the same one-per-hour window. This happens inside
-        // settlement so a payout/stat failure cannot leave a detached grant.
+        // A funded bot that finishes below the floor refills right
+        // here — no wait period for bots. This happens inside settlement so
+        // a payout/stat failure cannot leave a detached grant.
         let botAccounts = [];
         if (settlement.botUserIds.length > 0) {
             const botResult = await client.query(

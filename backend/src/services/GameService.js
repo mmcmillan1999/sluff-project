@@ -1176,21 +1176,22 @@
                 return { status: 'busy', state: engine.state };
             }
 
-            // Fresh random trio every game.
+            // Fresh trio every game — brains as distinct as funding allows,
+            // so the exhibition doubles as an arms race between the brains.
             for (const player of seated) {
                 engine.removeBotPlayer(player.userId);
             }
             const eligibleBotBalances = await this._loadAffordableQuickPlayBotBalances(engine);
             for (let seat = 0; seat < 3; seat += 1) {
-                engine.addBotPlayer({ eligibleBotBalances });
+                engine.addBotPlayer({ eligibleBotBalances, preferDistinctBrains: true });
             }
 
             const trio = engine.playerOrder.allIds
                 .map(id => engine.players[id])
                 .filter(player => player?.isBot);
             if (trio.length < 3) {
-                // Not enough funded bots right now; mercy tokens replenish
-                // hourly, so release the partial line-up and retry next tick.
+                // Not enough funded bots right now; broke bots refill to the
+                // floor at their next funding pass, so retry next tick.
                 for (const player of trio) engine.removeBotPlayer(player.userId);
                 this.emitGameState(tableId);
                 return { status: 'insufficient_bots', available: trio.length };

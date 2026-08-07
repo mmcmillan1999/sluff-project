@@ -223,7 +223,7 @@ class GameEngine {
         }
     }
 
-    _addBotPlayer({ allowQuickPlayFourth = false, eligibleBotBalances = null } = {}) {
+    _addBotPlayer({ allowQuickPlayFourth = false, eligibleBotBalances = null, preferDistinctBrains = false } = {}) {
         if (this.gameStarted || this.gameStartPending || this.playerOrder.count >= 4) return;
         // Quick Play's fourth seat is reserved for a human after the table has
         // explicitly entered its fourth-player search. Only the server-owned,
@@ -259,6 +259,16 @@ class GameEngine {
                         .filter(candidate => brainNameFor(candidate.username) === missingBrain);
                     if (matching.length > 0) draftPool = matching;
                 }
+            }
+            // Exhibition diversity: prefer a brain not already at the table
+            // so all-bot games compare the arms against each other. "When
+            // possible" — an out-of-funds arm falls back to the full pool
+            // rather than blocking the seat.
+            if (preferDistinctBrains) {
+                const seatedBrains = new Set(currentBots.map(bot => brainNameFor(bot.playerName)));
+                const freshBrains = draftPool
+                    .filter(candidate => !seatedBrains.has(brainNameFor(candidate.username)));
+                if (freshBrains.length > 0) draftPool = freshBrains;
             }
             const pickLeasedProfile = (pool) => {
                 const firstProfileIndex = Math.floor(Math.random() * pool.length);

@@ -34,12 +34,17 @@ const BID_EMOTES = {
 };
 const BIDDING_STATES = new Set(['Bidding Phase', 'Awaiting Frog Upgrade Decision']);
 
-// What this seat is saying during the auction: zzz once passed, the bid's
-// face while holding the high bid, a think while it is their turn.
+// What this seat is saying during the auction: a plain "Pass" once passed
+// (the zzz read as sleeping, not passing), the bid's face while holding
+// the high bid, a think while it is their turn.
 const bidEmoteFor = (currentTableState, playerName) => {
     if (!BIDDING_STATES.has(currentTableState.state)) return null;
     if (currentTableState.playersWhoPassedThisRound?.includes(playerName)) {
-        return { key: 'pass', node: '💤', label: `${playerName} passed` };
+        return {
+            key: 'pass',
+            node: <span className="bid-emote-word">Pass</span>,
+            label: `${playerName} passed`,
+        };
     }
     const highBid = currentTableState.currentHighestBidDetails;
     if (highBid?.playerName === playerName) {

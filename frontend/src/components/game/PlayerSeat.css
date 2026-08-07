@@ -535,3 +535,13 @@
 
 .bid-emote-suit--red { color: #c8102e; }
 .bid-emote-suit--black { color: #16161e; }
+
+/* The pass says so in words. */
+.bid-emote-word {
+    font-family: 'Oswald', sans-serif;
+    font-size: 1.4vh;
+    font-weight: 600;
+    letter-spacing: 0.06vh;
+    color: #3a4046;
+    text-transform: uppercase;
+}

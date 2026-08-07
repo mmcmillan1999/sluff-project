@@ -1,5 +1,5 @@
 // The bid emote bubble: during the auction each seat says what it just did
-// — zzz for a pass, the bid's emoji for the high bidder, a think for the
+// — "Pass" in words for a pass, the bid's emoji for the high bidder, a think for the
 // seat on turn — and vanishes the moment bidding resolves.
 import React from 'react';
 import { render, screen } from '@testing-library/react';
@@ -59,7 +59,7 @@ test('a passed player snoozes even when it is not their turn', () => {
         playersWhoPassedThisRound: ['River Ace'],
         biddingTurnPlayerName: 'Someone Else',
     });
-    expect(screen.getByRole('img', { name: 'River Ace passed' })).toHaveTextContent('💤');
+    expect(screen.getByRole('img', { name: 'River Ace passed' })).toHaveTextContent(/pass/i);
 });
 
 test('the seat on turn thinks', () => {

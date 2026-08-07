@@ -25,7 +25,7 @@ function makeFundedTable(gameId, scores = { Alice: 200, Bob: 100, 'Mike Knight':
     };
 }
 
-function createLedgerPool({ balances = { 1: 10, 2: 10, 100: 4 }, recentBotMercy = 0 } = {}) {
+function createLedgerPool({ balances = { 1: 10, 2: 10, 100: 2 }, recentBotMercy = 0 } = {}) {
     const state = {
         balances: new Map(Object.entries(balances).map(([id, amount]) => [Number(id), Number(amount)])),
         accounts: new Map([
@@ -98,9 +98,10 @@ function createLedgerPool({ balances = { 1: 10, 2: 10, 100: 4 }, recentBotMercy 
             if (sql.includes('INSERT INTO transactions')) {
                 if (sql.includes("'free_token_mercy'")) {
                     const userId = Number(params[0]);
-                    state.balances.set(userId, (state.balances.get(userId) || 0) + 1);
+                    const amount = Number(params[1]);
+                    state.balances.set(userId, (state.balances.get(userId) || 0) + amount);
                     state.mercyCount.set(userId, (state.mercyCount.get(userId) || 0) + 1);
-                    state.transactions.push({ userId, type: 'free_token_mercy', amount: 1 });
+                    state.transactions.push({ userId, type: 'free_token_mercy', amount });
                     return { rows: [] };
                 }
                 if (sql.includes("'buy_in'")) {
@@ -145,7 +146,7 @@ function makeService(engine, pool) {
 }
 
 async function testPersistentBotRosterAndAtomicStart() {
-    const profiles = [{ id: 100, username: 'Mike Knight', tokens: 4, isBot: true }];
+    const profiles = [{ id: 100, username: 'Mike Knight', tokens: 2, isBot: true }];
     const engine = new GameEngine('funded-start', 'fort-creek', 'Funded Start', null, 'private', profiles);
     engine.joinTable({ id: 1, username: 'Alice' }, 'socket-1', 10);
     engine.joinTable({ id: 2, username: 'Bob' }, 'socket-2', 10);
@@ -157,7 +158,7 @@ async function testPersistentBotRosterAndAtomicStart() {
         isSpectator: false,
         disconnected: false,
         isBot: true,
-        tokens: 4,
+        tokens: 2,
     });
 
     const start = engine.startGame(1);
@@ -168,15 +169,22 @@ async function testPersistentBotRosterAndAtomicStart() {
     const pool = createLedgerPool();
     await makeService(engine, pool)._executeEffects(engine.tableId, [effect]);
     assert.equal(engine.gameStarted, true);
-    assert.equal(engine.players[100].tokens, 4, 'the +1 mercy and -1 buy-in are reflected in memory');
+    assert.equal(engine.players[100].tokens, 2, 'the refill-to-3 and -1 buy-in are reflected in memory');
     assert.equal(pool.state.transactions.filter(row => row.type === 'free_token_mercy').length, 1);
     assert.equal(pool.state.transactions.filter(row => row.type === 'buy_in').length, 3);
 
+    // No wait period for bots (Aug 6 2026): dipping below the floor after
+    // the buy-in refills straight back to it on the very next check.
     const retryMercy = await transactionManager.handleAutomaticBotMercyToken(pool, 100);
-    assert.equal(retryMercy.granted, false);
-    assert.equal(retryMercy.reason, 'hourly_limit');
-    assert.equal(pool.state.transactions.filter(row => row.type === 'free_token_mercy').length, 1,
-        'the separate pre-start and in-transaction checks can never double-grant within an hour');
+    assert.equal(retryMercy.granted, true);
+    assert.equal(retryMercy.currentTokens, 3, 'refills TO the floor, not by one');
+    assert.equal(pool.state.balances.get(100), 3);
+    assert.equal(pool.state.transactions.filter(row => row.type === 'free_token_mercy').length, 2);
+
+    const atFloor = await transactionManager.handleAutomaticBotMercyToken(pool, 100);
+    assert.equal(atFloor.granted, false);
+    assert.equal(atFloor.reason, 'balance_not_below_threshold',
+        'the floor itself still gates — mercy never tops up a funded bot');
 }
 
 function testProcessLocalBotSeatLeases() {
@@ -280,13 +288,13 @@ function testPersistentBotsShareTheExactFundedPot() {
 }
 
 async function testPostSettlementBotMercy() {
-    const pool = createLedgerPool({ balances: { 1: 9, 2: 9, 100: 4 }, recentBotMercy: 0 });
+    const pool = createLedgerPool({ balances: { 1: 9, 2: 9, 100: 2 }, recentBotMercy: 0 });
     const result = await transactionManager.handleNormalGameTransactions(
         pool,
         makeFundedTable(900),
     );
     assert.equal(result.alreadySettled, false);
-    assert.equal(pool.state.balances.get(100), 5);
+    assert.equal(pool.state.balances.get(100), 3);
     assert.equal(pool.state.transactions.filter(row => row.type === 'free_token_mercy').length, 1);
     assert.equal(pool.state.stats.get(100), 'losses');
 
