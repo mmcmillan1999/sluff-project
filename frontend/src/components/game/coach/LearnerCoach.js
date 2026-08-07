@@ -10,7 +10,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import CoachCallout from './CoachCallout';
-import { pickLearnerLesson, explainTrick } from './learnerLessons';
+import { pickLearnerLesson, explainTrick, pointsMilestone } from './learnerLessons';
 import { getSeenTips, markTipSeen } from '../../../services/api';
 
 // Same storage shape as TipsBeacon: one receipts pool per account.
@@ -61,14 +61,21 @@ const LearnerCoach = ({ currentTableState, selfPlayerName, userId = null, active
         return () => { cancelled = true; };
     }, [active]);
 
+    // Score milestones (50 approaching, bid made past 60, bid dead at 60)
+    // own the linger they cross on: they can never re-fire, while a one-shot
+    // lesson simply re-arms at its next moment.
+    const milestone = active ? pointsMilestone(currentTableState, selfPlayerName) : null;
+    const [spokenMilestoneKey, setSpokenMilestoneKey] = useState(null);
+    const milestonePending = Boolean(milestone) && milestone.key !== spokenMilestoneKey;
+
     useEffect(() => {
-        if (!active || !receiptsLoaded || lesson) return;
+        if (!active || !receiptsLoaded || lesson || milestonePending) return;
         const next = pickLearnerLesson(currentTableState, selfPlayerName, seen);
         if (next) {
             shownAtRef.current = Date.now();
             setLesson(next);
         }
-    }, [active, receiptsLoaded, lesson, seen, currentTableState, selfPlayerName]);
+    }, [active, receiptsLoaded, lesson, milestonePending, seen, currentTableState, selfPlayerName]);
 
     const handleDismiss = useCallback(({ reason } = {}) => {
         setLesson(current => {
@@ -131,6 +138,25 @@ const LearnerCoach = ({ currentTableState, selfPlayerName, userId = null, active
                 onDismiss={() => setDealPromptHidden(true)}
             >
                 <strong>Your deal.</strong> Tap the Deal button to send the cards out.
+            </CoachCallout>
+        );
+    }
+
+    if (milestonePending) {
+        return (
+            <CoachCallout
+                key={milestone.key}
+                anchor={milestone.anchor}
+                side="top"
+                autoDismissMs={4200}
+                onDismiss={() => {
+                    setSpokenMilestoneKey(milestone.key);
+                    // The plain "X takes it" line for the same trick must not
+                    // pop up behind a dismissed milestone.
+                    if (explainer) setSpokenExplainerKey(explainer.key);
+                }}
+            >
+                <strong>{milestone.copy.strong}</strong> {milestone.copy.text}
             </CoachCallout>
         );
     }

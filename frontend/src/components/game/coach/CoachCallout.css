@@ -52,6 +52,11 @@
     position: absolute;
     transform: translateX(-50%);
     z-index: 2600;
+    /* max-content: an absolutely positioned box otherwise shrinks to the
+       space right of its left offset, so the card's width changed every
+       time the clamp moved it — which changed the clamp — and a left-seat
+       callout resized itself in a loop. Width must not depend on position. */
+    width: max-content;
     max-width: min(82vw, 26rem);
     padding: 1.1vh 3.4vh 1.1vh 1.5vh;
     background: rgba(20, 26, 34, 0.96);

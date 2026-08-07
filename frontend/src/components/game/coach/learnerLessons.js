@@ -84,6 +84,99 @@ export function explainTrick(currentTableState) {
     };
 }
 
+// Captured-pile totals, tolerant of both trick shapes on the wire: the
+// server sends { cards: ['AH', ...] }, older fixtures a bare [{ card }].
+const trickCardList = (trick) => (Array.isArray(trick) ? trick : trick?.cards || [])
+    .map(entry => (typeof entry === 'string' ? entry : entry?.card))
+    .filter(Boolean);
+
+const pileTotal = (capturedTricks, names) => names.reduce((sum, name) => (
+    sum + (capturedTricks?.[name] || []).reduce((trickSum, trick) => (
+        trickSum + trickCardList(trick).reduce((cardSum, card) => cardSum + cardPoints(card), 0)
+    ), 0)
+), 0);
+
+const BID_MULTIPLIERS = { Frog: 1, Solo: 2, 'Heart Solo': 3 };
+
+/**
+ * The running-score milestones (not receipts-gated, once per crossing):
+ * a side closing on break-even at 50, the bidder clinching past 60 with
+ * the payout math, the defenders killing the bid at 60. Announced on the
+ * linger of the trick that crossed the line — captured piles are visible
+ * public state, so this teaches WHY the round is being fought over 60.
+ * Hidden points (a Frog bidder's discards) can only delay an
+ * announcement, never make one wrong.
+ */
+export function pointsMilestone(currentTableState, selfPlayerName) {
+    if (currentTableState?.state !== 'TrickCompleteLinger') return null;
+    const { bidWinnerInfo, capturedTricks, lastCompletedTrick, playerOrderActive } = currentTableState;
+    const winnerName = lastCompletedTrick?.winnerName;
+    if (!bidWinnerInfo || !winnerName) return null;
+
+    const bidderName = bidWinnerInfo.playerName;
+    const defenderNames = (playerOrderActive || []).filter(name => name !== bidderName);
+    const trickCards = trickCardList(lastCompletedTrick);
+    const trickPoints = trickCards.reduce((sum, card) => sum + cardPoints(card), 0);
+    if (trickPoints === 0) return null; // a pointless trick cannot cross a line
+
+    const winnerIsBidder = winnerName === bidderName;
+    const sideNames = winnerIsBidder ? [bidderName] : defenderNames;
+    const after = pileTotal(capturedTricks, sideNames);
+    const before = after - trickPoints;
+    const selfOnSide = sideNames.includes(selfPlayerName);
+    const keyFor = (kind) => `milestone:${kind}:${winnerName}:${trickCards.join('-')}`;
+
+    if (winnerIsBidder && before <= 60 && after > 60) {
+        const multiplier = BID_MULTIPLIERS[bidWinnerInfo.bid] || 1;
+        const past = after - 60;
+        return {
+            key: keyFor('made'),
+            anchor: `[data-seat-player="${winnerName}"]`,
+            copy: {
+                strong: selfOnSide
+                    ? `You're past 60 — the bid is made.`
+                    : `${bidderName} is past 60 — the bid is made.`,
+                text: `${after} points is ${past} past 60 × ${multiplier} (${bidWinnerInfo.bid}) — that's ${past * multiplier} from each defender already, and every extra point pays ${multiplier} more.`,
+            },
+        };
+    }
+
+    if (!winnerIsBidder && before < 60 && after >= 60) {
+        return {
+            key: keyFor('dead'),
+            anchor: `[data-seat-player="${winnerName}"]`,
+            copy: {
+                strong: selfOnSide
+                    ? 'Your team hit 60 — the bid is dead.'
+                    : 'The defenders hit 60 — the bid is dead.',
+                text: `${bidderName} can't reach 61 now and pays each defender — and every extra defender point raises the bill.`,
+            },
+        };
+    }
+
+    if (before < 50 && after >= 50 && (winnerIsBidder ? after <= 60 : after < 60)) {
+        return {
+            key: keyFor('close'),
+            anchor: `[data-seat-player="${winnerName}"]`,
+            copy: winnerIsBidder
+                ? {
+                    strong: selfOnSide
+                        ? `You're at ${after} captured points.`
+                        : `${bidderName} is at ${after} captured points.`,
+                    text: `More than 60 of the 120 makes the bid — ${61 - after} to go.`,
+                }
+                : {
+                    strong: selfOnSide
+                        ? `Your team is at ${after} points.`
+                        : `The defenders are at ${after} points.`,
+                    text: `At 60 the bid is dead — ${60 - after} to go.`,
+                },
+        };
+    }
+
+    return null;
+}
+
 /**
  * Choose the one lesson that applies right now, or null. `seen` is a Set of
  * already-dismissed lesson ids; the caller shows at most one at a time.
