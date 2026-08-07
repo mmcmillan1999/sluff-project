@@ -193,6 +193,12 @@ if (promptMode) {
             tableState.state = 'Bidding Phase';
             tableState.biddingTurnPlayerName = 'Brandi';
             break;
+        case 'deal':
+            // Your deal: the deck, the sonar-ringed Deal button, and (in
+            // learner mode) the coach callout pointing at it.
+            tableState.state = 'Dealing Pending';
+            tableState.dealer = 101;
+            break;
         case 'trump':
             tableState.state = 'Trump Selection';
             break;

@@ -182,7 +182,7 @@ describe('pickLearnerLesson', () => {
             },
         }));
         expect(trumped.anchor).toBe('[data-seat-player="Bea"]');
-        expect(trumped.text).toMatch(/Bea takes it — trumped in with hearts \(\+4 pts\)/);
+        expect(trumped.text).toMatch(/Bea takes it — no spades left, so the rules said play trump — and trump beats the led suit \(\+4 pts\)/);
 
         const plain = explainTrick(baseState({
             state: 'TrickCompleteLinger',

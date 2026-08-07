@@ -343,6 +343,11 @@
     pointer-events: none;
 }
 
+/* The "?" mention matches the gold hint button it points at. */
+.action-prompt__bid-primer strong {
+    color: #f6cf74;
+}
+
 /* --- Bid keys: emoji face + name + multiplier pill ---------------------
    Each bid tier gets its own keycap palette, so the choice reads at a
    glance before the text does. The same emoji reappear as PlayerSeat's

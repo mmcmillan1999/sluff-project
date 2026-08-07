@@ -68,7 +68,9 @@ export function explainTrick(currentTableState) {
     const ledSuit = suitOf(plays[0].card);
     let reason;
     if (winnerSuit === trumpSuit && ledSuit !== trumpSuit) {
-        reason = `trumped in with ${suitName(trumpSuit)}`;
+        // Playing trump on an off-suit lead is only legal when void, so the
+        // narrator can teach the must-trump rule from the play itself.
+        reason = `no ${suitName(ledSuit)} left, so the rules said play trump — and trump beats the led suit`;
     } else if (winnerSuit === trumpSuit) {
         reason = `highest trump (${suitName(trumpSuit)})`;
     } else {

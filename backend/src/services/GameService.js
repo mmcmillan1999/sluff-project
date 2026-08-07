@@ -1962,9 +1962,12 @@
                 .filter(row => Number(row.games_played) < 3)
                 .map(row => Number(row.id));
             if (engine.learnerUserIds.length > 0) {
-                engine.botPaceMultiplier = 2;
-                engine.trickLingerMs = 3600;
-                console.log(`[LEARNER] ${engine.tableId}: learner table (users ${engine.learnerUserIds.join(', ')}) — bots at half speed.`);
+                // Half speed still played faster than a new player could read
+                // (Matt, first live test) — third speed, and the finished
+                // trick stays up long enough for the narrator line to land.
+                engine.botPaceMultiplier = 3;
+                engine.trickLingerMs = 4500;
+                console.log(`[LEARNER] ${engine.tableId}: learner table (users ${engine.learnerUserIds.join(', ')}) — bots at third speed.`);
             }
         }
 

@@ -63,20 +63,32 @@ const CoachCallout = ({
             const preferAbove = side === 'top';
             const flip = preferAbove ? rect.top < window.innerHeight * 0.25 : rect.bottom > window.innerHeight * 0.75;
             const above = preferAbove ? !flip : flip;
+            // The card is centered on the anchor, so clamping its CENTER to
+            // the margin still let half of it hang off a phone screen. Clamp
+            // by the card's real half-width once it has rendered (first pass
+            // falls back to the margin; the re-place below corrects it).
+            const halfCard = Math.max(margin, (cardRef.current?.offsetWidth || 0) / 2 + 8);
             setLayout({
-                anchorX: Math.min(Math.max(anchorX, margin), window.innerWidth - margin),
+                anchorX: Math.min(Math.max(anchorX, halfCard), window.innerWidth - halfCard),
                 anchorY: above ? rect.top : rect.bottom,
                 above,
-                spotX: anchorX,
+                // The hand tracks the anchor, not the card — but an anchor
+                // half off a phone screen must not drag it out of view.
+                spotX: Math.min(Math.max(anchorX, 16), window.innerWidth - 16),
                 spotY: rect.top + rect.height / 2,
                 spotR: Math.max(rect.width, rect.height) * 0.75,
             });
         };
         place();
+        // The first pass ran before the card existed, so its width was
+        // unknown and an edge anchor still clipped: re-place immediately
+        // after paint with the measured card.
+        const remeasure = requestAnimationFrame(place);
         const interval = setInterval(place, 400);
         window.addEventListener('resize', place);
         return () => {
             cancelled = true;
+            cancelAnimationFrame(remeasure);
             clearInterval(interval);
             window.removeEventListener('resize', place);
         };
@@ -127,7 +139,7 @@ const CoachCallout = ({
                     👆
                 </span>
             )}
-            <div className="coach-callout" style={cardStyle} role="status">
+            <div className="coach-callout" style={cardStyle} role="status" ref={cardRef}>
                 <div className="coach-callout-body">{children}</div>
                 <button
                     type="button"

@@ -422,7 +422,8 @@ const ActionControls = ({
                         {learnerMode && !bidHintText && (
                             <p className="action-prompt__bid-primer">
                                 Bid = play alone vs. the other two for most of the
-                                120 points. Pass costs nothing.
+                                120 points. Pass costs nothing. Not sure? Tap
+                                the <strong>?</strong> for advice on this hand.
                             </p>
                         )}
                         <div className="action-prompt__button-grid action-prompt__button-grid--bids">

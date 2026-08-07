@@ -92,6 +92,20 @@ const LearnerCoach = ({ currentTableState, selfPlayerName, userId = null, active
     const explainer = active ? explainTrick(currentTableState) : null;
     const [spokenExplainerKey, setSpokenExplainerKey] = useState(null);
 
+    // "Your deal" call-up: with the turn nudge silenced for learners,
+    // nothing else tells a new dealer the whole table is waiting on that
+    // little button. Not receipts-gated — every deal, all three games.
+    const [dealPromptHidden, setDealPromptHidden] = useState(false);
+    const dealingPending = currentTableState?.state === 'Dealing Pending';
+    useEffect(() => {
+        if (!dealingPending) setDealPromptHidden(false);
+    }, [dealingPending]);
+    const selfIsDealer = dealingPending
+        && Object.values(currentTableState?.players || {}).some(
+            player => player.playerName === selfPlayerName
+                && String(player.userId) === String(currentTableState.dealer),
+        );
+
     if (!active) return null;
 
     if (lesson) {
@@ -108,6 +122,19 @@ const LearnerCoach = ({ currentTableState, selfPlayerName, userId = null, active
         );
     }
 
+    if (selfIsDealer && !dealPromptHidden) {
+        return (
+            <CoachCallout
+                anchor=".dealer-deck-action"
+                side="top"
+                autoDismissMs={0}
+                onDismiss={() => setDealPromptHidden(true)}
+            >
+                <strong>Your deal.</strong> Tap the Deal button to send the cards out.
+            </CoachCallout>
+        );
+    }
+
     if (explainer && explainer.key !== spokenExplainerKey) {
         return (
             <CoachCallout
@@ -115,7 +142,7 @@ const LearnerCoach = ({ currentTableState, selfPlayerName, userId = null, active
                 anchor={explainer.anchor}
                 side="top"
                 pointer="none"
-                autoDismissMs={3400}
+                autoDismissMs={4200}
                 onDismiss={() => setSpokenExplainerKey(explainer.key)}
             >
                 {explainer.text}
