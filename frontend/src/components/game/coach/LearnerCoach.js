@@ -62,20 +62,46 @@ const LearnerCoach = ({ currentTableState, selfPlayerName, userId = null, active
     }, [active]);
 
     // Score milestones (50 approaching, bid made past 60, bid dead at 60)
-    // own the linger they cross on: they can never re-fire, while a one-shot
-    // lesson simply re-arms at its next moment.
+    // are read-and-confirm notes: a timed fade outran the reader (Matt), so
+    // a milestone is PINNED — it outlives its linger and leaves only when
+    // the player taps "Got it" or the next card hits the felt. They can
+    // never re-fire, while a one-shot lesson simply re-arms at its next
+    // moment.
     const milestone = active ? pointsMilestone(currentTableState, selfPlayerName) : null;
+    const [stickyMilestone, setStickyMilestone] = useState(null);
     const [spokenMilestoneKey, setSpokenMilestoneKey] = useState(null);
-    const milestonePending = Boolean(milestone) && milestone.key !== spokenMilestoneKey;
 
     useEffect(() => {
-        if (!active || !receiptsLoaded || lesson || milestonePending) return;
+        if (milestone
+            && milestone.key !== spokenMilestoneKey
+            && milestone.key !== stickyMilestone?.key) {
+            setStickyMilestone(milestone);
+        }
+    }, [milestone, spokenMilestoneKey, stickyMilestone]);
+
+    // A played card means the table has moved on: retire the note rather
+    // than nag into the next trick. Leaving the linger/play states entirely
+    // (round wrapped, vote struck) retires it too — the note must never
+    // float over a recap.
+    const tableState = currentTableState?.state;
+    const cardPlayed = tableState === 'Playing Phase'
+        && (currentTableState?.currentTrickCards || []).length > 0;
+    const stickyStateValid = tableState === 'TrickCompleteLinger' || tableState === 'Playing Phase';
+    useEffect(() => {
+        if (stickyMilestone && (cardPlayed || !stickyStateValid)) {
+            setSpokenMilestoneKey(stickyMilestone.key);
+            setStickyMilestone(null);
+        }
+    }, [stickyMilestone, cardPlayed, stickyStateValid]);
+
+    useEffect(() => {
+        if (!active || !receiptsLoaded || lesson || stickyMilestone) return;
         const next = pickLearnerLesson(currentTableState, selfPlayerName, seen);
         if (next) {
             shownAtRef.current = Date.now();
             setLesson(next);
         }
-    }, [active, receiptsLoaded, lesson, milestonePending, seen, currentTableState, selfPlayerName]);
+    }, [active, receiptsLoaded, lesson, stickyMilestone, seen, currentTableState, selfPlayerName]);
 
     const handleDismiss = useCallback(({ reason } = {}) => {
         setLesson(current => {
@@ -142,21 +168,23 @@ const LearnerCoach = ({ currentTableState, selfPlayerName, userId = null, active
         );
     }
 
-    if (milestonePending) {
+    if (stickyMilestone) {
         return (
             <CoachCallout
-                key={milestone.key}
-                anchor={milestone.anchor}
+                key={stickyMilestone.key}
+                anchor={stickyMilestone.anchor}
                 side="top"
-                autoDismissMs={4200}
+                autoDismissMs={0}
+                acknowledgeLabel="Got it"
                 onDismiss={() => {
-                    setSpokenMilestoneKey(milestone.key);
+                    setSpokenMilestoneKey(stickyMilestone.key);
                     // The plain "X takes it" line for the same trick must not
-                    // pop up behind a dismissed milestone.
+                    // pop up behind an acknowledged milestone.
                     if (explainer) setSpokenExplainerKey(explainer.key);
+                    setStickyMilestone(null);
                 }}
             >
-                <strong>{milestone.copy.strong}</strong> {milestone.copy.text}
+                <strong>{stickyMilestone.copy.strong}</strong> {stickyMilestone.copy.text}
             </CoachCallout>
         );
     }

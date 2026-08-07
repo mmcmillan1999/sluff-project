@@ -34,6 +34,8 @@ const CoachCallout = ({
     pointer = 'hand',        // 'hand' | 'none'
     spotlight = false,
     autoDismissMs = 8000,
+    acknowledgeLabel = null, // set for notes that wait to be READ: renders a
+                             // button instead of the corner ×
     onDismiss,
     children,
 }) => {
@@ -139,16 +141,31 @@ const CoachCallout = ({
                     👆
                 </span>
             )}
-            <div className="coach-callout" style={cardStyle} role="status" ref={cardRef}>
+            <div
+                className={`coach-callout${acknowledgeLabel ? ' coach-callout--ack' : ''}`}
+                style={cardStyle}
+                role="status"
+                ref={cardRef}
+            >
                 <div className="coach-callout-body">{children}</div>
-                <button
-                    type="button"
-                    className="coach-callout-dismiss"
-                    onClick={() => dismissRef.current?.({ reason: 'dismissed' })}
-                    aria-label="Dismiss tip"
-                >
-                    ×
-                </button>
+                {acknowledgeLabel ? (
+                    <button
+                        type="button"
+                        className="coach-callout-ack"
+                        onClick={() => dismissRef.current?.({ reason: 'acknowledged' })}
+                    >
+                        {acknowledgeLabel}
+                    </button>
+                ) : (
+                    <button
+                        type="button"
+                        className="coach-callout-dismiss"
+                        onClick={() => dismissRef.current?.({ reason: 'dismissed' })}
+                        aria-label="Dismiss tip"
+                    >
+                        ×
+                    </button>
+                )}
             </div>
         </div>,
         document.body,
