@@ -416,7 +416,10 @@ const ActionControls = ({
                             unmounting the button mid-interaction would drop
                             keyboard focus to the body. */}
                         <p className="action-prompt__hint" role="status">{bidHintText}</p>
-                        {learnerMode && (
+                        {/* Floats in the hint's slot above the prompt — never
+                            in-flow, which pushed bid keys off short phones.
+                            Yields the slot once a requested hint arrives. */}
+                        {learnerMode && !bidHintText && (
                             <p className="action-prompt__bid-primer">
                                 Bid = play alone vs. the other two for most of the
                                 120 points. Pass costs nothing.

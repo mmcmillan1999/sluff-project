@@ -320,6 +320,29 @@
     box-shadow: none;
 }
 
+/* Learner bid primer: shares the hint's floating slot above the prompt
+   (only one of the two renders at a time), so it can never grow the
+   prompt and push bid keys off short screens. Coach-parchment tone to
+   read as teaching, not as the gold suggestion. */
+.action-prompt__bid-primer {
+    position: absolute;
+    bottom: calc(100% + 0.7vh);
+    left: 50%;
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: min(82vw, 24rem);
+    margin: 0;
+    padding: 0.7vh 1.2vh;
+    background: rgba(24, 28, 22, 0.94);
+    border: 0.12vh solid rgba(190, 205, 170, 0.35);
+    border-radius: 0.8vh;
+    box-shadow: 0 0.4vh 1vh rgba(0, 0, 0, 0.45);
+    color: #cfd8c9;
+    font-size: clamp(0.7rem, 1.6vh, 0.9rem);
+    line-height: 1.35;
+    pointer-events: none;
+}
+
 /* --- Bid keys: emoji face + name + multiplier pill ---------------------
    Each bid tier gets its own keycap palette, so the choice reads at a
    glance before the text does. The same emoji reappear as PlayerSeat's

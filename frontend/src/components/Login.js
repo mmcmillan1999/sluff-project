@@ -33,8 +33,9 @@ const Login = ({ onLoginSuccess, onSwitchToRegister, onSwitchToForgotPassword })
         setError('');
         setResendStatus('Sending...');
         try {
-            const data = await resendVerificationEmail(email);
-            setResendStatus(data.message);
+            await resendVerificationEmail(email);
+            setResendStatus('Sent! Check your inbox — and your Spam or Junk folder. '
+                + 'If it landed there, mark it "Not Junk" so our emails reach you normally.');
             setShowResendLink(false);
         } catch (err) {
             setError(err.message || 'Failed to resend email.');

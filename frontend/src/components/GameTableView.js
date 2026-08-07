@@ -234,7 +234,12 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         () => pendingActionKey(currentTableState, pendingSelfAction),
         [currentTableState, pendingSelfAction]
     );
+    // Learners are exempt from turn call-up pressure (Matt: the flashing is
+    // too much for the first three games) — ref-read so the callback keeps
+    // its identity while the mode can flip via the menu toggle.
+    const learnerModeRef = useRef(false);
     const handleTurnEscalation = useCallback((nextLevel) => {
+        if (learnerModeRef.current) return;
         playSound('turnAlert');
         buzz(nextLevel >= 2
             ? { pattern: [30, 70, 30, 70, 30], nativeStyle: 'Heavy', nativeTaps: 3 }
@@ -253,6 +258,17 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             serverOffsetRef.current = observedServerTime - Date.now();
         }
     }, [observedServerTime]);
+    // Learner mode: the first few games get card-point badges on every card
+    // face and anchored micro-lessons at teachable moments — in ANY venue,
+    // unlike the Academy's guided coach. Retires itself at three games; the
+    // "Card helper" menu toggle overrides in either direction.
+    const [cardHelperNonce, setCardHelperNonce] = useState(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const learnerMode = useMemo(
+        () => !isSpectator && cardHelperActive(tutorialState),
+        [isSpectator, tutorialState, cardHelperNonce],
+    );
+
     const rawAfkDeadline = Number(currentTableState?.afkDeadline);
     const afkDeadlineLocal = Number.isFinite(rawAfkDeadline) && rawAfkDeadline > 0
         ? rawAfkDeadline - serverOffsetRef.current
@@ -272,8 +288,12 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const nudgeTeam = currentTableState?.bidWinnerInfo
         ? (currentTableState.bidWinnerInfo.userId === playerId ? 'bidder' : 'defender')
         : null;
-    const handNudgeLevel = pendingSelfAction?.surface === 'hand' ? turnNudgeLevel : 0;
-    const promptNudgeLevel = pendingSelfAction?.surface === 'prompt' ? turnNudgeLevel : 0;
+    // Learner exemption: no rim flash, no wave, no countdown pressure for
+    // the first three games — the coach is teaching, not the clock.
+    learnerModeRef.current = learnerMode;
+    const effectiveTurnNudgeLevel = learnerMode ? 0 : turnNudgeLevel;
+    const handNudgeLevel = pendingSelfAction?.surface === 'hand' ? effectiveTurnNudgeLevel : 0;
+    const promptNudgeLevel = pendingSelfAction?.surface === 'prompt' ? effectiveTurnNudgeLevel : 0;
 
     // The bid hint answer arrives privately on this socket; the copy is
     // composed here so the prompt only ever handles a finished sentence.
@@ -398,17 +418,6 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 : previousPresentation
         ));
     }, []);
-
-    // Learner mode: the first few games get card-point badges on every card
-    // face and anchored micro-lessons at teachable moments — in ANY venue,
-    // unlike the Academy's guided coach. Retires itself at three games; the
-    // "Card helper" menu toggle overrides in either direction.
-    const [cardHelperNonce, setCardHelperNonce] = useState(0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    const learnerMode = useMemo(
-        () => !isSpectator && cardHelperActive(tutorialState),
-        [isSpectator, tutorialState, cardHelperNonce],
-    );
 
     const tutorialCoachActive = Boolean(
         tutorialState?.activeVersion === FIRST_GAME_TUTORIAL_VERSION
@@ -1706,7 +1715,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             />
 
             <TurnNudge
-                level={turnNudgeLevel}
+                level={effectiveTurnNudgeLevel}
                 kind={pendingSelfAction?.kind}
                 team={nudgeTeam}
             />

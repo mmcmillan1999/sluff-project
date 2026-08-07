@@ -44,7 +44,10 @@ const Register = ({ onRegisterSuccess, onSwitchToLogin, onShowTerms, onShowPriva
                     <p className="auth-success-text">{successMessage}</p>
                     {emailSent && (
                         <p className="auth-success-text" style={{ fontSize: '0.9em', opacity: 0.85 }}>
-                            The link is valid for 24 hours. If you don't see it within a minute, check your spam folder.
+                            The link is valid for 24 hours. <strong>Don't see it? Check your
+                            Spam or Junk folder</strong> — and if it's hiding there, mark it
+                            {' '}<strong>"Not Junk"</strong> so our emails reach you normally
+                            from now on.
                         </p>
                     )}
                     {/* This button now correctly uses the onSwitchToLogin prop */}
