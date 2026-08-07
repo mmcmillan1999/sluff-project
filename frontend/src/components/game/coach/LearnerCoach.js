@@ -79,20 +79,22 @@ const LearnerCoach = ({ currentTableState, selfPlayerName, userId = null, active
         }
     }, [milestone, spokenMilestoneKey, stickyMilestone]);
 
-    // A played card means the table has moved on: retire the note rather
-    // than nag into the next trick. Leaving the linger/play states entirely
-    // (round wrapped, vote struck) retires it too — the note must never
-    // float over a recap.
+    // Only the PLAYER's own play retires the note — bots playing under it
+    // is fine (Matt's call); the reader sets the pace. Every trick includes
+    // the player, so the note can never survive into the next linger.
+    // Leaving the linger/play states entirely (round wrapped, vote struck)
+    // retires it too — the note must never float over a recap.
     const tableState = currentTableState?.state;
-    const cardPlayed = tableState === 'Playing Phase'
-        && (currentTableState?.currentTrickCards || []).length > 0;
+    const selfPlayed = tableState === 'Playing Phase'
+        && (currentTableState?.currentTrickCards || [])
+            .some(play => play.playerName === selfPlayerName);
     const stickyStateValid = tableState === 'TrickCompleteLinger' || tableState === 'Playing Phase';
     useEffect(() => {
-        if (stickyMilestone && (cardPlayed || !stickyStateValid)) {
+        if (stickyMilestone && (selfPlayed || !stickyStateValid)) {
             setSpokenMilestoneKey(stickyMilestone.key);
             setStickyMilestone(null);
         }
-    }, [stickyMilestone, cardPlayed, stickyStateValid]);
+    }, [stickyMilestone, selfPlayed, stickyStateValid]);
 
     useEffect(() => {
         if (!active || !receiptsLoaded || lesson || stickyMilestone) return;

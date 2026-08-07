@@ -75,7 +75,7 @@ describe('LearnerCoach pinned milestones', () => {
         />,
     );
 
-    test('the note survives the linger ending and dies on the next played card', async () => {
+    test('the note survives the linger AND bot plays, dying only on my own card', async () => {
         const { rerender } = renderCoach(lingerState);
         expect(await screen.findByText(/past 60 — the bid is made/)).toBeInTheDocument();
 
@@ -91,13 +91,35 @@ describe('LearnerCoach pinned milestones', () => {
         expect(screen.getByText(/past 60 — the bid is made/)).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /got it/i })).toBeInTheDocument();
 
-        // A card lands: the table moved on and the note retires.
+        // Bots play under it: the reader still sets the pace.
         rerender(
             <LearnerCoach
                 currentTableState={{
                     ...lingerState,
                     state: 'Playing Phase',
-                    currentTrickCards: [{ playerName: 'Bea', card: '7S' }],
+                    currentTrickCards: [
+                        { playerName: 'Bea', card: '7S' },
+                        { playerName: 'Ann', card: '8S' },
+                    ],
+                }}
+                selfPlayerName="Me"
+                userId={7}
+                active
+            />,
+        );
+        expect(screen.getByText(/past 60 — the bid is made/)).toBeInTheDocument();
+
+        // My own card: I've moved on, the note retires.
+        rerender(
+            <LearnerCoach
+                currentTableState={{
+                    ...lingerState,
+                    state: 'Playing Phase',
+                    currentTrickCards: [
+                        { playerName: 'Bea', card: '7S' },
+                        { playerName: 'Ann', card: '8S' },
+                        { playerName: 'Me', card: '9S' },
+                    ],
                 }}
                 selfPlayerName="Me"
                 userId={7}
