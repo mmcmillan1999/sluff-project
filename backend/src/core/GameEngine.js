@@ -229,7 +229,7 @@ class GameEngine {
         }
     }
 
-    _addBotPlayer({ allowQuickPlayFourth = false, eligibleBotBalances = null, preferDistinctBrains = false } = {}) {
+    _addBotPlayer({ allowQuickPlayFourth = false, eligibleBotBalances = null, preferDistinctBrains = false, preferHighestTokens = false } = {}) {
         if (this.gameStarted || this.gameStartPending || this.playerOrder.count >= 4) return;
         // Quick Play's fourth seat is reserved for a human after the table has
         // explicitly entered its fourth-player search. Only the server-owned,
@@ -244,6 +244,14 @@ class GameEngine {
             && !currentBotNames.has(profile.username)
             && (!hasEligibilityFilter || eligibleBotBalances.has(profile.id))
         ));
+        // Ladder-gated rooms seat the wealthiest affordable bots first, so
+        // the humans there always face the top of the bot ladder rather than
+        // whoever happens to be idle.
+        if (preferHighestTokens && hasEligibilityFilter) {
+            availableProfiles.sort((left, right) => (
+                (eligibleBotBalances.get(right.id) || 0) - (eligibleBotBalances.get(left.id) || 0)
+            ));
+        }
         const usePersistentProfile = this.botAccounts.length > 0;
         let botName;
         let botId;
@@ -277,7 +285,11 @@ class GameEngine {
                 if (freshBrains.length > 0) draftPool = freshBrains;
             }
             const pickLeasedProfile = (pool) => {
-                const firstProfileIndex = Math.floor(Math.random() * pool.length);
+                // A token-sorted pool is scanned in order so the richest
+                // leasable candidate wins; otherwise the start is random.
+                const firstProfileIndex = preferHighestTokens
+                    ? 0
+                    : Math.floor(Math.random() * pool.length);
                 for (let offset = 0; offset < pool.length; offset += 1) {
                     const candidate = pool[(firstProfileIndex + offset) % pool.length];
                     if (!this.botSeatLease || this.botSeatLease.acquire(candidate.id)) {
@@ -328,7 +340,7 @@ class GameEngine {
         return this._addBotPlayer(options && typeof options === 'object' ? options : {});
     }
 
-    addQuickPlayFallbackBot({ generation, deadline, now, eligibleBotBalances = null } = {}) {
+    addQuickPlayFallbackBot({ generation, deadline, now, eligibleBotBalances = null, preferHighestTokens = false } = {}) {
         if (this.tableType !== 'quickplay'
             || this.gameStarted || this.gameStartPending
             || this.qpPhase !== 'seeking_fourth'
@@ -341,7 +353,7 @@ class GameEngine {
             || !Object.values(this.players).some(player => !player.isBot && !player.isSpectator)
             || this.qpFallbackBot !== null) return null;
 
-        const bot = this._addBotPlayer({ allowQuickPlayFourth: true, eligibleBotBalances });
+        const bot = this._addBotPlayer({ allowQuickPlayFourth: true, eligibleBotBalances, preferHighestTokens });
         if (!bot || this.playerOrder.allIds[3] !== bot.userId) {
             if (bot) this.removeBotPlayer(bot.userId);
             return null;
@@ -1040,6 +1052,38 @@ class GameEngine {
                 this.roundSummary = summary;
                 this.state = "DrawComplete";
             }
+        }]);
+    }
+
+    // Immediately ends an in-progress, bot-only game as a wash draw: every
+    // funded buy-in is returned and the game closes in history like any
+    // other draw. The service uses this to reclaim exhibition bots when a
+    // funded human table needs them; any human seat makes it a no-op.
+    preemptBotGame() {
+        if (!this.gameStarted
+            || ['Game Over', 'DrawComplete', 'Draw Resolving'].includes(this.state)) {
+            return this._effects();
+        }
+        const activePlayers = Object.values(this.players).filter(p => !p.isSpectator);
+        if (activePlayers.length === 0 || activePlayers.some(p => !p.isBot)) return this._effects();
+
+        if (this.internalTimers.drawTimer) {
+            clearInterval(this.internalTimers.drawTimer);
+            delete this.internalTimers.drawTimer;
+        }
+        this.drawRequest.isActive = false;
+        // Mirrors the accepted-draw transition: leave the play states behind
+        // before the asynchronous settlement so no card or vote can race it.
+        this.state = 'Draw Resolving';
+        this.beginSettlement('draw');
+        console.log(`[${this.tableId}] Bot game preempted for human matchmaking; settling as a wash.`);
+        return this._effects([{
+            type: 'HANDLE_DRAW_OUTCOME',
+            payload: this._createSettlementSnapshot({ outcome: 'wash' }),
+            onComplete: (summary) => {
+                this.roundSummary = summary;
+                this.state = 'DrawComplete';
+            },
         }]);
     }
 

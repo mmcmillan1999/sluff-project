@@ -508,6 +508,16 @@
             )));
         }
 
+        // Rooms priced above the bot mercy floor only admit bots that won
+        // their way up the ladder, so their affordable pool is the thin top
+        // of it: the human there gets the richest of what remains. The
+        // mercy-priced room keeps the random draw (Matt's Aug 6 directive)
+        // so every brain still gets play time.
+        _quickPlaySeatsRichestFirst(engine) {
+            return Math.round(Number(TABLE_COSTS[engine.theme] || 0) * 100)
+                > Math.round(transactionManager.BOT_MERCY_THRESHOLD * 100);
+        }
+
         _quickPlayMatchmakingNotice(engine, code = 'HIGH_STAKES_POOL_THIN') {
             const currentCostCents = Math.round(Number(TABLE_COSTS[engine.theme] || 0) * 100);
             const recommendedTheme = THEMES
@@ -777,6 +787,15 @@
                             console.error(`[QUICKPLAY] Could not verify funded bot seats for ${tableId}.`, error);
                         }
 
+                        const richestFirst = this._quickPlaySeatsRichestFirst(eng);
+                        if (richestFirst) {
+                            await this._freeExhibitionBotsForQuickPlay(
+                                eng,
+                                eligibleBotBalances,
+                                3 - expectedSeats,
+                            );
+                        }
+
                         // The ledger read yielded. Revalidate the exact engine,
                         // roster, phase, and timer generation before taking a
                         // seat so a human arrival/reset always wins the race.
@@ -790,7 +809,7 @@
 
                         let bot = null;
                         try {
-                            bot = eng.addBotPlayer({ eligibleBotBalances });
+                            bot = eng.addBotPlayer({ eligibleBotBalances, preferHighestTokens: richestFirst });
                         } catch (error) {
                             console.error(`[QUICKPLAY] Could not fill a funded seat on ${tableId}.`, error);
                         }
@@ -928,6 +947,10 @@
                         eligibleBotBalances = new Map();
                         console.error(`[QUICKPLAY] Could not verify a funded fourth seat for ${tableId}.`, error);
                     }
+                    const richestFirst = this._quickPlaySeatsRichestFirst(current);
+                    if (richestFirst) {
+                        await this._freeExhibitionBotsForQuickPlay(current, eligibleBotBalances, 1);
+                    }
                     current = currentSearchEngine();
                     if (!current) return;
 
@@ -938,6 +961,7 @@
                             deadline,
                             now: this._quickPlayNow(),
                             eligibleBotBalances,
+                            preferHighestTokens: richestFirst,
                         });
                     } catch (error) {
                         console.error(`[QUICKPLAY] Could not create a fourth-seat fallback on ${tableId}.`, error);
@@ -1218,6 +1242,67 @@
             await this._performAction(tableId, eng => eng.startGame(trio[0].userId));
             this.io.emit('lobbyState', this.getLobbyState());
             return { status: 'started', bots: trio.map(p => p.playerName) };
+        }
+
+        // A funded human table outranks the exhibition loop. When the richest
+        // affordable bots for a filling quick-play table are locked in a
+        // bot-only exhibition game, that game is washed — every buy-in
+        // refunded — so matchmaking can seat those bots with the human
+        // instead. Bots inside games with human players are never disturbed;
+        // the walk simply passes them over and secures the next-richest.
+        async _freeExhibitionBotsForQuickPlay(qpEngine, eligibleBotBalances, seatsNeeded) {
+            if (!(eligibleBotBalances instanceof Map) || seatsNeeded <= 0) return;
+            const seatedHere = new Set(qpEngine.playerOrder.allIds);
+            const candidates = [...eligibleBotBalances.entries()]
+                .filter(([botId]) => !seatedHere.has(botId))
+                .sort((left, right) => right[1] - left[1]);
+            let securable = 0;
+            const exhibitionTableIds = new Set();
+            for (const [botId] of candidates) {
+                if (securable >= seatsNeeded) break;
+                const owner = this.botSeatLeases.get(botId);
+                if (!owner) { securable += 1; continue; }
+                if (owner.tableId === qpEngine.tableId) continue;
+                const holder = this.engines[owner.tableId];
+                if (holder?.isExhibitionTable !== true) continue;
+                const holderPlayers = Object.values(holder.players).filter(p => !p.isSpectator);
+                if (holderPlayers.some(p => !p.isBot)) continue;
+                exhibitionTableIds.add(owner.tableId);
+                securable += 1;
+            }
+            for (const exhibitionTableId of exhibitionTableIds) {
+                try {
+                    await this._preemptExhibitionGame(exhibitionTableId);
+                } catch (error) {
+                    console.error(`[QUICKPLAY] Could not reclaim exhibition bots from ${exhibitionTableId}.`, error);
+                }
+            }
+        }
+
+        // Ends a bot-only exhibition game on the spot (wash settlement: every
+        // buy-in refunded, the game closes as a draw) and clears the table so
+        // its bots return to the matchmaking pool. The exhibition manager
+        // re-seats a fresh trio from whoever is left on its next tick.
+        async _preemptExhibitionGame(tableId) {
+            const engine = this.engines[tableId];
+            if (!engine?.isExhibitionTable || engine.gameStartPending) return false;
+            const activePlayers = Object.values(engine.players).filter(p => !p.isSpectator);
+            if (activePlayers.length === 0 || activePlayers.some(p => !p.isBot)) return false;
+
+            if (engine.gameStarted) {
+                console.log(`[QUICKPLAY] Reclaiming exhibition bots: washing the game on ${tableId}.`);
+                await this._performAction(tableId, eng => eng.preemptBotGame());
+                const current = this.engines[tableId];
+                if (current !== engine
+                    || current.state !== 'DrawComplete'
+                    || current.settlement?.status !== 'complete') return false;
+                engine.reset();
+            }
+            let guard = 8;
+            while (guard-- > 0 && Object.values(engine.players).some(p => p.isBot)) engine.removeBot();
+            this.emitGameState(tableId);
+            this.io.emit('lobbyState', this.getLobbyState());
+            return true;
         }
 
         // --- Deploy-survival snapshots -----------------------------------

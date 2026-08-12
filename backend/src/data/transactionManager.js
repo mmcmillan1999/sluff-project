@@ -670,6 +670,7 @@ const handleForfeitTransactions = async (pool, table) => (
 );
 
 module.exports = {
+    BOT_MERCY_THRESHOLD,
     createGameRecord,
     postTransaction,
     updateGameRecordOutcome,

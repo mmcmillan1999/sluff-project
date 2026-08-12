@@ -15,6 +15,7 @@ const suites = [
     { name: 'bot exhibition', file: './botExhibition.test.js' },
     { name: 'payouts', file: './payouts.test.js' },
     { name: 'quick play', file: './quickPlay.test.js' },
+    { name: 'exhibition preemption', file: './exhibitionPreemption.test.js' },
     { name: 'four-player mode', file: './fourPlayer.test.js' },
     { name: 'leaderboard privacy', file: './leaderboard.test.js' },
     { name: 'season lifecycle and archives', file: './seasons.test.js' },
