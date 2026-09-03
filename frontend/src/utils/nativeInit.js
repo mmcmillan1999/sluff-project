@@ -30,6 +30,15 @@ export async function initNative() {
             window.dispatchEvent(new CustomEvent('sluff:invite', { detail: { tableId } }));
         };
         App.addListener('appUrlOpen', ({ url }) => handleInviteUrl(url));
+        // Android hardware back. Registering a listener switches off
+        // Capacitor's default (walk WebView history, then finish the activity
+        // — a forfeit mid-hand). A view with an open surface closes it and
+        // cancels the event; an unclaimed press backgrounds the app like Home.
+        App.addListener('backButton', () => {
+            const back = new CustomEvent('sluff:back', { cancelable: true });
+            window.dispatchEvent(back);
+            if (!back.defaultPrevented) App.minimizeApp().catch(() => {});
+        });
         const launch = await App.getLaunchUrl().catch(() => null);
         if (launch?.url) handleInviteUrl(launch.url);
     } catch { /* app plugin unavailable */ }

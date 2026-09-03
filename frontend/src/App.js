@@ -1,5 +1,5 @@
 // frontend/src/App.js
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, Suspense } from "react";
 import io from "socket.io-client";
 import { getServerUrl, submitFeedback, updateTutorialStatus } from "./services/api.js";
 import AuthContainer from "./components/AuthContainer.js";
@@ -10,7 +10,6 @@ import TokenLedgerView from "./components/TokenLedgerView.js";
 import BulletinView from "./components/BulletinView.js";
 import SeasonRecapsView from "./components/SeasonRecapsView.js";
 import MercyWindow from "./components/MercyWindow.js";
-import AdminView from "./components/AdminView.js";
 import FeedbackModal from "./components/FeedbackModal.js";
 import FeedbackView from "./components/FeedbackView.js";
 import LobbyHeader from "./components/LobbyHeader.js";
@@ -22,6 +21,7 @@ import TermsOfService from "./components/legal/TermsOfService.js";
 import FirstGameWelcome, { shouldShowFirstGameWelcome } from "./components/FirstGameWelcome.js";
 import OrientationScrim from "./components/OrientationScrim.js";
 import SluffIdent from "./components/SluffIdent.js";
+import DecorBoundary from "./components/DecorBoundary.js";
 import { extractInviteTableId } from "./utils/tableInvites.js";
 import { newBuildAvailable } from "./utils/clientVersion.js";
 import "./App.css";
@@ -35,6 +35,9 @@ import {
     TUTORIAL_VERSION,
     tutorialLessonStorageKey,
 } from "./config/tutorial.js";
+
+// Admin-only surface: its own chunk, fetched the first time an admin opens it.
+const AdminView = React.lazy(() => import("./components/AdminView.js"));
 
 const SERVER_URL = getServerUrl();
 console.log(`[Socket.IO] Connecting to: ${SERVER_URL}`);
@@ -108,7 +111,6 @@ function App() {
     const [inviteJoinInFlight, setInviteJoinInFlight] = useState(() => Boolean(
         extractInviteTableId(window.location.href) || window.__sluffInviteTableId
     ));
-    const currentTableId = currentTableState?.tableId;
     const hasConnectedRef = React.useRef(false);
     const errorMessageTimerRef = React.useRef(null);
     const connectionNoticeTimerRef = React.useRef(null);
@@ -118,6 +120,14 @@ function App() {
     // Throttles the automatic seat-reclaim reconnect so a genuinely
     // superseded tab cannot fight the live one in a loop.
     const seatReclaimAtRef = React.useRef(0);
+    // Mirrors currentTableState for code that must not re-bind on every
+    // table change: the socket listeners and the stale-build reload guard.
+    const tableRef = React.useRef(currentTableState);
+    useEffect(() => { tableRef.current = currentTableState; }, [currentTableState]);
+    // Armed by a reconnect made while seated. The server then pushes gameState
+    // only if an engine still holds us, and always follows with lobbyState —
+    // so lobbyState arriving first means the table is gone.
+    const awaitingReseatRef = React.useRef(false);
 
     const handleLogout = useCallback(() => {
         localStorage.removeItem("sluff_token");
@@ -213,13 +223,17 @@ function App() {
         if (socket.connected) socket.emit("requestUserSync");
     };
 
+    // Reads the table id through the ref so this stays referentially stable:
+    // the socket-listener effect depends on it, and re-binding every listener
+    // on each table join dropped the toast auto-dismiss timers mid-toast.
     const handleLeaveTable = useCallback(() => {
-        if (currentTableId) {
-            socket.emit("leaveTable", { tableId: currentTableId });
+        const tableId = tableRef.current?.tableId;
+        if (tableId) {
+            socket.emit("leaveTable", { tableId });
         }
         handleReturnToLobby();
         setCurrentTableState(null);
-    }, [currentTableId]);
+    }, []);
 
     useEffect(() => {
         if (token && !user) {
@@ -243,6 +257,11 @@ function App() {
 
             const onConnect = () => {
                 serverRestartingRef.current = false;
+                // Only a genuine reconnect while seated expects a reseat; a
+                // recovered session gets no connect-time pushes at all.
+                awaitingReseatRef.current = hasConnectedRef.current
+                    && !socket.recovered
+                    && tableRef.current !== null;
                 if (connectionNoticeTimerRef.current) clearTimeout(connectionNoticeTimerRef.current);
                 if (hasConnectedRef.current) {
                     setConnectionNotice({ kind: 'online', message: 'Back online' });
@@ -280,8 +299,20 @@ function App() {
                     // seat restoration for the newly connected socket.
                     setSocketSessionReady(true);
                 }
+                // Reconnected, and no gameState/joinedTable came first: the
+                // server no longer seats us. Drop the table rather than leave
+                // a frozen board that will never update again.
+                if (awaitingReseatRef.current) {
+                    awaitingReseatRef.current = false;
+                    setCurrentTableState(null);
+                    setView('lobby');
+                    setErrorMessage('Your table has closed.');
+                    if (errorMessageTimerRef.current) clearTimeout(errorMessageTimerRef.current);
+                    errorMessageTimerRef.current = setTimeout(() => setErrorMessage(''), 5000);
+                }
             };
             const onGameState = (newTableState) => {
+                awaitingReseatRef.current = false;
                 const currentUserId = JSON.parse(atob(token.split('.')[1])).id;
                 const playerAtTable = newTableState.players[currentUserId];
                 if (!playerAtTable) {
@@ -297,6 +328,7 @@ function App() {
                 }
             };
             const onJoinedTable = ({ gameState }) => {
+                awaitingReseatRef.current = false;
                 // console.log('[ADMIN] Joined table event received, tableId:', gameState?.tableId);
                 // console.log('[ADMIN] Table name:', gameState?.tableName);
                 // console.log('[ADMIN] Players:', Object.values(gameState?.players || {}).map(p => `${p.playerName} (${p.isSpectator ? 'spectator' : 'player'})`));
@@ -412,18 +444,38 @@ function App() {
     // the socket is connected. If it dropped while we were away, reconnecting here
     // triggers the server to put us back on our table. This is the "close the app
     // and come back" path.
+    const socketHiddenAtRef = React.useRef(null);
     useEffect(() => {
         if (!token) return;
+        // After a real absence a socket can still say "connected" over a TCP
+        // session the OS quietly lost (wifi → cell, a long lock): plays would
+        // go into the void until the ping timeout. Cycle it — the server
+        // reseats on every connect, so the cost is one round trip.
+        const STALE_AFTER_HIDDEN_MS = 20 * 1000;
         const ensureConnected = () => {
-            if (document.visibilityState === 'visible' && !socket.connected) {
+            if (document.visibilityState !== 'visible') return;
+            const hiddenAt = socketHiddenAtRef.current;
+            socketHiddenAtRef.current = null;
+            if (!socket.connected) {
+                socket.auth = { token };
+                socket.connect();
+            } else if (hiddenAt !== null && Date.now() - hiddenAt >= STALE_AFTER_HIDDEN_MS) {
+                socket.disconnect();
                 socket.auth = { token };
                 socket.connect();
             }
         };
-        document.addEventListener('visibilitychange', ensureConnected);
+        const onVisibility = () => {
+            if (document.visibilityState === 'hidden') {
+                if (socketHiddenAtRef.current === null) socketHiddenAtRef.current = Date.now();
+                return;
+            }
+            ensureConnected();
+        };
+        document.addEventListener('visibilitychange', onVisibility);
         window.addEventListener('focus', ensureConnected);
         return () => {
-            document.removeEventListener('visibilitychange', ensureConnected);
+            document.removeEventListener('visibilitychange', onVisibility);
             window.removeEventListener('focus', ensureConnected);
         };
     }, [token]);
@@ -463,8 +515,10 @@ function App() {
 
     useEffect(() => {
         let disposed = false;
+        // "Seated anywhere" is the real guard: a player checking the
+        // leaderboard mid-game is still in a live hand.
         const applyIfSafe = () => {
-            if (viewRef.current !== 'gameTable') window.location.reload();
+            if (viewRef.current !== 'gameTable' && tableRef.current === null) window.location.reload();
         };
         const check = async () => {
             if (pendingReloadRef.current) { applyIfSafe(); return; }
@@ -489,8 +543,8 @@ function App() {
 
     // A stale client that was mid-game reloads as soon as it leaves the table.
     useEffect(() => {
-        if (view !== 'gameTable' && pendingReloadRef.current) window.location.reload();
-    }, [view]);
+        if (view !== 'gameTable' && !currentTableState && pendingReloadRef.current) window.location.reload();
+    }, [view, currentTableState]);
 
     // Native deep links arrive as a window event (see utils/nativeInit.js)
     // because the webview URL never changes inside the Capacitor shell.
@@ -647,9 +701,9 @@ function App() {
 
         switch (view) {
             case 'lobby':
-                return <LobbyHeader />;
+                return <DecorBoundary><LobbyHeader /></DecorBoundary>;
             case 'gameTable':
-                return <GameHeader />;
+                return <DecorBoundary><GameHeader /></DecorBoundary>;
             default:
                 return null; // No header for admin, leaderboard, feedback, or auth views
         }
@@ -738,7 +792,11 @@ function App() {
                         case 'feedback':
                             return <FeedbackView user={user} onOpenFeedbackModal={() => handleOpenFeedbackModal()} onReturnToLobby={handleReturnToLobby} />;
                         case 'admin':
-                            return <AdminView onReturnToLobby={handleReturnToLobby} handleHardReset={handleHardReset} />;
+                            return (
+                                <Suspense fallback={null}>
+                                    <AdminView onReturnToLobby={handleReturnToLobby} handleHardReset={handleHardReset} />
+                                </Suspense>
+                            );
                         default:
                             setView('lobby');
                             return null;

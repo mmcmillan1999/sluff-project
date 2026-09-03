@@ -18,6 +18,7 @@ import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion';
 import { deriveTrickPlatePlacement } from './trickPlatePlacement';
 import { getThemePresentation } from '../../config/themePresentation';
 import { useCosmetics } from '../../utils/cosmetics';
+import DecorBoundary from '../DecorBoundary';
 
 // Full deck of 36 cards (9 ranks × 4 suits)
 const FULL_DECK = [
@@ -543,7 +544,9 @@ const TableLayout = ({
         const { bidderPileClass, defenderPileClass } = platePlacement;
         if (!bidderPileClass || !defenderPileClass) return null;
 
-        const TrickPile = ({ count, points }) => (
+        // A render helper, not a component type: a type created per render
+        // remounts both piles on every table-state broadcast.
+        const renderTrickPile = (count, points) => (
             <div className="trick-pile">
                 <div className="trick-pile-content-wrapper">
                     <div className="trick-pile-cards">
@@ -583,14 +586,14 @@ const TableLayout = ({
                 {/* Render bidder pile in its assigned position */}
                 <div className={`trick-pile-container ${bidderPileClass}`}>
                     <div className={`trick-pile-base bidder-base ${bidderWonLast ? 'pulsating-gold' : ''}`} onClick={() => handleTrickPileClick('bidder', bidderPileClass)} onKeyDown={(event) => activateOnKey(event, () => handleTrickPileClick('bidder', bidderPileClass))} role="button" tabIndex={lastCompletedTrick ? 0 : -1} aria-disabled={!lastCompletedTrick} aria-label={pileLabel('Bidder', bidderTricksCount, bidderPoints)}>
-                        <TrickPile count={bidderTricksCount} points={bidderPoints} />
+                        {renderTrickPile(bidderTricksCount, bidderPoints)}
                     </div>
                 </div>
 
                 {/* Render defender pile in its assigned position */}
                 <div className={`trick-pile-container ${defenderPileClass}`}>
                     <div className={`trick-pile-base defender-base ${defenderWonLast ? 'pulsating-blue' : ''}`} onClick={() => handleTrickPileClick('defender', defenderPileClass)} onKeyDown={(event) => activateOnKey(event, () => handleTrickPileClick('defender', defenderPileClass))} role="button" tabIndex={lastCompletedTrick ? 0 : -1} aria-disabled={!lastCompletedTrick} aria-label={pileLabel('Team', defenderTricksCount, defenderPoints)}>
-                        <TrickPile count={defenderTricksCount} points={defenderPoints} />
+                        {renderTrickPile(defenderTricksCount, defenderPoints)}
                     </div>
                 </div>
 
@@ -1013,17 +1016,26 @@ const TableLayout = ({
                 
                 {renderTrickTallyPiles()}
                 {renderWidowPile()}
-                <FrogWidowReveal
-                    active={currentTableState.state === 'Frog Widow Exchange'}
-                    cards={currentTableState.revealedWidowForFrog}
-                    renderCard={renderCard}
-                />
-                {renderLastTrickOverlay()}
-                {renderWidowPeekOverlay()}
-                {/* Pucks are now rendered individually below */}
-                {renderTrumpBrokenAnnouncement()}
-                {renderWidowCelebration()}
-                {renderDealerDeck()}
+                {/* Presentation overlays only — a crash here must not take
+                    the table down. Function child so the helpers run inside
+                    the boundary rather than in this component's render. */}
+                <DecorBoundary>
+                    {() => (
+                        <>
+                            <FrogWidowReveal
+                                active={currentTableState.state === 'Frog Widow Exchange'}
+                                cards={currentTableState.revealedWidowForFrog}
+                                renderCard={renderCard}
+                            />
+                            {renderLastTrickOverlay()}
+                            {renderWidowPeekOverlay()}
+                            {/* Pucks are now rendered individually below */}
+                            {renderTrumpBrokenAnnouncement()}
+                            {renderWidowCelebration()}
+                            {renderDealerDeck()}
+                        </>
+                    )}
+                </DecorBoundary>
 
                 {renderProgressBars()}
                 

@@ -1,5 +1,5 @@
 // frontend/src/components/GameTableView.js
-import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import './GameTableView.css';
 import DrawVoteModal from './game/DrawVoteModal';
@@ -22,7 +22,7 @@ import {
 } from '../config/endRoundTiming';
 import LobbyChat from './LobbyChat';
 import AdminObserverMode from './AdminObserverMode';
-import PlayerHandAnchorDebug from './game/PlayerHandAnchorDebug';
+import DecorBoundary from './DecorBoundary';
 import { getLobbyChatHistory, fetchChampionLine } from '../services/api';
 import { haptic } from '../utils/haptics';
 import LearnerCoach from './game/coach/LearnerCoach';
@@ -54,6 +54,10 @@ import { buzz } from '../utils/haptics';
 import { useCosmetics } from '../utils/cosmetics';
 import { CARD_PLAY_STYLES, useCardPlayStyle, setCardPlayStyle } from '../utils/playStyle';
 import VoiceControls from './game/VoiceControls';
+
+// Admin-only dev overlay (~900 lines): fetched on first Shift+D instead of
+// shipping in every player's main chunk.
+const PlayerHandAnchorDebug = React.lazy(() => import('./game/PlayerHandAnchorDebug'));
 
 const ROUND_PRESENTATION_STATES = new Set([
     'WidowReveal',
@@ -692,6 +696,24 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
     }, [chatOpen, showGameMenu]);
+
+    // Android hardware back (dispatched by utils/nativeInit.js): close the
+    // top-most utility surface and claim the press. Unclaimed, the app is
+    // backgrounded rather than navigated out of a live hand. Server-driven
+    // dialogs (votes, the recap) are deliberately not dismissable this way.
+    useEffect(() => {
+        const onBack = (event) => {
+            if (showGameMenu) setShowGameMenu(false);
+            else if (showStoreModal) setShowStoreModal(false);
+            else if (profilePlayerName) setProfilePlayerName(null);
+            else if (showInsurancePrompt) setShowInsurancePrompt(false);
+            else if (chatOpen) setChatOpen(false);
+            else return;
+            event.preventDefault();
+        };
+        window.addEventListener('sluff:back', onBack);
+        return () => window.removeEventListener('sluff:back', onBack);
+    }, [showGameMenu, showStoreModal, profilePlayerName, showInsurancePrompt, chatOpen]);
     
     const getPlayerNameByUserId = useCallback((targetPlayerId) => {
         if (!currentTableState?.players || !targetPlayerId) return String(targetPlayerId);
@@ -1387,7 +1409,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             {shareNotice && <div className="share-invite-notice">{shareNotice}</div>}
             {!roundPresentationControlsLocked && createPortal(
                 <>
-                    <TipsBeacon userId={playerId} />
+                    <DecorBoundary><TipsBeacon userId={playerId} /></DecorBoundary>
                     <button
                         className="game-header-store-btn"
                         type="button"
@@ -1528,10 +1550,10 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
 
             <IosPwaPrompt show={showIosPwaPrompt} onClose={() => setShowIosPwaPrompt(false)} />
             {midnightSpecial && (
-                <MidnightSpecialBanner
-                    key={midnightSpecial.runId}
-                    playerName={midnightSpecial.playerName}
-                />
+                // Keyed on the boundary so a fresh run gets a fresh boundary.
+                <DecorBoundary key={midnightSpecial.runId}>
+                    <MidnightSpecialBanner playerName={midnightSpecial.playerName} />
+                </DecorBoundary>
             )}
 
 
@@ -1568,11 +1590,13 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                     </button>
                 </>
             )}
-            <WidowSpider
-                runId={spiderRun.id}
-                mode={spiderRun.mode}
-                cancelled={ROUND_PRESENTATION_STATES.has(currentTableState?.state)}
-            />
+            <DecorBoundary>
+                <WidowSpider
+                    runId={spiderRun.id}
+                    mode={spiderRun.mode}
+                    cancelled={ROUND_PRESENTATION_STATES.has(currentTableState?.state)}
+                />
+            </DecorBoundary>
             {user?.is_admin && (
                 <>
                     <AdminObserverMode
@@ -1587,7 +1611,9 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                         userId={playerId}
                     />
                     {showAnchorDebug && (
-                        <PlayerHandAnchorDebug />
+                        <Suspense fallback={null}>
+                            <PlayerHandAnchorDebug />
+                        </Suspense>
                     )}
                 </>
             )}
@@ -1715,12 +1741,14 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             {/* Anchored micro-lessons for the first few games in ANY venue —
                 the Academy coach above stays the guided track; this one meets
                 Quick Play novices where they actually are. */}
-            <LearnerCoach
-                active={learnerMode && !tutorialCoachActive}
-                currentTableState={currentTableState}
-                selfPlayerName={selfPlayerName}
-                userId={playerId}
-            />
+            <DecorBoundary>
+                <LearnerCoach
+                    active={learnerMode && !tutorialCoachActive}
+                    currentTableState={currentTableState}
+                    selfPlayerName={selfPlayerName}
+                    userId={playerId}
+                />
+            </DecorBoundary>
             
             <footer className="game-footer">
                 <div

@@ -226,8 +226,10 @@ describe('App Component and Game Flow', () => {
         await user.click(await screen.findByRole('button', { name: 'Open player menu' }));
         await user.click(within(screen.getByRole('group', { name: 'Player menu' }))
             .getByRole('button', { name: 'Admin Tools' }));
+        // AdminView is lazy-loaded (its own chunk), so wait for it to resolve first.
+        const reviewButton = await screen.findByRole('button', { name: 'Review Wallet Reset' });
         expect(screen.queryByRole('button', { name: 'Reset Tokens' })).not.toBeInTheDocument();
-        await user.click(screen.getByRole('button', { name: 'Review Wallet Reset' }));
+        await user.click(reviewButton);
 
         expect(api.getAlpha2WalletResetPreview).toHaveBeenCalledOnce();
         expect(await screen.findByText('Every wallet → 8.00 tokens')).toBeInTheDocument();

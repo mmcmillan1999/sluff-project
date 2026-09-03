@@ -5,6 +5,7 @@ import './LobbyView.css';
 import BulletinTicker from './BulletinTicker';
 import LobbyTableCard from './LobbyTableCard';
 import VenueWheel from './VenueWheel';
+import DecorBoundary from './DecorBoundary';
 import LobbyChat from './LobbyChat';
 import SoundControls from './game/SoundControls';
 import { getLobbyChatHistory } from '../services/api';
@@ -96,9 +97,19 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, wheelAudio, handleJoinTab
 
         document.addEventListener('pointerdown', closeFromOutside);
         window.addEventListener('keydown', closeFromKeyboard);
+        // Android hardware back (dispatched by utils/nativeInit.js): an open
+        // menu claims the press; unclaimed, the app backgrounds instead of
+        // exiting.
+        const closeFromBack = event => {
+            event.preventDefault();
+            setShowMenu(false);
+            menuButtonRef.current?.focus();
+        };
+        window.addEventListener('sluff:back', closeFromBack);
         return () => {
             document.removeEventListener('pointerdown', closeFromOutside);
             window.removeEventListener('keydown', closeFromKeyboard);
+            window.removeEventListener('sluff:back', closeFromBack);
         };
     }, [showMenu]);
 
@@ -318,18 +329,20 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, wheelAudio, handleJoinTab
                         <span className="quickplay-title">Quick Play</span>
                         <span className="quickplay-subtitle">Spin the wheel, then hit play</span>
                     </div>
-                    <VenueWheel
-                        themes={lobbyThemes || []}
-                        userTokens={user.tokens}
-                        pendingThemeId={quickPlayPending}
-                        wheelAudio={wheelAudio}
-                        onPlay={(themeId) => {
-                            setQuickPlayPending(themeId);
-                            handleQuickPlay(themeId);
-                            // Safety: clear if the server didn't seat us
-                            setTimeout(() => setQuickPlayPending(null), 4000);
-                        }}
-                    />
+                    <DecorBoundary>
+                        <VenueWheel
+                            themes={lobbyThemes || []}
+                            userTokens={user.tokens}
+                            pendingThemeId={quickPlayPending}
+                            wheelAudio={wheelAudio}
+                            onPlay={(themeId) => {
+                                setQuickPlayPending(themeId);
+                                handleQuickPlay(themeId);
+                                // Safety: clear if the server didn't seat us
+                                setTimeout(() => setQuickPlayPending(null), 4000);
+                            }}
+                        />
+                    </DecorBoundary>
                 </div>
 
                 {/* ============ PRIVATE TABLES — play with friends ============ */}

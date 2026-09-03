@@ -761,7 +761,9 @@ const RoundSummaryModal = ({
         );
     };
     
-    const TrickDetailsPanel = () => {
+    // Same reason as the panels above: a broadcast mid-recap must not remount
+    // the trick list and throw away the player's scroll position.
+    const renderTrickDetailsPanel = () => {
         if (!allTricks) return null;
         const bidderWonWidow = (bidType === 'Frog') || (bidType === 'Solo') || ((bidType === 'Heart Solo') && lastCompletedTrick?.winnerName === bidderName);
         const widowRowJsx = (
@@ -773,7 +775,7 @@ const RoundSummaryModal = ({
                 <span className="trick-points">({widowPointsValue} pts)</span>
             </div>
         );
-        const TrickRow = ({ trick }) => (
+        const renderTrickRow = (trick) => (
             <div key={`trick-${trick.trickNumber}`} className="trick-detail-row">
                 <span className="trick-number">Trick {trick.trickNumber}:</span>
                 <div className="trick-cards">
@@ -788,12 +790,12 @@ const RoundSummaryModal = ({
             <div className="trick-breakdown-details">
                 <div className="team-trick-section">
                     <h4>{bidderName} (Bidder): {finalBidderPoints} pts</h4>
-                     {bidderTricks.map(trick => <TrickRow key={trick.trickNumber} trick={trick} />)}
+                     {bidderTricks.map(trick => renderTrickRow(trick))}
                     {bidderWonWidow && widowRowJsx}
                 </div>
                 <div className="team-trick-section">
                     <h4>{defenderNames.join(' & ')} (Defenders): {finalDefenderPoints} pts</h4>
-                     {defenderTricks.map(trick => <TrickRow key={trick.trickNumber} trick={trick} />)}
+                     {defenderTricks.map(trick => renderTrickRow(trick))}
                     {!bidderWonWidow && widowRowJsx}
                 </div>
             </div>
@@ -835,7 +837,7 @@ const RoundSummaryModal = ({
                         {detailsVisible && (
                             <div className="details-content">
                                  <div className="scrollable-tricks">
-                                    <TrickDetailsPanel />
+                                    {renderTrickDetailsPanel()}
                                 </div>
                             </div>
                         )}
