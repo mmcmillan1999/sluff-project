@@ -93,6 +93,18 @@ const DELETE_CHAMPION_LINES = `
     DELETE FROM champion_lines
     WHERE name_key = ANY(SELECT LEFT(LOWER(TRIM(n)), 80) FROM unnest($1::text[]) AS n)
 `;
+// "X has logged on/out." rows are written as System with user_id NULL, so
+// the anonymiser above never touches them; drop them for every name used.
+const DELETE_PRESENCE_ROWS = `
+    DELETE FROM lobby_chat_messages
+    WHERE user_id IS NULL
+      AND username = 'System'
+      AND message = ANY(
+          SELECT n || ' has logged on.' FROM unnest($1::text[]) AS n
+          UNION ALL
+          SELECT n || ' has logged out.' FROM unnest($1::text[]) AS n
+      )
+`;
 const DELETE_USER = 'DELETE FROM users WHERE id = $1 RETURNING id, username';
 
 /**
@@ -143,6 +155,7 @@ async function deleteOwnAccount(pool, userId) {
         const spokenNames = [account.username, ...(Array.isArray(account.previous_usernames) ? account.previous_usernames : [])]
             .filter(name => typeof name === 'string' && name.trim());
         await client.query(DELETE_CHAMPION_LINES, [spokenNames]);
+        await client.query(DELETE_PRESENCE_ROWS, [spokenNames]);
 
         const deleted = await client.query(DELETE_USER, [userId]);
         if (deleted.rowCount !== 1) {

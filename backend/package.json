@@ -20,12 +20,11 @@
     "secrets:rotate": "node scripts/rotate-render-secrets.js"
   },
   "engines": {
-    "node": ">=20"
+    "node": "22.x"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.59.0",
     "@google/generative-ai": "^0.24.1",
-    "@sendgrid/mail": "^8.1.5",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",

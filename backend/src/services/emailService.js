@@ -1,8 +1,8 @@
 // backend/src/services/emailService.js
 //
-// Transactional email with provider preference:
-//   1. Resend (RESEND_API_KEY) — current provider, free tier
-//   2. SendGrid (SENDGRID_API_KEY) — legacy fallback (account out of credits since 2025)
+// Transactional email via Resend (RESEND_API_KEY). The SendGrid rail was
+// removed Sept 2026 (SendGrid rail removed: the account had been out of
+// credits since 2025 and the dependency carried most of npm audit's noise).
 // Sender address comes from SENDER_EMAIL_ADDRESS (noreply@playsluff.com).
 
 const senderEmail = process.env.SENDER_EMAIL_ADDRESS;
@@ -29,12 +29,6 @@ const sendViaResend = async ({ to, subject, text, html }) => {
     }
 };
 
-const sendViaSendGrid = async ({ to, subject, text, html }) => {
-    const sgMail = require('@sendgrid/mail');
-    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-    await sgMail.send({ to, from: senderEmail, subject, text, html });
-};
-
 /**
  * Sends an email using the first configured provider.
  * @param {string} to - The recipient's email address.
@@ -51,10 +45,8 @@ const sendEmail = async ({ to, subject, text, html }) => {
     try {
         if (process.env.RESEND_API_KEY) {
             await sendViaResend({ to, subject, text, html });
-        } else if (process.env.SENDGRID_API_KEY) {
-            await sendViaSendGrid({ to, subject, text, html });
         } else {
-            throw new Error('No email provider configured (RESEND_API_KEY or SENDGRID_API_KEY).');
+            throw new Error('No email provider configured (RESEND_API_KEY).');
         }
         console.log(`✅ Email sent successfully to ${to} with subject "${subject}"`);
     } catch (error) {

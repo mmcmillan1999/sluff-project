@@ -98,37 +98,7 @@ const handleAutomaticBotMercyToken = async (pool, userId) => {
     }
 };
 
-const createGameRecord = async (pool, table) => {
-    const { tableId, theme, playerMode } = table;
-    const client = await pool.connect();
-    let transactionOpen = false;
-    try {
-        await client.query('BEGIN');
-        transactionOpen = true;
-        await acquireSeasonLock(client);
-        const query = `
-            INSERT INTO game_history (table_id, theme, player_count, outcome, season_id)
-            SELECT $1, $2, $3, $4, season_id
-            FROM seasons
-            WHERE status = 'active'
-            RETURNING game_id, season_id
-        `;
-        const result = await client.query(query, [tableId, theme, playerMode, 'In Progress']);
-        if (result.rows?.length !== 1) throw new Error('Unable to attach the game to an active season.');
-        const gameId = result.rows[0].game_id;
-        await client.query('COMMIT');
-        transactionOpen = false;
-        console.log(`✅ Game record created with ID ${gameId} for table ${tableId}`);
-        return gameId;
-    } catch (error) {
-        if (transactionOpen) await client.query('ROLLBACK');
-        console.error('❌ Failed to create game record:', error);
-        throw error;
-    } finally {
-        client.release();
-    }
-};
-
+// (createGameRecord, the non-atomic legacy start, lived here until Sept 2026.)
 const postTransaction = async (pool, { userId, gameId, type, amount, description }) => {
     // Input validation
     if (!userId || typeof userId !== 'number') {
@@ -247,7 +217,9 @@ const handleMercyTokenRequest = async (pool, userId, username = null) => {
         }
 
         // Check for suspicious activity before granting token
-        const suspiciousCheck = await securityMonitor.checkSuspiciousActivity(pool, userId);
+        // Same connection as the row lock we hold: checking out a second pool
+        // slot here let ten concurrent mercy requests starve a 10-slot pool.
+        const suspiciousCheck = await securityMonitor.checkSuspiciousActivity(client, userId);
         if (suspiciousCheck.suspicious) {
             // Still grant the token but flag for admin review
             console.warn(`🚨 Granting mercy token to flagged user ${username} (${userId}): ${suspiciousCheck.flags.join(', ')}`);
@@ -286,72 +258,8 @@ const handleMercyTokenRequest = async (pool, userId, username = null) => {
     }
 };
 
-const updateGameRecordOutcome = async (pool, gameId, outcome) => {
-    await pool.query(
-        'UPDATE game_history SET outcome = $1, end_time = NOW() WHERE game_id = $2',
-        [outcome, gameId],
-    );
-};
-
-const handleGameStartTransaction = async (pool, table, playerIds, gameId) => {
-    const cost = -(TABLE_COSTS[table.theme] || 1);
-    const description = `Table buy-in for game #${gameId}`;
-
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-
-        const balanceQuery = `
-            SELECT user_id, SUM(amount) as current_tokens 
-            FROM transactions 
-            WHERE user_id = ANY($1::int[]) 
-            GROUP BY user_id;
-        `;
-        const balanceResult = await client.query(balanceQuery, [playerIds]);
-        
-        const playerBalances = balanceResult.rows.reduce((acc, row) => {
-            acc[row.user_id] = parseFloat(row.current_tokens);
-            return acc;
-        }, {});
-
-        for (const userId of playerIds) {
-            const balance = playerBalances[userId] || 0;
-            if (balance < Math.abs(cost)) {
-                const userRes = await client.query('SELECT username FROM users WHERE id = $1', [userId]);
-                const username = userRes.rows[0]?.username || `Player ID ${userId}`;
-                throw new Error(`${username} has insufficient tokens. Needs ${Math.abs(cost)}, but has ${balance.toFixed(2)}.`);
-            }
-        }
-
-        const transactionPromises = playerIds.map(userId => {
-            const insertQuery = `
-                INSERT INTO transactions(user_id, game_id, transaction_type, amount, description) 
-                VALUES($1, $2, 'buy_in', $3, $4);
-            `;
-            return client.query(insertQuery, [userId, gameId, cost, description]);
-        });
-        
-        await Promise.all(transactionPromises);
-
-        await client.query('COMMIT');
-        console.log(`✅ Game start buy-in transaction successful for game ${gameId}`);
-        
-        // Return updated balances
-        const updatedBalances = {};
-        for (const userId of playerIds) {
-            updatedBalances[userId] = (playerBalances[userId] || 0) + cost;
-        }
-        return updatedBalances;
-
-    } catch (error) {
-        await client.query('ROLLBACK');
-        console.error("❌ Game start transaction failed and was rolled back:", error.message);
-        throw error; 
-    } finally {
-        client.release();
-    }
-};
-
+// (updateGameRecordOutcome and handleGameStartTransaction — an unconditional
+// outcome overwrite and a lock-free balance read — were removed Sept 2026.)
 // Creates the in-progress game and charges every funded player as one database
 // unit.  The user row locks serialize overlapping starts before balances are
 // read, while the surrounding transaction guarantees a failed charge cannot
@@ -671,11 +579,8 @@ const handleForfeitTransactions = async (pool, table) => (
 
 module.exports = {
     BOT_MERCY_THRESHOLD,
-    createGameRecord,
     postTransaction,
-    updateGameRecordOutcome,
-    handleGameStartTransaction,
-    startGameTransaction,
+    startGameTransaction, // legacy exports removed Sept 2026: see notes above
     handleNormalGameTransactions,
     handleDrawTransactions,
     handleForfeitTransactions,

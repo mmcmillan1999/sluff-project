@@ -1,7 +1,20 @@
 // backend/src/api/feedback.js
 
 const express = require('express');
+const { rateLimit } = require('express-rate-limit');
 const requireAuth = require('../middleware/requireAuth');
+const { filterMessage } = require('../data/chatModeration');
+
+// Keyed by account like chat (mobile carriers share IPs); runs after checkAuth.
+const byUser = (req) => (req.user?.id != null ? `u:${req.user.id}` : 'anonymous');
+const submitLimiter = rateLimit({
+    windowMs: 10 * 60 * 1000,
+    limit: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: byUser,
+    message: { message: 'You have sent a lot of feedback recently. Wait a few minutes.' },
+});
 
 const isAdmin = (req, res, next) => {
     if (req.user?.is_admin === true) {
@@ -18,7 +31,7 @@ const createFeedbackRoutes = (pool, jwt) => {
     const checkAuth = requireAuth(pool, jwt);
     
     // POST /api/feedback - Submit new feedback (existing functionality)
-    router.post('/', checkAuth, async (req, res) => {
+    router.post('/', checkAuth, submitLimiter, async (req, res) => {
         const { id: userId, username } = req.user;
         const { feedback_text, game_state_json } = req.body;
 
@@ -31,11 +44,14 @@ const createFeedbackRoutes = (pool, jwt) => {
 
         try {
             const tableId = game_state_json?.tableId || null;
+            // The board is public UGC; run chat's word filter over it (the
+            // length rule differs, so the filter rather than reviewMessage).
+            const { clean } = filterMessage(feedback_text.trim());
             const query = `
                 INSERT INTO feedback (user_id, username, feedback_text, table_id, game_state_json)
                 VALUES ($1, $2, $3, $4, $5)
             `;
-            const values = [userId, username, feedback_text, tableId, game_state_json];
+            const values = [userId, username, clean, tableId, game_state_json];
             await pool.query(query, values);
             res.status(201).json({ message: 'Feedback submitted successfully. Thank you!' });
 
@@ -61,9 +77,10 @@ const createFeedbackRoutes = (pool, jwt) => {
                     LIMIT ${FEEDBACK_PAGE_LIMIT};
                 `;
             } else {
-                // Regular users see non-hidden feedback, without admin notes
+                // Regular users see non-hidden feedback, without admin notes or
+                // the id-to-username map (chat refuses to leak that too).
                 query = `
-                    SELECT feedback_id, user_id, username, submitted_at, feedback_text, 
+                    SELECT feedback_id, username, submitted_at, feedback_text, 
                            table_id, status, admin_response, last_updated_by_admin_at
                     FROM feedback
                     WHERE status != 'hidden'

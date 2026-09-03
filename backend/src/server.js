@@ -142,6 +142,13 @@ async function initializeApplication() {
     pool = new Pool({
         connectionString: process.env.POSTGRES_CONNECT_STRING,
         ssl: { rejectUnauthorized: false },
+        max: 10,
+        // Fail fast instead of queueing forever when the pool is starved (a
+        // lock pile-up during a deploy, or a burst of mercy requests).
+        connectionTimeoutMillis: 10000,
+        // No app query legitimately runs this long; a stuck one would
+        // otherwise hold a pool slot until the connection dies.
+        statement_timeout: 60000,
     });
     // pg emits 'error' on the pool for idle clients that die (a Postgres restart,
     // a network blip). With no listener Node treats it as uncaught and exits —
@@ -214,6 +221,12 @@ async function initializeApplication() {
             await pool.query(`DELETE FROM client_errors WHERE id NOT IN (
                 SELECT id FROM client_errors ORDER BY id DESC LIMIT 5000
             )`);
+            // Lobby chat gains rows on every login/logout and funnel_events is
+            // fed by a public endpoint; neither has any use past a season.
+            // (play_timings and round_results are analytics sources and are
+            // deliberately not trimmed here.)
+            await pool.query("DELETE FROM lobby_chat_messages WHERE created_at < NOW() - INTERVAL '90 days'");
+            await pool.query("DELETE FROM funnel_events WHERE created_at < NOW() - INTERVAL '90 days'");
         } catch (error) {
             console.error('client_errors trim failed:', error.message);
         }

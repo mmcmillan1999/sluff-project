@@ -68,6 +68,7 @@ function createPool({
             if (sql.startsWith('DELETE FROM play_timings')) return { rows: [], rowCount: 40 };
             if (sql.startsWith('UPDATE round_results')) return { rows: [], rowCount: 4 };
             if (sql.includes('DELETE FROM champion_lines')) return { rows: [], rowCount: 1 };
+            if (sql.includes('DELETE FROM lobby_chat_messages')) return { rows: [], rowCount: 6 };
             if (sql.startsWith('DELETE FROM users')) {
                 return { rows: [{ id: user.id, username: user.username }], rowCount: deleteRowCount };
             }
@@ -256,6 +257,7 @@ async function testDeleteHappyPath() {
     assert.ok(sql.some(text => text.startsWith('UPDATE round_results SET bidder_user_id = NULL')));
     const championCall = pool.calls.find(call => String(call.sql).includes('DELETE FROM champion_lines'));
     assert.ok(championCall, 'removes the champion name clip');
+    assert.ok(sql.some(text => text.includes('DELETE FROM lobby_chat_messages')), 'drops the System presence rows that carried the name');
     assert.ok(Array.isArray(championCall.params[0]) && championCall.params[0].includes('Leaving'), 'by every name the player has used');
     assert.ok(
         sql.indexOf('COMMIT') > sql.findIndex(text => text.startsWith('DELETE FROM users')),

@@ -1752,25 +1752,46 @@
                         // computed from partial trick data and would mislead
                         // the insurance tuning.
                         if (engine.roundSummary && engine.roundSummary.insuranceHindsight
-                            && !engine.roundSummary.insuranceWrap && engine.gameId) {
+                            && !engine.roundSummary.insuranceWrap && engine.gameId
+                            // Once per round: rematch votes re-broadcast while the summary
+                            // is still set, and each broadcast used to log another set.
+                            && engine.hindsightLoggedFor !== engine.roundSummary) {
+                            engine.hindsightLoggedFor = engine.roundSummary;
                             console.log(`[Insurance] Round ended with hindsight data for game ${engine.gameId}`);
                             console.log(`[Insurance] Insurance was active:`, engine.insurance.isActive);
                             console.log(`[Insurance] Deal executed:`, engine.insurance.dealExecuted);
                             console.log(`[Insurance] Hindsight data:`, engine.roundSummary.insuranceHindsight);
-                            // Store the hindsight data before setTimeout since roundSummary might be cleared
+                            // Freeze everything the logger reads NOW. The 3 s delay
+                            // used to read the live engine, and on bot-only tables the
+                            // round had already advanced (bidWinnerInfo null, hands
+                            // redealt), so exhibition hindsight rows were silently lost.
                             const hindsightDataSnapshot = { ...engine.roundSummary.insuranceHindsight };
+                            const gameIdSnapshot = engine.gameId;
+                            const dealExecutedSnapshot = engine.insurance.dealExecuted;
+                            const engineSnapshot = {
+                                insurance: {
+                                    bidderRequirement: engine.insurance.bidderRequirement,
+                                    defenderOffers: { ...(engine.insurance.defenderOffers || {}) },
+                                },
+                                bidWinnerInfo: engine.bidWinnerInfo ? { ...engine.bidWinnerInfo } : { playerName: null, bid: null },
+                                tricksPlayedCount: engine.tricksPlayedCount,
+                                scores: { ...engine.scores },
+                                hands: Object.fromEntries(
+                                    Object.entries(engine.hands || {}).map(([name, hand]) => [name, [...(hand || [])]]),
+                                ),
+                            };
+                            const botsSnapshot = Object.values(engine.bots).map(bot => bot.playerName);
                             setTimeout(async () => {
-                                for (const botId in engine.bots) {
-                                    const bot = engine.bots[botId];
-                                    const hindsightData = hindsightDataSnapshot[bot.playerName];
+                                for (const botName of botsSnapshot) {
+                                    const hindsightData = hindsightDataSnapshot[botName];
                                     if (hindsightData) {
-                                        console.log(`[Insurance] Bot ${bot.playerName} hindsight:`, hindsightData);
+                                        console.log(`[Insurance] Bot ${botName} hindsight:`, hindsightData);
                                         // Log the decision
                                         await this.adaptiveInsurance.logInsuranceDecision(
-                                            engine.gameId,
-                                            bot.playerName,
-                                            engine,
-                                            engine.insurance.dealExecuted,
+                                            gameIdSnapshot,
+                                            botName,
+                                            engineSnapshot,
+                                            dealExecutedSnapshot,
                                             hindsightData.hindsightValue
                                         );
                                         
@@ -1972,14 +1993,24 @@
                                 effect.payload.playerIds,
                             );
                         } catch (err) {
-                            const insufficientFundsMatch = err.message.match(/(.+) has insufficient tokens/);
+                            // Non-Error rejections and a throwing onFailure must still
+                            // release gameStartPending, or the table refuses every
+                            // start, leave, and rematch until a process restart.
+                            const errorMessage = String(err?.message ?? err ?? 'Game start failed.');
+                            const insufficientFundsMatch = errorMessage.match(/(.+) has insufficient tokens/);
                             const brokePlayerName = insufficientFundsMatch ? insufficientFundsMatch[1] : null;
                             const brokePlayer = brokePlayerName
                                 ? Object.values(engine.players).find(player => player.playerName === brokePlayerName)
                                 : null;
                             const quickPlayBotFundingShortage = engine.tableType === 'quickplay'
                                 && brokePlayer?.isBot === true;
-                            if (effect.onFailure) effect.onFailure(err, brokePlayerName);
+                            try {
+                                if (effect.onFailure) effect.onFailure(err, brokePlayerName);
+                            } catch (failureError) {
+                                console.error(`[GAME-START] onFailure threw on ${tableId}:`, failureError);
+                            } finally {
+                                engine.gameStartPending = false;
+                            }
                             if (quickPlayBotFundingShortage) {
                                 // A cross-process race can drain a bot after our
                                 // live preflight but before the database locks
@@ -1995,7 +2026,7 @@
                                 });
                             } else {
                                 this.io.to(tableId).emit('gameStartFailed', {
-                                    message: err.message,
+                                    message: errorMessage,
                                     kickedPlayer: brokePlayerName,
                                 });
                             }

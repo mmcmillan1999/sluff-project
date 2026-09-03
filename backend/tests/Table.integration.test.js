@@ -28,12 +28,15 @@ class MockEffectProcessor {
         if (!effects || !effects.length) return;
         for (const effect of effects) {
             if (effect.type === 'HANDLE_DRAW_OUTCOME') {
-                const summary = await gameLogic.handleDrawGameOver(
-                    {...effect.payload, pool: this.pool},
-                    effect.payload.outcome,
-                    () => Promise.resolve(),
-                    () => Promise.resolve()
-                );
+                // The legacy logic.handleDrawGameOver payout path was removed
+                // (Sept 2026); the engine tests only need a synthesized draw summary.
+                const summary = {
+                    isGameOver: true,
+                    drawOutcome: effect.payload.outcome,
+                    gameWinner: 'Draw',
+                    payouts: {},
+                    finalScores: effect.payload.scores,
+                };
                 if (effect.onComplete) effect.onComplete(summary);
             }
         }

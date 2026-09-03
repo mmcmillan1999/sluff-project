@@ -241,110 +241,9 @@ function calculateRoundScoreDetails(table) {
 }
 
 
-async function handleGameOver(table, transactionFn, statUpdateFn) {
-    let gameWinnerName = "N/A";
-    const { playerOrderActive, scores, theme, gameId, players } = table;
-    try {
-        const tableCost = TABLE_COSTS[theme] || 0;
-        const transactionPromises = [];
-        const statPromises = [];
-
-        const finalPlayerScores = playerOrderActive
-            .map(id => players[id])
-            .filter(isFundedPlayer)
-            .map(p => ({ name: p.playerName, score: scores[p.playerName], userId: p.userId }))
-            .sort((a, b) => b.score - a.score);
-        
-        if (finalPlayerScores.length === 3) {
-            const [p1, p2, p3] = finalPlayerScores;
-            if (p1.score > p2.score && p2.score > p3.score) {
-                gameWinnerName = p1.name;
-                transactionPromises.push(transactionFn({ userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 2, description: `Win and Payout from ${p3.name}` }));
-                statPromises.push(statUpdateFn("UPDATE users SET wins = wins + 1 WHERE id = $1", [p1.userId]));
-                transactionPromises.push(transactionFn({ userId: p2.userId, gameId, type: 'wash_payout', amount: tableCost, description: `Wash - Buy-in returned` }));
-                statPromises.push(statUpdateFn("UPDATE users SET washes = washes + 1 WHERE id = $1", [p2.userId]));
-                statPromises.push(statUpdateFn("UPDATE users SET losses = losses + 1 WHERE id = $1", [p3.userId]));
-            }
-            else if (p1.score === p2.score && p2.score > p3.score) {
-                gameWinnerName = `${p1.name} & ${p2.name}`;
-                transactionPromises.push(transactionFn({ userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 1.5, description: `Win (tie) - Split payout from ${p3.name}` }));
-                transactionPromises.push(transactionFn({ userId: p2.userId, gameId, type: 'win_payout', amount: tableCost * 1.5, description: `Win (tie) - Split payout from ${p3.name}` }));
-                statPromises.push(statUpdateFn("UPDATE users SET wins = wins + 1 WHERE id = ANY($1::int[])", [[p1.userId, p2.userId]]));
-                statPromises.push(statUpdateFn("UPDATE users SET losses = losses + 1 WHERE id = $1", [p3.userId]));
-            }
-            else if (p1.score > p2.score && p2.score === p3.score) {
-                gameWinnerName = p1.name;
-                transactionPromises.push(transactionFn({ userId: p1.userId, gameId, type: 'win_payout', amount: tableCost * 3, description: `Win - Collects full pot` }));
-                statPromises.push(statUpdateFn("UPDATE users SET wins = wins + 1 WHERE id = $1", [p1.userId]));
-                statPromises.push(statUpdateFn("UPDATE users SET losses = losses + 1 WHERE id = ANY($1::int[])", [[p2.userId, p3.userId]]));
-            }
-            else {
-                gameWinnerName = "3-Way Tie";
-                finalPlayerScores.forEach(p => {
-                    transactionPromises.push(transactionFn({ userId: p.userId, gameId, type: 'wash_payout', amount: tableCost, description: `3-Way Tie - Buy-in returned` }));
-                    statPromises.push(statUpdateFn("UPDATE users SET washes = washes + 1 WHERE id = $1", [p.userId]));
-                });
-            }
-        }
-        
-        await Promise.all(transactionPromises);
-        await Promise.all(statPromises);
-        
-    } catch(err) {
-        console.error("Database error during game over update:", err);
-    }
-    return { gameWinnerName };
-}
-
-// --- NEW FUNCTION for handling draw game over ---
-async function handleDrawGameOver(table, outcome, transactionFn, statUpdateFn) {
-    const tableCost = TABLE_COSTS[table.theme] || 0;
-    const gameId = table.gameId;
-    let summaryData = {
-        isGameOver: true,
-        drawOutcome: outcome,
-        gameWinner: "Draw",
-        payouts: {},
-        finalScores: table.scores,
-    };
-
-    const fundedPlayers = Object.values(table.players).filter(p => !p.isSpectator && isFundedPlayer(p));
-    const statPromises = [];
-    const transactionPromises = [];
-
-    if (outcome === 'wash') {
-        summaryData.message = "The game has ended in a wash. All buy-ins have been returned.";
-        for (const player of fundedPlayers) {
-            summaryData.payouts[player.playerName] = { totalReturn: tableCost };
-            transactionPromises.push(transactionFn({ userId: player.userId, gameId, type: 'wash_payout', amount: tableCost, description: `Draw (Wash) - Buy-in returned` }));
-            statPromises.push(statUpdateFn("UPDATE users SET washes = washes + 1 WHERE id = $1", [player.userId]));
-        }
-    } else if (outcome === 'split') {
-        const splitResult = calculateDrawSplitPayout(table);
-        if (splitResult.wash) { // Fallback for 4-player games etc.
-            return handleDrawGameOver(table, 'wash', transactionFn, statUpdateFn);
-        }
-        summaryData.message = "The game has ended in a split pot. Payouts are based on score.";
-        summaryData.payouts = splitResult.payouts;
-        for (const playerName in splitResult.payouts) {
-            const payoutInfo = splitResult.payouts[playerName];
-            transactionPromises.push(transactionFn({ userId: payoutInfo.userId, gameId, type: 'win_payout', amount: payoutInfo.totalReturn, description: `Draw (Split) - Payout` }));
-            statPromises.push(statUpdateFn("UPDATE users SET washes = washes + 1 WHERE id = $1", [payoutInfo.userId]));
-        }
-    }
-    
-    try {
-        await Promise.all(transactionPromises);
-        await Promise.all(statPromises);
-        await transactionManager.updateGameRecordOutcome(table.pool, gameId, `Game Over! Draw (${outcome})`);
-    } catch (err) {
-        console.error("Database error during draw game over update:", err);
-    }
-
-    return summaryData;
-}
-
-
+// (handleGameOver / handleDrawGameOver — the pre-settlement, non-atomic
+// payout paths — were removed Sept 2026. GameService.handleGameOver and
+// settlement/gameSettlement.js are the live path.)
 function calculateInsuranceHindsight(table, pointChanges, cardPointChanges) {
     if (table.playerMode !== 3 && table.playerMode !== 4) return null;
 
@@ -412,8 +311,6 @@ module.exports = {
     getRank,
     determineTrickWinner,
     calculateRoundScoreDetails,
-    handleGameOver,
-    handleDrawGameOver,
     calculateForfeitPayout,
     calculateDrawSplitPayout,
     calculateCardPoints,

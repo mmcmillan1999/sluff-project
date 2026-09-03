@@ -166,9 +166,29 @@ const registerGameHandlers = (io, gameService, options = {}) => {
         });
     });
 
+    // A phone on a flaky network reconnects every few seconds; announcing
+    // each drop wrote a chat row plus a global emit per blip, outside every
+    // limiter. Wait out a grace period and only announce when the user is
+    // really gone (no other tab or device still holds a socket).
+    const PRESENCE_GRACE_MS = 30 * 1000;
+    const pendingLogoutNotices = new Map();
+    const userHasLiveSocket = (userId) => {
+        const connectedSockets = io.sockets?.sockets;
+        if (!connectedSockets || typeof connectedSockets.values !== 'function') return false;
+        for (const candidate of connectedSockets.values()) {
+            if (candidate.connected !== false && String(candidate.user?.id) === String(userId)) return true;
+        }
+        return false;
+    };
+
     io.on("connection", (socket) => {
         socket.data = socket.data || {};
         latestSocketIdByUser.set(String(socket.user.id), socket.id);
+        const pendingNotice = pendingLogoutNotices.get(String(socket.user.id));
+        if (pendingNotice) {
+            clearTimeout(pendingNotice);
+            pendingLogoutNotices.delete(String(socket.user.id));
+        }
         console.log(`Socket connected: ${socket.user.username} (ID: ${socket.user.id}, Socket: ${socket.id})`);
 
         const isCurrentSocketController = () => (
@@ -1131,15 +1151,23 @@ const registerGameHandlers = (io, gameService, options = {}) => {
                     gameService.evaluateTerminalCleanup(enginePlayerIsOn.tableId);
                 }
             }
-            try {
-                const pool = gameService.pool;
-                const logoutMsgQuery = `INSERT INTO lobby_chat_messages (user_id, username, message) VALUES ($1, $2, $3) RETURNING id, username, message, created_at;`;
-                const msgValues = [null, 'System', `${socket.user.username} has logged out.`];
-                const { rows } = await pool.query(logoutMsgQuery, msgValues);
-                io.emit('new_lobby_message', rows[0]);
-            } catch (chatError) {
-                console.error("Failed to post logout message to chat:", chatError);
-            }
+            const existingNotice = pendingLogoutNotices.get(socketUserKey);
+            if (existingNotice) clearTimeout(existingNotice);
+            const noticeTimer = setTimeout(async () => {
+                pendingLogoutNotices.delete(socketUserKey);
+                if (userHasLiveSocket(socket.user.id)) return;
+                try {
+                    const pool = gameService.pool;
+                    const logoutMsgQuery = `INSERT INTO lobby_chat_messages (user_id, username, message) VALUES ($1, $2, $3) RETURNING id, username, message, created_at;`;
+                    const msgValues = [null, 'System', `${socket.user.username} has logged out.`];
+                    const { rows } = await pool.query(logoutMsgQuery, msgValues);
+                    io.emit('new_lobby_message', rows[0]);
+                } catch (chatError) {
+                    console.error("Failed to post logout message to chat:", chatError);
+                }
+            }, PRESENCE_GRACE_MS);
+            if (typeof noticeTimer.unref === 'function') noticeTimer.unref();
+            pendingLogoutNotices.set(socketUserKey, noticeTimer);
         });
     });
 };

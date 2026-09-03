@@ -109,6 +109,12 @@ const PrivacyPolicy = ({ onNavigate }) => {
                         You can request account deletion any time by emailing{' '}
                         <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>.
                     </li>
+                    <li>
+                        Deleting your account removes your email, password, chat, and gameplay
+                        telemetry. Your username alone stays in the finished-game records and
+                        token ledger of the players you played with, because those records
+                        belong to their game history too.
+                    </li>
                 </ul>
 
                 <h2>Changes to this policy</h2>

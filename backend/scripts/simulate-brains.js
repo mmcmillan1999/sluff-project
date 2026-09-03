@@ -19,6 +19,19 @@ const BotPlayer = require('../src/core/BotPlayer');
 const { PLACEHOLDER_ID } = require('../src/core/constants');
 const { brainNameFor, registerBrainProfile } = require('../src/core/bot-brains');
 const { shuffle } = require('../src/utils/shuffle');
+const { makeRng } = require('../src/core/bot-strategies/RolloutEstimator');
+
+// --seed=N makes a run reproducible: seating, dealer, and every deal come from
+// Math.random, so the script (and only the script) swaps in the estimator's
+// seeded PRNG. Without it each run is fresh, as before.
+const CLI_FLAGS = process.argv.slice(2).filter(arg => arg.startsWith('--'));
+const CLI_ARGS = process.argv.slice(2).filter(arg => !arg.startsWith('--'));
+const SEED_FLAG = CLI_FLAGS.find(arg => arg.startsWith('--seed='));
+const SEED = SEED_FLAG ? Number(SEED_FLAG.slice('--seed='.length)) : null;
+if (SEED !== null) {
+    if (!Number.isInteger(SEED)) throw new Error('--seed must be an integer');
+    Math.random = makeRng(SEED);
+}
 
 const MAX_ROUNDS_PER_GAME = 300;
 
@@ -192,10 +205,10 @@ function runMatchup(label, seatNames, games) {
 // strategies through the same loop), so the CLI only runs when this file
 // is the entry point.
 if (require.main === module) {
-    const games = Number(process.argv[2]) || 500;
+    const games = Number(CLI_ARGS[0]) || 500;
     // Optional second arg filters matchups by label substring:
     //   node scripts/simulate-brains.js 100000 "flytrap vs counting"
-    const filter = (process.argv[3] || '').toLowerCase();
+    const filter = (CLI_ARGS[1] || '').toLowerCase();
     console.log(`Simulating offline (no server, no database). ${games} games per matchup...`);
     const t0 = Date.now();
 

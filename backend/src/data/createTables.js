@@ -848,6 +848,13 @@ const createDbTables = async (pool) => {
                 UNIQUE (user_id, entitlement_key)
             );
         `);
+        // One store receipt grants exactly one account. Admin grants share
+        // synthetic refs, so only the purchase rails are constrained.
+        await pool.query(`
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_player_entitlements_receipt
+            ON player_entitlements (source, external_ref)
+            WHERE source IN ('apple', 'google', 'stripe') AND external_ref IS NOT NULL
+        `);
 
         // Personalized champion stings ("All hail your champion, NAME!"),
         // generated once per name via ElevenLabs and cached here — the mp3 is

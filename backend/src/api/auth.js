@@ -255,6 +255,12 @@ module.exports = function(pool, bcrypt, jwt, io, gameService) {
     });
 
     // LOGIN ROUTE
+    // An unknown email used to return before bcrypt ran (~1 ms vs ~60 ms),
+    // which made account existence measurable. Compare against a real hash
+    // on a miss so both paths cost the same.
+    // (Promise-wrapped: tests inject a synchronous bcrypt stand-in.)
+    const timingPadHash = Promise.resolve().then(() => bcrypt.hash('not-a-real-password', 10)).catch(() => null);
+
     router.post('/login', loginLimiter, async (req, res) => {
         try {
             const { email, password } = req.body;
@@ -273,6 +279,8 @@ module.exports = function(pool, bcrypt, jwt, io, gameService) {
             const userResult = await pool.query(userQuery, [email]);
 
             if (userResult.rows.length === 0) {
+                const pad = await timingPadHash;
+                if (pad && typeof password === 'string') await bcrypt.compare(password, pad).catch(() => {});
                 return res.status(401).json({ message: "Invalid credentials." });
             }
 
