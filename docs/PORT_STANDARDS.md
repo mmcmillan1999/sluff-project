@@ -21,11 +21,11 @@ To avoid conflicts when running multiple projects:
 
 ## Quick Setup Commands
 ```bash
-# Start frontend
-cd frontend && npm start  # Uses PORT from .env (3000)
+# Start frontend (port 3000 is set in vite.config.js)
+cd frontend && npm run dev
 
-# Start backend  
-cd backend && npm start   # Uses PORT from .env (3005)
+# Start backend (PORT from backend/.env, default 3005)
+cd backend && npm run dev:simple   # `npm start` uses `exec`, which is for Render, not cmd.exe
 ```
 
 ## Troubleshooting Port Conflicts

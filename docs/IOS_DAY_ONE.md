@@ -217,7 +217,7 @@ debugging signing and CI simultaneously.
 
 ## 8. Android, for comparison
 
-Android is buildable on Windows and needs no Mac. `@capacitor/android` is not
-installed yet and there is no `android/` directory. A Google Play Console
-account is **$25 one-time** versus $99/year. If iOS stalls on hardware or
+Android is buildable on Windows and needs no Mac. `@capacitor/android` is
+already installed and `frontend/android/` is committed (see CAPACITOR.md). A
+Google Play Console account is **$25 one-time** versus $99/year. If iOS stalls on hardware or
 enrolment, Android is the faster route to a real device in a real store.

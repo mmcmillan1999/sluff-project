@@ -77,4 +77,5 @@ change, re-run `npm run build && npx cap sync`.
   to dodge Render's idle spin-down; a Starter instance is the real fix.
 - Token monetization stays out (IAP if ever sold). Note that selling tokens would
   also flip the "no payment path" answer the store classification rests on.
-- No crash reporting anywhere — only a React `ErrorBoundary`.
+- Crash reporting exists (first-party, anonymous: `utils/errorReporter.js` →
+  `POST /api/errors`, reviewed in the admin panel); there is no third-party SDK.

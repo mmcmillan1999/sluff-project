@@ -29,7 +29,7 @@ The "where is everything" file. Update this whenever an account, plan, or URL ch
 - **Root cause (May 2026 invoice CSV): `sluff-backend` was on a "Pro Ultra" instance at $0.6048/hr = ~$394/mo.** The fix is one dropdown: downsize to Starter (~$7/mo).
 - Render workspace inventory (May 2026): `sluff-backend` (prod, Pro Ultra — DOWNSIZE), `sluff-backend-pilot` (staging, Starter $6), `Mosaic` (Standard $22 — separate project, not sluff), `SOTOS` (Starter $6 — separate project, not sluff), `sluff-db` (Postgres Basic-1gb, ~$17 — holds ALL game data; servers hold none).
 - **Lesson: a friends-and-family app needs ~$15–25/mo on Render.** Review the first invoice after any change; billing email is the Yahoo address.
-- Backup the DB anytime with `node backend/scripts/backup-db.js` (writes JSON dumps to backend/backups/, gitignored). Run one immediately after the DB comes back from suspension.
+- Backup the DB anytime with `node backend/scripts/backup-db.js` (writes JSON dumps to `SLUFF_BACKUP_DIR`, which must point outside the repo/synced folder — the script refuses otherwise). Run one immediately after the DB comes back from suspension.
 - Prefer setting `SLUFF_BACKUP_DIR` to an access-restricted, encrypted location outside the repository. Backups contain account and application data and must never be committed.
 - Set a calendar reminder: review Render + Squarespace + SendGrid billing every 6 months.
 
@@ -103,11 +103,14 @@ node scripts/reset-alpha2-wallets.js --execute --expected-hash=HASH --expected-s
 cd backend && npm run deploy:check     # exit 0 = clear, exit 1 = a human is playing
 ```
 
-**A backend deploy kills every in-flight game.** The server has no SIGTERM
-handler, so Render restarts it outright; `abandonedGameRecovery` then refunds
-the buy-ins, which is why those games show up as *"Abandoned after server
-interruption — funded player buy-ins refunded"*. Nobody loses tokens, but the
-game is gone and the players notice.
+**A backend deploy interrupts every in-flight game, and resume is best-effort.**
+Since Aug 2026 the SIGTERM handler (`server.js`) tells clients an update is
+happening, snapshots every live human game to `live_game_snapshots`, and the
+replacement instance restores them (boot pass plus a 10-minute sweep; see
+`src/serialization/gameResume.js`). When a restore is not possible the game
+falls to `abandonedGameRecovery`, which refunds the buy-ins after the grace
+period — those games show up as *"Abandoned after server interruption — funded
+player buy-ins refunded"*. Nobody loses tokens, but the game is gone.
 
 The check reports live games (anything with activity in the last 10 minutes)
 split by whether a human is in one, and exits non-zero if so. Bot-only games are
@@ -118,6 +121,8 @@ If it says stop, either wait or save the push for a quiet hour. Frontend-only
 changes are safe any time — Netlify swaps static assets and the backend never
 restarts, so no game is interrupted.
 
-The durable fix is a SIGTERM handler that persists or cleanly parks in-flight
-games instead of dropping them. Not built: engine state lives in memory, so
-saving it is real work rather than a signal handler.
+Known resume limits: an in-flight playout or draw vote is not snapshotted,
+and the exhibition manager can claim table-10/table-20 on the new instance
+before the old instance's snapshot lands. Verify a deploy landed cleanly with
+`SELECT * FROM funnel_events WHERE name = 'server_sigterm'` and the Render logs'
+`[RESUME]` lines.

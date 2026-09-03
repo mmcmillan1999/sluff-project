@@ -22,7 +22,7 @@ The owner reported that the repository had no forks, one collaborator, and GitHu
 
 ## 1. Contain and rotate first
 
-History cleanup cannot make an exposed credential trustworthy again. Complete rotation before rewriting Git:
+History cleanup cannot make an exposed credential trustworthy again. Complete rotation before rewriting Git. Steps 1–4 are automated by `npm run secrets:rotate` in `backend/` (dry run by default, `-- --execute` to apply; needs `RENDER_API_KEY` in `backend/.env`). It appends a timestamped entry to the Rotation log at the end of this file, and that stamp is the line: anything published before it is dead.
 
 1. Replace the Render PostgreSQL credential. Update the backend service and local development environment, restart the service, verify `/health`, then revoke the old database credential.
 2. Generate and deploy a new `JWT_SECRET`. This intentionally invalidates every existing 90-day login token, so users will need to sign in again.
@@ -101,3 +101,12 @@ GitHub's current sensitive-data removal guidance is the authority for the final 
 - `.gitleaks.toml` extends Gitleaks' maintained defaults with Sluff-specific environment and PostgreSQL URL rules.
 - Before committing, run `pwsh -File scripts/scan-secrets.ps1`. Use `-AllHistory` for periodic full-ref audits.
 - Never commit generated context dumps, production login details, database URLs, or plaintext backup files.
+
+## Rotation log
+
+Anything published before the latest entry below is dead. Entries are appended by
+`backend/scripts/rotate-render-secrets.js`; never record a value here, only what was rotated.
+
+- **2026-07-10** (recorded retroactively on 2026-09-03) — Render Postgres credential rotated: the instance's only credential is `sluff_app_20260710`, the default user, so the original user whose URL appeared in history has been deactivated since that date. The historical connection URL is dead.
+
+- **2026-09-03T08:08:11.277Z** — JWT_SECRET regenerated (64 chars, CSPRNG); every login token issued before this moment is invalid. Confirmed AI_SECRET_KEY and ADMIN_SECRET are absent from the service. Deploy dep-dacildifngtc73dktm6g live, /health green.
