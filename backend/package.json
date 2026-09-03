@@ -16,7 +16,8 @@
     "games:reconcile": "node scripts/reconcile-abandoned-games.js",
     "tokens:audit": "node scripts/audit-token-accounting.js",
     "tokens:reset-alpha2": "node scripts/reset-alpha2-wallets.js",
-    "deploy:check": "node scripts/deploy-safety-check.js"
+    "deploy:check": "node scripts/deploy-safety-check.js",
+    "secrets:rotate": "node scripts/rotate-render-secrets.js"
   },
   "engines": {
     "node": ">=20"
@@ -32,7 +33,6 @@
     "express-rate-limit": "^8.6.0",
     "groq-sdk": "^0.30.0",
     "jsonwebtoken": "^9.0.2",
-    "node-fetch": "^3.3.2",
     "openai": "^5.12.2",
     "pg": "^8.16.3",
     "socket.io": "^4.5.4",
