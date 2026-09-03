@@ -110,3 +110,5 @@ Anything published before the latest entry below is dead. Entries are appended b
 - **2026-07-10** (recorded retroactively on 2026-09-03) — Render Postgres credential rotated: the instance's only credential is `sluff_app_20260710`, the default user, so the original user whose URL appeared in history has been deactivated since that date. The historical connection URL is dead.
 
 - **2026-09-03T08:08:11.277Z** — JWT_SECRET regenerated (64 chars, CSPRNG); every login token issued before this moment is invalid. Confirmed AI_SECRET_KEY and ADMIN_SECRET are absent from the service. Deploy dep-dacildifngtc73dktm6g live, /health green.
+
+- **2026-09-03T09:08:04.872Z** — NODE_ENV=production set on the service (dev CORS origins and verbose errors now off). Deploy dep-dacjhigjo6nc738enbug live, /health green.
