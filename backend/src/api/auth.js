@@ -248,7 +248,7 @@ module.exports = function(pool, bcrypt, jwt, io, gameService) {
                     : "That username is taken. Pick another one.";
                 return res.status(409).json({ message, field });
             }
-            res.status(500).json({ message: error.message || "An unknown error occurred." });
+            res.status(500).json({ message: "An internal error occurred during registration." });
         } finally {
             client.release();
         }
@@ -597,6 +597,9 @@ module.exports = function(pool, bcrypt, jwt, io, gameService) {
         const { token, password } = req.body;
         if (!token || !password) {
             return res.status(400).json({ message: "Token and new password are required." });
+        }
+        if (typeof password !== 'string' || password.length < MIN_PASSWORD_LENGTH) {
+            return res.status(400).json({ message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.` });
         }
 
         const client = await pool.connect();

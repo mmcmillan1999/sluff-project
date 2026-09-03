@@ -472,7 +472,14 @@ const INVALID_AMOUNTS_QUERY = `
           t.amount = 0
           OR (t.transaction_type::text = ANY($3::text[]) AND t.amount <= 0)
           OR (t.transaction_type IN ('buy_in', 'forfeit_loss') AND t.amount >= 0)
-          OR (t.transaction_type = 'free_token_mercy' AND t.amount <> 1)
+          OR (
+              t.transaction_type = 'free_token_mercy'
+              AND CASE
+                  -- Bots are refilled to the 3-token floor, so any 0 < amount <= 3 is legitimate.
+                  WHEN COALESCE(u.is_bot, FALSE) THEN NOT (t.amount > 0 AND t.amount <= 3)
+                  ELSE t.amount <> 1
+              END
+          )
       )
     ORDER BY t.transaction_id DESC
     LIMIT $2

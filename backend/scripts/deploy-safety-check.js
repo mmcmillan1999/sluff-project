@@ -5,10 +5,11 @@
 //   npm run deploy:check          # exits 1 if a human would be kicked
 //   npm run deploy:check -- --json
 //
-// The server has no SIGTERM handler, so a Render deploy kills it outright and
-// every in-flight game is abandoned. abandonedGameRecovery refunds the buy-ins
-// afterwards, so nobody loses tokens — but the game itself is gone, which is
-// what actually annoys the people playing it.
+// A Render deploy restarts the server. Since Aug 2026 the SIGTERM handler
+// snapshots live human games and the new instance restores them, but resume is
+// best-effort (see src/serialization/gameResume.js); anything it cannot restore
+// falls to abandonedGameRecovery, which refunds the buy-ins. Nobody loses
+// tokens — but a lost game is what actually annoys the people playing it.
 //
 // Bot-only games are deliberately NOT a blocker. The exhibition table restarts
 // itself and nobody is watching; waiting for it would mean never deploying.
@@ -89,9 +90,9 @@ async function main() {
 
             console.log('');
             if (humanGames.length > 0) {
-                console.log('DO NOT DEPLOY. A deploy restarts the backend with no SIGTERM handler,');
-                console.log('so these games are abandoned. Buy-ins get refunded automatically, but the');
-                console.log('game is lost and the players notice.');
+                console.log('DO NOT DEPLOY. A deploy restarts the backend; the SIGTERM snapshot tries to');
+                console.log('resume these games on the new instance, but resume is best-effort. Anything');
+                console.log('it cannot restore is refunded later — and the players notice either way.');
             } else if (chatter > 0) {
                 console.log('No live human games, but someone was in the lobby recently.');
                 console.log('Safe to deploy — just be quick about it.');

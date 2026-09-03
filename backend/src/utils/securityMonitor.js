@@ -74,6 +74,11 @@ const checkSuspiciousActivity = async (pool, userId) => {
 };
 
 const generateSecurityReport = async (pool, hours = 24) => {
+    // Callers pass parseInt(req.query.hours), which can be NaN; clamp to a sane
+    // window and bind it as a parameter rather than splicing it into SQL.
+    const windowHours = Number.isFinite(Number(hours)) && Number(hours) > 0
+        ? Math.min(Number(hours), 24 * 365)
+        : 24;
     try {
         const reportQuery = `
             SELECT 
@@ -86,14 +91,14 @@ const generateSecurityReport = async (pool, hours = 24) => {
             FROM transactions t
             JOIN users u ON t.user_id = u.id
             WHERE t.transaction_type = 'free_token_mercy'
-            AND t.transaction_time > NOW() - INTERVAL '${hours} hours'
+            AND t.transaction_time > NOW() - ($1 * INTERVAL '1 hour')
             GROUP BY u.id, u.username
             ORDER BY mercy_tokens_granted DESC, total_mercy_amount DESC
         `;
         
-        const result = await pool.query(reportQuery);
+        const result = await pool.query(reportQuery, [windowHours]);
         
-        console.log(`\n📊 [SECURITY REPORT] Mercy Token Activity (Last ${hours} hours)`);
+        console.log(`\n📊 [SECURITY REPORT] Mercy Token Activity (Last ${windowHours} hours)`);
         console.log('='.repeat(70));
         
         if (result.rows.length === 0) {

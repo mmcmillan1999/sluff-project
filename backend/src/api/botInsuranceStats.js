@@ -1,10 +1,21 @@
 // backend/src/api/botInsuranceStats.js
 const express = require('express');
-const router = express.Router();
+const requireAuth = require('../middleware/requireAuth');
 
-module.exports = (pool) => {
+// Rows here carry live mid-round bot state (hand strength, offers) and the
+// full bot roster, so both routes are admin-only. The only consumer is the
+// admin panel (frontend BotInsuranceStats.js), which already sends a token.
+const isAdmin = (req, res, next) => {
+    if (req.user?.is_admin === true) return next();
+    return res.status(403).send('Access Forbidden: Requires admin privileges.');
+};
+
+module.exports = (pool, jwt) => {
+    const router = express.Router();
+    const checkAuth = requireAuth(pool, jwt);
+
     // Get bot insurance performance stats
-    router.get('/stats', async (req, res) => {
+    router.get('/stats', checkAuth, isAdmin, async (req, res) => {
         try {
             // Overall bot performance
             const overallQuery = `
@@ -91,7 +102,7 @@ module.exports = (pool) => {
     });
     
     // Get detailed stats for a specific bot
-    router.get('/stats/:botName', async (req, res) => {
+    router.get('/stats/:botName', checkAuth, isAdmin, async (req, res) => {
         try {
             const { botName } = req.params;
             

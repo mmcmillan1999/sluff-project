@@ -49,8 +49,9 @@ Options:
   --min-games=N       Delete accounts with fewer than N games (default: 3).
   --help, -h          Show this help.
 
-Games are counted as wins + losses + washes. No email addresses, password
-hashes, tokens, or other private fields are printed.`);
+Games are counted as wins + losses + washes. Accounts younger than 30 days and
+accounts that own any entitlement (a purchase) are never candidates. No email
+addresses, password hashes, tokens, or other private fields are printed.`);
 };
 
 const candidateQuery = `
@@ -63,6 +64,10 @@ const candidateQuery = `
     WHERE COALESCE(u.wins, 0) + COALESCE(u.losses, 0) + COALESCE(u.washes, 0) < $1
       AND COALESCE(u.is_bot, FALSE) = FALSE
       AND ($2::boolean OR COALESCE(u.is_admin, FALSE) = FALSE)
+      -- A signup from this month has simply not played yet, and an account that
+      -- owns an entitlement is a customer: neither is "inactive".
+      AND u.created_at < NOW() - INTERVAL '30 days'
+      AND NOT EXISTS (SELECT 1 FROM player_entitlements e WHERE e.user_id = u.id)
       AND NOT EXISTS (
           SELECT 1
           FROM transactions active_transaction

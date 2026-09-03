@@ -55,6 +55,8 @@ const allowedOrigins = [
     'capacitor://localhost',
     'ionic://localhost',
     'http://localhost',
+    // Android Capacitor shell: capacitor.config.json sets androidScheme=https.
+    'https://localhost',
 ];
 if (process.env.CLIENT_ORIGIN && !allowedOrigins.includes(process.env.CLIENT_ORIGIN)) {
     allowedOrigins.push(process.env.CLIENT_ORIGIN);
@@ -88,6 +90,11 @@ let recoveryMonitor;
 
 // One proxy hop (Render) — required so rate limiting sees real client IPs.
 app.set('trust proxy', 1);
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+    res.set('X-Content-Type-Options', 'nosniff');
+    next();
+});
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '100kb' }));
 
@@ -135,6 +142,12 @@ async function initializeApplication() {
     pool = new Pool({
         connectionString: process.env.POSTGRES_CONNECT_STRING,
         ssl: { rejectUnauthorized: false },
+    });
+    // pg emits 'error' on the pool for idle clients that die (a Postgres restart,
+    // a network blip). With no listener Node treats it as uncaught and exits —
+    // and since that is not SIGTERM, no live-game snapshot would be taken.
+    pool.on('error', error => {
+        console.error('[DB] Idle client error (pool recovers on next query):', error.message);
     });
     await pool.query('SELECT 1');
     console.log('Database connection successful.');
@@ -215,7 +228,7 @@ async function initializeApplication() {
         }
     });
 
-    app.use('/api/bot-insurance', createBotInsuranceStatsRoutes(pool));
+    app.use('/api/bot-insurance', createBotInsuranceStatsRoutes(pool, jwt));
     recoveryMonitor.start();
 
     // Continuous 3-bot exhibition games (analytics feed for round_results,
@@ -307,6 +320,13 @@ async function startServer() {
 }
 
 if (require.main === module) {
+    // Node 20+ exits on an unhandled rejection. On a game server that means one
+    // stray async failure (a DB blip inside a fire-and-forget bot path) drops
+    // every live table without a snapshot. Log it and keep serving; SIGTERM
+    // stays the only planned exit.
+    process.on('unhandledRejection', (reason) => {
+        console.error('[PROCESS] Unhandled promise rejection:', reason);
+    });
     startServer().catch(error => {
         console.error('Sluff server startup failed:', error);
         process.exit(1);

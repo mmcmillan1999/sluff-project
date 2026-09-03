@@ -117,12 +117,6 @@ const createDbTables = async (pool) => {
             );
         }
 
-        // Voiding a game reverses its ledger, which is only possible while every
-        // funded participant's rows still exist. Account deletion removes them,
-        // so games touched by a deleted player are flagged here and refused by
-        // gameVoid.js. Without this a deleted winner makes a settled forfeit look
-        // like a lone unfunded forfeit, and the void mints the buy-in back.
-        await pool.query('ALTER TABLE game_history ADD COLUMN IF NOT EXISTS roster_complete BOOLEAN NOT NULL DEFAULT TRUE');
         // Tutorial progress is durable across browsers/devices. Version 0 means
         // the player has not completed or skipped a guided tutorial; the active
         // version lets an interrupted tutorial resume without marking it done.
@@ -196,6 +190,14 @@ const createDbTables = async (pool) => {
         await pool.query("ALTER TABLE game_history ADD COLUMN IF NOT EXISTS last_activity_at TIMESTAMP WITH TIME ZONE");
         await pool.query("ALTER TABLE game_history ALTER COLUMN last_activity_at SET DEFAULT CURRENT_TIMESTAMP");
         await pool.query("ALTER TABLE game_history ADD COLUMN IF NOT EXISTS heartbeat_owner_id VARCHAR(128)");
+        // Voiding a game reverses its ledger, which is only possible while every
+        // funded participant's rows still exist. Account deletion removes them,
+        // so games touched by a deleted player are flagged here and refused by
+        // gameVoid.js. Without this a deleted winner makes a settled forfeit look
+        // like a lone unfunded forfeit, and the void mints the buy-in back.
+        // (Must run after CREATE TABLE game_history above — a fresh database
+        // has no table to alter yet.)
+        await pool.query('ALTER TABLE game_history ADD COLUMN IF NOT EXISTS roster_complete BOOLEAN NOT NULL DEFAULT TRUE');
         // Legacy game rows cannot be distinguished reliably from completed
         // losses because older code often left both as "In Progress" with only
         // a buy-in in the ledger. Keep those rows NULL (quarantined), while the
@@ -525,6 +527,12 @@ const createDbTables = async (pool) => {
                 message TEXT NOT NULL,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             );
+        `);
+        // Every lobby open reads the newest N rows; the table grows on each
+        // login/logout, so without this it is a full scan plus sort.
+        await pool.query(`
+            CREATE INDEX IF NOT EXISTS idx_lobby_chat_created
+            ON lobby_chat_messages (created_at DESC)
         `);
 
         // --- Chat moderation (App Store guideline 1.2) ---------------------

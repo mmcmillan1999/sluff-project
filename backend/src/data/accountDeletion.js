@@ -18,7 +18,8 @@ class AccountDeletionError extends Error {
 }
 
 const SELECT_ACCOUNT_FOR_DELETE = `
-    SELECT id, username, COALESCE(is_admin, FALSE) AS is_admin, COALESCE(is_bot, FALSE) AS is_bot
+    SELECT id, username, previous_usernames,
+           COALESCE(is_admin, FALSE) AS is_admin, COALESCE(is_bot, FALSE) AS is_bot
     FROM users
     WHERE id = $1
     FOR UPDATE
@@ -83,6 +84,15 @@ const ANONYMISE_CHAT = `
     SET user_id = NULL, username = 'Deleted User'
     WHERE user_id = $1
 `;
+// Reaction-time telemetry and the spoken-name clip are personal data too.
+// Ledger and outcome text keep names as evidence; nothing keyed to the id or
+// the name itself should outlive the account.
+const DELETE_PLAY_TIMINGS = 'DELETE FROM play_timings WHERE user_id = $1';
+const DETACH_ROUND_RESULTS = 'UPDATE round_results SET bidder_user_id = NULL WHERE bidder_user_id = $1';
+const DELETE_CHAMPION_LINES = `
+    DELETE FROM champion_lines
+    WHERE name_key = ANY(SELECT LEFT(LOWER(TRIM(n)), 80) FROM unnest($1::text[]) AS n)
+`;
 const DELETE_USER = 'DELETE FROM users WHERE id = $1 RETURNING id, username';
 
 /**
@@ -128,6 +138,11 @@ async function deleteOwnAccount(pool, userId) {
         const ledger = await client.query(DELETE_TRANSACTIONS, [userId]);
         const feedback = await client.query(ANONYMISE_FEEDBACK, [userId]);
         const chat = await client.query(ANONYMISE_CHAT, [userId]);
+        await client.query(DELETE_PLAY_TIMINGS, [userId]);
+        await client.query(DETACH_ROUND_RESULTS, [userId]);
+        const spokenNames = [account.username, ...(Array.isArray(account.previous_usernames) ? account.previous_usernames : [])]
+            .filter(name => typeof name === 'string' && name.trim());
+        await client.query(DELETE_CHAMPION_LINES, [spokenNames]);
 
         const deleted = await client.query(DELETE_USER, [userId]);
         if (deleted.rowCount !== 1) {

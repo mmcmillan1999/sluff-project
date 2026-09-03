@@ -10,6 +10,9 @@ const isAdmin = (req, res, next) => {
     res.status(403).send('Access Forbidden: Requires admin privileges.');
 };
 
+const MAX_FEEDBACK_CHARS = 5000;
+const FEEDBACK_PAGE_LIMIT = 500;
+
 const createFeedbackRoutes = (pool, jwt) => {
     const router = express.Router();
     const checkAuth = requireAuth(pool, jwt);
@@ -19,8 +22,11 @@ const createFeedbackRoutes = (pool, jwt) => {
         const { id: userId, username } = req.user;
         const { feedback_text, game_state_json } = req.body;
 
-        if (!feedback_text) {
+        if (!feedback_text || typeof feedback_text !== 'string' || !feedback_text.trim()) {
             return res.status(400).json({ message: 'Feedback text is required.' });
+        }
+        if (feedback_text.length > MAX_FEEDBACK_CHARS) {
+            return res.status(400).json({ message: `Feedback must be ${MAX_FEEDBACK_CHARS} characters or fewer.` });
         }
 
         try {
@@ -51,7 +57,8 @@ const createFeedbackRoutes = (pool, jwt) => {
                     SELECT feedback_id, user_id, username, submitted_at, feedback_text, 
                            table_id, status, admin_response, admin_notes, last_updated_by_admin_at
                     FROM feedback
-                    ORDER BY submitted_at DESC;
+                    ORDER BY submitted_at DESC
+                    LIMIT ${FEEDBACK_PAGE_LIMIT};
                 `;
             } else {
                 // Regular users see non-hidden feedback, without admin notes
@@ -60,7 +67,8 @@ const createFeedbackRoutes = (pool, jwt) => {
                            table_id, status, admin_response, last_updated_by_admin_at
                     FROM feedback
                     WHERE status != 'hidden'
-                    ORDER BY submitted_at DESC;
+                    ORDER BY submitted_at DESC
+                    LIMIT ${FEEDBACK_PAGE_LIMIT};
                 `;
             }
             const { rows } = await pool.query(query);
@@ -72,8 +80,8 @@ const createFeedbackRoutes = (pool, jwt) => {
         }
     });
 
-    // --- NEW: PUT /api/feedback/:id - Update a feedback item (Admins only) ---
-    router.put('/:id', checkAuth, isAdmin, async (req, res) => {
+    // --- Update a feedback item (Admins only) ---
+    const updateFeedbackItem = async (req, res) => {
         const { id } = req.params;
         const { status, admin_response, admin_notes } = req.body;
 
@@ -121,7 +129,11 @@ const createFeedbackRoutes = (pool, jwt) => {
             console.error(`Error updating feedback ID ${id}:`, error);
             res.status(500).json({ message: 'An internal error occurred while updating the feedback item.' });
         }
-    });
+    };
+    // CORS pins methods to GET and POST (server.js), so a browser can only reach
+    // the POST form; PUT stays for same-origin and script callers.
+    router.put('/:id', checkAuth, isAdmin, updateFeedbackItem);
+    router.post('/:id/update', checkAuth, isAdmin, updateFeedbackItem);
 
     return router;
 };

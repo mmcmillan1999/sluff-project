@@ -13,6 +13,7 @@
         BOT_BID_READY_DELAY_MS,
     } = require('../core/constants');
     const { BRAINS } = require('../core/bot-brains');
+    const { getLegalMoves } = require('../core/legalMoves');
     const AdaptiveInsuranceStrategy = require('../core/bot-strategies/AdaptiveInsuranceStrategy');
     const MarketInsuranceStrategy = require('../core/bot-strategies/MarketInsuranceStrategy');
     const { serializeEngineForResume, restoreEngineFromResume } = require('../serialization/gameResume');
@@ -1223,6 +1224,12 @@
                 engine.removeBotPlayer(player.userId);
             }
             const eligibleBotBalances = await this._loadAffordableQuickPlayBotBalances(engine);
+            // A human may have sat down during that await. The funded game
+            // below must never start around them — it would charge their buy-in.
+            const seatedNow = engine.playerOrder.allIds.map(id => engine.players[id]).filter(Boolean);
+            if (seatedNow.some(player => !player.isBot) || engine.gameStarted || engine.gameStartPending) {
+                return { status: 'humans_seated' };
+            }
             for (let seat = 0; seat < 3; seat += 1) {
                 engine.addBotPlayer({ eligibleBotBalances, preferDistinctBrains: true });
             }
@@ -2112,6 +2119,36 @@
         }
 
         _triggerBots(tableId) {
+            try {
+                this._triggerBotsInner(tableId);
+            } catch (error) {
+                // Brains run synchronously inside the 1.5 s heartbeat. Without
+                // this, one brain throwing on one board state exits the process
+                // (no SIGTERM, so no snapshot) and drops every other table too.
+                console.error(`[BOT] Decision failed on ${tableId}:`, error);
+            }
+        }
+
+        // A brain that returns a card the engine rejects would otherwise be
+        // retried forever with the same answer: playHandler refuses silently and
+        // the AFK backstop skips bot seats, so the humans at the table are stuck.
+        // Substitute a legal card and shout about it.
+        _legalBotCard(tableId, engine, bot, card) {
+            const hand = engine.hands?.[bot.playerName] || [];
+            const legal = getLegalMoves(
+                hand,
+                (engine.currentTrickCards?.length ?? 0) === 0,
+                engine.leadSuitCurrentTrick,
+                engine.trumpSuit,
+                engine.trumpBroken,
+            );
+            if (card && legal.includes(card)) return card;
+            if (legal.length === 0) return null;
+            console.error(`[BOT] ${bot.playerName} chose an illegal card (${card}) on ${tableId}; playing ${legal[0]} instead.`);
+            return legal[0];
+        }
+
+        _triggerBotsInner(tableId) {
             const engine = this.getEngineById(tableId);
             if (!engine || engine.pendingBotAction) return;
         
@@ -2127,7 +2164,13 @@
                 turnActionTaken = true;
                 engine.pendingBotAction = setTimeout(async () => {
                     engine.pendingBotAction = null;
-                    await actionFn.call(this, tableId, ...args);
+                    try {
+                        await actionFn.call(this, tableId, ...args);
+                    } catch (error) {
+                        // Unhandled here means an unhandled rejection, which on
+                        // Node 20+ exits the process and every live table with it.
+                        console.error(`[BOT] Action failed on ${tableId}:`, error);
+                    }
                     // Re-trigger bot check after action completes
                     setTimeout(() => {
                         this._triggerBots(tableId);
@@ -2201,7 +2244,7 @@
                     // before returning its discards.
                     scheduleTurnAction(this.submitFrogDiscards, standardDelay + 3000, botUserId, discards);
                 } else if (engine.state === 'Playing Phase' && !engine.drawRequest.isActive && !engine.playoutVote?.isActive && engine.trickTurnPlayerId == botUserId) {
-                    const card = bot.playCard();
+                    const card = this._legalBotCard(tableId, engine, bot, bot.playCard());
                     if (card) {
                         scheduleTurnAction(this.playCard, playDelay, botUserId, card);
                     }
