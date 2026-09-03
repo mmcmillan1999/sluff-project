@@ -9,7 +9,6 @@
   "dependencies": {
     "@capacitor/android": "^8.4.2",
     "@capacitor/app": "^8.1.0",
-    "@capacitor/cli": "^8.4.0",
     "@capacitor/core": "^8.4.0",
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/ios": "^8.4.0",
@@ -20,9 +19,7 @@
     "@fontsource/oswald": "^5.2.8",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-router-dom": "^7.6.3",
-    "socket.io-client": "^4.8.1",
-    "web-vitals": "^2.1.4"
+    "socket.io-client": "^4.8.1"
   },
   "scripts": {
     "dev": "vite",
@@ -50,6 +47,7 @@
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.1",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
