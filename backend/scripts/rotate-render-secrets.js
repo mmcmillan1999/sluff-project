@@ -12,6 +12,10 @@
 //   --force       skip the mid-game check (players get bounced)
 //   --skip-db     rotate JWT_SECRET only
 //   --skip-jwt    rotate the database credential only
+//   --check-env   read-only: list the service's env var NAMES and whether
+//                 NODE_ENV=production; rotates nothing, needs no --execute
+//   --set-node-env  with --execute: set NODE_ENV=production and redeploy
+//                 (dev CORS origins and HTML stack traces are gated on it)
 //
 // Needs RENDER_API_KEY in backend/.env (Render → Account Settings → API Keys).
 // The key is for this script only; never put it on Render itself.
@@ -52,6 +56,8 @@ const EXECUTE = args.has('--execute');
 const FORCE = args.has('--force');
 const ROTATE_DB = !args.has('--skip-db');
 const ROTATE_JWT = !args.has('--skip-jwt');
+const CHECK_ENV = args.has('--check-env');
+const SET_NODE_ENV = args.has('--set-node-env');
 
 const log = (...parts) => console.log(...parts);
 const step = (title) => console.log(`\n== ${title}`);
@@ -277,6 +283,28 @@ function appendRotationLog(entries) {
 async function main() {
     if (!process.env.RENDER_API_KEY) {
         fail('RENDER_API_KEY is not set. Create one at Render → Account Settings → API Keys and add RENDER_API_KEY=... to backend/.env (gitignored).');
+    }
+    if (CHECK_ENV || SET_NODE_ENV) {
+        const service = await findService();
+        const envVars = await readEnvVars(service.id);
+        log(`Service ${service.name} (${service.id}) — ${envVars.size} environment variables (names only):`);
+        for (const key of [...envVars.keys()].sort()) log(`   ${key}`);
+        const nodeEnv = envVars.get('NODE_ENV');
+        log(`NODE_ENV: ${nodeEnv === undefined ? 'ABSENT' : nodeEnv === 'production' ? 'production' : 'set, not production'}`);
+        if (!SET_NODE_ENV) return;
+        if (nodeEnv === 'production') { log('Nothing to do.'); return; }
+        if (!EXECUTE) { log('Add --execute to set NODE_ENV=production and redeploy.'); return; }
+        const checkStatus = deployCheck();
+        if (checkStatus !== 0 && !FORCE) fail('A human is mid-game. Wait or re-run with --force.');
+        await api('PUT', `/services/${service.id}/env-vars/NODE_ENV`, { value: 'production' });
+        log('NODE_ENV=production set');
+        const deployId = await triggerDeploy(service.id);
+        const live = await waitForDeploy(service.id, deployId);
+        const healthy = live && await waitForHealth();
+        if (!healthy) fail(`Deploy ${deployId} did not come up healthy; check the Render dashboard.`);
+        appendRotationLog(['NODE_ENV=production set on the service (dev CORS origins and verbose errors now off).', `Deploy ${deployId} live, /health green.`]);
+        log('Done and recorded.');
+        return;
     }
     log(EXECUTE ? 'MODE: EXECUTE — this changes production.' : 'MODE: dry run — nothing will change. Add --execute to rotate.');
     log(`Rotating: ${[ROTATE_DB && 'database credential', ROTATE_JWT && 'JWT_SECRET'].filter(Boolean).join(' + ') || 'nothing (both skipped)'}`);

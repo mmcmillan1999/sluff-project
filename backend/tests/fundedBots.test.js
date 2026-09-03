@@ -126,6 +126,9 @@ function createLedgerPool({ balances = { 1: 10, 2: 10, 100: 2 }, recentBotMercy 
                 state.gameOutcome = params[0];
                 return { rows: [], rowCount: 1 };
             }
+            if (sql.includes('AS charged') && sql.includes("transaction_type = 'buy_in'")) {
+                return { rows: [{ charged: 0 }], rowCount: 1 }; // pot check skipped: no buy-ins modelled
+            }
             throw new Error(`Unexpected funded-bot query: ${sql}`);
         },
         release() {},

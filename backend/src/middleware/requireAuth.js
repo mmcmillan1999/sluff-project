@@ -1,9 +1,22 @@
 const CURRENT_USER_QUERY = `
-    SELECT id, username, is_admin
+    SELECT id, username, is_admin, sessions_valid_after
     FROM users
     WHERE id = $1
       AND COALESCE(is_bot, FALSE) = FALSE
 `;
+
+// A token minted before sessions_valid_after (set by a password reset) is
+// dead even though its signature and 90-day expiry are fine. Compared at
+// whole-second granularity because JWT iat is in seconds: a token issued in
+// the same second as the reset is the one the resetting user just got.
+function tokenPredatesRevocation(tokenUser, currentUser) {
+    const validAfter = currentUser?.sessions_valid_after;
+    if (!validAfter) return false;
+    const issuedAt = Number(tokenUser?.iat);
+    if (!Number.isFinite(issuedAt)) return false;
+    const validAfterSeconds = Math.floor(new Date(validAfter).getTime() / 1000);
+    return Number.isFinite(validAfterSeconds) && issuedAt < validAfterSeconds;
+}
 
 async function loadCurrentUserByTokenId(pool, tokenUser) {
     if (!pool || typeof pool.query !== 'function') {
@@ -16,12 +29,17 @@ async function loadCurrentUserByTokenId(pool, tokenUser) {
     const { rows } = await pool.query(CURRENT_USER_QUERY, [tokenUserId]);
     const currentUser = rows?.[0];
     if (!currentUser) return null;
+    if (tokenPredatesRevocation(tokenUser, currentUser)) return null;
 
-    return {
+    const hydrated = {
         id: currentUser.id,
         username: currentUser.username,
         is_admin: currentUser.is_admin === true,
     };
+    // Carried on the socket so the 60 s identity refresh can re-check
+    // revocation without the original token.
+    if (Number.isFinite(Number(tokenUser?.iat))) hydrated.tokenIssuedAt = Number(tokenUser.iat);
+    return hydrated;
 }
 
 const requireAuth = (pool, jwt) => {

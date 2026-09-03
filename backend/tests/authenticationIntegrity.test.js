@@ -53,7 +53,7 @@ function createHttpPool() {
             const sql = String(text);
             state.queries.push({ text: sql, params });
 
-            if (/SELECT\s+id,\s*username,\s*is_admin\s+FROM\s+users\s+WHERE\s+id\s*=\s*\$1/i.test(sql)) {
+            if (/SELECT\s+id,\s*username,\s*is_admin(?:,\s*sessions_valid_after)?\s+FROM\s+users\s+WHERE\s+id\s*=\s*\$1/i.test(sql)) {
                 const user = users.get(Number(params[0]));
                 if (user?.is_bot && /COALESCE\(is_bot, FALSE\)\s*=\s*FALSE/i.test(sql)) {
                     return { rows: [] };
@@ -279,7 +279,7 @@ function createSocketPool() {
                 const user = users.get(Number(params[0]));
                 return { rows: user ? [{ ...user }] : [] };
             }
-            if (/SELECT\s+id,\s*username,\s*is_admin\s+FROM\s+users/i.test(sql)) {
+            if (/SELECT\s+id,\s*username,\s*is_admin(?:,\s*sessions_valid_after)?\s+FROM\s+users/i.test(sql)) {
                 state.identityReads += 1;
                 if (state.failIdentityReads) throw new Error('forced identity refresh failure');
                 const user = users.get(Number(params[0]));
@@ -353,11 +353,15 @@ async function testSocketAuthenticationAndAdminRevocation() {
         const socket = makeSocket('auth-socket', staleToken);
         const authError = await harness.authenticate(socket);
         assert.equal(authError, undefined);
-        assert.deepEqual(socket.user, {
+        const { tokenIssuedAt, ...hydratedIdentity } = socket.user;
+        assert.deepEqual(hydratedIdentity, {
             id: 7,
             username: 'DatabaseName',
             is_admin: true,
         }, 'socket identity and privileges are hydrated from the database');
+        // The token's iat rides along so the 60 s refresh can re-check
+        // sessions_valid_after (password-reset revocation) without the token.
+        assert.ok(Number.isFinite(tokenIssuedAt), 'socket keeps the token issue time for revocation checks');
 
         const deletedToken = jsonwebtoken.sign(
             { id: 999, username: 'Deleted', is_admin: true },

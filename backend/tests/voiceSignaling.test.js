@@ -30,7 +30,7 @@ function createVoicePool() {
     return {
         async query(text, params = []) {
             const sql = String(text);
-            if (/SELECT\s+id,\s*username,\s*is_admin\s+FROM\s+users/i.test(sql)) {
+            if (/SELECT\s+id,\s*username,\s*is_admin(?:,\s*sessions_valid_after)?\s+FROM\s+users/i.test(sql)) {
                 const user = users.get(Number(params[0]));
                 return { rows: user ? [{ ...user }] : [] };
             }

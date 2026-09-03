@@ -417,7 +417,7 @@ async function testSocketSeatingAndResetRaces() {
         const resetService = {
             pool: {
                 async query(text) {
-                    if (/SELECT\s+id,\s*username,\s*is_admin\s+FROM\s+users/i.test(String(text))) {
+                    if (/SELECT\s+id,\s*username,\s*is_admin(?:,\s*sessions_valid_after)?\s+FROM\s+users/i.test(String(text))) {
                         return { rows: [{ id: 90, username: 'Admin', is_admin: true }] };
                     }
                     if (/INSERT\s+INTO\s+lobby_chat_messages/i.test(String(text))) chatQueries += 1;

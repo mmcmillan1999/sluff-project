@@ -640,7 +640,10 @@ module.exports = function(pool, bcrypt, jwt, io, gameService) {
                     password_hash = $1, 
                     password_reset_token = NULL, 
                     password_reset_token_expires = NULL,
-                    is_verified = TRUE 
+                    is_verified = TRUE,
+                    -- Whoever held the old password (or a token stolen with it)
+                    -- is signed out everywhere; requireAuth compares token iat.
+                    sessions_valid_after = NOW() 
                 WHERE id = $2
             `;
             await client.query(updateUserQuery, [hashedPassword, user.id]);

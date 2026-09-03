@@ -10,6 +10,12 @@ const { recommendBid } = require('../core/bidAdvice');
 const { playerProgressFields } = require('../services/tutorialProgress');
 
 const DEFAULT_SOCKET_AUTH_REFRESH_INTERVAL_MS = 60_000;
+// HTTP routes are rate limited; socket events were not, and some cost a
+// query or a row lock each (requestUserSync, requestFreeToken). A token
+// bucket per socket: generous for play — a flick is one event — and useless
+// for a loop. Exceeding it drops the packet and tells the client once.
+const SOCKET_EVENT_BURST = 60;
+const SOCKET_EVENTS_PER_SECOND = 30;
 
 function revokeTrustedAdminObserver(socket) {
     socket.data = socket.data || {};
@@ -17,7 +23,7 @@ function revokeTrustedAdminObserver(socket) {
 }
 
 async function refreshSocketUserFromDatabase(socket, pool) {
-    const currentUser = await loadCurrentUserByTokenId(pool, { id: socket.user?.id });
+    const currentUser = await loadCurrentUserByTokenId(pool, { id: socket.user?.id, iat: socket.user?.tokenIssuedAt });
     if (!currentUser) {
         revokeTrustedAdminObserver(socket);
         return null;
@@ -183,6 +189,27 @@ const registerGameHandlers = (io, gameService, options = {}) => {
 
     io.on("connection", (socket) => {
         socket.data = socket.data || {};
+        if (typeof socket.use === 'function') {
+            let bucket = SOCKET_EVENT_BURST;
+            let lastRefill = Date.now();
+            let warned = false;
+            socket.use((packet, next) => {
+                const now = Date.now();
+                bucket = Math.min(SOCKET_EVENT_BURST, bucket + ((now - lastRefill) / 1000) * SOCKET_EVENTS_PER_SECOND);
+                lastRefill = now;
+                if (bucket < 1) {
+                    if (!warned) {
+                        warned = true;
+                        console.warn(`[RATE] Socket ${socket.id} (${socket.user?.username}) exceeded ${SOCKET_EVENTS_PER_SECOND} events/s; dropping.`);
+                        socket.emit('error', { message: 'Too many actions at once. Slow down a moment.' });
+                    }
+                    return; // dropped
+                }
+                warned = false;
+                bucket -= 1;
+                next();
+            });
+        }
         latestSocketIdByUser.set(String(socket.user.id), socket.id);
         const pendingNotice = pendingLogoutNotices.get(String(socket.user.id));
         if (pendingNotice) {

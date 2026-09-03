@@ -81,6 +81,9 @@ const createDbTablesOnce = async (pool) => {
         
         // --- NEW: Add columns for password recovery ---
         await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token TEXT");
+        // Set by a password reset: login tokens issued before it are refused
+        // by requireAuth even though their signature and expiry are valid.
+        await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS sessions_valid_after TIMESTAMP WITH TIME ZONE");
         await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token_expires TIMESTAMP WITH TIME ZONE");
 
         // Self-service rename cooldown. NULL means the player has never renamed,

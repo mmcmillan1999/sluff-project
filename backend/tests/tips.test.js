@@ -35,7 +35,7 @@ function createPool() {
             const sql = String(text);
             state.queries.push({ sql, params: [...params] });
 
-            if (/SELECT\s+id,\s*username,\s*is_admin\s+FROM\s+users\s+WHERE\s+id\s*=\s*\$1/i.test(sql)) {
+            if (/SELECT\s+id,\s*username,\s*is_admin(?:,\s*sessions_valid_after)?\s+FROM\s+users\s+WHERE\s+id\s*=\s*\$1/i.test(sql)) {
                 const id = Number(params[0]);
                 if (id === 1) return { rows: [{ id: 1, username: 'Tipper', is_admin: false }] };
                 if (id === 2) return { rows: [{ id: 2, username: 'Fresh', is_admin: false }] };

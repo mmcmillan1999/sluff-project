@@ -101,7 +101,7 @@ function createVoidPool(state = baseState()) {
         get releaseCount() { return releaseCount; },
         async query(text, params) {
             calls.push({ sql: String(text).replace(/\s+/g, ' ').trim(), params, scope: 'pool' });
-            if (/SELECT\s+id,\s*username,\s*is_admin\s+FROM\s+users/i.test(String(text))) {
+            if (/SELECT\s+id,\s*username,\s*is_admin(?:,\s*sessions_valid_after)?\s+FROM\s+users/i.test(String(text))) {
                 const user = state.users.get(Number(params[0]));
                 return { rows: user ? [{ id: user.id, username: user.username, is_admin: false }] : [] };
             }

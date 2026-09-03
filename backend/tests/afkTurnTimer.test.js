@@ -10,6 +10,7 @@ const {
     pendingHumanAction,
     refresh,
 } = require('../src/core/afkTurnTimer');
+const { frogDiscardStrategyFor } = require('../src/core/frogDiscards');
 
 // The timer exists because the forfeit timer only ever covered DISCONNECTED
 // seats: a player whose phone was face-down froze the table indefinitely. What
@@ -227,6 +228,146 @@ function testScriptedPingsCannotHoldTheTableHostage() {
     console.log('  scripted pings delay the backstop to the cap, never disable it');
 }
 
+// The forfeit timer covered disconnected seats and the first version of this
+// timer covered bids and card plays. Human vs bots makes the human the dealer
+// every third round, so "phone face-down at Dealing Pending" was the commonest
+// freeze left, followed by the three bidder-only prompts (upgrade, trump,
+// widow exchange) that nobody else at the table can answer.
+
+const FROG_HAND = ['AS', 'KS', '9C', '8D', '7D', '6D', 'AH', 'KH', 'QH', 'JH', '10H'];
+
+const dealingFor = overrides => engineFor({
+    state: 'Dealing Pending', dealer: 1, trickTurnPlayerId: null, ...overrides,
+});
+const upgradeFor = overrides => engineFor({
+    state: 'Awaiting Frog Upgrade Decision', biddingTurnPlayerId: 1, trickTurnPlayerId: null, ...overrides,
+});
+const trumpFor = overrides => engineFor({
+    state: 'Trump Selection',
+    bidWinnerInfo: { userId: 1 },
+    trumpSuit: null,
+    trickTurnPlayerId: null,
+    hands: { You: ['AS', 'KS', '9C', '8D', '7D', '6D'] },
+    ...overrides,
+});
+const exchangeFor = overrides => engineFor({
+    state: 'Frog Widow Exchange',
+    bidWinnerInfo: { userId: 1 },
+    widowDiscardsForFrogBidder: [],
+    trickTurnPlayerId: null,
+    hands: { You: [...FROG_HAND] },
+    ...overrides,
+});
+
+// First sighting arms, one tick short stays quiet, the full window fires.
+function armThenFire(engine) {
+    const start = 1_000_000;
+    assert.equal(evaluate(engine, { now: start }), null, 'first sighting only arms the clock');
+    assert.equal(engine.afkWatch.since, start, 'the clock armed at first sighting');
+    assert.equal(evaluate(engine, { now: start + DEFAULT_TIMEOUT_MS - 1 }), null, 'one tick short stays quiet');
+    return evaluate(engine, { now: start + DEFAULT_TIMEOUT_MS });
+}
+
+function testAnAbsentDealerDeals() {
+    const engine = dealingFor();
+    assert.equal(pendingHumanAction(engine).kind, 'deal');
+    assert.deepEqual(armThenFire(engine), { action: 'deal', userId: 1, playerName: 'You' });
+
+    assert.equal(pendingHumanAction(dealingFor({ dealer: 3 })), null, 'a disconnected dealer belongs to the forfeit timer');
+    assert.equal(pendingHumanAction(dealingFor({ dealer: 2 })), null, 'a bot dealer belongs to the bot loop');
+    assert.equal(pendingHumanAction(dealingFor({ dealer: null })), null, 'no dealer, nothing to wait on');
+    console.log('  an absent dealer deals; bot and disconnected dealers are left alone');
+}
+
+function testAnAbsentFrogBidderDeclinesTheUpgrade() {
+    const engine = upgradeFor();
+    assert.equal(pendingHumanAction(engine).kind, 'upgrade');
+    assert.deepEqual(
+        armThenFire(engine),
+        { action: 'bid', userId: 1, bid: 'Pass', playerName: 'You' },
+        'declining keeps the Frog the player actually committed to',
+    );
+
+    assert.equal(pendingHumanAction(upgradeFor({ biddingTurnPlayerId: 2 })), null, 'a bot decides its own upgrade');
+    assert.equal(pendingHumanAction(upgradeFor({ biddingTurnPlayerId: 3 })), null, 'a disconnected bidder is not auto-decided');
+    console.log('  an absent Frog bidder declines the upgrade rather than raising');
+}
+
+function testAnAbsentSoloBidderGetsTheirLongestSuit() {
+    const engine = trumpFor();
+    assert.equal(pendingHumanAction(engine).kind, 'trump');
+    assert.deepEqual(
+        armThenFire(engine),
+        { action: 'trump', userId: 1, suit: 'D', playerName: 'You' },
+        'three diamonds beat two spades and one club',
+    );
+
+    // The pick is the table default, not a judgement call: the longest suit
+    // among S/C/D, spades ahead of diamonds on a tie, clubs when the hand
+    // gives nothing to go on.
+    const suitChosenFor = hand => armThenFire(trumpFor({ hands: { You: hand } })).suit;
+    assert.equal(suitChosenFor(['AS', 'KS', '9D', '8D', 'AH']), 'S', 'a spade/diamond tie goes to spades');
+    assert.equal(suitChosenFor(['AH', 'KH', 'QH']), 'C', 'an all-heart hand falls back to clubs');
+    assert.equal(suitChosenFor([]), 'C', 'no hand at all still produces a legal suit');
+
+    assert.equal(pendingHumanAction(trumpFor({ bidWinnerInfo: { userId: 2 } })), null, 'a bot bidder picks its own trump');
+    assert.equal(pendingHumanAction(trumpFor({ bidWinnerInfo: { userId: 3 } })), null, 'a disconnected bidder is not auto-picked');
+    assert.equal(pendingHumanAction(trumpFor({ trumpSuit: 'D' })), null, 'once trump is named nothing is owed');
+    assert.equal(pendingHumanAction(trumpFor({ bidWinnerInfo: null })), null, 'no bid winner, nothing to wait on');
+    console.log('  an absent Solo bidder is given their longest suit');
+}
+
+function testAnAbsentFrogBidderBuriesTheDefaultDiscards() {
+    const engine = exchangeFor();
+    assert.equal(pendingHumanAction(engine).kind, 'discards');
+
+    const decision = armThenFire(engine);
+    assert.equal(decision.action, 'discards');
+    assert.equal(decision.userId, 1);
+    assert.equal(decision.playerName, 'You');
+    assert.equal(decision.discards.length, 3, 'the engine demands exactly three');
+    assert.equal(new Set(decision.discards).size, 3, 'three distinct cards');
+    for (const card of decision.discards) {
+        assert.ok(FROG_HAND.includes(card), `${card} must come from the bidder's own hand`);
+    }
+    assert.deepEqual(
+        decision.discards,
+        frogDiscardStrategyFor('You')(FROG_HAND),
+        'the table default discard policy applies, exactly as a bot would use it',
+    );
+    assert.deepEqual(engine.hands.You, FROG_HAND, 'deciding does not mutate the hand; the engine applies it');
+
+    assert.equal(
+        pendingHumanAction(exchangeFor({ widowDiscardsForFrogBidder: ['9C', '8D', '7D'] })),
+        null,
+        'once the discards are down nothing is owed',
+    );
+    assert.equal(pendingHumanAction(exchangeFor({ bidWinnerInfo: { userId: 2 } })), null, 'a bot buries its own');
+    assert.equal(pendingHumanAction(exchangeFor({ bidWinnerInfo: { userId: 3 } })), null, 'a disconnected bidder is not auto-discarded');
+    console.log('  an absent Frog bidder buries the default discards');
+}
+
+function testTheNewPromptsStillRespectVotesAndTheDeadline() {
+    // The suspensions and the client-facing deadline are shared machinery;
+    // a new state must not slip past them.
+    assert.equal(pendingHumanAction(dealingFor({ drawRequest: { isActive: true } })), null);
+    assert.equal(pendingHumanAction(trumpFor({ playoutVote: { isActive: true } })), null);
+    assert.equal(pendingHumanAction(exchangeFor({ gameStarted: false })), null);
+
+    const engine = trumpFor();
+    const start = 1_000_000;
+    evaluate(engine, { now: start });
+    assert.equal(deadlineFor(engine, { timeoutMs: DEFAULT_TIMEOUT_MS }), start + DEFAULT_TIMEOUT_MS);
+    assert.equal(refresh(engine, 1, { now: start + 10_000 }), true, 'the bidder can extend their own clock');
+    assert.equal(refresh(engine, 2, { now: start + 20_000 }), false, 'a bot cannot extend it for them');
+
+    // Naming trump moves the table on; the stale watch must not fire.
+    engine.trumpSuit = 'D';
+    assert.equal(evaluate(engine, { now: start + 2 * DEFAULT_TIMEOUT_MS }), null);
+    assert.equal(engine.afkWatch, null, 'the watch is dropped once nothing is pending');
+    console.log('  the new prompts share the vote suspension, deadline, and ping rules');
+}
+
 function run() {
     testItOnlyWatchesIdleHumans();
     testNothingHappensBeforeTheWindowElapses();
@@ -238,6 +379,11 @@ function run() {
     testActivityPingsExtendTheClock();
     testScriptedPingsCannotHoldTheTableHostage();
     testDeadlineIsExposedForTheClient();
+    testAnAbsentDealerDeals();
+    testAnAbsentFrogBidderDeclinesTheUpgrade();
+    testAnAbsentSoloBidderGetsTheirLongestSuit();
+    testAnAbsentFrogBidderBuriesTheDefaultDiscards();
+    testTheNewPromptsStillRespectVotesAndTheDeadline();
     console.log('AFK turn timer tests passed.');
 }
 

@@ -112,8 +112,12 @@ function suitWithMostCards(hand) {
         const suit = String(card).slice(-1);
         if (suit in counts) counts[suit] += 1;
     }
+    // Same rule and tie-break as BotPlayer.chooseTrump: first of S, C, D with the most cards.
     let best = 'C';
-    for (const suit of ['S', 'C', 'D']) if (counts[suit] > counts[best]) best = suit;
+    let most = 0;
+    for (const suit of ['S', 'C', 'D']) {
+        if (counts[suit] > most) { most = counts[suit]; best = suit; }
+    }
     return best;
 }
 
