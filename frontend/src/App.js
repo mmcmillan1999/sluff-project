@@ -45,7 +45,10 @@ const socket = io(SERVER_URL, {
     // get their socket back, which is what triggers the server-side rejoin.
     reconnectionAttempts: Infinity,
     reconnectionDelayMax: 5000,
-    transports: ['websocket', 'polling']
+    transports: ['websocket', 'polling'],
+    // engine.io-client tries ONLY the first transport by default; without this
+    // a network that blocks WebSocket upgrades never reaches the polling entry.
+    tryAllTransports: true,
 });
 
 function App() {

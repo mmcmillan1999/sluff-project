@@ -680,8 +680,11 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                     return;
                 }
             }
-            // Toggle debug overlay with Shift+D
-            if (e.key.toLowerCase() === 'd' && e.shiftKey) {
+            // Toggle debug overlay with Shift+D — but never while typing (chat
+            // lives inside the game view, and preventDefault would eat the "D").
+            const tag = e.target?.tagName;
+            const typing = tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable === true;
+            if (!typing && e.key.toLowerCase() === 'd' && e.shiftKey) {
                 e.preventDefault();
                 setShowAnchorDebug(prev => !prev);
             }
@@ -1054,59 +1057,6 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         }
     }, [currentTableState, selfPlayerName, isSpectator, playSound, playDealSounds, playerId]);
 
-    // Global keyboard handler for puck debug
-    useEffect(() => {
-        const handleKeyPress = (e) => {
-            if (e.shiftKey && e.key === 'D') {
-                console.log('========== PUCK DEBUG TRIGGERED ==========');
-                // Measure all player seats
-                document.querySelectorAll('.player-seat-wrapper').forEach((wrapper) => {
-                    const seatElement = wrapper.querySelector('.player-seat');
-                    const nameElement = seatElement?.querySelector('.player-name');
-                    const name = nameElement?.textContent;
-                    if (name) {
-                        const dealerPuck = wrapper.querySelector('.dealer-puck-ear');
-                        const bidderPuck = wrapper.querySelector('.bidder-puck-ear');
-                        
-                        if (dealerPuck || bidderPuck) {
-                            const wrapperRect = wrapper.getBoundingClientRect();
-                            
-                            console.log(`[PUCK DEBUG] ${name}:`);
-                            
-                            if (dealerPuck) {
-                                const dealerRect = dealerPuck.getBoundingClientRect();
-                                const topFromWrapper = (dealerRect.top - wrapperRect.top) / window.innerHeight * 100;
-                                console.log(`  Dealer puck top from wrapper: ${topFromWrapper.toFixed(3)}vh`);
-                                console.log(`  Dealer puck CSS top: ${window.getComputedStyle(dealerPuck).top}`);
-                            }
-                            
-                            if (bidderPuck) {
-                                const bidderRect = bidderPuck.getBoundingClientRect();
-                                const topFromWrapper = (bidderRect.top - wrapperRect.top) / window.innerHeight * 100;
-                                console.log(`  Bidder puck top from wrapper: ${topFromWrapper.toFixed(3)}vh`);
-                                console.log(`  Bidder puck CSS top: ${window.getComputedStyle(bidderPuck).top}`);
-                            }
-                            
-                            if (dealerPuck && bidderPuck) {
-                                const dealerRect = dealerPuck.getBoundingClientRect();
-                                const bidderRect = bidderPuck.getBoundingClientRect();
-                                const diff = (dealerRect.top - bidderRect.top) / window.innerHeight * 100;
-                                console.log(`  Vertical difference (dealer - bidder): ${diff.toFixed(3)}vh`);
-                            }
-                        }
-                    }
-                });
-                console.log('==========================================');
-            }
-        };
-        
-        window.addEventListener('keydown', handleKeyPress);
-        
-        return () => {
-            window.removeEventListener('keydown', handleKeyPress);
-        };
-    }, []);
-    
     if (!currentTableState) {
         return <div>Loading table...</div>;
     }

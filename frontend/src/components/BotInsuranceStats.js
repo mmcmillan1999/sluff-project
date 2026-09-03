@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './BotInsuranceStats.css';
+import { getServerUrl } from '../services/api';
 
 const BotInsuranceStats = ({ onClose }) => {
     const [stats, setStats] = useState(null);
@@ -13,7 +14,7 @@ const BotInsuranceStats = ({ onClose }) => {
     const fetchStats = async () => {
         try {
             const token = localStorage.getItem('sluff_token');
-            const serverUrl = import.meta.env?.VITE_SERVER_URL || 'http://localhost:3005';
+            const serverUrl = getServerUrl();
             const response = await fetch(`${serverUrl}/api/bot-insurance/stats`, {
                 headers: {
                     'Authorization': `Bearer ${token}`

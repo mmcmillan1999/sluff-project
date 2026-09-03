@@ -591,7 +591,7 @@ export const getFeedback = async () => {
 };
 
 export const updateFeedback = async (id, updateData) => {
-    const response = await configuredFetch(`/api/feedback/${id}`, 'PUT', updateData);
+    const response = await configuredFetch(`/api/feedback/${id}/update`, 'POST', updateData);
     const data = await response.json();
     if (!response.ok) {
         throw new Error(data.message || 'Failed to update feedback.');

@@ -1,3 +1,6 @@
+// First on purpose: ESM evaluates imports in order, and api.js/App.js log at
+// module scope. Silences console in production.
+import './utils/logger';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 // Brand fonts — referenced throughout the CSS but never loaded until now
@@ -13,7 +16,6 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { initNative } from './utils/nativeInit';
 import { initErrorReporter } from './utils/errorReporter';
 import reportWebVitals from './utils/reportWebVitals';
-import './utils/logger'; // Silences console in production
 
 // Native (Capacitor) startup — no-ops on web.
 initNative();
