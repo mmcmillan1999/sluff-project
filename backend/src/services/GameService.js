@@ -2286,7 +2286,10 @@
             try {
                 return this.marketInsurance.calculateInsuranceMove(engine, bot);
             } catch (error) {
-                console.error(`[INSURANCE] Market strategy failed for ${bot.playerName}; using legacy fallback:`, error.message);
+                // Counted so a silently-permanent fallback shows up in the logs
+                // as what it is, not as "bots got weird about insurance".
+                this.insuranceFallbackCount = (this.insuranceFallbackCount || 0) + 1;
+                console.error(`[INSURANCE] Market strategy failed for ${bot.playerName} (fallback #${this.insuranceFallbackCount} since boot); using legacy strategy:`, error.message);
                 return this.adaptiveInsurance.calculateInsuranceMove(engine, bot);
             }
         }

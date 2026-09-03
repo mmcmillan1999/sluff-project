@@ -122,6 +122,23 @@ class AIService {
 
     // Try the requested model first; on total failure walk the fallback
     // chain (skipping models from the provider that just failed).
+    // Per-request cap passed to every SDK (their defaults are 10 minutes
+    // with two retries), and a hard ceiling per candidate so a provider that
+    // stalls without erroring still yields to the next one. Bounded so that
+    // if SuperBot is ever wired into live play, a hung provider cannot hold
+    // a table for longer than a slow human would.
+    static get REQUEST_TIMEOUT_MS() { return 8000; }
+    static get DECISION_DEADLINE_MS() { return 20000; }
+
+    _withDeadline(promise, ms, label) {
+        let timer = null;
+        const deadline = new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error(`${label} exceeded the ${ms} ms decision deadline`)), ms);
+            if (typeof timer.unref === 'function') timer.unref();
+        });
+        return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
+    }
+
     async _decideWithFallback(modelId, prompt, type) {
         this.initialize();
 
@@ -148,7 +165,11 @@ class AIService {
             console.log(`📡 [AI-API] Calling ${candidate.id}${isFallback ? ' (fallback)' : ''} for ${type} decision...`);
             try {
                 const startTime = Date.now();
-                const result = await this._decide(candidate, prompt, type);
+                const result = await this._withDeadline(
+                    this._decide(candidate, prompt, type),
+                    AIService.DECISION_DEADLINE_MS,
+                    candidate.id,
+                );
                 if (result) {
                     console.log(`✅ [AI-API] ${candidate.id} ${type} response in ${Date.now() - startTime}ms`);
                     return result;
@@ -198,7 +219,7 @@ class AIService {
                     ],
                     max_completion_tokens: 4000,
                     response_format: { type: 'json_object' }
-                });
+                }, { timeout: AIService.REQUEST_TIMEOUT_MS, maxRetries: 0 });
 
                 const content = response.choices[0].message.content;
                 const result = JSON.parse(content);
@@ -227,7 +248,7 @@ class AIService {
                             content: `${this._getSystemPrompt(type)}\n\n${prompt}\n\nIMPORTANT: Respond with ONLY a valid JSON object. No text before or after the JSON.`
                         }
                     ]
-                });
+                }, { timeout: AIService.REQUEST_TIMEOUT_MS, maxRetries: 0 });
 
                 const text = response.content[0].text.trim();
                 // Extract JSON if wrapped in text
@@ -265,7 +286,7 @@ ${prompt}
 
 CRITICAL: Your response must be ONLY a valid JSON object, nothing else.`;
 
-                const result = await genModel.generateContent(fullPrompt);
+                const result = await genModel.generateContent(fullPrompt, { timeout: AIService.REQUEST_TIMEOUT_MS });
                 const response = await result.response;
                 const text = response.text().trim();
 
@@ -313,7 +334,7 @@ CRITICAL: Your response must be ONLY a valid JSON object, nothing else.`;
                     max_tokens: 300,
                     temperature: 0.1,
                     response_format: { type: 'json_object' }
-                });
+                }, { timeout: AIService.REQUEST_TIMEOUT_MS, maxRetries: 0 });
 
                 const content = response.choices[0].message.content;
                 const result = JSON.parse(content);

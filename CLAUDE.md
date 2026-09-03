@@ -1,9 +1,9 @@
 # CLAUDE.md — Sluff Card Game
 
-Real-time multiplayer trick-taking card game (4-player Sluff) with LLM-powered bot opponents.
+Real-time multiplayer trick-taking card game (4-player Sluff) with bot opponents.
 
 ## Stack
-- **AI bots** (`backend/src/services/aiService.js`): multi-provider (OpenAI, Anthropic, Google, Groq) with a single `MODELS` registry, legacy-ID aliases, and a cross-provider fallback chain. Verify model changes with `node scripts/smoke-test-ai.js`.
+- **Bots**: live play uses heuristic brains (`backend/src/core/bot-brains/`, dispatched by `BotPlayer.js`; see the Bot brains memory). The LLM layer (`core/SuperBot.js` + `services/aiService.js`: OpenAI, Anthropic, Google, Groq behind one `MODELS` registry with a fallback chain) is dormant — nothing in live play calls it. It has per-request timeouts and a decision deadline so it can be re-wired behind a flag; verify with `node scripts/smoke-test-ai.js`.
 
 ## Commands
 ```bash

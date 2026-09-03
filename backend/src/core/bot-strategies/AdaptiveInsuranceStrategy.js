@@ -11,7 +11,9 @@ class AdaptiveInsuranceStrategy {
         this.pool = pool;
         this.io = io;
         this.strategyCache = new Map();
-        this.lastCacheUpdate = 0;
+        // Per-key clocks: one global clock let one bot's refresh keep every
+        // other bot's stale entry "fresh".
+        this.cacheUpdatedAt = new Map();
         this.CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
     }
 
@@ -23,7 +25,7 @@ class AdaptiveInsuranceStrategy {
         const now = Date.now();
         
         // Check cache
-        if (this.strategyCache.has(cacheKey) && (now - this.lastCacheUpdate) < this.CACHE_DURATION) {
+        if (this.strategyCache.has(cacheKey) && (now - (this.cacheUpdatedAt.get(cacheKey) || 0)) < this.CACHE_DURATION) {
             return this.strategyCache.get(cacheKey);
         }
 
@@ -52,7 +54,9 @@ class AdaptiveInsuranceStrategy {
                     adjustment_factor
                 FROM bot_strategy_adjustments
                 WHERE bot_name = $1
+                  AND (expires_at IS NULL OR expires_at > NOW())
                 ORDER BY created_at DESC
+                LIMIT 20
             `;
             const adjustmentResult = await this.pool.query(adjustmentQuery, [botName]);
 
@@ -62,7 +66,7 @@ class AdaptiveInsuranceStrategy {
             };
 
             this.strategyCache.set(cacheKey, data);
-            this.lastCacheUpdate = now;
+            this.cacheUpdatedAt.set(cacheKey, now);
             
             return data;
         } catch (error) {
@@ -130,7 +134,7 @@ class AdaptiveInsuranceStrategy {
             const query = `
                 INSERT INTO bot_strategy_adjustments 
                 (bot_name, strategy_type, trick_range, adjustment_factor, reason, expires_at)
-                VALUES ($1, $2, $3, $4, $5, NULL)
+                VALUES ($1, $2, $3, $4, $5, NOW() + INTERVAL '30 days')
             `;
             await this.pool.query(query, [botName, strategyType, trickRange, adjustmentFactor, reason]);
         } catch (error) {
@@ -188,15 +192,18 @@ class AdaptiveInsuranceStrategy {
         let aggressiveness = 1.0 + (personalityOffset * 0.02); // 0.8 to 1.2
         let riskTolerance = 0.3 + (personalityOffset * 0.01);  // 0.2 to 0.4
         
-        // Apply learned adjustments (PERMANENT)
+        // Apply learned adjustments. They used to compound forever (rows never
+        // expired, every matching row multiplied in); now rows expire after 30
+        // days, only the latest 20 are read, and the result is clamped.
         for (const adj of botData.adjustments) {
-            if (adj.strategy_type === (isBidder ? 'bidder' : 'defender') && 
+            if (adj.strategy_type === (isBidder ? 'bidder' : 'defender') &&
                 adj.trick_range === trickPhase) {
-                // Adjustments modify personality permanently
                 aggressiveness *= (1 - adj.adjustment_factor);
                 riskTolerance *= (1 + adj.adjustment_factor);
             }
         }
+        aggressiveness = Math.min(1.5, Math.max(0.5, aggressiveness));
+        riskTolerance = Math.min(0.6, Math.max(0.1, riskTolerance));
 
         // Estimate capture rate based on hand strength
         let myCaptureRate;
