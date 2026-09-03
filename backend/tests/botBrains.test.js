@@ -381,6 +381,102 @@ async function runBotBrainTests() {
         pass('Quick Play seating is fully random again — no brain is forced into the game.');
     }
 
+    // 16) Every live card-play brain answers from PUBLIC information only.
+    //     This is the same trap marketInsurance.test.js springs on the
+    //     insurance strategy: the whole table is dealt — both other hands
+    //     and a widow — so there is genuinely something to peek at, and any
+    //     read of a hand other than the bot's own, or of the widow, throws.
+    //     The sealed brains are observed here, never described.
+    {
+        const { getLegalMoves } = require('../src/core/legalMoves');
+        const { deck } = require('../src/core/constants');
+        const liveBrains = [
+            ['counting', 'Kimba'],
+            ['flytrap', 'Mike Knight'],
+            ['sphinx', 'Doc Shuffle'],
+            ['coyote', 'Otis Draw'],
+        ];
+        // The two situations from test 14: following a trick, and leading.
+        const scenarios = [
+            {
+                label: 'following',
+                myHand: ['KH', '6H', 'AS', '9D', '7C', '8C', '9C', '6S', '7S', '8S', '9S'],
+                currentTrickCards: [
+                    { userId: 2, playerName: 'Ally', card: 'KD' },
+                    { userId: 1, playerName: 'Bidder', card: 'QD' },
+                ],
+                trickLeaderName: 'Ally',
+            },
+            {
+                label: 'leading',
+                myHand: ['AD', 'JD', '10S', '8S', '6C', '7C', '8C', '6H', '7H', '8H', '9H'],
+                currentTrickCards: [],
+                trickLeaderName: 'Me',
+            },
+        ];
+
+        const trapPrivateInfo = (engine, botName) => {
+            const seatNames = Object.values(engine.players).map(p => p.playerName);
+            engine.hands = new Proxy(engine.hands, {
+                get(target, prop) {
+                    if (typeof prop === 'string' && prop !== botName && seatNames.includes(prop)) {
+                        throw new Error(`ILLEGAL READ: hand of ${prop}`);
+                    }
+                    return target[prop];
+                },
+            });
+            Object.defineProperty(engine, 'widow', {
+                get() { throw new Error('ILLEGAL READ: widow'); },
+            });
+            Object.defineProperty(engine, 'originalDealtWidow', {
+                get() { throw new Error('ILLEGAL READ: originalDealtWidow'); },
+            });
+            return engine;
+        };
+
+        for (const [brain, botName] of liveBrains) {
+            // Guard against roster drift: if the name were reassigned this
+            // would silently test a different brain.
+            assert.strictEqual(brainNameFor(botName), brain, `${botName} must resolve to the ${brain} brain`);
+            for (const scenario of scenarios) {
+                const engine = makeEngine(scenario);
+                engine.players[3] = { userId: 3, playerName: botName, isBot: true };
+                engine.trickLeaderId = scenario.currentTrickCards.length ? 2 : 3;
+
+                // Deal the rest of the table from the remaining deck: 11 cards
+                // each less any card already on the table, and a 3-card widow.
+                // 36 cards = 3 x 11 + 3, so this is a complete legal deal.
+                const onTable = scenario.currentTrickCards.map(t => t.card);
+                const remaining = deck.filter(c => !scenario.myHand.includes(c) && !onTable.includes(c));
+                const playedBy = name => (onTable.length && scenario.currentTrickCards.some(t => t.playerName === name) ? 1 : 0);
+                const allyHand = remaining.splice(0, 11 - playedBy('Ally'));
+                const bidderHand = remaining.splice(0, 11 - playedBy('Bidder'));
+                const widow = remaining.splice(0, 3);
+                assert.strictEqual(remaining.length, 0, 'the whole deck is dealt');
+                engine.hands = { [botName]: [...scenario.myHand], Ally: allyHand, Bidder: bidderHand };
+                engine.widow = widow;
+                engine.originalDealtWidow = [...widow];
+                trapPrivateInfo(engine, botName);
+
+                let card;
+                try {
+                    card = new BotPlayer(3, botName, engine).playCard();
+                } catch (error) {
+                    assert.fail(`${brain} brain (${botName}), ${scenario.label}: read private information — ${error.message}`);
+                }
+                const legal = getLegalMoves(
+                    scenario.myHand,
+                    scenario.currentTrickCards.length === 0,
+                    engine.leadSuitCurrentTrick,
+                    engine.trumpSuit,
+                    engine.trumpBroken,
+                );
+                assert.ok(legal.includes(card), `${brain} brain (${botName}), ${scenario.label}: offered illegal ${card}`);
+            }
+        }
+        pass('Every live brain (counting, flytrap, sphinx, coyote) plays from public information only.');
+    }
+
     console.log('All bot brain profile tests passed!');
 }
 
