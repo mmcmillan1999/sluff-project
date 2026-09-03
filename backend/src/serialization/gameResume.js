@@ -43,6 +43,11 @@ const COPY_FIELDS = [
     'trickLeaderId', 'lastCompletedTrick', 'tricksPlayedCount', 'capturedTricks',
     'bidderCardPoints', 'defenderCardPoints', 'allCardsPlayedThisRound',
     'insurance', 'roundSummary', 'roundWrappedEarly',
+    // The deal-struck vote is plain data (its interval lives in
+    // internalTimers). A concluded vote must not be re-asked; an open one is
+    // reopened below with a fresh clock. The Quick Play fallback-bot marker
+    // must survive too, or reset() keeps the bot through the rematch.
+    'playoutVote', 'qpFallbackBot',
     // Midnight Special: the once-per-round guard must survive a deploy (or a
     // restored round could celebrate the same run twice), and the rider stamp
     // feeds the round-history entry written at scoring.
@@ -172,6 +177,18 @@ function restoreEngineFromResume(engine, snapshot) {
     // The 3-second all-pass reveal died with its timer; perform what it was
     // about to do: rotate the dealer and re-deal.
     if (engine.state === 'AllPassWidowReveal') engine._advanceRound();
+    // An open playout vote died with its interval: reopen it (fresh 30 s,
+    // votes cleared). Snapshots from before the field existed get a vote
+    // only if the deal is struck and tricks remain, which is the same rule.
+    if (!engine.playoutVote || typeof engine.playoutVote !== 'object') {
+        engine.playoutVote = { isActive: false, resolution: null, votes: {}, timer: null };
+    }
+    const dealStruck = engine.insurance?.dealExecuted === true;
+    const tricksRemain = (engine.tricksPlayedCount ?? 0) < 11 && !engine.roundWrappedEarly;
+    if (engine.playoutVote.isActive || (dealStruck && tricksRemain && !engine.playoutVote.resolution)) {
+        engine.playoutVote.isActive = false;
+        if (typeof engine._startPlayoutVote === 'function') engine._startPlayoutVote();
+    }
     engine.turnStartedAt = Date.now();
     return true;
 }

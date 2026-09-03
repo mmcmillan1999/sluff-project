@@ -337,9 +337,10 @@ function runPlayoutVoteTests() {
             pass('Round results record each bot\'s brain at play time.');
         }
 
-        // A deploy mid-vote: the snapshot carries the executed deal but not
-        // the vote, so the restored table resumes playable — the vote simply
-        // evaporates and the round plays out on the locked deal.
+        // A deploy mid-vote: the snapshot carries the executed deal and the
+        // vote itself; the interval died with the process, so the restored
+        // table reopens the vote with a fresh clock (Sept 2026 — before this
+        // the vote evaporated and everyone had to play the round out).
         {
             const engine = makeMidRoundEngine();
             engine.gameId = 777;
@@ -350,7 +351,9 @@ function runPlayoutVoteTests() {
             const revived = new GameEngine('playout-restore', 'fort-creek', 'Playout Restore');
             assert.strictEqual(restoreEngineFromResume(revived, snapshot), true);
             assert.strictEqual(revived.state, 'Playing Phase');
-            assert.strictEqual(revived.playoutVote.isActive, false, 'no orphaned vote without its timer');
+            assert.strictEqual(revived.playoutVote.isActive, true, 'the vote is reopened with a fresh clock');
+            assert.ok(revived.internalTimers.playoutTimer, 'and its interval is live, not orphaned');
+            clearInterval(revived.internalTimers.playoutTimer);
             assert.strictEqual(revived.insurance.dealExecuted, true, 'the deal survives the deploy');
             assert.strictEqual(revived.roundWrappedEarly, false);
             pass('A deploy mid-vote restores a playable round with the deal intact.');

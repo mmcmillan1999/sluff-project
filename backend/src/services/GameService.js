@@ -64,6 +64,10 @@
             this.qpGenerationCounter = 0;
             this.terminalCleanupTimers = {};
             this.roundAdvanceTimers = {};
+            // Failed settlements, keyed by table: the snapshot to replay and
+            // when. settleGameTransaction is idempotent against the persisted
+            // outcome, so replaying is always safe.
+            this.settlementRetries = {};
             this.adaptiveInsurance = new AdaptiveInsuranceStrategy(pool, io);
             // Live insurance brain (July 2026): Monte Carlo market pricing on
             // public information only. INSURANCE_STRATEGY=legacy reverts to the
@@ -88,6 +92,8 @@
                         // forfeit timer only ever covered disconnected seats,
                         // so before this a face-down phone froze the table.
                         void this._enforceAfkTurnTimer(tableId);
+                        this._enforceLoneHumanForfeit(tableId);
+                        this._retryDueSettlement(tableId);
                     }
                 }
             }, 1500);
@@ -175,7 +181,12 @@
         hasActiveOrPendingGame() {
             return Object.values(this.engines).some(engine => (
                 engine.gameStartPending === true
-                || engine.gameStarted === true
+                || (engine.gameStarted === true
+                    // A finished game whose settlement failed is not "active";
+                    // an admin may need the hard reset precisely because of it
+                    // (recovery then refunds the row on its normal schedule).
+                    && !(['Game Over', 'DrawComplete'].includes(engine.state)
+                        && engine.settlement?.status === 'failed'))
             ));
         }
 
@@ -1396,7 +1407,15 @@
                         console.log(`[RESUME] Skipping game #${row.game_id}: snapshot too old; leaving it to recovery.`);
                         continue;
                     }
-                    const engine = this.getEngineById(row.table_id);
+                    let engine = this.getEngineById(row.table_id);
+                    // Render boots the new instance before the old one gets
+                    // SIGTERM, so the exhibition manager can already be running
+                    // a bot game on this table by the time the snapshot lands.
+                    // Bots yield to people: wash it and take the table back.
+                    if (engine?.isExhibitionTable && engine.gameStarted) {
+                        await this._preemptExhibitionGame(row.table_id);
+                        engine = this.getEngineById(row.table_id);
+                    }
                     if (!engine || !restoreEngineFromResume(engine, claim.rows[0].snapshot)) {
                         console.log(`[RESUME] Could not restore game #${row.game_id} on ${row.table_id}; recovery will refund it.`);
                         continue;
@@ -1424,6 +1443,19 @@
             for (const socket of sockets.values()) {
                 const userId = socket.user?.id;
                 if (!userId || !engine.players[userId]) continue;
+                // A player who already sat down elsewhere (Quick Play in the
+                // minute before the snapshot landed) keeps that seat; this one
+                // stays disconnected and its forfeit/recovery paths apply.
+                const elsewhere = Object.values(this.engines).some(other => (
+                    other !== engine
+                    && (other.gameStarted || other.gameStartPending)
+                    && other.players?.[userId]
+                    && other.players[userId].isSpectator !== true
+                ));
+                if (elsewhere) {
+                    console.log(`[RESUME] ${engine.players[userId].playerName} is seated at another live table; not rebinding to ${engine.tableId}.`);
+                    continue;
+                }
                 socket.join?.(engine.tableId);
                 engine.reconnectPlayer(userId, socket);
             }
@@ -1514,6 +1546,78 @@
 
         async handleForfeit(payload) {
             return transactionManager.handleForfeitTransactions(this.pool, payload);
+        }
+
+        // A settlement that missed its half-second in-line retry budget used
+        // to wedge the table for good: reset, rematch, and terminal cleanup all
+        // refuse while status is 'failed', the hard reset refused while any
+        // engine was started, and the game_history row stayed "In Progress"
+        // under a heartbeat so it was never refunded either. Replay it from
+        // the heartbeat with backoff instead — the transaction is idempotent.
+        _scheduleSettlementRetry(tableId, kind, payload, onComplete) {
+            // Lazy: test helpers build the service without the constructor.
+            const retries = this.settlementRetries || (this.settlementRetries = {});
+            const previous = retries[tableId];
+            const attempt = (previous?.attempt || 0) + 1;
+            const delayMs = Math.min(5 * 60 * 1000, 30 * 1000 * (2 ** (attempt - 1)));
+            retries[tableId] = { kind, payload, onComplete, attempt, dueAt: Date.now() + delayMs, inFlight: false };
+            console.warn(`[SETTLEMENT] ${kind} settlement on ${tableId} will retry in ${Math.round(delayMs / 1000)}s (attempt ${attempt}).`);
+        }
+
+        _retryDueSettlement(tableId) {
+            const retry = this.settlementRetries?.[tableId];
+            if (!retry || retry.inFlight || Date.now() < retry.dueAt) return;
+            void this.retrySettlement(tableId);
+        }
+
+        // Public so an admin can force it (POST /api/admin/tables/:id/retry-settlement).
+        async retrySettlement(tableId) {
+            const engine = this.getEngineById(tableId);
+            const retry = this.settlementRetries?.[tableId];
+            if (!engine || !retry) return { ok: false, reason: 'nothing_to_retry' };
+            if (engine.settlement?.status !== 'failed') {
+                delete this.settlementRetries[tableId];
+                return { ok: false, reason: 'not_failed' };
+            }
+            if (retry.inFlight) return { ok: false, reason: 'in_flight' };
+            retry.inFlight = true;
+            try {
+                const operation = retry.kind === 'normal'
+                    ? () => this.handleGameOver(retry.payload)
+                    : retry.kind === 'draw'
+                        ? () => this.handleDrawOutcome(retry.payload)
+                        : () => this.handleForfeit(retry.payload);
+                const settlement = await this._runSettlementWithRetry(engine, retry.kind, operation);
+                if (settlement.ok) {
+                    delete this.settlementRetries[tableId];
+                    this._applySettlementSuccess(engine, retry.kind, settlement.result, retry.onComplete);
+                    console.log(`[SETTLEMENT] ${retry.kind} settlement on ${tableId} committed on retry ${retry.attempt}.`);
+                } else {
+                    console.error(`[SETTLEMENT] Retry ${retry.attempt} failed on ${tableId}:`, settlement.error?.message);
+                    this._scheduleSettlementRetry(tableId, retry.kind, retry.payload, retry.onComplete);
+                }
+                this.emitGameState(tableId);
+                this.evaluateTerminalCleanup(tableId);
+                return { ok: settlement.ok, attempt: retry.attempt };
+            } finally {
+                retry.inFlight = false;
+            }
+        }
+
+        _applySettlementSuccess(engine, kind, result, onComplete) {
+            if (kind === 'draw') {
+                if (onComplete) onComplete(result);
+                return;
+            }
+            if (engine.roundSummary) {
+                engine.roundSummary.gameWinner = result.gameWinnerName;
+                engine.roundSummary.payoutDetails = result.payoutDetails;
+                engine.roundSummary.tokenSettlement = result.tokenSettlement;
+                if (engine.roundSummary.message && /needs administrator review/.test(engine.roundSummary.message)) {
+                    delete engine.roundSummary.message;
+                }
+                if (onComplete) onComplete(result);
+            }
         }
 
         async _runSettlementWithRetry(engine, kind, operation) {
@@ -1888,6 +1992,7 @@
                         } else if (engine.roundSummary) {
                             console.error(`[SERVICE] Normal settlement failed for game ${effect.payload.gameId}:`, settlement.error);
                             engine.roundSummary.message = 'Game settlement needs administrator review. No partial payout was committed.';
+                            this._scheduleSettlementRetry(tableId, 'normal', effect.payload, effect.onComplete);
                         }
                         if (engine.roundSummary) {
                             // Start the shared presentation clock after the
@@ -1908,6 +2013,7 @@
                             if (effect.onComplete) effect.onComplete(settlement.result);
                         } else {
                             console.error(`[SERVICE] Draw settlement failed for game ${effect.payload.gameId}:`, settlement.error);
+                            this._scheduleSettlementRetry(tableId, 'draw', effect.payload, effect.onComplete);
                             // Draw Resolving is only an in-flight state. Even a
                             // failed settlement must reach a stable terminal UI
                             // so players can read the failure and leave; the
@@ -1940,6 +2046,7 @@
                         } else if (engine.roundSummary) {
                             console.error(`[SERVICE] Forfeit settlement failed for game ${effect.payload.gameId}:`, settlement.error);
                             engine.roundSummary.message = 'Forfeit settlement needs administrator review. No partial payout was committed.';
+                            this._scheduleSettlementRetry(tableId, 'forfeit', effect.payload, null);
                         }
                         if (engine.roundSummary) {
                             // No final trick/widow animation on a forfeit; this
@@ -2121,6 +2228,15 @@
                 if (decision.action === 'bid') {
                     console.log(`[AFK] ${decision.playerName} passed automatically at ${tableId}`);
                     await this.placeBid(tableId, decision.userId, decision.bid);
+                } else if (decision.action === 'deal') {
+                    console.log(`[AFK] Dealt for ${decision.playerName} at ${tableId}`);
+                    await this.dealCards(tableId, decision.userId);
+                } else if (decision.action === 'trump') {
+                    console.log(`[AFK] Chose trump ${decision.suit} for ${decision.playerName} at ${tableId}`);
+                    await this.chooseTrump(tableId, decision.userId, decision.suit);
+                } else if (decision.action === 'discards') {
+                    console.log(`[AFK] Submitted frog discards for ${decision.playerName} at ${tableId}`);
+                    await this.submitFrogDiscards(tableId, decision.userId, decision.discards);
                 } else {
                     console.log(`[AFK] ${decision.playerName} auto-played ${decision.card} at ${tableId}`);
                     await this.playCard(tableId, decision.userId, decision.card);
@@ -2132,6 +2248,32 @@
                 // window and this simply retries if it is still stuck.
                 console.error(`[AFK] Auto-action failed at ${tableId}:`, error.message);
             }
+        }
+
+        // A human who drops out of a table where only bots remain used to
+        // freeze it forever: the AFK backstop skips disconnected seats, the
+        // forfeit clock needs a connected human to start it, and bots never
+        // did. The recovery monitor kept heartbeating the game, so it was
+        // never reclaimed either. Let the house start the same two-minute
+        // clock a fellow human would — reconnecting inside it clears it.
+        _enforceLoneHumanForfeit(tableId) {
+            const engine = this.getEngineById(tableId);
+            if (!engine?.gameStarted || engine.internalTimers?.forfeit || engine.forfeiture?.targetPlayerName) return;
+            if (['Game Over', 'DrawComplete', 'Draw Resolving'].includes(engine.state)) return;
+            const seated = Object.values(engine.players).filter(p => p && !p.isSpectator);
+            if (seated.some(p => !p.isBot && !p.disconnected)) return; // a human is here to decide
+            const gone = seated.filter(p => !p.isBot && p.disconnected);
+            const requester = seated.find(p => p.isBot);
+            if (gone.length === 0 || !requester) return;
+            // Right after a deploy every human is "disconnected" until their
+            // app reconnects; give a restored table ten minutes before the
+            // clock, not two.
+            if (seated.some(p => p.resumePending)
+                && Date.now() - (Number(engine.turnStartedAt) || 0) < 10 * 60 * 1000) return;
+            const target = gone[0];
+            console.log(`[FORFEIT] ${target.playerName} is disconnected with no human left at ${tableId}; the house started the clock.`);
+            this._performAction(tableId, eng => eng.startForfeitTimer(requester.userId, target.playerName))
+                .catch(error => console.error(`[FORFEIT] Could not start the clock at ${tableId}:`, error.message));
         }
 
         // Market strategy is the live insurance brain; the adaptive strategy

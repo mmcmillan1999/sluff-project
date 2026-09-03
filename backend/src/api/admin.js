@@ -31,12 +31,29 @@ const createAdminRoutes = (pool, jwt, io = null, options = {}) => {
   const getLiveGameIds = typeof options.getLiveGameIds === 'function'
     ? options.getLiveGameIds
     : () => [];
+  const retrySettlement = typeof options.retrySettlement === 'function'
+    ? options.retrySettlement
+    : async () => ({ ok: false, reason: 'unavailable' });
 
   // A middleware to check if the user is an admin
   const isAdmin = (req, res, next) => {
     if (req.user?.is_admin === true) return next();
     return res.status(403).send('Access Forbidden: Requires admin privileges.');
   };
+
+  // Force an immediate replay of a failed settlement (the heartbeat retries
+  // on its own with backoff; this is for the admin who is looking at it now).
+  router.post('/tables/:tableId/retry-settlement', checkAuth, isAdmin, async (req, res) => {
+    const tableId = String(req.params.tableId || '');
+    if (!/^[a-z0-9-]{1,40}$/i.test(tableId)) return res.status(400).json({ message: 'Invalid table id.' });
+    try {
+      const result = await retrySettlement(tableId);
+      return res.status(result.ok ? 200 : 409).json(result);
+    } catch (error) {
+      console.error('Settlement retry failed:', error);
+      return res.status(500).json({ ok: false, reason: 'error' });
+    }
+  });
 
   // --- Chat moderation queue (App Store guideline 1.2) -------------------
   // The Terms have always promised suspension; until now nothing here could

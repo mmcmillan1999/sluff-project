@@ -16,6 +16,7 @@
 
 const { getLegalMoves } = require('./legalMoves');
 const { CARD_POINT_VALUES } = require('./constants');
+const { frogDiscardStrategyFor } = require('./frogDiscards');
 
 const DEFAULT_TIMEOUT_MS = 45_000;
 // A turn can be extended by activity pings to at most this many windows. The
@@ -70,7 +71,50 @@ function pendingHumanAction(engine) {
         return { userId: engine.trickTurnPlayerId, kind: 'play', playerName: player.playerName };
     }
 
+    // The four other prompts a human can leave the table waiting on. Human vs
+    // bots makes the human dealer every third round, so "phone face-down at
+    // Dealing Pending" was the commonest freeze the timer did not cover.
+    if (engine.state === 'Dealing Pending' && engine.dealer != null) {
+        const player = engine.players?.[engine.dealer];
+        if (!player || player.isBot || player.disconnected) return null;
+        return { userId: engine.dealer, kind: 'deal', playerName: player.playerName };
+    }
+
+    if (engine.state === 'Awaiting Frog Upgrade Decision' && engine.biddingTurnPlayerId != null) {
+        const player = engine.players?.[engine.biddingTurnPlayerId];
+        if (!player || player.isBot || player.disconnected) return null;
+        return { userId: engine.biddingTurnPlayerId, kind: 'upgrade', playerName: player.playerName };
+    }
+
+    const bidderId = engine.bidWinnerInfo?.userId;
+    if (engine.state === 'Trump Selection' && bidderId != null && !engine.trumpSuit) {
+        const player = engine.players?.[bidderId];
+        if (!player || player.isBot || player.disconnected) return null;
+        return { userId: bidderId, kind: 'trump', playerName: player.playerName };
+    }
+
+    if (engine.state === 'Frog Widow Exchange' && bidderId != null
+        && (engine.widowDiscardsForFrogBidder?.length ?? 0) === 0) {
+        const player = engine.players?.[bidderId];
+        if (!player || player.isBot || player.disconnected) return null;
+        return { userId: bidderId, kind: 'discards', playerName: player.playerName };
+    }
+
     return null;
+}
+
+// For an absent bidder who already committed to Solo/Frog, the table's own
+// default policies apply — the same suit rule and discard policy a bot uses.
+// Nothing here tries to play well; it lets the round proceed.
+function suitWithMostCards(hand) {
+    const counts = { S: 0, C: 0, D: 0 };
+    for (const card of hand) {
+        const suit = String(card).slice(-1);
+        if (suit in counts) counts[suit] += 1;
+    }
+    let best = 'C';
+    for (const suit of ['S', 'C', 'D']) if (counts[suit] > counts[best]) best = suit;
+    return best;
 }
 
 /**
@@ -93,7 +137,8 @@ function turnKey(engine, pending) {
  * Advances the timer for one engine. Pure bookkeeping plus a decision — the
  * caller performs the action, so this stays testable without a live table.
  *
- * @returns {{action: 'bid'|'play', userId: number, bid?: string, card?: string,
+ * @returns {{action: 'bid'|'play'|'deal'|'trump'|'discards', userId: number,
+ *            bid?: string, card?: string, suit?: string, discards?: string[],
  *            playerName: string} | null}
  */
 function evaluate(engine, { now = Date.now(), timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
@@ -116,11 +161,22 @@ function evaluate(engine, { now = Date.now(), timeoutMs = DEFAULT_TIMEOUT_MS } =
     // twice, and the next turn gets a full window.
     engine.afkWatch = { key, since: now, armedAt: now };
 
-    if (pending.kind === 'bid') {
+    if (pending.kind === 'bid' || pending.kind === 'upgrade') {
         return { action: 'bid', userId: pending.userId, bid: 'Pass', playerName: pending.playerName };
+    }
+    if (pending.kind === 'deal') {
+        return { action: 'deal', userId: pending.userId, playerName: pending.playerName };
     }
 
     const hand = engine.hands?.[pending.playerName] || [];
+    if (pending.kind === 'trump') {
+        return { action: 'trump', userId: pending.userId, suit: suitWithMostCards(hand), playerName: pending.playerName };
+    }
+    if (pending.kind === 'discards') {
+        const discards = frogDiscardStrategyFor(pending.playerName)(hand);
+        if (!Array.isArray(discards) || discards.length !== 3) return null;
+        return { action: 'discards', userId: pending.userId, discards, playerName: pending.playerName };
+    }
     const legal = getLegalMoves(
         hand,
         (engine.currentTrickCards?.length ?? 0) === 0,

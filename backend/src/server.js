@@ -203,6 +203,7 @@ async function initializeApplication() {
         // Registered by gameEvents, which owns the voice rooms: a chat mute
         // must end a live voice session, not just block the next join.
         ejectFromVoice: (userId) => gameService.ejectUserFromVoiceRooms?.(userId) ?? 0,
+        retrySettlement: (tableId) => gameService.retrySettlement(tableId),
     }));
     app.use('/api/feedback', createFeedbackRoutes(pool, jwt));
     app.use('/api/chat', createChatRoutes(pool, io, jwt));
