@@ -1,6 +1,7 @@
 'use strict';
 
 const { acquireSeasonReadLock } = require('../services/seasonService');
+const { VOID_WINDOW_HOURS, VOID_QUOTA_PER_SEASON } = require('./gameVoidPolicy');
 
 const GAME_VOID_ATTESTATION = 'scouts_honor';
 const GAME_VOID_ATTESTATION_VERSION = 'scouts_honor_v1';
@@ -564,6 +565,28 @@ async function voidGame(pool, { gameId: rawGameId, requester: rawRequester, atte
         }
         if (typeof game.outcome !== 'string' || !game.outcome.startsWith('Game Over!') || !game.end_time) {
             throw new GameVoidError('GAME_NOT_SETTLED', 'Only a completed game can be voided.');
+        }
+        // Policy (see gameVoidPolicy.js): soon after the game, a few per season.
+        const endedAt = new Date(game.end_time).getTime();
+        if (Number.isFinite(endedAt) && Date.now() - endedAt > VOID_WINDOW_HOURS * 3600000) {
+            throw new GameVoidError(
+                'GAME_VOID_WINDOW_CLOSED',
+                `A game can only be voided within ${VOID_WINDOW_HOURS} hours of ending.`,
+            );
+        }
+        const quotaResult = await client.query(
+            `SELECT COUNT(*)::int AS used
+             FROM game_voids v
+             JOIN game_history g ON g.game_id = v.game_id
+             WHERE v.requested_by_user_id = $1 AND g.season_id = $2`,
+            [requester.id, Number(game.season_id)],
+        );
+        const voidsUsed = Number(quotaResult.rows?.[0]?.used || 0);
+        if (voidsUsed >= VOID_QUOTA_PER_SEASON) {
+            throw new GameVoidError(
+                'GAME_VOID_QUOTA_REACHED',
+                `You have used all ${VOID_QUOTA_PER_SEASON} game voids for this season.`,
+            );
         }
 
         const initialValidated = validateSourceLedger(initialLedgerRows, {

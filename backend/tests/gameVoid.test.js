@@ -50,7 +50,8 @@ function baseState(overrides = {}) {
             theme: 'fort-creek',
             playerCount: 3,
             outcome: 'Game Over! Winner: Player1',
-            endTime: '2026-07-17T10:30:00.000Z',
+            // Recent: the void window (gameVoidPolicy.js) closes 24 h after a game ends.
+            endTime: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
             reconciliationStatus: null,
             reconciledAt: null,
             reconciledBy: null,
@@ -299,6 +300,9 @@ function createVoidPool(state = baseState()) {
                             .reduce((sum, row) => sum + Number(row.amount), 0);
                         return { rows: [{ current_balance_cents: String(Math.round(amount * 100)) }] };
                     }
+                    if (sql.includes('FROM game_voids v')) {
+                        return { rows: [{ used: Number(state.game.voidsUsed || 0) }] };
+                    }
                     throw new Error(`Unexpected client query: ${sql}`);
                 },
                 release() { releaseCount += 1; },
@@ -404,6 +408,9 @@ async function testAuthorizationAndEligibilityFailures() {
         [{ seasonStatus: 'finalized' }, 'GAME_SEASON_FINALIZED'],
         [{ outcome: 'In Progress', endTime: null }, 'GAME_NOT_SETTLED'],
         [{ reconciliationStatus: 'abandoned_refunded' }, 'GAME_NOT_VOIDABLE'],
+        // Policy: soon after the game, a few per season (gameVoidPolicy.js).
+        [{ endTime: '2026-07-17T10:30:00.000Z' }, 'GAME_VOID_WINDOW_CLOSED'],
+        [{ voidsUsed: 3 }, 'GAME_VOID_QUOTA_REACHED'],
     ]) {
         const pool = createVoidPool(baseState({ game }));
         await assert.rejects(

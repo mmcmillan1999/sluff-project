@@ -1,5 +1,7 @@
 'use strict';
 
+const { VOID_WINDOW_HOURS } = require('./gameVoidPolicy');
+
 const DEFAULT_LEDGER_PAGE_SIZE = 50;
 const MAX_LEDGER_PAGE_SIZE = 100;
 
@@ -85,6 +87,7 @@ const LEDGER_PAGE_QUERY = `
              AND game.outcome LIKE 'Game Over!%'
              AND game.reconciliation_status IS NULL
              AND game_season.status = 'active'
+             AND game.end_time > NOW() - (INTERVAL '1 hour' * ${VOID_WINDOW_HOURS})
              AND EXISTS (
                  SELECT 1
                  FROM transactions participant_buy_in

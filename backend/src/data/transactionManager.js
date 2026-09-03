@@ -433,6 +433,30 @@ async function settleGameTransaction(pool, settlement) {
             }
         }
 
+        // The payouts were priced from live TABLE_COSTS at settlement time;
+        // the buy-ins were charged at game start. Games survive deploys now,
+        // so a table-cost edit mid-game would mint or burn the difference.
+        // The ledger is the authority: refuse to pay out anything other than
+        // exactly what was charged. (No buy-in rows at all — a free table, or
+        // an older test double — leaves nothing to reconcile against.)
+        const chargedResult = await client.query(
+            `SELECT COALESCE(SUM(-amount), 0) AS charged
+             FROM transactions
+             WHERE game_id = $1
+               AND transaction_type = 'buy_in'
+               AND reverses_transaction_id IS NULL`,
+            [settlement.gameId],
+        );
+        const chargedCents = Math.round(Number(chargedResult.rows?.[0]?.charged || 0) * 100);
+        const payoutCents = settlement.payouts.reduce((sum, payout) => sum + Number(payout.amountCents || 0), 0);
+        if (chargedCents > 0 && payoutCents !== chargedCents) {
+            const error = new Error(
+                `Settlement for game ${settlement.gameId} would pay out ${payoutCents} cents against ${chargedCents} cents of buy-ins.`,
+            );
+            error.code = 'SETTLEMENT_POT_MISMATCH';
+            throw error;
+        }
+
         for (const payout of settlement.payouts) {
             await client.query(
                 `INSERT INTO transactions

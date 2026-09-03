@@ -3,7 +3,7 @@
 
 const { setCaseInsensitiveUsernamesEnforced } = require('./accountIdentity');
 
-const createDbTables = async (pool) => {
+const createDbTablesOnce = async (pool) => {
     const client = await pool.connect();
     // node-postgres transactions are connection-scoped. Keep every migration
     // statement on this checked-out client rather than hopping through
@@ -13,6 +13,12 @@ const createDbTables = async (pool) => {
     try {
         await pool.query('BEGIN');
         transactionOpen = true;
+        // A rolling deploy migrates here while the old instance still settles
+        // games. Settlement locks game_history then users; this transaction
+        // takes users first, so the two can deadlock (Postgres kills one after
+        // a second) or queue behind a long settlement. Give up on any lock
+        // quickly instead and let the wrapper below retry the whole thing.
+        await pool.query("SET LOCAL lock_timeout = '5s'");
 
         await pool.query(`
             DO $$ BEGIN
@@ -905,4 +911,22 @@ const createDbTables = async (pool) => {
     }
 };
 
-module.exports = createDbTables;
+// lock_timeout (55P03) and deadlock (40P01) are the two ways a rolling deploy
+// loses a race with the still-live instance; both are safe to retry because
+// every statement above is idempotent and the transaction rolled back.
+const RETRYABLE_MIGRATION_CODES = new Set(['55P03', '40P01']);
+const createDbTablesWithRetry = async (pool, { attempts = 4, delayMs = 3000 } = {}) => {
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+        try {
+            return await createDbTablesOnce(pool);
+        } catch (error) {
+            if (!RETRYABLE_MIGRATION_CODES.has(error?.code) || attempt === attempts) throw error;
+            console.warn(`Migration lost a lock race (${error.code}); retrying in ${delayMs / 1000}s (attempt ${attempt} of ${attempts}).`);
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+    }
+    return undefined;
+};
+
+module.exports = createDbTablesWithRetry;
+module.exports.createDbTablesOnce = createDbTablesOnce;

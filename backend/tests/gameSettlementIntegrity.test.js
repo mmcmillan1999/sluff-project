@@ -391,6 +391,13 @@ function createSettlementPool({
                         const ids = (params[0] || []).filter(id => state.stats.has(id));
                         return { rows: ids.map(id => ({ id })), rowCount: ids.length };
                     }
+                    if (sql.includes('AS charged') && sql.includes("transaction_type = 'buy_in'")) {
+                        // The pot check reads what was actually charged for the game.
+                        const charged = state.transactions
+                            .filter(t => t.gameId === params[0] && t.type === 'buy_in')
+                            .reduce((sum, t) => sum - Number(t.amount), 0);
+                        return { rows: [{ charged }], rowCount: 1 };
+                    }
                     if (sql.startsWith('INSERT INTO transactions')) {
                         insertAttempt += 1;
                         if (insertAttempt === failOnInsertNumber) throw new Error('injected payout insert failure');

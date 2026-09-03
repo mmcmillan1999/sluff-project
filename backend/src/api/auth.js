@@ -462,7 +462,7 @@ module.exports = function(pool, bcrypt, jwt, io, gameService) {
         }
     });
 
-    router.post('/token-ledger/games/:gameId/void', checkAuth, async (req, res) => {
+    router.post('/token-ledger/games/:gameId/void', checkAuth, accountChangeLimiter, async (req, res) => {
         res.set('Cache-Control', 'private, no-store');
         try {
             const result = await voidGame(pool, {
