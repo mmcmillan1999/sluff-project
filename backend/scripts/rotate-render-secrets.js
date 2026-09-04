@@ -12,6 +12,7 @@
 //   --force       skip the mid-game check (players get bounced)
 //   --skip-db     rotate JWT_SECRET only
 //   --skip-jwt    rotate the database credential only
+//   --deploys     read-only: the last eight deploys (status, commit, trigger)
 //   --check-env   read-only: list the service's env var NAMES and whether
 //                 NODE_ENV=production; rotates nothing, needs no --execute
 //   --set-node-env  with --execute: set NODE_ENV=production and redeploy
@@ -57,6 +58,7 @@ const FORCE = args.has('--force');
 const ROTATE_DB = !args.has('--skip-db');
 const ROTATE_JWT = !args.has('--skip-jwt');
 const CHECK_ENV = args.has('--check-env');
+const LIST_DEPLOYS = args.has('--deploys');
 const SET_NODE_ENV = args.has('--set-node-env');
 
 const log = (...parts) => console.log(...parts);
@@ -283,6 +285,17 @@ function appendRotationLog(entries) {
 async function main() {
     if (!process.env.RENDER_API_KEY) {
         fail('RENDER_API_KEY is not set. Create one at Render → Account Settings → API Keys and add RENDER_API_KEY=... to backend/.env (gitignored).');
+    }
+    if (LIST_DEPLOYS) {
+        // Read-only: the last few deploys, so 'did that push restart the server?'
+        // has an answer that is not inferred from /health uptime.
+        const service = await findService();
+        const deploys = unwrap(await api('GET', `/services/${service.id}/deploys?limit=8`));
+        for (const d of deploys) {
+            const commit = d.commit?.id ? d.commit.id.slice(0, 7) : '-';
+            log(`   ${d.createdAt || '?'}  ${String(d.status).padEnd(18)} ${commit}  ${d.trigger || ''}  ${(d.commit?.message || '').split('\n')[0].slice(0, 60)}`);
+        }
+        return;
     }
     if (CHECK_ENV || SET_NODE_ENV) {
         const service = await findService();
