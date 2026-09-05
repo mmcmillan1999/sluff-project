@@ -556,6 +556,14 @@
     will-change: transform;
 }
 
+/* Inside .trick-card-fly: the element an opponent's card flies in on, from
+   their seat to the slot (Web Animations, see playedCardArrival.js). Block,
+   not inline-block, so it adds no baseline gap under the card. */
+.trick-card-arrive {
+    display: block;
+    transform-origin: center center;
+}
+
 /* End-of-round widow celebration: cards fly widow pile -> center -> awarded pile */
 .widow-celebration-overlay {
     position: fixed;

@@ -16,6 +16,7 @@ import './TableLayout.css';
 import { SUIT_SYMBOLS, CARD_POINT_VALUES } from '../../constants';
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion';
 import { deriveTrickPlatePlacement } from './trickPlatePlacement';
+import { arrivalKey, reconcileArrivals, launchArrival } from './playedCardArrival';
 import { getThemePresentation } from '../../config/themePresentation';
 import { useCosmetics } from '../../utils/cosmetics';
 import DecorBoundary from '../DecorBoundary';
@@ -76,6 +77,13 @@ const TableLayout = ({
     // Refs to the played-card "fly" wrappers (one per seat) + the hold-then-fly timer.
     const flyRefs = useRef({});
     const flyTimerRef = useRef(null);
+    // Opponents' played cards fly in from their seats (playedCardArrival.js).
+    // arrivalRefs: seat -> the inner element that flies. arrivedKeysRef: plays
+    // already resting on the felt, null until the first commit seeds it.
+    const arrivalRefs = useRef({});
+    const arrivedKeysRef = useRef(null);
+    const arrivalAnimationsRef = useRef([]);
+    const tableRef = useRef(null);
     // End-of-round celebration: the widow cards fly from the widow pile to
     // center and on to the awarded team's pile.
     const [widowCelebrationActive, setWidowCelebrationActive] = useState(false);
@@ -119,10 +127,48 @@ const TableLayout = ({
             if (laggedTrickTimerRef.current) {
                 clearTimeout(laggedTrickTimerRef.current);
             }
+            arrivalAnimationsRef.current.forEach((animation) => {
+                try { animation.cancel(); } catch (error) { /* element already gone */ }
+            });
+            arrivalAnimationsRef.current = [];
             clearEndRoundTimers();
             endRoundKeyRef.current = null;
         };
     }, []);
+
+    // Which plays are on the felt right now: the completed trick during the
+    // linger, otherwise the trick in progress. The signature keys the fly-in
+    // effect so mid-trick re-renders (timers, insurance, chat) never re-run it.
+    const isLingerState = currentTableState.state === 'TrickCompleteLinger';
+    const displayedPlays = (isLingerState
+        ? currentTableState.lastCompletedTrick?.cards
+        : currentTableState.currentTrickCards) || [];
+    const arrivalSignature = displayedPlays.map(arrivalKey).filter(Boolean).join('|');
+
+    // Fly in the opponent cards that just appeared. Runs before paint so the
+    // first frame is already at the seat. The first commit only seeds the seen
+    // set, so mounting mid-trick (reconnect, spectating) launches nothing.
+    // Purely presentational: the turn has already moved on in this broadcast.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useLayoutEffect(() => {
+        const slots = Object.entries(arrivalRefs.current).filter(([, el]) => el);
+        const seeded = arrivedKeysRef.current !== null;
+        const { seen, arriving } = reconcileArrivals(
+            arrivedKeysRef.current || new Set(),
+            slots.map(([, el]) => el.dataset.arrivalKey),
+            seeded,
+        );
+        arrivedKeysRef.current = seen;
+        if (!seeded || prefersReducedMotion || arriving.length === 0) return;
+        const scope = tableRef.current || document;
+        slots.forEach(([seat, el]) => {
+            if (!arriving.includes(el.dataset.arrivalKey)) return;
+            const animation = launchArrival(el, { seat, playerName: el.dataset.arrivalPlayer, scope });
+            if (animation) arrivalAnimationsRef.current.push(animation);
+        });
+        arrivalAnimationsRef.current = arrivalAnimationsRef.current
+            .filter((animation) => animation.playState !== 'finished');
+    }, [arrivalSignature, prefersReducedMotion]);
 
     // When a trick is captured, hold the pile count until the magnet has slid the
     // cards onto the pile (~hold + fly). Resets/new rounds update immediately, and
@@ -441,16 +487,15 @@ const TableLayout = ({
     };
 
     const renderPlayedCardsOnTable = () => {
-        const isLingerState = currentTableState.state === 'TrickCompleteLinger';
-        const cardsToDisplay = isLingerState ? currentTableState.lastCompletedTrick?.cards : currentTableState.currentTrickCards;
+        const cardsToDisplay = displayedPlays;
 
         // Cards already played to the table are public information. Spectators
         // receive this play list without receiving any player's hidden hand.
-        if (!cardsToDisplay || cardsToDisplay.length === 0) {
+        if (cardsToDisplay.length === 0) {
             return null;
         }
 
-        const cardFor = (pName) => (pName ? (cardsToDisplay || []).find(c => c.playerName === pName)?.card || null : null);
+        const cardFor = (pName) => (pName ? cardsToDisplay.find(c => c.playerName === pName)?.card || null : null);
 
         // During the linger, highlight the card that actually won the trick, in the
         // winning team's colour (gold = bidder, blue = defender) to match the pile.
@@ -458,16 +503,30 @@ const TableLayout = ({
         const winnerIsBidder = !!winnerName && winnerName === currentTableState.bidWinnerInfo?.playerName;
 
         // Each played card sits in a fixed wrapper for positioning; the inner
-        // .trick-card-fly element is what we transform to animate onto the pile.
+        // .trick-card-fly element is what we transform to animate onto the pile,
+        // and .trick-card-arrive inside it is what flies in from the seat, so
+        // the two motions compose instead of fighting over one transform.
         const slot = (posKey, pName, wrapperClass) => {
             const card = cardFor(pName);
             const isWinner = !!card && pName === winnerName;
             const winnerClass = isWinner ? (winnerIsBidder ? ' trick-winning-card-bidder' : ' trick-winning-card-defender') : '';
             const flyClass = `trick-card-fly${winnerClass}`;
+            const key = card ? arrivalKey({ playerName: pName, card }) : null;
+            // The local player's card is flown in by PlayerHand as it leaves
+            // the hand, so its slot stays static; every other seat's flies in.
+            const fliesIn = !!key && pName !== selfPlayerName;
             return (
-                <div className={wrapperClass}>
+                <div className={wrapperClass} data-played-card-slot={posKey}>
                     <div className={flyClass} ref={(el) => { flyRefs.current[posKey] = card ? el : null; }}>
-                        {renderCard(card, { large: true })}
+                        <div
+                            key={key || 'empty'}
+                            className="trick-card-arrive"
+                            data-arrival-key={fliesIn ? key : undefined}
+                            data-arrival-player={fliesIn ? pName : undefined}
+                            ref={fliesIn ? (el) => { arrivalRefs.current[posKey] = el; } : undefined}
+                        >
+                            {renderCard(card, { large: true })}
+                        </div>
                     </div>
                 </div>
             );
@@ -958,6 +1017,7 @@ const TableLayout = ({
 
     return (
         <main
+            ref={tableRef}
             className="game-table"
             data-table-theme={tableThemeId}
             data-score-transfer-table={currentTableState.tableId || 'table'}

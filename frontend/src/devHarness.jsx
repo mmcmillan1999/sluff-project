@@ -16,6 +16,8 @@
 // ?turn=1 to make it your turn with a live hand — playCard really moves the
 // card onto the felt; ?playstyle=flick|fast presets the card play style
 // (implies ?turn=1) so both gestures can be exercised without a backend.
+// ?volley=1 plays the rest of the trick back at you (opponent fly-ins,
+// linger, magnet) and hands the lead back — see the flag below.
 // The turn call-up rides along with ?turn=1 and ?prompt=bid|frogup|trump:
 // sit still for 5s for the nudge, 15s for the urgent tier. Any click or key
 // restarts the clock, so leave the pointer alone while you wait — and note
@@ -96,7 +98,13 @@ if (params.get('playstyle')) {
 }
 // ?turn=1 (implied by ?playstyle) arms the hand: it becomes your turn and the
 // harness emitEvent really moves the played card onto the felt.
-const interactiveTurn = params.get('turn') === '1' || Boolean(params.get('playstyle'));
+// ?volley=1 (implies ?turn=1) — a whole trick plays out: you lead, each
+// opponent answers on the bot cadence (their card flies in from the seat),
+// the trick lingers and magnets to a pile, and the lead comes back to you.
+// Loops for as long as you keep leading. In ?mode=4 Elena sits out as dealer
+// so the across seat (Marcus) is one of the two that answer.
+const volley = params.get('volley') === '1';
+const interactiveTurn = params.get('turn') === '1' || Boolean(params.get('playstyle')) || volley;
 // ?role=defender — Brandi holds the bid and You defend.
 const selfIsBidder = params.get('role') !== 'defender';
 // ?insurance=unset — everyone still at the server's round defaults
@@ -176,6 +184,30 @@ if (interactiveTurn) {
         tableState.serverTime = Date.now();
     }
 }
+if (volley) {
+    // You lead into an empty felt so every opponent card is a fresh arrival.
+    tableState.currentTrickCards = [];
+    tableState.leadSuitCurrentTrick = null;
+    if (playerMode === 4) {
+        tableState.dealer = 103;
+        tableState.playerOrderActive = ['You', 'Brandi', 'Marcus'];
+        tableState.insurance.defenderOffers = Object.fromEntries(
+            tableState.playerOrderActive
+                .filter(name => name !== bidderName)
+                .map(name => [name, insuranceUnset ? -120 : -20]),
+        );
+    }
+}
+// Bot cadence from GameService (playDelay for a non-Courtney bot), so the
+// harness volley paces exactly like a live table.
+const VOLLEY_PLAY_DELAY_MS = 1200;
+const VOLLEY_LINGER_MS = 2200;
+// Cards no one else holds in the canned deal, cycled per responder.
+const VOLLEY_POOL = {
+    Brandi: ['KH', 'QS', '9D', 'JH', 'AS', '6C'],
+    Elena: ['9H', '10S', '8D', 'QH', 'KS', '7C'],
+    Marcus: ['6H', 'JS', '10D', '7H', '9S', '8C'],
+};
 
 // ?prompt=<state> — force each ActionControls popup (and the draw vote
 // modal) so their size, position, and key-cap buttons can be screenshotted.
@@ -314,6 +346,50 @@ const soundSettings = {
 // the turn then passes to Brandi, who never moves).
 const HarnessApp = () => {
     const [liveState, setLiveState] = React.useState(tableState);
+    const liveStateRef = React.useRef(tableState);
+    liveStateRef.current = liveState;
+    const volleyTimersRef = React.useRef([]);
+    const volleyPlayCountRef = React.useRef(0);
+    React.useEffect(() => () => volleyTimersRef.current.forEach(clearTimeout), []);
+
+    // Play the rest of the trick back on the bot cadence, linger it onto the
+    // first responder's pile, then hand the lead back. Each step is a plain
+    // state update, the way a server broadcast would land.
+    const runVolley = React.useCallback(() => {
+        const later = (ms, fn) => volleyTimersRef.current.push(setTimeout(fn, ms));
+        const responders = tableState.playerOrderActive.filter(name => name !== 'You');
+        const round = volleyPlayCountRef.current;
+        volleyPlayCountRef.current += 1;
+        responders.forEach((name, index) => {
+            const pool = VOLLEY_POOL[name] || VOLLEY_POOL.Brandi;
+            const card = pool[round % pool.length];
+            const completesTrick = index === responders.length - 1;
+            later(VOLLEY_PLAY_DELAY_MS * (index + 1), () => setLiveState(prev => {
+                const currentTrickCards = [...prev.currentTrickCards, { playerName: name, card }];
+                // The server completes the trick in the same broadcast as the
+                // last card, so the linger (and the magnet's hold) starts while
+                // that card is still flying in — exactly what a live table does.
+                return completesTrick
+                    ? {
+                        ...prev,
+                        currentTrickCards,
+                        state: 'TrickCompleteLinger',
+                        trickTurnPlayerName: null,
+                        lastCompletedTrick: { cards: currentTrickCards, winnerName: responders[0] },
+                    }
+                    : { ...prev, currentTrickCards, trickTurnPlayerName: responders[index + 1] };
+            }));
+        });
+        const trickDone = VOLLEY_PLAY_DELAY_MS * responders.length;
+        later(trickDone + VOLLEY_LINGER_MS, () => setLiveState(prev => ({
+            ...prev,
+            state: 'Playing Phase',
+            currentTrickCards: [],
+            leadSuitCurrentTrick: null,
+            trickTurnPlayerName: 'You',
+        })));
+    }, []);
+
     const emitEvent = React.useCallback((eventName, payload) => {
         console.log('[harness] emitEvent', eventName, payload);
         if (eventName === 'requestBidHint') {
@@ -331,16 +407,17 @@ const HarnessApp = () => {
             return;
         }
         if (!interactiveTurn || eventName !== 'playCard' || !payload?.card) return;
-        setLiveState(prev => {
-            if (!prev.hands.You.includes(payload.card)) return prev;
-            return {
-                ...prev,
-                hands: { ...prev.hands, You: prev.hands.You.filter(c => c !== payload.card) },
-                currentTrickCards: [...prev.currentTrickCards, { playerName: 'You', card: payload.card }],
-                trickTurnPlayerName: 'Brandi',
-            };
-        });
-    }, []);
+        // Acceptance is decided against the latest committed state (a ref,
+        // since updaters may run lazily) so the volley only follows a real play.
+        if (!liveStateRef.current.hands.You.includes(payload.card)) return;
+        setLiveState(prev => ({
+            ...prev,
+            hands: { ...prev.hands, You: prev.hands.You.filter(c => c !== payload.card) },
+            currentTrickCards: [...prev.currentTrickCards, { playerName: 'You', card: payload.card }],
+            trickTurnPlayerName: 'Brandi',
+        }));
+        if (volley) runVolley();
+    }, [runVolley]);
 
     return (
         <>

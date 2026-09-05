@@ -46,7 +46,7 @@ Debug overlay in game: `Shift+D`.
 - Positioning uses wrapper components (`docs/PLAYERSEAT_POSITIONING_SYSTEM.md`).
 - 4-space indent, single quotes, CommonJS in backend, ESM in frontend.
 - **Orientation policy (July 2026)**: mobile portrait is the gold-standard layout. Phone landscape is intentionally blocked by `OrientationScrim` (landscape + coarse pointer + ≤600px tall) and `manifest.json` locks installed PWAs to portrait — don't build phone-landscape layouts. Portrait tablets get the phone layout (wide-mode threshold aspect ≥ 1.25 in `PlayerSeatPositioner.js`); desktop/tablet-landscape geometry is vh-capped via `min()`/`max()` terms that are no-ops on portrait.
-- **Layout harness**: `npm run dev` then open `/harness.html?mode=3|4` — renders the real game table with canned state, no backend needed. Use it to screenshot layout changes at any viewport. Add `?turn=1` for a live hand (playCard really moves the card), `?playstyle=flick|fast` to preset the card play style (implies turn).
+- **Layout harness**: `npm run dev` then open `/harness.html?mode=3|4` — renders the real game table with canned state, no backend needed. Use it to screenshot layout changes at any viewport. Add `?turn=1` for a live hand (playCard really moves the card), `?playstyle=flick|fast` to preset the card play style (implies turn), `?volley=1` to have the opponents answer your lead on the bot cadence (their cards fly in from the seats, then linger + magnet, then the lead returns; add `&afk=0` so the AFK backstop doesn't play for you).
 
 ## Known quirks
 - **Player name is live game-state identity.** GameEngine keys `scores`, `hands`,
