@@ -99,7 +99,10 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '100kb' }));
 
 function botExhibitionConfigFromEnvironment() {
-    const enabled = process.env.BOT_EXHIBITION_ENABLED !== 'false';
+    // Off unless explicitly enabled (Sept 2026): bot-only games were running
+    // ten to one against human games and inflating the season board. Set
+    // BOT_EXHIBITION_ENABLED=true on the service to bring the exhibition back.
+    const enabled = process.env.BOT_EXHIBITION_ENABLED === 'true';
     // The comma-separated list wins; the legacy single-table variable is
     // still honored so an existing Render override keeps working.
     const rawTables = process.env.BOT_EXHIBITION_TABLE_IDS
@@ -256,6 +259,8 @@ async function initializeApplication() {
             intervalMs: exhibitionConfig.intervalMs,
         });
         botExhibition.start();
+    } else {
+        console.log('[EXHIBITION] Bot exhibition is off (BOT_EXHIBITION_ENABLED is not "true"); bots only play alongside humans.');
     }
 
     return { gameService, pool, recoveryMonitor, botExhibition, stopResumeSweep };

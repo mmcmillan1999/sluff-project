@@ -15,7 +15,9 @@
 // both tables at once.
 //
 // Env configuration (see server.js):
-//   BOT_EXHIBITION_ENABLED           default true ('false' disables)
+//   BOT_EXHIBITION_ENABLED           default OFF since Sept 2026 ('true' enables);
+//                                    bot-only games ran 10:1 against human games
+//                                    and inflated the season board
 //   BOT_EXHIBITION_TABLE_IDS         comma-separated, default 'table-10,table-20'
 //   BOT_EXHIBITION_TABLE_ID          legacy single-table form (still honored)
 //   BOT_EXHIBITION_INTERVAL_SECONDS  default 45, minimum 10

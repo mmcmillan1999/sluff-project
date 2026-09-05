@@ -17,6 +17,12 @@
 //                 NODE_ENV=production; rotates nothing, needs no --execute
 //   --set-node-env  with --execute: set NODE_ENV=production and redeploy
 //                 (dev CORS origins and HTML stack traces are gated on it)
+//   --set-env KEY=VALUE  with --execute: set one NON-SECRET variable on the
+//                 service and redeploy, behind the same mid-game check
+//                 (e.g. --set-env BOT_EXHIBITION_ENABLED=true brings the bot
+//                 exhibition back; it is off by default since Sept 2026). The value
+//                 sits on your command line and in shell history, so keys that
+//                 look like secrets are refused — rotate those instead.
 //
 // Needs RENDER_API_KEY in backend/.env (Render → Account Settings → API Keys).
 // The key is for this script only; never put it on Render itself.
@@ -60,6 +66,23 @@ const ROTATE_JWT = !args.has('--skip-jwt');
 const CHECK_ENV = args.has('--check-env');
 const LIST_DEPLOYS = args.has('--deploys');
 const SET_NODE_ENV = args.has('--set-node-env');
+const SET_ENV = parseSetEnv(process.argv.slice(2));
+
+// --set-env KEY=VALUE (or --set-env=KEY=VALUE). Plain operational toggles
+// only: anything that smells like a credential must go through rotation, so
+// a secret never lands in shell history by way of this flag.
+function parseSetEnv(argv) {
+    const index = argv.findIndex(arg => arg === '--set-env' || arg.startsWith('--set-env='));
+    if (index === -1) return null;
+    const raw = argv[index].startsWith('--set-env=') ? argv[index].slice('--set-env='.length) : argv[index + 1];
+    const match = /^([A-Z][A-Z0-9_]*)=(.+)$/.exec(raw || '');
+    if (!match) fail('--set-env expects KEY=VALUE with an UPPER_SNAKE key and a non-empty value.');
+    const [, key, value] = match;
+    if (/SECRET|KEY|TOKEN|PASSWORD|CONNECT_STRING|API/.test(key)) {
+        fail(`${key} looks like a credential; use the rotation flow, not --set-env.`);
+    }
+    return { key, value };
+}
 
 const log = (...parts) => console.log(...parts);
 const step = (title) => console.log(`\n== ${title}`);
@@ -317,6 +340,26 @@ async function main() {
         if (!healthy) fail(`Deploy ${deployId} did not come up healthy; check the Render dashboard.`);
         appendRotationLog(['NODE_ENV=production set on the service (dev CORS origins and verbose errors now off).', `Deploy ${deployId} live, /health green.`]);
         log('Done and recorded.');
+        return;
+    }
+    if (SET_ENV) {
+        // Operational toggle, not a credential: nothing goes in the rotation
+        // log. Record the why in CLAUDE.md or the commit that flips it.
+        const service = await findService();
+        const envVars = await readEnvVars(service.id);
+        const current = envVars.get(SET_ENV.key);
+        log(`Service ${service.name} (${service.id}): ${SET_ENV.key} is ${current === undefined ? 'ABSENT' : current === SET_ENV.value ? 'already set to this value' : 'set to a different value'}.`);
+        if (current === SET_ENV.value) { log('Nothing to do.'); return; }
+        if (!EXECUTE) { log(`Add --execute to set ${SET_ENV.key} and redeploy.`); return; }
+        const checkStatus = deployCheck();
+        if (checkStatus !== 0 && !FORCE) fail('A human is mid-game. Wait or re-run with --force.');
+        await api('PUT', `/services/${service.id}/env-vars/${SET_ENV.key}`, { value: SET_ENV.value });
+        log(`${SET_ENV.key} set`);
+        const deployId = await triggerDeploy(service.id);
+        const live = await waitForDeploy(service.id, deployId);
+        const healthy = live && await waitForHealth();
+        if (!healthy) fail(`Deploy ${deployId} did not come up healthy; check the Render dashboard.`);
+        log('Done.');
         return;
     }
     log(EXECUTE ? 'MODE: EXECUTE — this changes production.' : 'MODE: dry run — nothing will change. Add --execute to rotate.');

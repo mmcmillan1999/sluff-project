@@ -3,7 +3,7 @@
 Real-time multiplayer trick-taking card game (4-player Sluff) with bot opponents.
 
 ## Stack
-- **Bots**: live play uses heuristic brains (`backend/src/core/bot-brains/`, dispatched by `BotPlayer.js`; see the Bot brains memory). The LLM layer (`core/SuperBot.js` + `services/aiService.js`: OpenAI, Anthropic, Google, Groq behind one `MODELS` registry with a fallback chain) is dormant — nothing in live play calls it. It has per-request timeouts and a decision deadline so it can be re-wired behind a flag; verify with `node scripts/smoke-test-ai.js`.
+- **Bots**: live play uses heuristic brains (`backend/src/core/bot-brains/`, dispatched by `BotPlayer.js`; see the Bot brains memory). Bots only play alongside humans: the bot-only exhibition (`maintenance/botExhibition.js`) is **OFF by default since Sept 5 2026** because bot-only games ran ~10:1 against human games and inflated the season leaderboard; re-enable with `BOT_EXHIBITION_ENABLED=true` on Render (`node scripts/rotate-render-secrets.js --set-env BOT_EXHIBITION_ENABLED=true --execute`). The LLM layer (`core/SuperBot.js` + `services/aiService.js`: OpenAI, Anthropic, Google, Groq behind one `MODELS` registry with a fallback chain) is dormant — nothing in live play calls it. It has per-request timeouts and a decision deadline so it can be re-wired behind a flag; verify with `node scripts/smoke-test-ai.js`.
 
 ## Commands
 ```bash
