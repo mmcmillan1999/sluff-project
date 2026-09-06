@@ -54,6 +54,7 @@ import { buzz } from '../utils/haptics';
 import { useCosmetics } from '../utils/cosmetics';
 import { CARD_PLAY_STYLES, useCardPlayStyle, setCardPlayStyle } from '../utils/playStyle';
 import VoiceControls from './game/VoiceControls';
+import { TournamentVoiceSlot } from './tournament/TournamentVoiceDock';
 import TournamentClockPill from './tournament/TournamentClockPill';
 
 // Admin-only dev overlay (~900 lines): fetched on first Shift+D instead of
@@ -190,11 +191,16 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     const selfPlayerInTable = currentTableState ? currentTableState.players[playerId] : null;
     const isSpectator = selfPlayerInTable?.isSpectator;
     const selfPlayerName = selfPlayerInTable?.playerName;
+    // Tournament tables use the tournament-wide voice room, mounted once by
+    // App.js and adopted here through a slot, not a per-table room that
+    // would be rebuilt at every reseat.
+    const tournamentVoiceSlot = Boolean(selfPlayerInTable && socket && currentTableState?.tournament);
     const tableVoiceAvailable = Boolean(
         selfPlayerInTable
         && !isSpectator
         && socket
         && currentTableState?.tableId
+        && !currentTableState?.tournament
     );
     const gameState = currentTableState?.state;
     const gameHasSettled = gameState === 'Game Over' || gameState === 'DrawComplete';
@@ -1459,6 +1465,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 <TournamentClockPill
                     clock={currentTableState.tournamentClock}
                     playerName={currentTableState.players?.[playerId]?.playerName}
+                    stakesMultiplier={currentTableState.tournament?.pointMultiplier ?? null}
                 />
             )}
             {!roundPresentationControlsLocked && createPortal(
@@ -1853,7 +1860,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                         insuranceTouched={insuranceTouched}
                         onInsuranceInteract={() => setInsuranceTouched(true)}
                     />
-                    {(tableVoiceAvailable || !roundPresentationControlsLocked) && (
+                    {(tableVoiceAvailable || tournamentVoiceSlot || !roundPresentationControlsLocked) && (
                         <div className="button-panel">
                             {tableVoiceAvailable && (
                                 <VoiceControls
@@ -1862,6 +1869,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                                     tableId={currentTableState.tableId}
                                 />
                             )}
+                            {tournamentVoiceSlot && <TournamentVoiceSlot className="tournament-voice-slot" />}
                             {!roundPresentationControlsLocked && (
                                 <button className="chat-tab-button" onClick={toggleChatWindow}>
                                     <span>Chat</span>

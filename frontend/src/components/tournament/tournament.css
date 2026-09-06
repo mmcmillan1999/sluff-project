@@ -312,9 +312,68 @@
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.8rem;
   flex-wrap: wrap;
   margin-bottom: 0.8rem;
+}
+
+.tournament-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+/* The tournament-wide voice controls (TournamentVoiceDock) sit here on the
+   board and in the felt's footer panel; the host node moves between them. */
+.tournament-voice-slot:empty {
+  display: none;
+}
+
+.tournament-voice-slot.on-board .voice-controls {
+  font-size: 0.9rem;
+}
+
+.tournament-wait {
+  border-color: rgba(120, 200, 255, 0.45);
+  background: linear-gradient(135deg, #1a2330, #1f1f1f);
+}
+
+.tournament-wait-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.95rem;
+}
+
+.tournament-sheet-tables {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0 0 0.4rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  display: grid;
+  gap: 0.15rem;
+  font-size: 0.85rem;
+}
+
+.tournament-sheet-tables li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.tournament-sheet-tables li.mine {
+  color: #ffe9a8;
+}
+
+@media (max-width: 480px) {
+  .tournament-view { padding: 0.8rem 0.7rem calc(3rem + env(safe-area-inset-bottom)); }
+  .tournament-panel { padding: 0.7rem 0.75rem; }
+  .tournament-facts { grid-template-columns: 1fr 1fr; gap: 0.4rem 0.5rem; }
+  .tournament-standings { font-size: 0.85rem; }
+  .tournament-standings th, .tournament-standings td { padding: 0.35rem 0.3rem; }
+  .tournament-head h1 { font-size: 1.4rem; }
 }
 
 .tournament-head h1 {

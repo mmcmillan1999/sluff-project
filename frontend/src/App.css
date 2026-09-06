@@ -38,9 +38,15 @@ body.allow-scroll {
 }
 
 .app-content-container.app-view-lobby,
-.app-content-container.app-view-tournament,
 .app-content-container.app-view-gameTable {
   overflow: hidden;
+}
+
+/* The tournament board is a document: it scrolls (phones especially). */
+.app-content-container.app-view-tournament {
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* No header for auth pages */

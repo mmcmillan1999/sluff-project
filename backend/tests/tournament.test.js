@@ -10,6 +10,7 @@ const GameService = require('../src/services/GameService');
 const { TournamentDirector, TournamentError, TOURNAMENT_VENUE, REGISTRATION_TTL_MS } = require('../src/tournament/TournamentDirector');
 const { createMemoryStore } = require('../src/tournament/tournamentStore');
 const { tableSizes, seatRound } = require('../src/tournament/seating');
+const { scaleExchange } = require('../src/core/handlers/scoringHandler');
 const { prizeSplitCents, rankFinishers, allocatePrizeCents } = require('../src/tournament/prizes');
 const { registerBrainProfile } = require('../src/core/bot-brains');
 const BotPlayer = require('../src/core/BotPlayer');
@@ -328,7 +329,12 @@ async function runTournamentTests() {
             for (const id of engine.playerOrder.turnOrder) await gameService.placeBid('tn-x', id, 'Pass');
             assert.equal(engine.state, 'AllPassWidowReveal');
             await harness.timers.shift().cb();
-            if (redeal < 2) assert.equal(engine.state, 'Bidding Phase', `redeal ${redeal + 1} is dealt again`);
+            if (redeal < 2) {
+                assert.equal(engine.state, 'Dealing Pending', `redeal ${redeal + 1} goes back to the deck for the director to deal`);
+                assert.equal(engine.tournamentDealDueAt, null, 'the director sets the due time on its own clock');
+                engine.dealCards(engine.dealer);
+                assert.equal(engine.state, 'Bidding Phase');
+            }
         }
         assert.equal(engine.state, 'Awaiting Next Round Trigger', 'the third all-pass washes the round');
         assert.equal(engine.roundSummary.tournamentWash, true);
@@ -338,6 +344,57 @@ async function runTournamentTests() {
         pass('Three all-pass redeals wash the round with no chip movement.');
         assert.equal(gameService.destroyTournamentEngine('tn-x'), true);
         assert.equal(gameService.getEngineById('tn-x'), undefined);
+    }
+
+    // ----------------------------- the delayed deal and the all-pass redeal
+    {
+        const harness = buildHarness({ balances: { 901: 1000, 902: 1000 } });
+        const { director, gameService, clock } = harness;
+        const matt = { id: 11, username: 'Matt', is_vip: true };
+        const t = await director.create(matt, { buyInTokens: 1, startingStack: 120, maxSeats: 3, startRule: 'creator', escalationPercent: 0 });
+        await director.register(t.id, matt);
+        for (let i = 0; i < 2; i += 1) await director.findPlayer(t.id, 11);
+        await director.start(t.id, 11);
+        const live = director.get(t.id);
+        const [tableId] = [...live.tables.keys()];
+        const engine = gameService.getEngineById(tableId);
+        assert.equal(engine.state, 'Dealing Pending');
+        assert.equal(director.publicState(live).tables[0].phase, 'dealing');
+        // The scheduled deal is lost (say, with the process): the heartbeat
+        // deals once the due time passes.
+        harness.queue.length = 0;
+        await director.tick();
+        assert.equal(engine.state, 'Dealing Pending', 'not due yet');
+        clock.now += 2_500;
+        await director.tick();
+        assert.equal(engine.state, 'Bidding Phase', 'the heartbeat dealt the round when it fell due');
+        assert.equal(director.publicState(live).tables[0].phase, 'bidding');
+        // An all-pass: the table goes back to Dealing Pending and the
+        // director deals again after the deal delay, so the redeal animates.
+        engine.biddingTurnPlayerId = engine.playerOrder.turnOrder[0];
+        for (const id of engine.playerOrder.turnOrder) await gameService.placeBid(tableId, id, 'Pass');
+        assert.equal(engine.state, 'AllPassWidowReveal');
+        await harness.timers.shift().cb();
+        assert.equal(engine.state, 'Dealing Pending');
+        assert.equal(engine.tournamentDealDueAt, null);
+        await director.tick();
+        assert.equal(engine.tournamentDealDueAt, clock.now + 2_500, 'the heartbeat sets the due time on the director clock');
+        assert.equal(engine.state, 'Dealing Pending');
+        clock.now += 2_499;
+        await director.tick();
+        assert.equal(engine.state, 'Dealing Pending', 'a millisecond early is still pending');
+        clock.now += 1;
+        await director.tick();
+        assert.equal(engine.state, 'Bidding Phase', 'the redeal lands when due');
+        assert.equal(engine.tournamentAllPassRedeals, 1);
+        pass('Rounds open on screen and deal after the delay; an all-pass redeal waits for the same delay.');
+
+        // Escalation scales the exchange and keeps the round balanced.
+        assert.deepEqual(scaleExchange({ Ada: -30, Bo: 15, Cy: 15 }, 'Ada', 1.21), { Bo: 18, Cy: 18, Ada: -36 });
+        assert.deepEqual(scaleExchange({ Ada: 60, Bo: -20, Cy: -20, ScoreAbsorber: -20 }, 'Ada', 1.1), { Bo: -22, Cy: -22, ScoreAbsorber: -22, Ada: 66 });
+        assert.equal(scaleExchange(null, 'Ada', 2), null);
+        pass('Escalation multiplies every side of the exchange and the bidder balances it to the point.');
+        await director.voidTournament(t.id, 'done');
     }
 
     // --------------------------------- the shared widow seat at five players
@@ -387,8 +444,14 @@ async function runTournamentTests() {
         // A 60 stack keeps this bot-only run short; at 120 with no drain a
         // nine-seat tournament can run past a hundred rounds (see the
         // whiteboard's simulation), which is a scheduling fact, not a bug.
-        const t = await director.create(matt, { name: '  Saturday Sluff  ', buyInTokens: 1, startingStack: 60, maxSeats: 9, venue: 'fort-creek', startRule: 'creator' });
+        await assert.rejects(
+            () => director.create(matt, { buyInTokens: 1, startingStack: 60, maxSeats: 9, escalationPercent: 7 }),
+            err => err.code === 'BAD_ESCALATION',
+        );
+        const t = await director.create(matt, { name: '  Saturday Sluff  ', buyInTokens: 1, startingStack: 60, maxSeats: 9, venue: 'fort-creek', startRule: 'creator', escalationPercent: 10 });
         assert.equal(t.name, 'Saturday Sluff');
+        assert.equal(t.escalationPercent, 10);
+        assert.equal(t.stakesMultiplier, 1);
         for (const human of [matt, { id: 12, username: 'Broke Bob' }, { id: 13, username: 'Cara' }, { id: 14, username: 'Dee' }]) {
             await director.register(t.id, human);
         }
@@ -405,16 +468,24 @@ async function runTournamentTests() {
         for (const table of live.tables.values()) {
             const engine = gameService.getEngineById(table.tableId);
             assert.ok(engine, `${table.tableId} exists`);
-            assert.equal(engine.state, 'Bidding Phase', 'every table is dealt the moment the round opens');
+            assert.equal(engine.state, 'Dealing Pending', 'the round opens on screen before the cards fly');
+            assert.ok(Number.isFinite(engine.tournamentDealDueAt), 'the deal is due after the deal delay');
+            assert.equal(engine.tournament.pointMultiplier, 1, 'round one is played at even stakes');
+        }
+        await harness.drainQueue();
+        for (const table of live.tables.values()) {
+            const engine = gameService.getEngineById(table.tableId);
+            assert.equal(engine.state, 'Bidding Phase', 'the delayed deal lands');
             assert.equal(engine.playerMode, 3);
             assert.equal(engine.gameId, null, 'no game_history row for a tournament round');
             assert.equal(engine.tournament.roundNumber, 1);
             for (const seat of table.seats) assert.equal(engine.scores[live.entries.get(seat).username], 60);
         }
         assert.equal(gameService.hasActiveOrPendingGame(), true, 'the deploy check sees a running tournament');
-        pass('Starting seats the field, opens every table and deals at once.');
+        pass('Starting seats the field, opens every table, and deals after the deal delay.');
 
         let rounds = 0;
+        let singleTableId = null;
         while (live.status === 'running' && rounds < 200) {
             rounds += 1;
             const alive = live.entries.size;
@@ -429,6 +500,16 @@ async function runTournamentTests() {
             const playing = [...live.entries.values()].filter(e => e.status === 'playing').length;
             const sizes = [...live.tables.values()].map(table => table.seats.length + table.spectatorUserIds.length);
             assert.equal(sizes.reduce((a, b) => a + b, 0), playing, 'everyone alive has a seat');
+            const stakes = director.publicState(live).stakesMultiplier;
+            assert.equal(stakes, Number((1.1 ** (live.round - 1)).toFixed(2)), 'stakes grow ten percent a round');
+            for (const table of live.tables.values()) {
+                assert.equal(gameService.getEngineById(table.tableId).tournament.pointMultiplier, stakes);
+            }
+            if (live.tables.size === 1) {
+                const [tableId] = live.tables.keys();
+                if (singleTableId) assert.equal(tableId, singleTableId, 'one table left: the room stays seated between rounds');
+                singleTableId = tableId;
+            }
         }
         assert.equal(live.status, 'complete', `the tournament finished (rounds played: ${rounds})`);
         assert.ok(live.round >= 2, 'at least two rounds were needed');

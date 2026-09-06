@@ -1,10 +1,12 @@
 // The shot clock on the felt: your bank for the round, and the red "on the
 // clock" state when the room is waiting on this table.
 import React from 'react';
+import { stakesLabel } from './tournamentFormat';
 import './tournament.css';
 
-const TournamentClockPill = ({ clock, playerName }) => {
+const TournamentClockPill = ({ clock, playerName, stakesMultiplier = null }) => {
     if (!clock) return null;
+    const stakes = stakesLabel(stakesMultiplier);
     const bank = clock.banks?.[playerName];
     const onTheClock = clock.onTheClock === true;
     return (
@@ -20,6 +22,7 @@ const TournamentClockPill = ({ clock, playerName }) => {
             {Number.isFinite(bank) && (
                 <span className="tournament-clock-bank">Bank {bank} s</span>
             )}
+            {stakes && <span className="tournament-clock-bank">{stakes}</span>}
         </div>
     );
 };

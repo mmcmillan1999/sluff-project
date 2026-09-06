@@ -5,7 +5,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useModalFocus } from '../../hooks/useModalFocus';
 import {
-    MAX_BUY_IN_TOKENS, MAX_SEATS, MIN_SEATS, STARTING_STACKS, TOURNAMENT_VENUE, VENUE_OPTIONS,
+    ESCALATION_OPTIONS, MAX_BUY_IN_TOKENS, MAX_SEATS, MIN_SEATS, STARTING_STACKS, TOURNAMENT_VENUE, VENUE_OPTIONS,
 } from './tournamentFormat';
 import './tournament.css';
 
@@ -22,6 +22,7 @@ export const validateSettings = (form) => {
     if (!STARTING_STACKS.includes(Number(form.startingStack))) return 'Pick a starting stack.';
     const seats = Number(form.maxSeats);
     if (!Number.isInteger(seats) || seats < MIN_SEATS || seats > MAX_SEATS) return `Seats must be between ${MIN_SEATS} and ${MAX_SEATS}.`;
+    if (!ESCALATION_OPTIONS.some(option => option.value === Number(form.escalationPercent))) return 'Pick an escalation.';
     if (form.startRule === 'at_time') {
         const when = new Date(form.startsAt).getTime();
         if (!Number.isFinite(when) || when < Date.now() + MIN_LEAD_MINUTES * 60_000) return `A timed start must be at least ${MIN_LEAD_MINUTES} minutes away.`;
@@ -37,6 +38,7 @@ const TournamentCreateSheet = ({ show, defaultName = '', onClose, onCreate, busy
         startingStack: 120,
         maxSeats: '9',
         venue: TOURNAMENT_VENUE,
+        escalationPercent: 10,
         startRule: 'creator',
         startsAt: localDateTimeValue(new Date(Date.now() + 15 * 60_000)),
     }), [defaultName]);
@@ -65,6 +67,7 @@ const TournamentCreateSheet = ({ show, defaultName = '', onClose, onCreate, busy
             startingStack: Number(form.startingStack),
             maxSeats: Number(form.maxSeats),
             venue: form.venue,
+            escalationPercent: Number(form.escalationPercent),
             startRule: form.startRule,
             startsAt: form.startRule === 'at_time' ? new Date(form.startsAt).toISOString() : null,
         });
@@ -115,6 +118,14 @@ const TournamentCreateSheet = ({ show, defaultName = '', onClose, onCreate, busy
                                     <span className="tournament-venue-swatch" aria-hidden="true" />
                                     <span>{venue.name}</span>
                                 </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="tournament-field">
+                        <span>Escalation · stakes grow every round</span>
+                        <div className="tournament-segments" role="group" aria-label="Escalation">
+                            {ESCALATION_OPTIONS.map(option => (
+                                <button key={option.value} type="button" className="tournament-segment" aria-pressed={Number(form.escalationPercent) === option.value} onClick={() => set('escalationPercent', option.value)}>{option.label}</button>
                             ))}
                         </div>
                     </div>

@@ -18,10 +18,16 @@
 // widow share; bust at zero; the final three play to the first bust; prizes
 // 50 / 30 / 20 (65 / 35 under six); no ante, no hand cap.
 
-const { seatRound } = require('./seating');
+const { seatRound, tableSizes } = require('./seating');
 const { rankFinishers, allocatePrizeCents } = require('./prizes');
 const { ROUND_PRESENTATION_LOCK_MS, THEMES } = require('../core/constants');
 const tournamentClock = require('../core/tournamentClock');
+
+const TRICKS_PER_ROUND = 11;
+const BIDDING_STATES = new Set([
+    'Bidding Phase', 'Awaiting Frog Upgrade Decision', 'Frog Widow Exchange',
+    'Trump Selection', 'Bid Announcement', 'AllPassWidowReveal',
+]);
 const { serializeEngineForResume, restoreEngineFromResume } = require('../serialization/gameResume');
 
 const STARTING_STACKS = Object.freeze([60, 90, 120, 180, 240]);
@@ -31,7 +37,7 @@ const MIN_SEATS = 3;
 const MAX_SEATS = 15;
 const MIN_START_LEAD_MS = 10 * 60 * 1000;
 const REGISTRATION_TTL_MS = 24 * 60 * 60 * 1000;
-const DEFAULT_BOARD_DELAY_MS = 20_000;
+const DEFAULT_BOARD_DELAY_MS = tournamentClock.TOURNAMENT_CLOCK.boardDelayMs;
 // After a restart, a running tournament whose snapshot never arrives is
 // voided and refunded once this much time has passed (Render boots the
 // replacement before the old instance's SIGTERM, so snapshots land late).
@@ -39,6 +45,9 @@ const RESUME_GRACE_MS = 10 * 60 * 1000;
 const SNAPSHOT_VERSION = 1;
 const TOURNAMENT_VENUE = 'tournament-stage';
 const MAX_NAME_LENGTH = 60;
+// Escalation: the percentage by which every round's stakes grow.
+const ESCALATION_PERCENTS = Object.freeze([0, 5, 10, 20]);
+const DEFAULT_ESCALATION_PERCENT = 10;
 
 class TournamentError extends Error {
     constructor(code, message) {
@@ -64,6 +73,8 @@ class TournamentDirector {
         random = Math.random,
         presentationHoldMs = ROUND_PRESENTATION_LOCK_MS,
         boardDelayMs = DEFAULT_BOARD_DELAY_MS,
+        dealDelayMs = tournamentClock.TOURNAMENT_CLOCK.dealDelayMs,
+        singleTableDelayMs = tournamentClock.TOURNAMENT_CLOCK.singleTableDelayMs,
         allowNegativeHumans = true,
         venues = [...THEMES.map(theme => theme.id), TOURNAMENT_VENUE],
         log = console,
@@ -79,6 +90,8 @@ class TournamentDirector {
         this.random = random;
         this.presentationHoldMs = presentationHoldMs;
         this.boardDelayMs = boardDelayMs;
+        this.dealDelayMs = dealDelayMs;
+        this.singleTableDelayMs = singleTableDelayMs;
         this.allowNegativeHumans = allowNegativeHumans;
         this.venues = venues;
         this.log = log;
@@ -156,7 +169,8 @@ class TournamentDirector {
             }))
             .sort((a, b) => (a.place ?? 0) - (b.place ?? 0) || (b.stack - a.stack) || a.username.localeCompare(b.username));
         const nameOf = id => t.entries.get(id)?.username ?? null;
-        const tables = [...t.tables.values()].map(table => ({
+        const tableRows = this._tableRows(t);
+        const tables = tableRows.map(table => ({
             tableId: table.tableId,
             tableIndex: table.index,
             playerMode: table.playerMode,
@@ -164,10 +178,13 @@ class TournamentDirector {
             dealer: nameOf(table.dealerUserId),
             sitOuts: table.sitOutUserIds.map(nameOf),
             finished: Boolean(table.result),
+            // How far along the table is, so the board and the standings
+            // sheet can show the room what it is waiting on.
+            ...this._tableProgress(table),
         }));
         const viewer = viewerUserId == null ? null : (() => {
             const entry = t.entries.get(Number(viewerUserId));
-            const table = [...t.tables.values()].find(candidate => (
+            const table = tableRows.find(candidate => (
                 candidate.seats.includes(Number(viewerUserId)) || candidate.spectatorUserIds.includes(Number(viewerUserId))
             ));
             return {
@@ -188,6 +205,8 @@ class TournamentDirector {
             startsAt: t.startsAt,
             status: t.status,
             round: t.round,
+            escalationPercent: t.escalationPercent || 0,
+            stakesMultiplier: this._stakesMultiplier(t, t.round),
             creatorUserId: t.creatorUserId,
             creatorName: t.creatorName,
             seatsTaken: this._seatCount(t),
@@ -236,17 +255,24 @@ class TournamentDirector {
             throw new TournamentError('BAD_VENUE', 'That venue is not available.');
         }
         const name = cleanName(settings.name) || `${creator.username}'s Tournament`;
+        const escalationPercent = settings.escalationPercent === undefined
+            ? DEFAULT_ESCALATION_PERCENT
+            : Number(settings.escalationPercent);
+        if (!ESCALATION_PERCENTS.includes(escalationPercent)) {
+            throw new TournamentError('BAD_ESCALATION', `Escalation must be one of ${ESCALATION_PERCENTS.join(', ')} percent.`);
+        }
 
         const { tournamentId, seasonId } = await this.store.createTournament({
             creatorUserId: creator.id, name, venue, buyInCents, startingStack, maxSeats, startRule,
             startsAt: startsAt ? new Date(startsAt) : null,
+            escalationPercent,
         });
         const t = this._newTournament({
             id: tournamentId, seasonId, creatorUserId: creator.id, creatorName: creator.username,
-            name, venue, buyInCents, startingStack, maxSeats, startRule, startsAt, createdAt: this.now(),
+            name, venue, buyInCents, startingStack, maxSeats, startRule, startsAt, escalationPercent, createdAt: this.now(),
         });
         this.tournaments.set(t.id, t);
-        this.log.log(`[TOURNAMENT] #${t.id} "${t.name}" opened by ${creator.username}: ${t.buyInCents / 100} tokens, stack ${t.startingStack}, ${t.maxSeats} seats, ${t.startRule}.`);
+        this.log.log(`[TOURNAMENT] #${t.id} "${t.name}" opened by ${creator.username}: ${t.buyInCents / 100} tokens, stack ${t.startingStack}, ${t.maxSeats} seats, ${t.startRule}, escalation ${t.escalationPercent}%.`);
         this._emit(t);
         return this.publicState(t, creator.id);
     }
@@ -372,6 +398,16 @@ class TournamentDirector {
                         t.pendingTimer = null;
                     }
                     await this._finishRound(t);
+                    continue;
+                }
+                await this._dealDueTables(t, now);
+                // Every table's trick count rides the tournament state, so
+                // the board and the standings sheet can show how far along
+                // the room is. Broadcast only when something moved.
+                const signature = this._progressSignature(t);
+                if (signature !== t.lastProgressSignature) {
+                    t.lastProgressSignature = signature;
+                    this._emit(t);
                 }
                 continue;
             }
@@ -434,6 +470,7 @@ class TournamentDirector {
                 name: tournament.name, venue: tournament.venue, buyInCents: tournament.buyInCents,
                 startingStack: tournament.startingStack, maxSeats: tournament.maxSeats,
                 startRule: tournament.startRule, startsAt: tournament.startsAt, createdAt: tournament.createdAt,
+                escalationPercent: tournament.escalationPercent || 0,
             });
             for (const entry of entries) {
                 if (entry.isBot && !t.lease.acquire(entry.userId)) continue;
@@ -490,6 +527,7 @@ class TournamentDirector {
                 name: t.name, venue: t.venue, buyInCents: t.buyInCents, startingStack: t.startingStack,
                 maxSeats: t.maxSeats, startRule: t.startRule, startsAt: t.startsAt, createdAt: t.createdAt,
                 startedAt: t.startedAt, round: t.round, roundCompleteAt: t.roundCompleteAt || null,
+                escalationPercent: t.escalationPercent || 0,
             },
             entries: [...t.entries.values()].map(entry => ({
                 userId: entry.userId, username: entry.username, isBot: entry.isBot, status: entry.status,
@@ -542,6 +580,7 @@ class TournamentDirector {
             id: Number(meta.id), seasonId: meta.seasonId, creatorUserId: meta.creatorUserId, creatorName: meta.creatorName,
             name: meta.name, venue: meta.venue, buyInCents: meta.buyInCents, startingStack: meta.startingStack,
             maxSeats: meta.maxSeats, startRule: meta.startRule, startsAt: meta.startsAt, createdAt: meta.createdAt,
+            escalationPercent: meta.escalationPercent || 0,
         });
         t.status = 'running';
         t.startedAt = meta.startedAt;
@@ -584,10 +623,11 @@ class TournamentDirector {
                     table.result = this._washResult(t, table);
                     this.log.log(`[RESUME] Tournament #${t.id} table ${table.index + 1} could not be restored; its round is a wash.`);
                 } else {
-                    // The all-pass reveal is normalized to a fresh deal that
-                    // nobody has made yet; tournament tables deal themselves.
+                    // A deal that was pending (a round just opened, or an
+                    // all-pass redeal) is dealt after the usual delay so the
+                    // returning clients see it fly.
                     if (engine.state === 'Dealing Pending') {
-                        await this.gameService._performAction(table.tableId, current => current.dealCards(current.dealer));
+                        engine.tournamentDealDueAt = this.now() + this.dealDelayMs;
                     }
                     this.gameService._rebindSocketsForEngine?.(engine);
                     this.gameService.emitGameState(table.tableId);
@@ -639,21 +679,46 @@ class TournamentDirector {
             alive.map(entry => ({ userId: entry.userId, stack: entry.stack, sitOuts: entry.sitOuts, deals: entry.deals })),
             { random: this.random },
         );
+        // One table left and it is still standing: the room stays seated and
+        // the next round opens in place, no trip to the board.
+        const reuseTableId = plan.length === 1 && t.reuseTableId && this.gameService.getEngineById(t.reuseTableId)
+            ? t.reuseTableId
+            : null;
+        if (t.reuseTableId && !reuseTableId) this.gameService.destroyTournamentEngine(t.reuseTableId);
+        t.reuseTableId = null;
+        t.heldTable = null;
         t.tables = new Map();
         for (const table of plan) {
-            const tableId = `tn-${t.id}-r${t.round}-t${table.index + 1}`;
+            const tableId = reuseTableId || `tn-${t.id}-r${t.round}-t${table.index + 1}`;
             const seats = table.seats.map(id => t.entries.get(id));
-            const spectators = table.spectatorUserIds.map(id => t.entries.get(id));
+            // Anyone still at a reused table but out of the tournament keeps
+            // a spectator's seat so they can watch the rest.
+            const watchers = reuseTableId
+                ? [...t.entries.values()].filter(entry => entry.status === 'busted'
+                    && !table.seats.includes(entry.userId)
+                    && !table.spectatorUserIds.includes(entry.userId)
+                    && Boolean(this._socket(entry.socketId)))
+                : [];
+            const spectators = [...table.spectatorUserIds.map(id => t.entries.get(id)), ...watchers];
             const stacks = {};
             for (const entry of [...seats, ...spectators]) stacks[entry.userId] = entry.stack;
-            const engine = this.gameService.createTournamentEngine({
-                tableId,
-                venue: t.venue,
-                tableName: `${t.name} · Table ${table.index + 1}`,
-                leaseController: t.lease,
-            });
+            const engine = reuseTableId
+                ? this.gameService.getEngineById(tableId)
+                : this.gameService.createTournamentEngine({
+                    tableId,
+                    venue: t.venue,
+                    tableName: `${t.name} · Table ${table.index + 1}`,
+                    leaseController: t.lease,
+                });
             engine.startTournamentRound({
-                tournament: { tournamentId: t.id, name: t.name, roundNumber: t.round, tableIndex: table.index },
+                tournament: {
+                    tournamentId: t.id,
+                    name: t.name,
+                    roundNumber: t.round,
+                    tableIndex: table.index,
+                    escalationPercent: t.escalationPercent || 0,
+                    pointMultiplier: this._stakesMultiplier(t, t.round),
+                },
                 seats: seats.map(entry => this._seatInfo(entry)),
                 spectators: spectators.map(entry => this._seatInfo(entry)),
                 stacks,
@@ -664,13 +729,106 @@ class TournamentDirector {
             for (const id of table.sitOutUserIds) t.entries.get(id).sitOuts += 1;
             for (const entry of [...seats, ...spectators]) this._joinRoom(entry.socketId, t, tableId);
             t.tables.set(tableId, { ...table, tableId, result: null });
+            // The table opens on every screen first; the cards fly after the
+            // deal delay, so the clients see Dealing Pending and animate.
+            engine.tournamentDealDueAt = this.now() + this.dealDelayMs;
+            this.gameService.emitGameState(tableId);
+            this._scheduleDeal(t, tableId);
         }
+        t.lastProgressSignature = null;
         await this.store.updateStatus(t.id, 'running', { currentRound: t.round });
         this._emit(t);
-        // Nobody taps the deck in a tournament: every table deals at once.
+    }
+
+    _scheduleDeal(t, tableId) {
+        this.schedule(() => this._dealIfPending(t, tableId).catch(error => {
+            this.log.error(`[TOURNAMENT] #${t.id} deal failed at ${tableId}:`, error);
+        }), this.dealDelayMs);
+    }
+
+    async _dealIfPending(t, tableId) {
+        if (t.status !== 'running' || !t.tables.has(tableId)) return false;
+        const engine = this.gameService.getEngineById(tableId);
+        if (!engine || engine.state !== 'Dealing Pending') return false;
+        engine.tournamentDealDueAt = null;
+        await this.gameService._performAction(tableId, current => current.dealCards(current.dealer));
+        return true;
+    }
+
+    // Deals that fall due on the heartbeat: the all-pass redeal, and any
+    // opening deal whose scheduled step was lost with the process.
+    async _dealDueTables(t, now) {
         for (const tableId of t.tables.keys()) {
-            await this.gameService._performAction(tableId, engine => engine.dealCards(engine.dealer));
+            const engine = this.gameService.getEngineById(tableId);
+            if (!engine || engine.state !== 'Dealing Pending') continue;
+            if (!Number.isFinite(engine.tournamentDealDueAt)) {
+                engine.tournamentDealDueAt = now + this.dealDelayMs;
+                continue;
+            }
+            if (now >= engine.tournamentDealDueAt) await this._dealIfPending(t, tableId);
         }
+    }
+
+    _stakesMultiplier(t, round) {
+        const percent = Number(t.escalationPercent) || 0;
+        if (percent <= 0 || !round || round <= 1) return 1;
+        return Number(((1 + percent / 100) ** (round - 1)).toFixed(2));
+    }
+
+    // Between rounds a lone table that is being kept still shows on the
+    // board (finished), so nobody is bounced off the felt.
+    _tableRows(t) {
+        if (t.tables.size > 0) return [...t.tables.values()];
+        return t.heldTable ? [t.heldTable] : [];
+    }
+
+    _tableProgress(table) {
+        const done = { phase: 'done', trick: TRICKS_PER_ROUND, tricksTotal: TRICKS_PER_ROUND };
+        if (table.result) return done;
+        const engine = this.gameService.getEngineById(table.tableId);
+        if (!engine) return done;
+        const state = engine.state;
+        let phase = 'playing';
+        if (state === 'Dealing Pending') phase = 'dealing';
+        else if (BIDDING_STATES.has(state)) phase = 'bidding';
+        else if (state === 'Awaiting Next Round Trigger') phase = 'done';
+        return { phase, trick: Number(engine.tricksPlayedCount) || 0, tricksTotal: TRICKS_PER_ROUND };
+    }
+
+    _progressSignature(t) {
+        return this._tableRows(t)
+            .map(table => {
+                const progress = this._tableProgress(table);
+                return `${table.tableId}:${progress.phase}:${progress.trick}`;
+            })
+            .join('|');
+    }
+
+    // The tournament-wide voice room, shaped like a table for the signaling
+    // relay (events/socketActionGuard.js): every human in the tournament is
+    // a member for the whole event, so the mesh survives every reseat.
+    voiceRoomView(tournamentId) {
+        const t = this.get(tournamentId);
+        if (!t || !['registering', 'running'].includes(t.status)) return null;
+        const players = {};
+        for (const entry of t.entries.values()) {
+            if (entry.isBot || ['withdrawn', 'refunded'].includes(entry.status)) continue;
+            players[entry.userId] = {
+                userId: entry.userId,
+                playerName: entry.username,
+                socketId: entry.socketId || null,
+                isSpectator: false,
+                isBot: false,
+                disconnected: !this._socket(entry.socketId),
+            };
+        }
+        const director = this;
+        return {
+            tableId: this._roomName(t),
+            tournamentVoiceRoom: true,
+            players,
+            reconnectPlayer(userId, socket) { return director.bindSocket(userId, socket); },
+        };
     }
 
     // From GameService, when a tournament table's round has been scored.
@@ -770,10 +928,22 @@ class TournamentDirector {
                 pointChanges: changes,
                 allPassRedeals: table.result?.allPassRedeals || 0,
             });
-            this.gameService.destroyTournamentEngine(table.tableId);
         }
+        const finishedTables = [...t.tables.values()];
         t.tables = new Map();
         const busted = this._applyBusts(t);
+        const alive = this._alive(t);
+        // One table, still a tournament: keep the room seated and reopen the
+        // next round in place instead of sending everyone to the board.
+        const keepSeated = finishedTables.length === 1
+            && alive.length >= MIN_SEATS
+            && tableSizes(alive.length).length === 1
+            && Boolean(this.gameService.getEngineById(finishedTables[0].tableId));
+        if (!keepSeated) {
+            for (const table of finishedTables) this.gameService.destroyTournamentEngine(table.tableId);
+        }
+        t.reuseTableId = keepSeated ? finishedTables[0].tableId : null;
+        t.heldTable = keepSeated ? finishedTables[0] : null;
         if (busted.length > 0) {
             this.log.log(`[TOURNAMENT] #${t.id} round ${t.round}: out — ${busted.map(entry => entry.username).join(', ')}.`);
         }
@@ -788,12 +958,12 @@ class TournamentDirector {
                     status: entry.status, bustedRound: entry.bustedRound,
                 })),
         });
-        if (this._alive(t).length < MIN_SEATS) {
+        if (alive.length < MIN_SEATS) {
             await this._finish(t);
             return;
         }
         this._emit(t);
-        this._schedule(t, () => this._startRound(t), this.boardDelayMs);
+        this._schedule(t, () => this._startRound(t), keepSeated ? this.singleTableDelayMs : this.boardDelayMs);
     }
 
     _applyBusts(t) {
@@ -846,6 +1016,7 @@ class TournamentDirector {
             t.pendingTimer = null;
         }
         for (const table of t.tables.values()) this.gameService.destroyTournamentEngine(table.tableId);
+        this._dropHeldTable(t);
         t.tables = new Map();
         const refunds = [...t.entries.values()]
             .filter(entry => !['withdrawn', 'refunded'].includes(entry.status))
@@ -871,6 +1042,10 @@ class TournamentDirector {
             closeReason: null,
             round: 0,
             roundCompleteAt: null,
+            reuseTableId: null,
+            heldTable: null,
+            lastProgressSignature: null,
+            escalationPercent: Number(fields.escalationPercent) || 0,
             entries: new Map(),
             tables: new Map(),
             lease: this.gameService.createBotSeatLease(`tn-${fields.id}`),
@@ -942,6 +1117,12 @@ class TournamentDirector {
         return `tournament-${t.id}`;
     }
 
+    _dropHeldTable(t) {
+        if (t.reuseTableId) this.gameService.destroyTournamentEngine(t.reuseTableId);
+        t.reuseTableId = null;
+        t.heldTable = null;
+    }
+
     _socket(socketId) {
         if (!socketId) return null;
         return this.io?.sockets?.sockets?.get?.(socketId) || null;
@@ -978,4 +1159,6 @@ module.exports = {
     MIN_START_LEAD_MS,
     RESUME_GRACE_MS,
     SNAPSHOT_VERSION,
+    ESCALATION_PERCENTS,
+    DEFAULT_ESCALATION_PERCENT,
 };

@@ -391,6 +391,9 @@ const createDbTablesOnce = async (pool) => {
             );
         `);
         await pool.query("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS tournament_id INTEGER REFERENCES tournaments(tournament_id) ON DELETE SET NULL");
+        // Escalation (first live feedback, Sept 6 2026): the creator's
+        // percentage by which every round's stakes grow.
+        await pool.query("ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS escalation_percent INTEGER NOT NULL DEFAULT 0 CHECK (escalation_percent BETWEEN 0 AND 50)");
         // The first production schema called the event-time column `timestamp`.
         // When transaction_time was later added with a default, PostgreSQL gave
         // every pre-existing row the migration timestamp. Restore the original

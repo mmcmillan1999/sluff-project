@@ -2521,7 +2521,9 @@
                         : Math.max(500, presentationReadyAt - Date.now() + (isCourtney ? 1500 : 750)))
                     : legacyRoundEndDelay;
         
-                if (engine.state === 'Dealing Pending' && engine.dealer == botUserId) {
+                if (engine.state === 'Dealing Pending' && engine.dealer == botUserId && !engine.tournament) {
+                    // Tournament tables are dealt by the director on its own
+                    // clock, so every screen sees the deal.
                     scheduleTurnAction(this.dealCards, standardDelay, botUserId);
                 } else if (engine.state === 'Awaiting Next Round Trigger' && !engine.tournament) {
                     // Check if this bot should trigger next round

@@ -1,4 +1,5 @@
 // frontend/src/App.js
+import { createPortal } from 'react-dom';
 import React, { useState, useEffect, useCallback, Suspense } from "react";
 import io from "socket.io-client";
 import { getServerUrl, submitFeedback, updateTutorialStatus } from "./services/api.js";
@@ -8,6 +9,8 @@ import GameTableView from "./components/GameTableView.js";
 import TournamentView from './components/tournament/TournamentView';
 import TournamentPopup from './components/tournament/TournamentPopup';
 import TournamentCreateSheet from './components/tournament/TournamentCreateSheet';
+import VoiceControls from './components/game/VoiceControls';
+import { tournamentVoiceHost } from './components/tournament/TournamentVoiceDock';
 import LeaderboardView from "./components/LeaderboardView.js";
 import TokenLedgerView from "./components/TokenLedgerView.js";
 import BulletinView from "./components/BulletinView.js";
@@ -847,6 +850,20 @@ function App() {
                     onClose={() => { setShowTournamentCreate(false); setTournamentError(''); pendingTournamentCreateRef.current = false; }}
                     onCreate={handleTournamentCreate}
                 />
+                {/* Tournament-wide voice: one room for the whole event, built
+                    once. It renders into a host node the felt and the board
+                    adopt in turn (TournamentVoiceDock), so it survives every
+                    reseat and the board between rounds. */}
+                {myTournament && myTournament.status === 'running' && tournamentVoiceHost()
+                    && (myTournament.entries || []).some(entry => entry.userId === user.id && !['withdrawn', 'refunded'].includes(entry.status))
+                    && createPortal(
+                        <VoiceControls
+                            key={`tournament-${myTournament.id}`}
+                            socket={socket}
+                            tableId={`tournament-${myTournament.id}`}
+                        />,
+                        tournamentVoiceHost(),
+                    )}
                 {view === 'lobby' && tournamentLobby.open
                     && dismissedTournamentId !== tournamentLobby.open.id
                     && tournamentLobby.open.creatorUserId !== user.id

@@ -10,6 +10,29 @@ export const MIN_SEATS = 3;
 export const MAX_SEATS = 15;
 export const TOURNAMENT_VENUE = 'tournament-stage';
 
+export const ESCALATION_OPTIONS = [
+    { value: 0, label: 'Off' },
+    { value: 5, label: '+5%' },
+    { value: 10, label: '+10%' },
+    { value: 20, label: '+20%' },
+];
+
+// "Stakes ×1.21" once escalation has kicked in; nothing in round one.
+export const stakesLabel = (multiplier) => {
+    const m = Number(multiplier);
+    if (!Number.isFinite(m) || m <= 1) return '';
+    return `Stakes ×${m.toFixed(2).replace(/0$/, '')}`;
+};
+
+export const tableProgressLabel = (table) => {
+    if (!table) return '';
+    if (table.finished || table.phase === 'done') return 'Done';
+    if (table.phase === 'dealing') return 'Dealing';
+    if (table.phase === 'bidding') return 'Bidding';
+    const total = table.tricksTotal || 11;
+    return `Trick ${Math.min(total, (Number(table.trick) || 0) + 1)} of ${total}`;
+};
+
 export const VENUE_OPTIONS = [
     TOURNAMENT_VENUE,
     'fort-creek',
@@ -98,12 +121,13 @@ export const tournamentFaces = (tournament, userId) => {
     const playing = ranked.filter(entry => entry.status === 'playing');
     const leaders = playing.slice(0, 3);
     const out = latestBust(tournament);
+    const stakes = stakesLabel(tournament.stakesMultiplier);
     const faces = [
         {
             key: 'round',
             title: tournament.name,
             sub: tournament.status === 'running'
-                ? `Round ${tournament.round} · ${tournament.playersLeft ?? playing.length} of ${fieldSize} left`
+                ? `Round ${tournament.round} · ${tournament.playersLeft ?? playing.length} of ${fieldSize} left${stakes ? ` · ${stakes.toLowerCase()}` : ''}`
                 : statusLabel(tournament),
         },
         {
@@ -123,5 +147,15 @@ export const tournamentFaces = (tournament, userId) => {
         title: out ? `${out.username} out in round ${out.bustedRound}` : 'Nobody out yet',
         sub: out ? 'Latest bust' : 'Everyone is still in',
     });
+    // Where the other tables are, so a finished table knows how long the
+    // wait is.
+    const others = (tournament.tables || []).filter(table => table.tableId !== myTable?.tableId);
+    if (tournament.status === 'running' && others.length > 0) {
+        faces.push({
+            key: 'tables',
+            title: others.map(table => `T${table.tableIndex + 1} ${tableProgressLabel(table).toLowerCase()}`).join(' · '),
+            sub: 'Other tables',
+        });
+    }
     return faces;
 };

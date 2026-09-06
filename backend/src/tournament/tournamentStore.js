@@ -242,14 +242,14 @@ function createPgStore(pool) {
     return {
         kind: 'postgres',
 
-        async createTournament({ creatorUserId, name, venue, buyInCents, startingStack, maxSeats, startRule, startsAt }) {
+        async createTournament({ creatorUserId, name, venue, buyInCents, startingStack, maxSeats, startRule, startsAt, escalationPercent = 0 }) {
             const { rows } = await pool.query(
                 `INSERT INTO tournaments
-                    (season_id, creator_user_id, name, venue, buy_in_cents, starting_stack, max_seats, start_rule, starts_at, status)
-                 SELECT season_id, $1, $2, $3, $4, $5, $6, $7, $8, 'registering'
+                    (season_id, creator_user_id, name, venue, buy_in_cents, starting_stack, max_seats, start_rule, starts_at, escalation_percent, status)
+                 SELECT season_id, $1, $2, $3, $4, $5, $6, $7, $8, $9, 'registering'
                  FROM seasons WHERE status = 'active'
                  RETURNING tournament_id, season_id`,
-                [creatorUserId, name, venue, buyInCents, startingStack, maxSeats, startRule, startsAt],
+                [creatorUserId, name, venue, buyInCents, startingStack, maxSeats, startRule, startsAt, escalationPercent],
             );
             if (rows.length !== 1) {
                 const error = new Error('Unable to attach the tournament to an active season.');
@@ -412,6 +412,7 @@ function createPgStore(pool) {
                         maxSeats: Number(row.max_seats),
                         startRule: row.start_rule,
                         startsAt: row.starts_at ? new Date(row.starts_at).getTime() : null,
+                        escalationPercent: Number(row.escalation_percent) || 0,
                         createdAt: new Date(row.created_at).getTime(),
                     },
                     entries: entries.rows.map(entry => ({

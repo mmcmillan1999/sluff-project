@@ -3,7 +3,7 @@
 // or on its own after eight seconds.
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { describeViewer, ordinal } from './tournamentFormat';
+import { describeViewer, ordinal, stakesLabel, tableProgressLabel } from './tournamentFormat';
 import './tournament.css';
 
 const AUTO_CLOSE_MS = 8000;
@@ -20,7 +20,17 @@ const TournamentStandingsSheet = ({ tournament, viewerUserId, onClose }) => {
 
     return createPortal(
         <div className="tournament-sheet" role="dialog" aria-label="Tournament standings" onClick={onClose}>
-            <h2>{tournament.name} · round {tournament.round}</h2>
+            <h2>{tournament.name} · round {tournament.round}{stakesLabel(tournament.stakesMultiplier) ? ` · ${stakesLabel(tournament.stakesMultiplier)}` : ''}</h2>
+            {(tournament.tables || []).length > 0 && (
+                <ul className="tournament-sheet-tables">
+                    {tournament.tables.map(table => (
+                        <li key={table.tableId} className={table.tableId === myTable?.tableId ? 'mine' : undefined}>
+                            <span>Table {table.tableIndex + 1}{table.tableId === myTable?.tableId ? ' · you' : ''}</span>
+                            <span>{tableProgressLabel(table)}</span>
+                        </li>
+                    ))}
+                </ul>
+            )}
             <table className="tournament-standings">
                 <tbody>
                     {ranked.map(entry => {

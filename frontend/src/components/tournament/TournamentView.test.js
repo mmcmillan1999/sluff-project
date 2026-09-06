@@ -45,8 +45,8 @@ const running = () => ({
         entry(16, 'Flo', { status: 'busted', stack: -12, bustedRound: 2 }),
     ],
     tables: [
-        { tableId: 'tn-1-r3-t1', tableIndex: 0, playerMode: 3, seats: ['Matt', 'Bob', 'Cara'], dealer: 'Cara', sitOuts: [], finished: false },
-        { tableId: 'tn-1-r3-t2', tableIndex: 1, playerMode: 3, seats: ['Dee', 'Eli'], dealer: 'Dee', sitOuts: [], finished: false },
+        { tableId: 'tn-1-r3-t1', tableIndex: 0, playerMode: 3, seats: ['Matt', 'Bob', 'Cara'], dealer: 'Cara', sitOuts: [], finished: false, phase: 'playing', trick: 0, tricksTotal: 11 },
+        { tableId: 'tn-1-r3-t2', tableIndex: 1, playerMode: 3, seats: ['Dee', 'Eli'], dealer: 'Dee', sitOuts: [], finished: false, phase: 'playing', trick: 6, tricksTotal: 11 },
     ],
 });
 
@@ -153,7 +153,8 @@ test('the lobby slot is Create for a VIP, a ribbon when something is open, nothi
 });
 
 test('creator settings are validated the way the server validates them', () => {
-    const base = { buyInTokens: '1', startingStack: 120, maxSeats: '9', startRule: 'creator', startsAt: '' };
+    const base = { buyInTokens: '1', startingStack: 120, maxSeats: '9', startRule: 'creator', startsAt: '', escalationPercent: 10 };
+    expect(validateSettings({ ...base, escalationPercent: 7 })).toMatch(/escalation/i);
     expect(validateSettings(base)).toBe('');
     expect(validateSettings({ ...base, buyInTokens: '51' })).toMatch(/between 0 and 50/);
     expect(validateSettings({ ...base, startingStack: 100 })).toMatch(/starting stack/);
@@ -170,10 +171,24 @@ test('standings rank the playing by stack, then the busted by the round they wen
     expect(view.myTable.tableIndex).toBe(1);
     expect(view.isCreator).toBe(false);
     const faces = tournamentFaces(running(), 15);
-    expect(faces.map(f => f.key)).toEqual(['round', 'leaders', 'you', 'out']);
+    expect(faces.map(f => f.key)).toEqual(['round', 'leaders', 'you', 'out', 'tables']);
+    expect(faces[4].title).toBe('T1 trick 1 of 11');
     expect(faces[0].sub).toBe('Round 3 · 5 of 6 left');
     expect(faces[2].title).toBe('You 5th · 40');
     expect(faces[3].title).toBe('Flo out in round 2');
     expect(ordinal(22)).toBe('22nd');
     expect(ordinal(13)).toBe('13th');
+});
+
+
+test('a finished table waits on the others with their trick counts, and the stakes show', () => {
+    const state = running();
+    state.tables[0].finished = true;
+    state.tables[0].phase = 'done';
+    state.stakesMultiplier = 1.21;
+    state.escalationPercent = 10;
+    render(<TournamentView tournament={state} user={{ id: 12, username: 'Bob' }} onBack={() => {}} onQuit={() => {}} onWatch={() => {}} />);
+    expect(screen.getByRole('heading', { name: 'Waiting on one table' })).toBeInTheDocument();
+    expect(screen.getAllByText(/Trick 7 of 11/).length).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { name: 'You · Stakes ×1.21' })).toBeInTheDocument();
 });

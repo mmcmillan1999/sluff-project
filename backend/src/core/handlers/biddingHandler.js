@@ -102,8 +102,12 @@ function resolveBiddingFinal(engine) {
                             if (engineRef.tournamentAllPassRedeals >= MAX_TOURNAMENT_ALL_PASS_REDEALS) {
                                 return engineRef.completeTournamentRoundAsWash();
                             }
+                            // Back to Dealing Pending on screen first; the
+                            // director deals after its deal delay so the
+                            // redeal animates like any other deal.
                             engineRef._advanceRound();
-                            return engineRef.dealCards(engineRef.dealer).effects;
+                            engineRef.tournamentDealDueAt = null;
+                            return [{ type: 'BROADCAST_STATE' }];
                         }
                         engineRef._advanceRound();
                         return [{ type: 'BROADCAST_STATE' }];

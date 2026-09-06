@@ -4,6 +4,14 @@ const { BID_HIERARCHY, deck } = require('../core/constants');
 
 const CARD_SET = new Set(deck);
 
+function tournamentVoiceRoom(gameService, tableId) {
+    const match = /^tournament-(\d+)$/.exec(String(tableId));
+    if (!match) return null;
+    const director = gameService?.tournamentDirector;
+    if (!director || typeof director.voiceRoomView !== 'function') return null;
+    return director.voiceRoomView(Number(match[1]));
+}
+
 function authorizeTableAction(socket, gameService, payload, options = {}) {
     const {
         adminOnly = false,
@@ -18,7 +26,10 @@ function authorizeTableAction(socket, gameService, payload, options = {}) {
         return reject(socket, 'Invalid table id.');
     }
 
-    const engine = gameService.getEngineById(tableId);
+    // A tournament's voice room is a table for signaling purposes: every
+    // player in the tournament belongs to it for the whole event, so the
+    // mesh is not torn down at every reseat.
+    const engine = gameService.getEngineById(tableId) || tournamentVoiceRoom(gameService, tableId);
     if (!engine) return reject(socket, 'Table not found.');
     if (adminOnly && socket.user?.is_admin !== true) {
         return reject(socket, 'Admin privileges required.');

@@ -94,6 +94,7 @@ async function runTournamentResumeTests() {
         await first.director.register(t.id, matt);
         for (let i = 0; i < 5; i += 1) await first.director.findPlayer(t.id, 11);
         await first.director.start(t.id, 11);
+        await first.drain(); // the delayed deals
         const live = first.director.get(t.id);
         const [tableA, tableB] = [...live.tables.keys()];
         await playToEnd(first, tableA);

@@ -20,23 +20,32 @@
 
 const { ROUND_PRESENTATION_LOCK_MS } = require('./constants');
 
+// Doubled after the first live tournament (Matt, 6 Sept 2026: "it felt a
+// bit too rushed ... allow twice as much time"). The absent-seat clock is
+// the one value that stays short.
 const TOURNAMENT_CLOCK = Object.freeze({
     freeMs: Object.freeze({
-        bid: 12_000,
-        upgrade: 12_000,
-        trump: 8_000,
-        discards: 20_000,
-        play: 6_000,
-        deal: 6_000,
+        bid: 24_000,
+        upgrade: 24_000,
+        trump: 16_000,
+        discards: 40_000,
+        play: 12_000,
+        deal: 12_000,
     }),
-    bankMs: 45_000,
+    bankMs: 90_000,
     // A seat nobody is sitting in: the house acts after this, not after the
     // bank, so a dropped player cannot hold the room for a minute a card.
     absentMs: 6_000,
     pressure: Object.freeze({ freeScale: 4 / 6, drainRate: 2 }),
-    playoutVoteSeconds: 10,
+    playoutVoteSeconds: 20,
     presentationHoldMs: ROUND_PRESENTATION_LOCK_MS,
-    boardDelayMs: 20_000,
+    boardDelayMs: 40_000,
+    // The round opens on screen before the cards fly, so every client sees
+    // the deal animation rather than landing on a dealt table.
+    dealDelayMs: 2_500,
+    // One table left: the room stays seated and the next round follows the
+    // recap after this, with no trip to the board.
+    singleTableDelayMs: 4_000,
 });
 
 function newRoundClock(userIds, { bankMs = TOURNAMENT_CLOCK.bankMs } = {}) {

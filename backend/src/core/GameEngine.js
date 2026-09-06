@@ -171,12 +171,27 @@ class GameEngine {
      * here — the tournament ledger already did that at registration.
      */
     startTournamentRound({ tournament, seats, spectators = [], stacks, dealerUserId, playerMode }) {
-        if (this.gameStarted || this.gameStartPending) {
+        // A tournament table between rounds may be reopened in place (one
+        // table left: the room stays seated); anything else live is refused.
+        const reopening = Boolean(this.tournament) && this.state === 'Awaiting Next Round Trigger';
+        if ((this.gameStarted && !reopening) || this.gameStartPending) {
             throw new Error(`[${this.tableId}] Cannot open a tournament round on a live table.`);
+        }
+        if (reopening) {
+            this._clearPlayoutTimer();
+            this._clearForfeitTimer();
+            if (this.internalTimers.drawTimer) {
+                clearInterval(this.internalTimers.drawTimer);
+                delete this.internalTimers.drawTimer;
+            }
+            if (this.pendingBotAction) clearTimeout(this.pendingBotAction);
+            this.pendingBotAction = null;
         }
         if (![3, 4].includes(playerMode)) throw new Error(`Bad tournament player mode ${playerMode}`);
         this.tournament = { ...tournament };
         this.tournamentAllPassRedeals = 0;
+        // When the director should deal (its clock); null until it decides.
+        this.tournamentDealDueAt = null;
         this.players = {};
         this.bots = {};
         this.scores = {};

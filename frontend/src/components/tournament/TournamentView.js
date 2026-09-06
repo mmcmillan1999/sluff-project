@@ -3,7 +3,8 @@
 // so the player always lands on the same place from the ribbon, the popup
 // and the table.
 import React, { useEffect, useState } from 'react';
-import { describeViewer, formatTokens, ordinal, startLabel, statusLabel, MIN_SEATS } from './tournamentFormat';
+import { describeViewer, formatTokens, ordinal, stakesLabel, startLabel, statusLabel, tableProgressLabel, MIN_SEATS } from './tournamentFormat';
+import { TournamentVoiceSlot } from './TournamentVoiceDock';
 import { getThemePresentation } from '../../config/themePresentation';
 import './tournament.css';
 
@@ -15,6 +16,7 @@ const Facts = ({ tournament }) => (
         <li><span className="k">Venue</span><span className="v">{getThemePresentation(tournament.venue).name}</span></li>
         <li><span className="k">Start</span><span className="v">{startLabel(tournament)}</span></li>
         <li><span className="k">Prizes</span><span className="v">{tournament.seatsTaken >= 6 ? '50 / 30 / 20' : '65 / 35'}</span></li>
+        <li><span className="k">Escalation</span><span className="v">{tournament.escalationPercent > 0 ? `+${tournament.escalationPercent}% a round` : 'Off'}</span></li>
     </ul>
 );
 
@@ -100,9 +102,12 @@ const TournamentView = ({
                     <p className="tournament-status">{statusLabel(tournament)}</p>
                     <h1>{tournament.name}</h1>
                 </div>
-                <button type="button" className="tournament-btn secondary" onClick={onBack}>
-                    {running && me?.status === 'playing' ? 'Lobby' : 'Back to the lobby'}
-                </button>
+                <div className="tournament-head-actions">
+                    {running && me && <TournamentVoiceSlot className="tournament-voice-slot on-board" />}
+                    <button type="button" className="tournament-btn secondary" onClick={onBack}>
+                        {running && me?.status === 'playing' ? 'Lobby' : 'Back to the lobby'}
+                    </button>
+                </div>
             </div>
 
             {error && <p className="tournament-error" role="alert">{error}</p>}
@@ -163,8 +168,23 @@ const TournamentView = ({
 
             {running && (
                 <>
+                    {(() => {
+                        const open = tournament.tables.filter(table => !table.finished);
+                        const mineDone = myTable ? Boolean(myTable.finished) : true;
+                        if (open.length === 0 || !mineDone || !me || me.status !== 'playing') return null;
+                        return (
+                            <section className="tournament-panel tournament-wait" aria-live="polite">
+                                <h2>Waiting on {open.length === 1 ? 'one table' : `${open.length} tables`}</h2>
+                                <ul className="tournament-wait-list">
+                                    {open.map(table => (
+                                        <li key={table.tableId}><strong>Table {table.tableIndex + 1}</strong> · {tableProgressLabel(table)}</li>
+                                    ))}
+                                </ul>
+                            </section>
+                        );
+                    })()}
                     <section className="tournament-panel tournament-you">
-                        <h2>You</h2>
+                        <h2>You{stakesLabel(tournament.stakesMultiplier) ? ` · ${stakesLabel(tournament.stakesMultiplier)}` : ''}</h2>
                         {!me && <p>You are watching. {tournament.playersLeft} players are still in.</p>}
                         {me?.status === 'playing' && myTable && (
                             <p>You are at <strong>Table {myTable.tableIndex + 1}</strong> with {myTable.seats.filter(name => name !== me.username).join(' and ')}{myTable.sitOuts?.length ? `; ${myTable.sitOuts.join(' and ')} sit${myTable.sitOuts.length === 1 ? 's' : ''} this one out` : ''}.</p>
@@ -190,7 +210,7 @@ const TournamentView = ({
                                 <div className="tournament-tables">
                                     {tournament.tables.map(table => (
                                         <div key={table.tableId} className={`tournament-table${table.tableId === myTable?.tableId ? ' mine' : ''}`}>
-                                            <div className="t"><span>Table {table.tableIndex + 1}</span>{table.finished && <span>done</span>}</div>
+                                            <div className="t"><span>Table {table.tableIndex + 1}</span><span>{tableProgressLabel(table)}</span></div>
                                             <ul>
                                                 {table.seats.map(name => (
                                                     <li key={name} className={(table.sitOuts || []).includes(name) ? 'sit-out' : ''}>
