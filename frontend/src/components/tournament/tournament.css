@@ -342,6 +342,52 @@
   font-size: 0.9rem;
 }
 
+/* On the felt under the header: the wait, the watch buttons, the way back. */
+.tournament-wait-strip {
+  position: absolute;
+  top: calc(7.5vh + env(safe-area-inset-top, 0px) + 0.6vh);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6vh 1vw;
+  max-width: 94vw;
+  padding: 0.7vh 1.4vh;
+  border-radius: 1.2vh;
+  border: 1px solid rgba(120, 200, 255, 0.5);
+  background: rgba(14, 24, 34, 0.92);
+  color: #eaf4ff;
+  font-family: 'Oswald', sans-serif;
+  font-size: clamp(0.8rem, 1.7vh, 1rem);
+  letter-spacing: 0.02em;
+  box-shadow: 0 0.6vh 1.6vh rgba(0, 0, 0, 0.4);
+}
+
+.tournament-wait-strip.is-watching {
+  border-color: rgba(255, 220, 120, 0.55);
+}
+
+.tournament-wait-text {
+  text-align: center;
+}
+
+.tournament-btn.small {
+  padding: 0.5vh 1.2vh;
+  font-size: clamp(0.75rem, 1.6vh, 0.95rem);
+  min-height: 0;
+}
+
+.tournament-countdown {
+  font-family: 'Oswald', sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9fd8ff;
+  font-size: 0.85rem;
+}
+
 .tournament-wait {
   border-color: rgba(120, 200, 255, 0.45);
   background: linear-gradient(135deg, #1a2330, #1f1f1f);
@@ -615,48 +661,6 @@
 }
 
 /* ---------- the shot clock on the felt ---------- */
-
-.tournament-clock-pill {
-  position: fixed;
-  top: calc(7.5vh + env(safe-area-inset-top, 0px) + 0.6vh);
-  left: calc(1.2vw + env(safe-area-inset-left, 0px));
-  z-index: 1500;
-  display: flex;
-  gap: 0.6em;
-  align-items: baseline;
-  padding: 0.35vh 1.4vw;
-  border-radius: 999px;
-  background: rgba(20, 22, 26, 0.82);
-  border: 1px solid rgba(242, 193, 78, 0.5);
-  color: #f5efdf;
-  font-family: 'Oswald', sans-serif;
-  font-size: clamp(0.65rem, 1.5vh, 0.85rem);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  pointer-events: none;
-}
-
-.tournament-clock-pill.on-the-clock {
-  background: rgba(120, 20, 20, 0.9);
-  border-color: #ff6f5e;
-  color: #ffe1dc;
-  animation: tournament-clock-pulse 1.2s ease-in-out infinite;
-}
-
-.tournament-clock-bank {
-  color: rgba(255, 255, 255, 0.75);
-  font-variant-numeric: tabular-nums;
-}
-
-.tournament-clock-pill.on-the-clock .tournament-clock-bank {
-  color: #ffd0c8;
-}
-
-@keyframes tournament-clock-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 111, 94, 0.55); }
-  50% { box-shadow: 0 0 0 0.6vh rgba(255, 111, 94, 0); }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .tournament-clock-pill.on-the-clock { animation: none; }
 }

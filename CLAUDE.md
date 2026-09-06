@@ -47,7 +47,7 @@ Debug overlay in game: `Shift+D`.
   `tournament` view in App.js, the header cube via BrandHeader's `tournament` prop, venue
   `tournament-stage` in venueThemes.css). Clock: `core/tournamentClock.js` (doubled after the first
   live event: 24 s bid, 16 s trump, 40 s discards, 12 s + 90 s bank per card; pace pressure at
-  two-thirds done = free ×2/3, bank drains 2×; absent seat 6 s; playout vote 20 s; board 40 s) drives
+  two-thirds done = free ×2/3, bank drains 2×; absent seat 6 s; playout vote 20 s; board 12 s) drives
   afkTurnTimer for tournament tables. Rounds open in Dealing Pending and the director deals 2.5 s later
   (clients need that transition for the deal animation); one table left reopens the same engine in
   place; voice is one `tournament-<id>` room per event (socketActionGuard + TournamentVoiceDock);

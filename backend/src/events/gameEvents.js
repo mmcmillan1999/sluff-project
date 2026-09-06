@@ -641,6 +641,15 @@ const registerGameHandlers = (io, gameService, options = {}) => {
         socket.on('tournamentQuit', payload => tournamentAction('tournamentQuit', payload, director => (
             director.quit(tournamentIdFrom(payload), socket.user.id)
         )));
+        // Watching another table while yours is done for the round.
+        socket.on('tournamentWatch', payload => tournamentAction('tournamentWatch', payload, director => {
+            const tableId = typeof payload.tableId === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(payload.tableId) ? payload.tableId : null;
+            if (!tableId) throw Object.assign(new Error('Invalid table id.'), { name: 'TournamentError', code: 'BAD_TABLE' });
+            return director.watchTable(tournamentIdFrom(payload), socket.user.id, tableId, socket);
+        }));
+        socket.on('tournamentUnwatch', payload => tournamentAction('tournamentUnwatch', payload, director => (
+            director.unwatchTable(tournamentIdFrom(payload), socket.user.id)
+        )));
 
         onTableAction("leaveTable", { allowSpectator: true }, async ({ engine: engineToLeave, payload: { tableId } }) => {
             leaveVoiceRoom(tableId, socket.user.id);

@@ -188,8 +188,11 @@ test('a finished table waits on the others with their trick counts, and the stak
     state.tables[0].phase = 'done';
     state.stakesMultiplier = 1.21;
     state.escalationPercent = 10;
-    render(<TournamentView tournament={state} user={{ id: 12, username: 'Bob' }} onBack={() => {}} onQuit={() => {}} onWatch={() => {}} />);
-    expect(screen.getByRole('heading', { name: 'Waiting on one table' })).toBeInTheDocument();
+    const onWatch = vi.fn();
+    render(<TournamentView tournament={state} user={{ id: 12, username: 'Bob' }} onBack={() => {}} onQuit={() => {}} onWatch={onWatch} />);
+    expect(screen.getByRole('heading', { name: /waiting on one table/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Watch' }));
+    expect(onWatch).toHaveBeenCalledWith('tn-1-r3-t2');
     expect(screen.getAllByText(/Trick 7 of 11/).length).toBeGreaterThan(0);
     expect(screen.getByRole('heading', { name: 'You · Stakes ×1.21' })).toBeInTheDocument();
 });

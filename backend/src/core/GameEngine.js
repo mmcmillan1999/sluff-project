@@ -1517,7 +1517,7 @@ class GameEngine {
             state.afkTimeoutSeconds = pending
                 ? Math.max(1, Math.round(tournamentClock.allowanceMs(this, pending) / 1000))
                 : null;
-            state.tournamentClock = tournamentClock.publicClock(this);
+            state.tournamentClock = tournamentClock.publicClock(this, pending);
         }
         state.biddingTurnPlayerName = this.players[this.biddingTurnPlayerId]?.playerName;
         state.trickTurnPlayerName = this.players[this.trickTurnPlayerId]?.playerName;

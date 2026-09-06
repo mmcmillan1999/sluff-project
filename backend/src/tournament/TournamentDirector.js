@@ -192,6 +192,7 @@ class TournamentDirector {
                 status: entry?.status ?? null,
                 isCreator: t.creatorUserId === Number(viewerUserId),
                 tableId: table?.tableId ?? null,
+                watchingTableId: entry?.watchingTableId ?? null,
             };
         })();
         return {
@@ -207,6 +208,9 @@ class TournamentDirector {
             round: t.round,
             escalationPercent: t.escalationPercent || 0,
             stakesMultiplier: this._stakesMultiplier(t, t.round),
+            // Between rounds: how long until the next one opens, so the
+            // board can count down instead of leaving the room guessing.
+            nextRoundInSeconds: t.nextRoundAt ? Math.max(0, Math.ceil((t.nextRoundAt - this.now()) / 1000)) : null,
             creatorUserId: t.creatorUserId,
             creatorName: t.creatorName,
             seatsTaken: this._seatCount(t),
@@ -599,6 +603,7 @@ class TournamentDirector {
         if (snapshot.phase !== 'round' || !Array.isArray(snapshot.tables) || snapshot.tables.length === 0) {
             // Between rounds: the room was on the board. Reseat after the
             // usual board delay.
+            t.nextRoundAt = this.now() + this.boardDelayMs;
             this._schedule(t, () => this._startRound(t), this.boardDelayMs);
             this._emit(t);
             return;
@@ -673,6 +678,8 @@ class TournamentDirector {
     async _startRound(t) {
         if (t.status !== 'running') return;
         t.pendingTimer = null;
+        t.nextRoundAt = null;
+        this._unwatchAll(t);
         t.round += 1;
         const alive = this._alive(t);
         const plan = seatRound(
@@ -890,6 +897,7 @@ class TournamentDirector {
         if (t.status !== 'running' || t.tables.size === 0) return;
         t.pendingTimer = null;
         t.roundCompleteAt = null;
+        this._unwatchAll(t);
         // Player names are the engine's keys; the tournament's own roster is
         // the authority for turning them back into ids (a table restored
         // after a deploy may have no engine at all).
@@ -962,8 +970,84 @@ class TournamentDirector {
             await this._finish(t);
             return;
         }
+        const delay = keepSeated ? this.singleTableDelayMs : this.boardDelayMs;
+        t.nextRoundAt = this.now() + delay;
         this._emit(t);
-        this._schedule(t, () => this._startRound(t), keepSeated ? this.singleTableDelayMs : this.boardDelayMs);
+        this._schedule(t, () => this._startRound(t), delay);
+    }
+
+    // ---- Watching another table while yours is done ----------------------
+    // A player whose table has finished the round (or who is out) may sit in
+    // as a spectator at a table still playing. The seat is a spectator entry
+    // on that engine (hands stay hidden: the engine serializes per viewer),
+    // and it is removed the moment the room reseats.
+    watchTable(tournamentId, userId, tableId, socket) {
+        const t = this.get(tournamentId);
+        if (!t || t.status !== 'running') throw new TournamentError('NOT_RUNNING', 'That tournament is not running.');
+        const entry = t.entries.get(Number(userId));
+        if (!entry || ['withdrawn', 'refunded'].includes(entry.status)) throw new TournamentError('NOT_ENTERED', 'You are not in this tournament.');
+        const table = t.tables.get(tableId);
+        if (table && (table.seats.includes(entry.userId) || table.spectatorUserIds.includes(entry.userId))) {
+            throw new TournamentError('OWN_TABLE', 'That is your own table.');
+        }
+        if (!table || table.result) throw new TournamentError('TABLE_DONE', 'That table has finished its round.');
+        const own = this._ownTable(t, entry.userId);
+        if (own && !own.result) {
+            const ownEngine = this.gameService.getEngineById(own.tableId);
+            if (ownEngine && ownEngine.state !== 'Awaiting Next Round Trigger') {
+                throw new TournamentError('STILL_PLAYING', 'Finish your own round first.');
+            }
+        }
+        const engine = this.gameService.getEngineById(tableId);
+        if (!engine) throw new TournamentError('TABLE_DONE', 'That table has finished its round.');
+        if (entry.watchingTableId && entry.watchingTableId !== tableId) this._unwatch(t, entry, { announce: false });
+        if (socket) entry.socketId = socket.id;
+        engine.players[entry.userId] = {
+            userId: entry.userId,
+            playerName: entry.username,
+            socketId: entry.socketId || null,
+            tokens: null,
+            isSpectator: true,
+            disconnected: false,
+            isBot: false,
+            untimedBotGames: false,
+        };
+        entry.watchingTableId = tableId;
+        socket?.join?.(tableId);
+        this.gameService.emitGameState(tableId);
+        return this.publicState(t, entry.userId);
+    }
+
+    unwatchTable(tournamentId, userId) {
+        const t = this.get(tournamentId);
+        if (!t) throw new TournamentError('NOT_FOUND', 'No such tournament.');
+        const entry = t.entries.get(Number(userId));
+        if (!entry) throw new TournamentError('NOT_ENTERED', 'You are not in this tournament.');
+        this._unwatch(t, entry, { announce: true });
+        return this.publicState(t, entry.userId);
+    }
+
+    _unwatch(t, entry, { announce }) {
+        const tableId = entry.watchingTableId;
+        entry.watchingTableId = null;
+        if (!tableId) return;
+        const engine = this.gameService.getEngineById(tableId);
+        if (engine?.players?.[entry.userId]?.isSpectator) delete engine.players[entry.userId];
+        this._socket(entry.socketId)?.leave?.(tableId);
+        if (!announce) return;
+        // Back to their own (finished) table, if it is still standing.
+        const own = this._ownTable(t, entry.userId);
+        if (own && this.gameService.getEngineById(own.tableId)) this.gameService.emitGameState(own.tableId);
+    }
+
+    _unwatchAll(t) {
+        for (const entry of t.entries.values()) {
+            if (entry.watchingTableId) this._unwatch(t, entry, { announce: false });
+        }
+    }
+
+    _ownTable(t, userId) {
+        return this._tableRows(t).find(table => table.seats.includes(userId) || table.spectatorUserIds.includes(userId)) || null;
     }
 
     _applyBusts(t) {
@@ -1044,6 +1128,7 @@ class TournamentDirector {
             roundCompleteAt: null,
             reuseTableId: null,
             heldTable: null,
+            nextRoundAt: null,
             lastProgressSignature: null,
             escalationPercent: Number(fields.escalationPercent) || 0,
             entries: new Map(),
@@ -1057,6 +1142,7 @@ class TournamentDirector {
         return {
             userId: Number(userId), username, isBot: Boolean(isBot), socketId, tokens,
             status: 'registered', stack, sitOuts: 0, deals: 0, bustedRound: null, place: null, prizeCents: 0, quit: false,
+            watchingTableId: null,
         };
     }
 

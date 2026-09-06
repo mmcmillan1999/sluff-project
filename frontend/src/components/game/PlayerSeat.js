@@ -2,6 +2,7 @@
 import React from 'react';
 import './PlayerSeat.css'; // Import the CSS file
 import ScoreChipStack from './ScoreChipStack';
+import TurnClockRing from './TurnClockRing';
 
 const SCORE_ANIMATION_STATES = new Set([
     'WidowReveal',
@@ -120,6 +121,19 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent, showTrum
     ].filter(Boolean).join(' ');
 
     const nameClasses = ['player-name', isSelf && 'is-self'].filter(Boolean).join(' ');
+    // Tournament shot clock: the ring drains around whoever the server says
+    // is on the clock (the pending human decision), not merely the trick turn.
+    const clockTurn = currentTableState.tournament ? currentTableState.tournamentClock?.turn : null;
+    const clockRing = clockTurn && clockTurn.playerName === playerName
+        ? {
+            turnKey: `${currentTableState.tableId}:${currentTableState.state}:${clockTurn.kind}:${playerName}:${currentTableState.tricksPlayedCount || 0}:${(currentTableState.currentTrickCards || []).length}`,
+            freeSeconds: clockTurn.freeSeconds,
+            bankSeconds: clockTurn.bankSeconds,
+            deadlineAt: Number.isFinite(Number(currentTableState.afkDeadline)) && Number(currentTableState.serverTime) > 0
+                ? Number(currentTableState.afkDeadline) - (Number(currentTableState.serverTime) - Date.now())
+                : null,
+        }
+        : null;
     const rawScoreAnimationReadyAt = currentTableState.roundSummary?.presentationReadyAt;
     const scoreAnimationReadyAt = Number(rawScoreAnimationReadyAt);
     const scoreAnimationScope = SCORE_ANIMATION_STATES.has(currentTableState.state)
@@ -204,6 +218,7 @@ const PlayerSeat = ({ playerName, currentTableState, isSelf, emitEvent, showTrum
                 );
             })()}
             {renderOpponentCards()}
+            {clockRing && <TurnClockRing {...clockRing} />}
             <div className={seatClasses} style={dynamicStyles}>
                 {onPlayerProfile ? (
                     <button

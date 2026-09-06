@@ -88,6 +88,11 @@ function App() {
     const [tournamentError, setTournamentError] = useState('');
     const myTournamentRef = React.useRef(null);
     myTournamentRef.current = myTournament;
+    // Tournament: the other table this player is watching while their own
+    // round is done (null otherwise). A ref for the socket handlers.
+    const [watchingTableId, setWatchingTableId] = useState(null);
+    const watchingTableIdRef = React.useRef(null);
+    watchingTableIdRef.current = watchingTableId;
     const pendingTournamentCreateRef = React.useRef(false);
     const [errorMessage, setErrorMessage] = useState('');
     const [connectionNotice, setConnectionNotice] = useState(null);
@@ -253,6 +258,7 @@ function App() {
     const handleLeaveTable = useCallback(() => {
         const tableId = tableRef.current?.tableId;
         const inTournament = Boolean(tableRef.current?.tournament);
+        setWatchingTableId(null);
         if (tableId) {
             socket.emit("leaveTable", { tableId });
         }
@@ -346,6 +352,14 @@ function App() {
                 awaitingReseatRef.current = false;
                 const currentUserId = JSON.parse(atob(token.split('.')[1])).id;
                 const playerAtTable = newTableState.players[currentUserId];
+                // Watching another tournament table: our own finished table
+                // may still broadcast (acknowledgements, reconnects). Stay on
+                // the watched table until the next round opens somewhere.
+                const watching = watchingTableIdRef.current;
+                if (watching && newTableState.tableId !== watching && newTableState.tournament) {
+                    if (newTableState.state === 'Awaiting Next Round Trigger') return;
+                    setWatchingTableId(null);
+                }
                 if (!playerAtTable) {
                     setView('lobby');
                     setCurrentTableState(null);
@@ -750,6 +764,21 @@ function App() {
         enableSound();
         socket.emit("joinTable", { tableId, asSpectator: true });
     };
+    // Tournament: watch another table while yours is done for the round.
+    // The director seats you as a spectator there and pulls you back the
+    // moment the room reseats.
+    const handleWatchTournamentTable = (tableId) => {
+        if (!myTournamentRef.current) return;
+        enableSound();
+        setWatchingTableId(tableId);
+        socket.emit('tournamentWatch', { tournamentId: myTournamentRef.current.id, tableId });
+        setView('gameTable');
+    };
+    const handleStopWatchingTournamentTable = () => {
+        if (!myTournamentRef.current) return;
+        setWatchingTableId(null);
+        socket.emit('tournamentUnwatch', { tournamentId: myTournamentRef.current.id });
+    };
 
     // ---- Tournaments: every action is a socket event; the director answers
     // with tournamentState (or tournamentActionFailed). ----
@@ -986,12 +1015,12 @@ function App() {
                                     onStart={tournamentActionFor('tournamentStart')}
                                     onCancel={tournamentActionFor('tournamentCancel')}
                                     onQuit={tournamentActionFor('tournamentQuit')}
-                                    onWatch={handleJoinTableAsSpectator}
+                                    onWatch={handleWatchTournamentTable}
                                     onBack={handleTournamentBack}
                                 />
                             );
                         case 'gameTable':
-                            return currentTableState ? <GameTableView user={user} playerId={user.id} currentTableState={currentTableState} handleLeaveTable={handleLeaveTable} handleLogout={handleLogout} handleShowHowToPlay={handleShowHowToPlay} errorMessage={errorMessage} emitEvent={emitEvent} playSound={playSound} playDealSounds={playDealSounds} playMidnightSpecial={playMidnightSpecial} prefetchChampionLine={prefetchChampionLine} playChampionSting={playChampionSting} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} soundSettings={soundSettings} tutorialState={{ tutorialVersion: Number(user.tutorial_version) || 0, activeVersion: Number(user.tutorial_active_version) || 0, gamesPlayed: Number(user.games_played) || 0 }} onTutorialAction={handleTutorialAction} onShowTokenLedger={() => setView('tokenLedger')} /> : <div>Loading table...</div>;
+                            return currentTableState ? <GameTableView user={user} playerId={user.id} currentTableState={currentTableState} handleLeaveTable={handleLeaveTable} handleLogout={handleLogout} handleShowHowToPlay={handleShowHowToPlay} errorMessage={errorMessage} emitEvent={emitEvent} playSound={playSound} playDealSounds={playDealSounds} playMidnightSpecial={playMidnightSpecial} prefetchChampionLine={prefetchChampionLine} playChampionSting={playChampionSting} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} soundSettings={soundSettings} tutorialState={{ tutorialVersion: Number(user.tutorial_version) || 0, activeVersion: Number(user.tutorial_active_version) || 0, gamesPlayed: Number(user.games_played) || 0 }} onTutorialAction={handleTutorialAction} onShowTokenLedger={() => setView('tokenLedger')} tournament={myTournament} watchingTableId={watchingTableId} onWatchTable={handleWatchTournamentTable} onStopWatching={handleStopWatchingTournamentTable} /> : <div>Loading table...</div>;
                         case 'leaderboard':
                             return <LeaderboardView user={user} onReturnToLobby={handleReturnToLobby} handleShowAdmin={handleShowAdmin} onShowTokenLedger={() => setView('tokenLedger')} />;
                         case 'tokenLedger':

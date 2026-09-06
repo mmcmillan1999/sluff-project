@@ -394,7 +394,64 @@ async function runTournamentTests() {
         assert.deepEqual(scaleExchange({ Ada: 60, Bo: -20, Cy: -20, ScoreAbsorber: -20 }, 'Ada', 1.1), { Bo: -22, Cy: -22, ScoreAbsorber: -22, Ada: 66 });
         assert.equal(scaleExchange(null, 'Ada', 2), null);
         pass('Escalation multiplies every side of the exchange and the bidder balances it to the point.');
+        // The ring on the felt: the seat on the clock, its free window and bank.
+        engine.biddingTurnPlayerId = 11; // a human seat: house seats are never on the clock
+        const turnClock = engine._getRawStateForClient().tournamentClock.turn;
+        assert.equal(turnClock.playerName, 'Matt');
+        assert.equal(turnClock.kind, 'bid');
+        assert.equal(turnClock.freeSeconds, 24);
+        assert.equal(turnClock.bankSeconds, 0, 'bids do not draw on the bank');
+        pass('The public clock names the seat on the clock with its free window and bank.');
         await director.voidTournament(t.id, 'done');
+    }
+
+    // --------------------------------- watching another table while you wait
+    {
+        const harness = buildHarness({ balances: { 901: 1000, 902: 1000, 903: 1000, 904: 1000, 905: 1000 } });
+        const { director, gameService, clock } = harness;
+        const matt = { id: 11, username: 'Matt', is_vip: true };
+        const sockets = new Map();
+        const fakeSocket = id => {
+            const socket = { id, rooms: new Set(), join(room) { this.rooms.add(room); }, leave(room) { this.rooms.delete(room); }, emit() {} };
+            sockets.set(id, socket);
+            return socket;
+        };
+        mockIo.sockets = { sockets };
+        const mattSocket = fakeSocket('sock-matt');
+        const t = await director.create(matt, { buyInTokens: 1, startingStack: 120, maxSeats: 6, startRule: 'creator', escalationPercent: 0 });
+        await director.register(t.id, matt, { socketId: mattSocket.id });
+        for (let i = 0; i < 5; i += 1) await director.findPlayer(t.id, 11);
+        await director.start(t.id, 11);
+        await harness.drainQueue();
+        const live = director.get(t.id);
+        const [tableA, tableB] = [...live.tables.keys()];
+        const mine = [...live.tables.values()].find(table => table.seats.includes(11));
+        const other = mine.tableId === tableA ? tableB : tableA;
+        assert.throws(() => director.watchTable(t.id, 11, other, mattSocket), err => err.code === 'STILL_PLAYING', 'not while your own round is live');
+        await playTable(harness, mine.tableId);
+        assert.equal(gameService.getEngineById(mine.tableId).state, 'Awaiting Next Round Trigger');
+        const state = director.watchTable(t.id, 11, other, mattSocket);
+        assert.equal(state.viewer.watchingTableId, other);
+        const watched = gameService.getEngineById(other);
+        assert.equal(watched.players[11].isSpectator, true, 'seated as a spectator at the other table');
+        assert.ok(mattSocket.rooms.has(other), 'the socket joined the watched table room');
+        const view = watched.getStateForClient({ userId: 11, isAdmin: false });
+        const shownHands = Object.entries(view.hands || {}).filter(([, cards]) => Array.isArray(cards) && cards.length > 0 && typeof cards[0] === 'string');
+        assert.equal(shownHands.length, 0, 'a watcher sees no hands');
+        assert.throws(() => director.watchTable(t.id, 11, mine.tableId, mattSocket), err => err.code === 'OWN_TABLE');
+        director.unwatchTable(t.id, 11);
+        assert.equal(watched.players[11], undefined, 'unwatching removes the spectator seat');
+        assert.ok(!mattSocket.rooms.has(other));
+        director.watchTable(t.id, 11, other, mattSocket);
+        await playTable(harness, other);
+        clock.now += 60_000;
+        await harness.drainQueue(); // finishRound, then the next round starts
+        assert.equal(live.round, 2);
+        assert.equal(live.entries.get(11).watchingTableId, null, 'reseating ends the watch');
+        assert.ok(!mattSocket.rooms.has(other), 'and leaves the old room');
+        pass('A player whose table is done can watch another table; the watch ends when the room reseats.');
+        await director.voidTournament(t.id, 'done');
+        delete mockIo.sockets;
     }
 
     // --------------------------------- the shared widow seat at five players

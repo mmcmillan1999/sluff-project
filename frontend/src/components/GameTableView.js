@@ -55,7 +55,7 @@ import { useCosmetics } from '../utils/cosmetics';
 import { CARD_PLAY_STYLES, useCardPlayStyle, setCardPlayStyle } from '../utils/playStyle';
 import VoiceControls from './game/VoiceControls';
 import { TournamentVoiceSlot } from './tournament/TournamentVoiceDock';
-import TournamentClockPill from './tournament/TournamentClockPill';
+import TournamentWaitStrip from './tournament/TournamentWaitStrip';
 
 // Admin-only dev overlay (~900 lines): fetched on first Shift+D instead of
 // shipping in every player's main chunk.
@@ -99,7 +99,7 @@ const stableScoreMapSignature = (scoreMap) => JSON.stringify(
 );
 
 
-const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, handleShowHowToPlay, emitEvent, playSound, playDealSounds, playMidnightSpecial, prefetchChampionLine, playChampionSting, socket, handleOpenFeedbackModal, soundSettings, tutorialState, onTutorialAction, onShowTokenLedger }) => {
+const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, handleShowHowToPlay, emitEvent, playSound, playDealSounds, playMidnightSpecial, prefetchChampionLine, playChampionSting, socket, handleOpenFeedbackModal, soundSettings, tutorialState, onTutorialAction, onShowTokenLedger, tournament = null, onWatchTable = null, onStopWatching = null }) => {
     const themePresentation = getThemePresentation(currentTableState?.theme);
     const [seatAssignments, setSeatAssignments] = useState({ self: null, opponentLeft: null, opponentRight: null });
     const [showRoundSummaryModal, setShowRoundSummaryModal] = useState(false);
@@ -1461,11 +1461,15 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             ref={gameViewRef}
         >
             {shareNotice && <div className="share-invite-notice">{shareNotice}</div>}
-            {currentTableState?.tournament && (
-                <TournamentClockPill
-                    clock={currentTableState.tournamentClock}
-                    playerName={currentTableState.players?.[playerId]?.playerName}
-                    stakesMultiplier={currentTableState.tournament?.pointMultiplier ?? null}
+            {currentTableState?.tournament && tournament && tournament.id === currentTableState.tournament.tournamentId && (
+                <TournamentWaitStrip
+                    tournament={tournament}
+                    tableId={currentTableState.tableId}
+                    tableState={currentTableState.state}
+                    viewerUserId={playerId}
+                    isSpectator={Boolean(isSpectator)}
+                    onWatch={onWatchTable}
+                    onStopWatching={onStopWatching}
                 />
             )}
             {!roundPresentationControlsLocked && createPortal(

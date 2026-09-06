@@ -5,6 +5,7 @@
 import React, { useEffect, useState } from 'react';
 import { describeViewer, formatTokens, ordinal, stakesLabel, startLabel, statusLabel, tableProgressLabel, MIN_SEATS } from './tournamentFormat';
 import { TournamentVoiceSlot } from './TournamentVoiceDock';
+import { useCountdown } from './useCountdown';
 import { getTournamentInviteUrl, shareTournamentInvite } from '../../utils/tournamentInvites';
 import { getThemePresentation } from '../../config/themePresentation';
 import './tournament.css';
@@ -73,6 +74,7 @@ const TournamentView = ({
     onBack,
 }) => {
     const [confirming, setConfirming] = useState(null);
+    const nextIn = useCountdown(tournament?.nextRoundInSeconds ?? null);
     // "Link copied" after a share that had no share sheet; clears itself.
     const [shareNotice, setShareNotice] = useState('');
     useEffect(() => {
@@ -186,13 +188,25 @@ const TournamentView = ({
                     {(() => {
                         const open = tournament.tables.filter(table => !table.finished);
                         const mineDone = myTable ? Boolean(myTable.finished) : true;
-                        if (open.length === 0 || !mineDone || !me || me.status !== 'playing') return null;
+                        if (!me || me.status !== 'playing') return null;
+                        if (open.length === 0) {
+                            return (
+                                <section className="tournament-panel tournament-wait" aria-live="polite">
+                                    <h2>{Number.isFinite(nextIn) && nextIn > 0 ? `Next round in ${nextIn} s` : 'Reseating…'}</h2>
+                                    <p>Top with top: the leaders share a table, and so do the short stacks.</p>
+                                </section>
+                            );
+                        }
+                        if (!mineDone) return null;
                         return (
                             <section className="tournament-panel tournament-wait" aria-live="polite">
-                                <h2>Waiting on {open.length === 1 ? 'one table' : `${open.length} tables`}</h2>
+                                <h2>Your round is done · waiting on {open.length === 1 ? 'one table' : `${open.length} tables`}</h2>
                                 <ul className="tournament-wait-list">
                                     {open.map(table => (
-                                        <li key={table.tableId}><strong>Table {table.tableIndex + 1}</strong> · {tableProgressLabel(table)}</li>
+                                        <li key={table.tableId}>
+                                            <strong>Table {table.tableIndex + 1}</strong> · {tableProgressLabel(table)}
+                                            {onWatch && <button type="button" className="tournament-btn secondary small" onClick={() => onWatch(table.tableId)}>Watch</button>}
+                                        </li>
                                     ))}
                                 </ul>
                             </section>

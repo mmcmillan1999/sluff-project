@@ -193,6 +193,36 @@
     box-sizing: border-box; /* Include padding in width */
 }
 
+/* Tournament shot clock: a ring the exact size of the plaque, draining
+   clockwise around it. Gold = free time, red = eating the bank. */
+.turn-clock-ring {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 3;
+    pointer-events: none;
+    overflow: visible;
+}
+
+.turn-clock-ring rect {
+    stroke: #fbbf24;
+    stroke-width: calc(7vh * 0.09);
+    stroke-linecap: butt;
+    transition: stroke 0.3s ease;
+    filter: drop-shadow(0 0 0.4vh rgba(251, 191, 36, 0.55));
+}
+
+.turn-clock-ring.is-bank rect {
+    stroke: #ef4444;
+    filter: drop-shadow(0 0 0.5vh rgba(239, 68, 68, 0.6));
+}
+
+.turn-clock-ring.is-out rect {
+    stroke: #ef4444;
+    opacity: 0.35;
+}
+
 .player-name {
     position: relative;
     z-index: 2;

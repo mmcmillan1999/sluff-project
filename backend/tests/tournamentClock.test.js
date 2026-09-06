@@ -99,6 +99,8 @@ async function runTournamentClockTests() {
         assert.ok(charged >= 3_000 && charged <= 3_100, `a fifteen-second play costs three seconds of bank (charged ${charged})`);
         const publicView = clock.publicClock(fresh);
         assert.equal(publicView.banks.Ada, 87);
+        const onTurn = clock.publicClock(fresh, { kind: 'play', userId: 21 }).turn;
+        assert.deepEqual(onTurn, { playerName: 'Ada', kind: 'play', freeSeconds: 12, bankSeconds: 87, allowanceSeconds: 99 });
         assert.equal(publicView.onTheClock, false);
         pass('The bank is charged for time past the free allowance, doubled on the clock, never negative.');
     }

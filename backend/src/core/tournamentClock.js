@@ -39,7 +39,10 @@ const TOURNAMENT_CLOCK = Object.freeze({
     pressure: Object.freeze({ freeScale: 4 / 6, drainRate: 2 }),
     playoutVoteSeconds: 20,
     presentationHoldMs: ROUND_PRESENTATION_LOCK_MS,
-    boardDelayMs: 40_000,
+    // The board between rounds: long enough to read the standings and find
+    // your next table, no longer. (40 s stacked on the 18 s recap read as
+    // "a full minute of reseating" at the first live event.)
+    boardDelayMs: 12_000,
     // The round opens on screen before the cards fly, so every client sees
     // the deal animation rather than landing on a dealt table.
     dealDelayMs: 2_500,
@@ -115,7 +118,7 @@ function setOnTheClock(engine, onTheClock) {
 }
 
 /** What clients see: banks by player name in whole seconds, and the pressure flag. */
-function publicClock(engine) {
+function publicClock(engine, pending = null) {
     const clock = engine?.tournamentClock;
     if (!clock) return null;
     const banks = {};
@@ -123,8 +126,22 @@ function publicClock(engine) {
         const name = engine.players?.[userId]?.playerName;
         if (name) banks[name] = Math.round(bankMs / 1000);
     }
+    // The seat on the clock right now: its free window and its bank, so the
+    // felt can draw the ring draining around that player's name.
+    const turn = pending && engine.players?.[pending.userId]
+        ? {
+            playerName: engine.players[pending.userId].playerName,
+            kind: pending.kind,
+            freeSeconds: Math.round(freeMsFor(clock, pending.kind) / 1000),
+            bankSeconds: pending.kind === 'play'
+                ? Math.round(bankFor(clock, pending.userId) / drainRate(clock) / 1000)
+                : 0,
+            allowanceSeconds: Math.max(1, Math.round(allowanceMs(engine, pending) / 1000)),
+        }
+        : null;
     return {
         onTheClock: clock.onTheClock === true,
+        turn,
         banks,
         freeSeconds: {
             play: Math.round(freeMsFor(clock, 'play') / 1000),
