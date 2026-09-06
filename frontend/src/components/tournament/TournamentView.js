@@ -3,7 +3,7 @@
 // so the player always lands on the same place from the ribbon, the popup
 // and the table.
 import React, { useEffect, useState } from 'react';
-import { describeViewer, formatTokens, ordinal, stakesLabel, startLabel, statusLabel, tableProgressLabel, MIN_SEATS } from './tournamentFormat';
+import { currentDrain, describeViewer, drainLabel, formatTokens, ordinal, startLabel, statusLabel, tableProgressLabel, MIN_SEATS } from './tournamentFormat';
 import { TournamentVoiceSlot } from './TournamentVoiceDock';
 import { useCountdown } from './useCountdown';
 import { getTournamentInviteUrl, shareTournamentInvite } from '../../utils/tournamentInvites';
@@ -18,7 +18,7 @@ const Facts = ({ tournament }) => (
         <li><span className="k">Venue</span><span className="v">{getThemePresentation(tournament.venue).name}</span></li>
         <li><span className="k">Start</span><span className="v">{startLabel(tournament)}</span></li>
         <li><span className="k">Prizes</span><span className="v">{tournament.seatsTaken >= 6 ? '50 / 30 / 20' : '65 / 35'}</span></li>
-        <li><span className="k">Escalation</span><span className="v">{tournament.escalationPercent > 0 ? `+${tournament.escalationPercent}% a round` : 'Off'}</span></li>
+        <li><span className="k">Chip drain</span><span className="v">{drainLabel(tournament)}</span></li>
     </ul>
 );
 
@@ -190,10 +190,29 @@ const TournamentView = ({
                         const mineDone = myTable ? Boolean(myTable.finished) : true;
                         if (!me || me.status !== 'playing') return null;
                         if (open.length === 0) {
+                            const drain = currentDrain(tournament);
+                            const drops = drain
+                                ? ranked.filter(entry => entry.status === 'playing' && drain.drops[entry.username] > 0)
+                                : [];
                             return (
                                 <section className="tournament-panel tournament-wait" aria-live="polite">
                                     <h2>{Number.isFinite(nextIn) && nextIn > 0 ? `Next round in ${nextIn} s` : 'Reseating…'}</h2>
-                                    <p>Top with top: the leaders share a table, and so do the short stacks.</p>
+                                    {drain && drops.length > 0 ? (
+                                        <>
+                                            <p className="tournament-drain-title">Chip drain · everyone drops {drain.percent}%</p>
+                                            <ul className="tournament-drain-list">
+                                                {drops.map(entry => (
+                                                    <li key={entry.userId} className={entry.userId === me?.userId ? 'mine' : undefined}>
+                                                        <span>{entry.username}</span>
+                                                        <span className="drop">−{drain.drops[entry.username]}</span>
+                                                        <span className="after">{entry.stack}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </>
+                                    ) : (
+                                        <p>Top with top: the leaders share a table, and so do the short stacks.</p>
+                                    )}
                                 </section>
                             );
                         }
@@ -213,7 +232,7 @@ const TournamentView = ({
                         );
                     })()}
                     <section className="tournament-panel tournament-you">
-                        <h2>You{stakesLabel(tournament.stakesMultiplier) ? ` · ${stakesLabel(tournament.stakesMultiplier)}` : ''}</h2>
+                        <h2>You</h2>
                         {!me && <p>You are watching. {tournament.playersLeft} players are still in.</p>}
                         {me?.status === 'playing' && myTable && (
                             <p>You are at <strong>Table {myTable.tableIndex + 1}</strong> with {myTable.seats.filter(name => name !== me.username).join(' and ')}{myTable.sitOuts?.length ? `; ${myTable.sitOuts.join(' and ')} sit${myTable.sitOuts.length === 1 ? 's' : ''} this one out` : ''}.</p>

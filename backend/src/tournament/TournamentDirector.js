@@ -45,9 +45,11 @@ const RESUME_GRACE_MS = 10 * 60 * 1000;
 const SNAPSHOT_VERSION = 1;
 const TOURNAMENT_VENUE = 'tournament-stage';
 const MAX_NAME_LENGTH = 60;
-// Escalation: the percentage by which every round's stakes grow.
-const ESCALATION_PERCENTS = Object.freeze([0, 5, 10, 20]);
-const DEFAULT_ESCALATION_PERCENT = 10;
+// Chip drain: between rounds every stack drops by this percentage. Rounds
+// play at even stakes (insurance math stays plain); the drain does the
+// squeezing. Matt, Sept 6 2026, replacing the escalation multiplier.
+const DRAIN_PERCENTS = Object.freeze([0, 5, 10, 20]);
+const DEFAULT_DRAIN_PERCENT = 10;
 
 class TournamentError extends Error {
     constructor(code, message) {
@@ -206,8 +208,10 @@ class TournamentDirector {
             startsAt: t.startsAt,
             status: t.status,
             round: t.round,
-            escalationPercent: t.escalationPercent || 0,
-            stakesMultiplier: this._stakesMultiplier(t, t.round),
+            drainPercent: t.drainPercent || 0,
+            // The drop everyone just took between rounds (by name), so the
+            // board can show it while the room reseats.
+            lastDrain: t.lastDrain,
             // Between rounds: how long until the next one opens, so the
             // board can count down instead of leaving the room guessing.
             nextRoundInSeconds: t.nextRoundAt ? Math.max(0, Math.ceil((t.nextRoundAt - this.now()) / 1000)) : null,
@@ -259,24 +263,24 @@ class TournamentDirector {
             throw new TournamentError('BAD_VENUE', 'That venue is not available.');
         }
         const name = cleanName(settings.name) || `${creator.username}'s Tournament`;
-        const escalationPercent = settings.escalationPercent === undefined
-            ? DEFAULT_ESCALATION_PERCENT
-            : Number(settings.escalationPercent);
-        if (!ESCALATION_PERCENTS.includes(escalationPercent)) {
-            throw new TournamentError('BAD_ESCALATION', `Escalation must be one of ${ESCALATION_PERCENTS.join(', ')} percent.`);
+        const drainPercent = settings.drainPercent === undefined
+            ? DEFAULT_DRAIN_PERCENT
+            : Number(settings.drainPercent);
+        if (!DRAIN_PERCENTS.includes(drainPercent)) {
+            throw new TournamentError('BAD_DRAIN', `Chip drain must be one of ${DRAIN_PERCENTS.join(', ')} percent.`);
         }
 
         const { tournamentId, seasonId } = await this.store.createTournament({
             creatorUserId: creator.id, name, venue, buyInCents, startingStack, maxSeats, startRule,
             startsAt: startsAt ? new Date(startsAt) : null,
-            escalationPercent,
+            drainPercent,
         });
         const t = this._newTournament({
             id: tournamentId, seasonId, creatorUserId: creator.id, creatorName: creator.username,
-            name, venue, buyInCents, startingStack, maxSeats, startRule, startsAt, escalationPercent, createdAt: this.now(),
+            name, venue, buyInCents, startingStack, maxSeats, startRule, startsAt, drainPercent, createdAt: this.now(),
         });
         this.tournaments.set(t.id, t);
-        this.log.log(`[TOURNAMENT] #${t.id} "${t.name}" opened by ${creator.username}: ${t.buyInCents / 100} tokens, stack ${t.startingStack}, ${t.maxSeats} seats, ${t.startRule}, escalation ${t.escalationPercent}%.`);
+        this.log.log(`[TOURNAMENT] #${t.id} "${t.name}" opened by ${creator.username}: ${t.buyInCents / 100} tokens, stack ${t.startingStack}, ${t.maxSeats} seats, ${t.startRule}, drain ${t.drainPercent}%.`);
         this._emit(t);
         return this.publicState(t, creator.id);
     }
@@ -474,7 +478,7 @@ class TournamentDirector {
                 name: tournament.name, venue: tournament.venue, buyInCents: tournament.buyInCents,
                 startingStack: tournament.startingStack, maxSeats: tournament.maxSeats,
                 startRule: tournament.startRule, startsAt: tournament.startsAt, createdAt: tournament.createdAt,
-                escalationPercent: tournament.escalationPercent || 0,
+                drainPercent: tournament.drainPercent || 0,
             });
             for (const entry of entries) {
                 if (entry.isBot && !t.lease.acquire(entry.userId)) continue;
@@ -531,7 +535,7 @@ class TournamentDirector {
                 name: t.name, venue: t.venue, buyInCents: t.buyInCents, startingStack: t.startingStack,
                 maxSeats: t.maxSeats, startRule: t.startRule, startsAt: t.startsAt, createdAt: t.createdAt,
                 startedAt: t.startedAt, round: t.round, roundCompleteAt: t.roundCompleteAt || null,
-                escalationPercent: t.escalationPercent || 0,
+                drainPercent: t.drainPercent || 0,
             },
             entries: [...t.entries.values()].map(entry => ({
                 userId: entry.userId, username: entry.username, isBot: entry.isBot, status: entry.status,
@@ -584,7 +588,7 @@ class TournamentDirector {
             id: Number(meta.id), seasonId: meta.seasonId, creatorUserId: meta.creatorUserId, creatorName: meta.creatorName,
             name: meta.name, venue: meta.venue, buyInCents: meta.buyInCents, startingStack: meta.startingStack,
             maxSeats: meta.maxSeats, startRule: meta.startRule, startsAt: meta.startsAt, createdAt: meta.createdAt,
-            escalationPercent: meta.escalationPercent || 0,
+            drainPercent: meta.drainPercent ?? meta.escalationPercent ?? 0,
         });
         t.status = 'running';
         t.startedAt = meta.startedAt;
@@ -723,8 +727,7 @@ class TournamentDirector {
                     name: t.name,
                     roundNumber: t.round,
                     tableIndex: table.index,
-                    escalationPercent: t.escalationPercent || 0,
-                    pointMultiplier: this._stakesMultiplier(t, t.round),
+                    drainPercent: t.drainPercent || 0,
                 },
                 seats: seats.map(entry => this._seatInfo(entry)),
                 spectators: spectators.map(entry => this._seatInfo(entry)),
@@ -776,10 +779,27 @@ class TournamentDirector {
         }
     }
 
-    _stakesMultiplier(t, round) {
-        const percent = Number(t.escalationPercent) || 0;
-        if (percent <= 0 || !round || round <= 1) return 1;
-        return Number(((1 + percent / 100) ** (round - 1)).toFixed(2));
+    // Between rounds every live stack drops by the tournament's percentage,
+    // rounded up so the smallest stack still feels it. Applied after the
+    // round's chips have moved and before busts, so a drop to nothing is a
+    // bust like any other.
+    _applyDrain(t) {
+        const percent = Number(t.drainPercent) || 0;
+        if (percent <= 0) {
+            t.lastDrain = null;
+            return null;
+        }
+        const drops = {};
+        const changes = {};
+        for (const entry of this._alive(t)) {
+            if (entry.stack <= 0) continue;
+            const drop = Math.ceil(entry.stack * percent / 100);
+            entry.stack -= drop;
+            drops[entry.username] = drop;
+            changes[entry.userId] = -drop;
+        }
+        t.lastDrain = { round: t.round, percent, drops };
+        return { percent, changes };
     }
 
     // Between rounds a lone table that is being kept still shows on the
@@ -939,6 +959,7 @@ class TournamentDirector {
         }
         const finishedTables = [...t.tables.values()];
         t.tables = new Map();
+        const drain = this._applyDrain(t);
         const busted = this._applyBusts(t);
         const alive = this._alive(t);
         // One table, still a tournament: keep the room seated and reopen the
@@ -959,6 +980,7 @@ class TournamentDirector {
             tournamentId: t.id,
             roundNumber: t.round,
             tables: roundTables,
+            drain,
             entryUpdates: [...t.entries.values()]
                 .filter(entry => entry.status !== 'withdrawn')
                 .map(entry => ({
@@ -1130,7 +1152,8 @@ class TournamentDirector {
             heldTable: null,
             nextRoundAt: null,
             lastProgressSignature: null,
-            escalationPercent: Number(fields.escalationPercent) || 0,
+            drainPercent: Number(fields.drainPercent) || 0,
+            lastDrain: null,
             entries: new Map(),
             tables: new Map(),
             lease: this.gameService.createBotSeatLease(`tn-${fields.id}`),
@@ -1245,6 +1268,6 @@ module.exports = {
     MIN_START_LEAD_MS,
     RESUME_GRACE_MS,
     SNAPSHOT_VERSION,
-    ESCALATION_PERCENTS,
-    DEFAULT_ESCALATION_PERCENT,
+    DRAIN_PERCENTS,
+    DEFAULT_DRAIN_PERCENT,
 };

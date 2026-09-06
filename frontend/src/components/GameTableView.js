@@ -99,7 +99,7 @@ const stableScoreMapSignature = (scoreMap) => JSON.stringify(
 );
 
 
-const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, handleShowHowToPlay, emitEvent, playSound, playDealSounds, playMidnightSpecial, prefetchChampionLine, playChampionSting, socket, handleOpenFeedbackModal, soundSettings, tutorialState, onTutorialAction, onShowTokenLedger, tournament = null, onWatchTable = null, onStopWatching = null }) => {
+const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, handleShowHowToPlay, emitEvent, playSound, playDealSounds, playMidnightSpecial, prefetchChampionLine, playChampionSting, socket, handleOpenFeedbackModal, soundSettings, tutorialState, onTutorialAction, onShowTokenLedger, tournament = null, watchingTableId = null, onWatchTable = null, onStopWatching = null }) => {
     const themePresentation = getThemePresentation(currentTableState?.theme);
     const [seatAssignments, setSeatAssignments] = useState({ self: null, opponentLeft: null, opponentRight: null });
     const [showRoundSummaryModal, setShowRoundSummaryModal] = useState(false);
@@ -1466,8 +1466,9 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                     tournament={tournament}
                     tableId={currentTableState.tableId}
                     tableState={currentTableState.state}
-                    viewerUserId={playerId}
                     isSpectator={Boolean(isSpectator)}
+                    viewerName={selfPlayerName}
+                    watchingTableId={watchingTableId}
                     onWatch={onWatchTable}
                     onStopWatching={onStopWatching}
                 />

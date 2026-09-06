@@ -42,7 +42,7 @@ const TOURNAMENT_CLOCK = Object.freeze({
     // The board between rounds: long enough to read the standings and find
     // your next table, no longer. (40 s stacked on the 18 s recap read as
     // "a full minute of reseating" at the first live event.)
-    boardDelayMs: 12_000,
+    boardDelayMs: 8_000,
     // The round opens on screen before the cards fly, so every client sees
     // the deal animation rather than landing on a dealt table.
     dealDelayMs: 2_500,

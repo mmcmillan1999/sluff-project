@@ -2,16 +2,16 @@
 // table's round is done, with a way to watch the tables still playing —
 // and, while watching one, the way back.
 import React from 'react';
-import { tableProgressLabel } from './tournamentFormat';
+import { currentDrain, tableProgressLabel } from './tournamentFormat';
 import { useCountdown } from './useCountdown';
 import './tournament.css';
 
-const TournamentWaitStrip = ({ tournament, tableId, tableState, viewerUserId, isSpectator, onWatch, onStopWatching }) => {
+const TournamentWaitStrip = ({ tournament, tableId, tableState, isSpectator, viewerName = null, watchingTableId = null, onWatch, onStopWatching }) => {
     const nextIn = useCountdown(tournament?.nextRoundInSeconds ?? null);
     if (!tournament || tournament.status !== 'running') return null;
     const tables = tournament.tables || [];
     const mine = tables.find(table => table.tableId === tableId) || null;
-    const watching = tournament.viewer?.watchingTableId && tournament.viewer.watchingTableId === tableId;
+    const watching = Boolean(watchingTableId) && watchingTableId === tableId;
     const open = tables.filter(table => !table.finished && table.tableId !== tableId);
 
     if (watching) {
@@ -27,10 +27,13 @@ const TournamentWaitStrip = ({ tournament, tableId, tableState, viewerUserId, is
     const done = tableState === 'Awaiting Next Round Trigger' || (mine && mine.finished);
     if (!done || isSpectator) return null;
     if (open.length === 0) {
+        const drain = currentDrain(tournament);
+        const myDrop = drain && viewerName ? drain.drops[viewerName] : null;
         return (
             <div className="tournament-wait-strip" role="status" aria-live="polite">
                 <span className="tournament-wait-text">
-                    Every table is done.{Number.isFinite(nextIn) && nextIn > 0 ? ` Next round in ${nextIn} s.` : ' Reseating…'}
+                    {drain ? `Chip drain −${drain.percent}%${myDrop ? ` · you drop ${myDrop}` : ''}.` : 'Every table is done.'}
+                    {Number.isFinite(nextIn) && nextIn > 0 ? ` Next round in ${nextIn} s.` : ' Reseating…'}
                 </span>
             </div>
         );

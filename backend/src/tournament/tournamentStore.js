@@ -107,8 +107,8 @@ function createMemoryStore({ seasonId = 1, balances = {} } = {}) {
             return { balanceCents: balanceOf(userId) };
         },
 
-        async saveRound({ tournamentId, roundNumber, tables, entryUpdates }) {
-            state.rounds.push({ tournamentId, roundNumber, tables: structuredClone(tables) });
+        async saveRound({ tournamentId, roundNumber, tables, entryUpdates, drain = null }) {
+            state.rounds.push({ tournamentId, roundNumber, tables: structuredClone(tables), drain: drain ? structuredClone(drain) : null });
             for (const update of entryUpdates) {
                 const entry = entryFor(tournamentId, update.userId);
                 if (entry) Object.assign(entry, update);
@@ -242,14 +242,14 @@ function createPgStore(pool) {
     return {
         kind: 'postgres',
 
-        async createTournament({ creatorUserId, name, venue, buyInCents, startingStack, maxSeats, startRule, startsAt, escalationPercent = 0 }) {
+        async createTournament({ creatorUserId, name, venue, buyInCents, startingStack, maxSeats, startRule, startsAt, drainPercent = 0 }) {
             const { rows } = await pool.query(
                 `INSERT INTO tournaments
-                    (season_id, creator_user_id, name, venue, buy_in_cents, starting_stack, max_seats, start_rule, starts_at, escalation_percent, status)
+                    (season_id, creator_user_id, name, venue, buy_in_cents, starting_stack, max_seats, start_rule, starts_at, drain_percent, status)
                  SELECT season_id, $1, $2, $3, $4, $5, $6, $7, $8, $9, 'registering'
                  FROM seasons WHERE status = 'active'
                  RETURNING tournament_id, season_id`,
-                [creatorUserId, name, venue, buyInCents, startingStack, maxSeats, startRule, startsAt, escalationPercent],
+                [creatorUserId, name, venue, buyInCents, startingStack, maxSeats, startRule, startsAt, drainPercent],
             );
             if (rows.length !== 1) {
                 const error = new Error('Unable to attach the tournament to an active season.');
@@ -304,19 +304,21 @@ function createPgStore(pool) {
             });
         },
 
-        async saveRound({ tournamentId, roundNumber, tables, entryUpdates }) {
+        async saveRound({ tournamentId, roundNumber, tables, entryUpdates, drain = null }) {
             await withTransaction(async client => {
                 for (const table of tables) {
                     await client.query(
                         `INSERT INTO tournament_rounds
                             (tournament_id, round_number, table_index, player_mode, seating, dealer_user_id,
-                             sit_out_user_ids, bid_type, bidder_user_id, deal_executed, point_changes, all_pass_redeals)
-                         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+                             sit_out_user_ids, bid_type, bidder_user_id, deal_executed, point_changes, all_pass_redeals,
+                             drain_percent, drain_changes)
+                         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
                         [
                             tournamentId, roundNumber, table.tableIndex, table.playerMode,
                             JSON.stringify(table.seating), table.dealerUserId, JSON.stringify(table.sitOutUserIds),
                             table.bidType ?? null, table.bidderUserId ?? null, Boolean(table.dealExecuted),
                             JSON.stringify(table.pointChanges || {}), table.allPassRedeals || 0,
+                            drain?.percent || 0, JSON.stringify(drain?.changes || {}),
                         ],
                     );
                 }
@@ -412,7 +414,7 @@ function createPgStore(pool) {
                         maxSeats: Number(row.max_seats),
                         startRule: row.start_rule,
                         startsAt: row.starts_at ? new Date(row.starts_at).getTime() : null,
-                        escalationPercent: Number(row.escalation_percent) || 0,
+                        drainPercent: Number(row.drain_percent) || 0,
                         createdAt: new Date(row.created_at).getTime(),
                     },
                     entries: entries.rows.map(entry => ({

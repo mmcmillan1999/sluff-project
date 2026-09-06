@@ -10,7 +10,6 @@ const GameService = require('../src/services/GameService');
 const { TournamentDirector, TournamentError, TOURNAMENT_VENUE, REGISTRATION_TTL_MS } = require('../src/tournament/TournamentDirector');
 const { createMemoryStore } = require('../src/tournament/tournamentStore');
 const { tableSizes, seatRound } = require('../src/tournament/seating');
-const { scaleExchange } = require('../src/core/handlers/scoringHandler');
 const { prizeSplitCents, rankFinishers, allocatePrizeCents } = require('../src/tournament/prizes');
 const { registerBrainProfile } = require('../src/core/bot-brains');
 const BotPlayer = require('../src/core/BotPlayer');
@@ -351,7 +350,7 @@ async function runTournamentTests() {
         const harness = buildHarness({ balances: { 901: 1000, 902: 1000 } });
         const { director, gameService, clock } = harness;
         const matt = { id: 11, username: 'Matt', is_vip: true };
-        const t = await director.create(matt, { buyInTokens: 1, startingStack: 120, maxSeats: 3, startRule: 'creator', escalationPercent: 0 });
+        const t = await director.create(matt, { buyInTokens: 1, startingStack: 120, maxSeats: 3, startRule: 'creator', drainPercent: 0 });
         await director.register(t.id, matt);
         for (let i = 0; i < 2; i += 1) await director.findPlayer(t.id, 11);
         await director.start(t.id, 11);
@@ -389,11 +388,9 @@ async function runTournamentTests() {
         assert.equal(engine.tournamentAllPassRedeals, 1);
         pass('Rounds open on screen and deal after the delay; an all-pass redeal waits for the same delay.');
 
-        // Escalation scales the exchange and keeps the round balanced.
-        assert.deepEqual(scaleExchange({ Ada: -30, Bo: 15, Cy: 15 }, 'Ada', 1.21), { Bo: 18, Cy: 18, Ada: -36 });
-        assert.deepEqual(scaleExchange({ Ada: 60, Bo: -20, Cy: -20, ScoreAbsorber: -20 }, 'Ada', 1.1), { Bo: -22, Cy: -22, ScoreAbsorber: -22, Ada: 66 });
-        assert.equal(scaleExchange(null, 'Ada', 2), null);
-        pass('Escalation multiplies every side of the exchange and the bidder balances it to the point.');
+        // Chip drain: between rounds every live stack drops by the percentage.
+        assert.equal(director.publicState(live).drainPercent, 0);
+        assert.equal(director.publicState(live).lastDrain, null, 'no drain at 0 percent');
         // The ring on the felt: the seat on the clock, its free window and bank.
         engine.biddingTurnPlayerId = 11; // a human seat: house seats are never on the clock
         const turnClock = engine._getRawStateForClient().tournamentClock.turn;
@@ -418,7 +415,7 @@ async function runTournamentTests() {
         };
         mockIo.sockets = { sockets };
         const mattSocket = fakeSocket('sock-matt');
-        const t = await director.create(matt, { buyInTokens: 1, startingStack: 120, maxSeats: 6, startRule: 'creator', escalationPercent: 0 });
+        const t = await director.create(matt, { buyInTokens: 1, startingStack: 120, maxSeats: 6, startRule: 'creator', drainPercent: 10 });
         await director.register(t.id, matt, { socketId: mattSocket.id });
         for (let i = 0; i < 5; i += 1) await director.findPlayer(t.id, 11);
         await director.start(t.id, 11);
@@ -444,9 +441,26 @@ async function runTournamentTests() {
         assert.ok(!mattSocket.rooms.has(other));
         director.watchTable(t.id, 11, other, mattSocket);
         await playTable(harness, other);
+        // Post-round chips, before the drain between rounds.
+        const chipsBefore = {};
+        for (const table of live.tables.values()) {
+            const done = gameService.getEngineById(table.tableId);
+            for (const [name, score] of Object.entries(done.scores)) chipsBefore[name] = score;
+        }
         clock.now += 60_000;
         await harness.drainQueue(); // finishRound, then the next round starts
         assert.equal(live.round, 2);
+        const drained = director.publicState(live).lastDrain;
+        assert.equal(drained.round, 1);
+        assert.equal(drained.percent, 10);
+        for (const entry of live.entries.values()) {
+            const before = chipsBefore[entry.username];
+            if (!Number.isFinite(before) || before <= 0) continue;
+            const drop = Math.ceil(before * 0.1);
+            assert.equal(drained.drops[entry.username], drop, `${entry.username} drops ten percent, rounded up`);
+            assert.equal(entry.stack, before - drop, `${entry.username}'s stack after the drain`);
+        }
+        pass('Between rounds every live stack drops by the chip drain, rounded up, and the board is told.');
         assert.equal(live.entries.get(11).watchingTableId, null, 'reseating ends the watch');
         assert.ok(!mattSocket.rooms.has(other), 'and leaves the old room');
         pass('A player whose table is done can watch another table; the watch ends when the room reseats.');
@@ -460,7 +474,7 @@ async function runTournamentTests() {
         const harness = buildHarness({ balances: { 901: 1000, 902: 1000, 903: 1000, 904: 1000, 905: 1000 } });
         const { director, gameService, store } = harness;
         const matt = { id: 11, username: 'Matt', is_vip: true };
-        const t = await director.create(matt, { buyInTokens: 1, startingStack: 120, maxSeats: 5, startRule: 'creator' });
+        const t = await director.create(matt, { buyInTokens: 1, startingStack: 120, maxSeats: 5, startRule: 'creator', drainPercent: 0 });
         for (let i = 0; i < 5; i += 1) await director.findPlayer(t.id, 11);
         assert.equal(director.get(t.id).status, 'registering');
         await director.start(t.id, 11);
@@ -502,13 +516,13 @@ async function runTournamentTests() {
         // nine-seat tournament can run past a hundred rounds (see the
         // whiteboard's simulation), which is a scheduling fact, not a bug.
         await assert.rejects(
-            () => director.create(matt, { buyInTokens: 1, startingStack: 60, maxSeats: 9, escalationPercent: 7 }),
-            err => err.code === 'BAD_ESCALATION',
+            () => director.create(matt, { buyInTokens: 1, startingStack: 60, maxSeats: 9, drainPercent: 7 }),
+            err => err.code === 'BAD_DRAIN',
         );
-        const t = await director.create(matt, { name: '  Saturday Sluff  ', buyInTokens: 1, startingStack: 60, maxSeats: 9, venue: 'fort-creek', startRule: 'creator', escalationPercent: 10 });
+        const t = await director.create(matt, { name: '  Saturday Sluff  ', buyInTokens: 1, startingStack: 60, maxSeats: 9, venue: 'fort-creek', startRule: 'creator', drainPercent: 10 });
         assert.equal(t.name, 'Saturday Sluff');
-        assert.equal(t.escalationPercent, 10);
-        assert.equal(t.stakesMultiplier, 1);
+        assert.equal(t.drainPercent, 10);
+        assert.equal(t.lastDrain, null);
         for (const human of [matt, { id: 12, username: 'Broke Bob' }, { id: 13, username: 'Cara' }, { id: 14, username: 'Dee' }]) {
             await director.register(t.id, human);
         }
@@ -527,7 +541,7 @@ async function runTournamentTests() {
             assert.ok(engine, `${table.tableId} exists`);
             assert.equal(engine.state, 'Dealing Pending', 'the round opens on screen before the cards fly');
             assert.ok(Number.isFinite(engine.tournamentDealDueAt), 'the deal is due after the deal delay');
-            assert.equal(engine.tournament.pointMultiplier, 1, 'round one is played at even stakes');
+            assert.equal(engine.tournament.drainPercent, 10, 'the table knows the drain for its badge');
         }
         await harness.drainQueue();
         for (const table of live.tables.values()) {
@@ -557,10 +571,10 @@ async function runTournamentTests() {
             const playing = [...live.entries.values()].filter(e => e.status === 'playing').length;
             const sizes = [...live.tables.values()].map(table => table.seats.length + table.spectatorUserIds.length);
             assert.equal(sizes.reduce((a, b) => a + b, 0), playing, 'everyone alive has a seat');
-            const stakes = director.publicState(live).stakesMultiplier;
-            assert.equal(stakes, Number((1.1 ** (live.round - 1)).toFixed(2)), 'stakes grow ten percent a round');
-            for (const table of live.tables.values()) {
-                assert.equal(gameService.getEngineById(table.tableId).tournament.pointMultiplier, stakes);
+            if (live.round >= 2) {
+                const drained = director.publicState(live).lastDrain;
+                assert.equal(drained.round, live.round - 1, 'the drain between rounds is reported on the board');
+                assert.ok(Object.values(drained.drops).every(drop => drop >= 1), 'every live stack dropped at least a chip');
             }
             if (live.tables.size === 1) {
                 const [tableId] = live.tables.keys();

@@ -10,18 +10,25 @@ export const MIN_SEATS = 3;
 export const MAX_SEATS = 15;
 export const TOURNAMENT_VENUE = 'tournament-stage';
 
-export const ESCALATION_OPTIONS = [
+// Chip drain: between rounds every stack drops by this much.
+export const DRAIN_OPTIONS = [
     { value: 0, label: 'Off' },
-    { value: 5, label: '+5%' },
-    { value: 10, label: '+10%' },
-    { value: 20, label: '+20%' },
+    { value: 5, label: '5%' },
+    { value: 10, label: '10%' },
+    { value: 20, label: '20%' },
 ];
 
-// "Stakes ×1.21" once escalation has kicked in; nothing in round one.
-export const stakesLabel = (multiplier) => {
-    const m = Number(multiplier);
-    if (!Number.isFinite(m) || m <= 1) return '';
-    return `Stakes ×${m.toFixed(2).replace(/0$/, '')}`;
+export const drainLabel = (tournament) => {
+    const percent = Number(tournament?.drainPercent) || 0;
+    return percent > 0 ? `${percent}% between rounds` : 'Off';
+};
+
+// The drop everyone just took, while the board shows it (between rounds
+// only: the round number on the drain matches the round just finished).
+export const currentDrain = (tournament) => {
+    const drain = tournament?.lastDrain;
+    if (!drain || !tournament || (tournament.tables || []).some(table => !table.finished)) return null;
+    return drain.round === tournament.round ? drain : null;
 };
 
 export const tableProgressLabel = (table) => {
@@ -121,13 +128,12 @@ export const tournamentFaces = (tournament, userId) => {
     const playing = ranked.filter(entry => entry.status === 'playing');
     const leaders = playing.slice(0, 3);
     const out = latestBust(tournament);
-    const stakes = stakesLabel(tournament.stakesMultiplier);
     const faces = [
         {
             key: 'round',
             title: tournament.name,
             sub: tournament.status === 'running'
-                ? `Round ${tournament.round} · ${tournament.playersLeft ?? playing.length} of ${fieldSize} left${stakes ? ` · ${stakes.toLowerCase()}` : ''}`
+                ? `Round ${tournament.round} · ${tournament.playersLeft ?? playing.length} of ${fieldSize} left`
                 : statusLabel(tournament),
         },
         {

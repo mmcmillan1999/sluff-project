@@ -391,9 +391,20 @@ const createDbTablesOnce = async (pool) => {
             );
         `);
         await pool.query("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS tournament_id INTEGER REFERENCES tournaments(tournament_id) ON DELETE SET NULL");
-        // Escalation (first live feedback, Sept 6 2026): the creator's
-        // percentage by which every round's stakes grow.
-        await pool.query("ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS escalation_percent INTEGER NOT NULL DEFAULT 0 CHECK (escalation_percent BETWEEN 0 AND 50)");
+        // Chip drain (Sept 6 2026, replacing the short-lived escalation
+        // multiplier): between rounds every stack drops by this percentage.
+        // Rounds play at even stakes, so insurance math stays plain.
+        await pool.query(`
+            DO $$ BEGIN
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tournaments' AND column_name = 'escalation_percent')
+                   AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tournaments' AND column_name = 'drain_percent') THEN
+                    ALTER TABLE tournaments RENAME COLUMN escalation_percent TO drain_percent;
+                END IF;
+            END $$;
+        `);
+        await pool.query("ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS drain_percent INTEGER NOT NULL DEFAULT 0 CHECK (drain_percent BETWEEN 0 AND 50)");
+        await pool.query("ALTER TABLE tournament_rounds ADD COLUMN IF NOT EXISTS drain_percent INTEGER NOT NULL DEFAULT 0");
+        await pool.query("ALTER TABLE tournament_rounds ADD COLUMN IF NOT EXISTS drain_changes JSONB NOT NULL DEFAULT '{}'::jsonb");
         // The first production schema called the event-time column `timestamp`.
         // When transaction_time was later added with a default, PostgreSQL gave
         // every pre-existing row the migration timestamp. Restore the original

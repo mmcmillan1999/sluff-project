@@ -154,8 +154,8 @@ test('the lobby slot is Create for a VIP, a ribbon when something is open, nothi
 });
 
 test('creator settings are validated the way the server validates them', () => {
-    const base = { buyInTokens: '1', startingStack: 120, maxSeats: '9', startRule: 'creator', startsAt: '', escalationPercent: 10 };
-    expect(validateSettings({ ...base, escalationPercent: 7 })).toMatch(/escalation/i);
+    const base = { buyInTokens: '1', startingStack: 120, maxSeats: '9', startRule: 'creator', startsAt: '', drainPercent: 10 };
+    expect(validateSettings({ ...base, drainPercent: 7 })).toMatch(/chip drain/i);
     expect(validateSettings(base)).toBe('');
     expect(validateSettings({ ...base, buyInTokens: '51' })).toMatch(/between 0 and 50/);
     expect(validateSettings({ ...base, startingStack: 100 })).toMatch(/starting stack/);
@@ -182,19 +182,28 @@ test('standings rank the playing by stack, then the busted by the round they wen
 });
 
 
-test('a finished table waits on the others with their trick counts, and the stakes show', () => {
+test('a finished table waits on the others with their trick counts', () => {
     const state = running();
     state.tables[0].finished = true;
     state.tables[0].phase = 'done';
-    state.stakesMultiplier = 1.21;
-    state.escalationPercent = 10;
     const onWatch = vi.fn();
     render(<TournamentView tournament={state} user={{ id: 12, username: 'Bob' }} onBack={() => {}} onQuit={() => {}} onWatch={onWatch} />);
     expect(screen.getByRole('heading', { name: /waiting on one table/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Watch' }));
     expect(onWatch).toHaveBeenCalledWith('tn-1-r3-t2');
     expect(screen.getAllByText(/Trick 7 of 11/).length).toBeGreaterThan(0);
-    expect(screen.getByRole('heading', { name: 'You · Stakes ×1.21' })).toBeInTheDocument();
+});
+
+test('between rounds the board shows the chip drain everyone just took and counts down', () => {
+    const state = running();
+    state.tables = [];
+    state.drainPercent = 10;
+    state.lastDrain = { round: 3, percent: 10, drops: { Matt: 21, Bob: 14, Cara: 10, Dee: 6, Eli: 4 } };
+    state.nextRoundInSeconds = 8;
+    render(<TournamentView tournament={state} user={{ id: 12, username: 'Bob' }} onBack={() => {}} onQuit={() => {}} />);
+    expect(screen.getByRole('heading', { name: 'Next round in 8 s' })).toBeInTheDocument();
+    expect(screen.getByText(/everyone drops 10%/i)).toBeInTheDocument();
+    expect(screen.getByText('−14')).toBeInTheDocument();
 });
 
 

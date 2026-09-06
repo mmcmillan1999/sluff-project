@@ -47,11 +47,14 @@ Debug overlay in game: `Shift+D`.
   `tournament` view in App.js, the header cube via BrandHeader's `tournament` prop, venue
   `tournament-stage` in venueThemes.css). Clock: `core/tournamentClock.js` (doubled after the first
   live event: 24 s bid, 16 s trump, 40 s discards, 12 s + 90 s bank per card; pace pressure at
-  two-thirds done = free ×2/3, bank drains 2×; absent seat 6 s; playout vote 20 s; board 12 s) drives
+  two-thirds done = free ×2/3, bank drains 2×; absent seat 6 s; playout vote 20 s) drives
   afkTurnTimer for tournament tables. Rounds open in Dealing Pending and the director deals 2.5 s later
   (clients need that transition for the deal animation); one table left reopens the same engine in
   place; voice is one `tournament-<id>` room per event (socketActionGuard + TournamentVoiceDock);
-  escalation `tournaments.escalation_percent` scales each round's exchange by (1+p)^(round-1). Deploy survival:
+  chip drain `tournaments.drain_percent` (Off/5/10/20, default 10) drops every live stack by that much between
+  rounds, rounded up, before busts (rounds play at even stakes; the escalation multiplier was retired the same
+  day because it muddied the insurance math); watchers (tournamentWatch) sit as hand-hidden spectators at a
+  table still playing until the room reseats; board delay 8 s with a countdown. Deploy survival:
   `tournament_snapshots` (director.snapshotForShutdown on SIGTERM, restoreSnapshots at boot + sweep;
   a running tournament with no snapshot is voided after a 10-min grace); `npm run deploy:check` blocks
   on running tournaments with humans. Record: `tournament_results` → GET /api/tournaments/scoreboard

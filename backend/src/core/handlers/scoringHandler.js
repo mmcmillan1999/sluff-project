@@ -4,19 +4,6 @@ const gameLogic = require('../logic');
 const { ROUND_PRESENTATION_LOCK_MS } = require('../constants');
 const { brainNameFor } = require('../bot-brains');
 
-function scaleExchange(changes, bidderName, multiplier) {
-    if (!changes || typeof changes !== 'object') return changes;
-    const scaled = {};
-    let othersTotal = 0;
-    for (const [name, change] of Object.entries(changes)) {
-        if (name === bidderName) continue;
-        scaled[name] = Math.round((Number(change) || 0) * multiplier);
-        othersTotal += scaled[name];
-    }
-    if (bidderName && bidderName in changes) scaled[bidderName] = -othersTotal;
-    return scaled;
-}
-
 function calculateRoundScores(engine) {
     const effects = [];
     
@@ -52,17 +39,6 @@ function calculateRoundScores(engine) {
         bidderTotalCardPoints,
         playerOrderActive: engine.playerOrder.turnOrder
     });
-
-    // Tournament escalation: every round's stakes grow by the creator's
-    // percentage. The exchange is scaled after the cards (and any deal) have
-    // spoken, with the bidder's side set to the negative of everyone else's
-    // so the round still balances to the point.
-    const stakes = Number(engine.tournament?.pointMultiplier) || 1;
-    if (stakes !== 1) {
-        const scaledBidder = engine.bidWinnerInfo?.playerName;
-        roundData.pointChanges = scaleExchange(roundData.pointChanges, scaledBidder, stakes);
-        roundData.cardPointChanges = scaleExchange(roundData.cardPointChanges, scaledBidder, stakes);
-    }
 
     for (const playerName in roundData.pointChanges) {
         if (engine.scores[playerName] !== undefined) {
@@ -221,5 +197,4 @@ function calculateRoundScores(engine) {
 
 module.exports = {
     calculateRoundScores,
-    scaleExchange,
 };
