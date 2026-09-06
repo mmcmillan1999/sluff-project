@@ -24,8 +24,11 @@ export const isLearner = (tutorialState) => (
     (Number(tutorialState?.gamesPlayed) || 0) < LEARNER_GAMES
 );
 
-// Manual override from the game menu: veterans can summon the helper,
-// learners can silence it. Unset = automatic by games played.
+// Manual override from the game menu. Unset = ON for everyone (Matt, Sept
+// 2026: "turn on card helper by default for users"); the menu and a quick
+// tip tell players they can switch it off. isLearner (first three games)
+// still drives the things that should only happen to a NEW player, such as
+// the turn call-up exemption.
 const HELPER_KEY = 'sluff_card_helper';
 
 export const getCardHelperOverride = () => {
@@ -44,10 +47,10 @@ export const setCardHelperOverride = (value) => {
     } catch { /* private browsing: session state stands */ }
 };
 
-export const cardHelperActive = (tutorialState) => {
+export const cardHelperActive = () => {
     const override = getCardHelperOverride();
     if (override) return override === 'on';
-    return isLearner(tutorialState);
+    return true;
 };
 
 /**

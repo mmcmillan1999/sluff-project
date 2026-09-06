@@ -23,10 +23,10 @@ import {
 import LobbyChat from './LobbyChat';
 import AdminObserverMode from './AdminObserverMode';
 import DecorBoundary from './DecorBoundary';
-import { getLobbyChatHistory, fetchChampionLine } from '../services/api';
+import { getLobbyChatHistory, fetchChampionLine, updateAccountSettings } from '../services/api';
 import { haptic } from '../utils/haptics';
 import LearnerCoach from './game/coach/LearnerCoach';
-import { cardHelperActive, setCardHelperOverride } from './game/coach/learnerLessons';
+import { cardHelperActive, isLearner, setCardHelperOverride } from './game/coach/learnerLessons';
 import SoundControls from './game/SoundControls';
 import { useModalFocus } from '../hooks/useModalFocus';
 import { shareInvite, getInviteUrl } from '../utils/tableInvites';
@@ -273,6 +273,24 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         [isSpectator, tutorialState, cardHelperNonce],
     );
 
+    // VIP-only (alpha testers): untimed turns when they are the only person
+    // at the table. Saved server-side; the user sync brings the flag back
+    // and turnPressureSuppressed above reads it from `user`.
+    const untimedAlone = user?.untimed_bot_games === true;
+    const [untimedBusy, setUntimedBusy] = useState(false);
+    const toggleUntimedAlone = useCallback(async () => {
+        if (untimedBusy) return;
+        setUntimedBusy(true);
+        try {
+            await updateAccountSettings({ untimedBotGames: !untimedAlone });
+            socket?.emit?.('requestUserSync');
+        } catch (error) {
+            console.error('[SETTINGS] Could not save the turn timer setting:', error.message);
+        } finally {
+            setUntimedBusy(false);
+        }
+    }, [untimedAlone, untimedBusy, socket]);
+
     const rawAfkDeadline = Number(currentTableState?.afkDeadline);
     const afkDeadlineLocal = Number.isFinite(rawAfkDeadline) && rawAfkDeadline > 0
         ? rawAfkDeadline - serverOffsetRef.current
@@ -301,8 +319,12 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         : null;
     // Learner exemption: no rim flash, no wave, no countdown pressure for
     // the first three games — the coach is teaching, not the clock.
-    learnerModeRef.current = learnerMode;
-    const effectiveTurnNudgeLevel = learnerMode ? 0 : turnNudgeLevel;
+    // The exemption keys on being NEW (first three games), not on the card
+    // helper: the helper is on by default for everyone now, and the call-up
+    // must not vanish for everyone with it.
+    const newPlayer = isLearner(tutorialState);
+    learnerModeRef.current = newPlayer;
+    const effectiveTurnNudgeLevel = newPlayer ? 0 : turnNudgeLevel;
     const handNudgeLevel = pendingSelfAction?.surface === 'hand' ? effectiveTurnNudgeLevel : 0;
     const promptNudgeLevel = pendingSelfAction?.surface === 'prompt' ? effectiveTurnNudgeLevel : 0;
 
@@ -1360,8 +1382,25 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                         </button>
                         <p className="game-menu-helper">
                             Point values on every card plus coaching tips on the felt.
-                            On automatically for your first three games.
+                            On by default; switch it off here whenever you like.
                         </p>
+                        {user?.is_vip && (
+                            <>
+                                <button
+                                    onClick={toggleUntimedAlone}
+                                    className="game-menu-button"
+                                    aria-pressed={untimedAlone}
+                                    disabled={untimedBusy}
+                                >
+                                    Untimed when alone: {untimedAlone ? 'On' : 'Off'}
+                                </button>
+                                <p className="game-menu-helper">
+                                    When you're the only person at the table nobody is waiting on you:
+                                    no turn timer, nothing played for you. With others seated, the
+                                    usual timer applies.
+                                </p>
+                            </>
+                        )}
                         <button onClick={handleShareInvite} className="game-menu-button invite">Invite Friends</button>
                         <button
                             onClick={() => {

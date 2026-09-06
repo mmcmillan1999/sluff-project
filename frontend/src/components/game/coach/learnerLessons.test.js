@@ -1,7 +1,7 @@
 // The learner-mode lesson picker: fires the right lesson at the right
 // moment, one at a time, never twice, and only from public client state.
 
-import { pickLearnerLesson, explainTrick, pointsMilestone, isLearner, LEARNER_GAMES } from './learnerLessons';
+import { pickLearnerLesson, explainTrick, pointsMilestone, isLearner, LEARNER_GAMES, cardHelperActive, setCardHelperOverride } from './learnerLessons';
 
 const baseState = (overrides = {}) => ({
     state: 'Playing Phase',
@@ -313,5 +313,30 @@ describe('pointsMilestone', () => {
             ] },
         }), 'Me');
         expect(milestone.copy.strong).toBe('Ann is at 54 captured points.');
+    });
+});
+
+describe('cardHelperActive', () => {
+    afterEach(() => { window.localStorage.removeItem('sluff_card_helper'); });
+
+    test('is on by default for everyone, however many games they have played', () => {
+        expect(cardHelperActive({ gamesPlayed: 0 })).toBe(true);
+        expect(cardHelperActive({ gamesPlayed: LEARNER_GAMES * 10 })).toBe(true);
+        expect(cardHelperActive(undefined)).toBe(true);
+    });
+
+    test('the menu switch wins in either direction and can be cleared', () => {
+        setCardHelperOverride('off');
+        expect(cardHelperActive({ gamesPlayed: 0 })).toBe(false);
+        setCardHelperOverride('on');
+        expect(cardHelperActive({ gamesPlayed: 50 })).toBe(true);
+        setCardHelperOverride(null);
+        expect(cardHelperActive({ gamesPlayed: 50 })).toBe(true);
+    });
+
+    test('being new is a separate question from the helper switch', () => {
+        setCardHelperOverride('off');
+        expect(isLearner({ gamesPlayed: 0 })).toBe(true);
+        expect(isLearner({ gamesPlayed: LEARNER_GAMES })).toBe(false);
     });
 });

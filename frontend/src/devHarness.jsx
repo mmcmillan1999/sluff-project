@@ -425,7 +425,7 @@ const HarnessApp = () => {
             <GameHeader />
             <div className="app-content-container with-header app-view-gameTable">
                 <GameTableView
-                    user={{ id: 101, username: 'You', is_admin: true }}
+                    user={{ id: 101, username: 'You', is_admin: true, is_vip: true }}
                     playerId={101}
                     currentTableState={liveState}
                     handleLeaveTable={noop}

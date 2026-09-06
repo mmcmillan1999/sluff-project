@@ -18,6 +18,11 @@ export const TIPS = [
         body: 'Flick keeps the classic drag-and-throw. Fast lets you click a card to raise it, then click again to play it instantly. Pick whichever feels right — you can change it anytime from the menu.',
         widget: 'play-style',
     },
+    {
+        id: 'card-helper-on-2026-09',
+        title: 'Card helper is on',
+        body: 'Every card shows its point value, and coaching tips appear on the felt at the moments that matter. Prefer a clean table? Open the menu and switch Card helper off — it comes back whenever you want it.',
+    },
 ];
 
 export const TIP_IDS = TIPS.map(tip => tip.id);
