@@ -2,6 +2,9 @@
 
 const { BID_HIERARCHY } = require('../constants');
 
+// A tournament table washes the round after this many all-pass redeals.
+const MAX_TOURNAMENT_ALL_PASS_REDEALS = 3;
+
 function placeBid(engine, userId, bid) {
     if (userId !== engine.biddingTurnPlayerId) return [];
     
@@ -93,6 +96,15 @@ function resolveBiddingFinal(engine) {
                 duration: 3000,
                 onTimeout: (engineRef) => {
                     if (engineRef.state === "AllPassWidowReveal") {
+                        if (engineRef.tournament) {
+                            // Tournament tables deal themselves; nobody taps
+                            // the deck. Three redeals and the round washes.
+                            if (engineRef.tournamentAllPassRedeals >= MAX_TOURNAMENT_ALL_PASS_REDEALS) {
+                                return engineRef.completeTournamentRoundAsWash();
+                            }
+                            engineRef._advanceRound();
+                            return engineRef.dealCards(engineRef.dealer).effects;
+                        }
                         engineRef._advanceRound();
                         return [{ type: 'BROADCAST_STATE' }];
                     }

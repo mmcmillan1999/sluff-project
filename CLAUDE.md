@@ -36,6 +36,13 @@ Debug overlay in game: `Shift+D`.
 - `frontend/src/utils/CardSpacingEngine.js` — CENTER/OVERLAP card spacing math (`docs/CARD_SPACING_LOGIC.md`).
 - `play_timings` table (Aug 2026): server-measured human think time per card play (turn-open →
   card-received, bots excluded) — the reaction-time distribution is the bot-detection signal.
+- Tournaments (Sept 2026, branch `tournament`): `backend/src/tournament/` — `TournamentDirector.js` owns
+  registration, buy-ins/refunds/prizes and the round loop (one round at every table, then reseat top
+  with top); `seating.js` (n = 3a + 4b tables, sit-out count) and `prizes.js` (50/30/20, 65/35 under six)
+  are pure; `tournamentStore.js` has the Postgres store and an in-memory one for tests. Tables are
+  ordinary GameEngines with `engine.tournament` set (`tableType: 'tournament'`, gameId null, never game
+  over, no draws/forfeits/rematch, all-pass redeals keep the dealer and wash after three) that report
+  a TOURNAMENT_ROUND_COMPLETE effect. Spec: the tournament whiteboard artifact (see memory).
 - Bot insurance (Aug 2026): `backend/src/core/bot-strategies/MarketInsuranceStrategy.js` prices
   asks/offers from a Monte Carlo rollout (`RolloutEstimator.js`) over public information only
   (`PublicRoundView.js` is the enforced no-cheating boundary — see `tests/marketInsurance.test.js`).

@@ -72,6 +72,22 @@ function untimedForThisSeat(engine, player) {
     return humans.length === 1;
 }
 
+// In a tournament an absent seat is still the table's problem: the house
+// plays for a disconnected player on a short clock instead of waiting on a
+// forfeit that tournaments do not have.
+const TOURNAMENT_ABSENT_TIMEOUT_MS = 6_000;
+
+function absentSeat(engine, player) {
+    return player?.disconnected === true && !engine?.tournament;
+}
+
+function effectiveTimeoutFor(engine, pending, timeoutMs) {
+    if (engine?.tournament && engine.players?.[pending?.userId]?.disconnected === true) {
+        return Math.min(timeoutMs, TOURNAMENT_ABSENT_TIMEOUT_MS);
+    }
+    return timeoutMs;
+}
+
 function pendingHumanAction(engine) {
     const pending = pendingSeatAction(engine);
     if (!pending) return null;
@@ -85,13 +101,13 @@ function pendingSeatAction(engine) {
 
     if (engine.state === 'Bidding Phase' && engine.biddingTurnPlayerId != null) {
         const player = engine.players?.[engine.biddingTurnPlayerId];
-        if (!player || player.isBot || player.disconnected) return null;
+        if (!player || player.isBot || absentSeat(engine, player)) return null;
         return { userId: engine.biddingTurnPlayerId, kind: 'bid', playerName: player.playerName };
     }
 
     if (engine.state === 'Playing Phase' && engine.trickTurnPlayerId != null) {
         const player = engine.players?.[engine.trickTurnPlayerId];
-        if (!player || player.isBot || player.disconnected) return null;
+        if (!player || player.isBot || absentSeat(engine, player)) return null;
         return { userId: engine.trickTurnPlayerId, kind: 'play', playerName: player.playerName };
     }
 
@@ -100,27 +116,27 @@ function pendingSeatAction(engine) {
     // Dealing Pending" was the commonest freeze the timer did not cover.
     if (engine.state === 'Dealing Pending' && engine.dealer != null) {
         const player = engine.players?.[engine.dealer];
-        if (!player || player.isBot || player.disconnected) return null;
+        if (!player || player.isBot || absentSeat(engine, player)) return null;
         return { userId: engine.dealer, kind: 'deal', playerName: player.playerName };
     }
 
     if (engine.state === 'Awaiting Frog Upgrade Decision' && engine.biddingTurnPlayerId != null) {
         const player = engine.players?.[engine.biddingTurnPlayerId];
-        if (!player || player.isBot || player.disconnected) return null;
+        if (!player || player.isBot || absentSeat(engine, player)) return null;
         return { userId: engine.biddingTurnPlayerId, kind: 'upgrade', playerName: player.playerName };
     }
 
     const bidderId = engine.bidWinnerInfo?.userId;
     if (engine.state === 'Trump Selection' && bidderId != null && !engine.trumpSuit) {
         const player = engine.players?.[bidderId];
-        if (!player || player.isBot || player.disconnected) return null;
+        if (!player || player.isBot || absentSeat(engine, player)) return null;
         return { userId: bidderId, kind: 'trump', playerName: player.playerName };
     }
 
     if (engine.state === 'Frog Widow Exchange' && bidderId != null
         && (engine.widowDiscardsForFrogBidder?.length ?? 0) === 0) {
         const player = engine.players?.[bidderId];
-        if (!player || player.isBot || player.disconnected) return null;
+        if (!player || player.isBot || absentSeat(engine, player)) return null;
         return { userId: bidderId, kind: 'discards', playerName: player.playerName };
     }
 
@@ -194,7 +210,7 @@ function evaluate(engine, { now = Date.now(), timeoutMs = DEFAULT_TIMEOUT_MS } =
         return null;
     }
 
-    if (now - engine.afkWatch.since < timeoutMs) return null;
+    if (now - engine.afkWatch.since < effectiveTimeoutFor(engine, pending, timeoutMs)) return null;
 
     // Re-arm before acting: whatever happens next, this turn must not fire
     // twice, and the next turn gets a full window.
@@ -233,7 +249,7 @@ function deadlineFor(engine, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
     if (!engine?.afkWatch) return null;
     const pending = pendingHumanAction(engine);
     if (!pending || turnKey(engine, pending) !== engine.afkWatch.key) return null;
-    return engine.afkWatch.since + timeoutMs;
+    return engine.afkWatch.since + effectiveTimeoutFor(engine, pending, timeoutMs);
 }
 
 /**
@@ -268,6 +284,7 @@ function refresh(engine, userId, { now = Date.now(), timeoutMs = DEFAULT_TIMEOUT
 
 module.exports = {
     CARD_POINTS,
+    TOURNAMENT_ABSENT_TIMEOUT_MS,
     MAX_TURN_WINDOWS,
     DEAL_ALLOWANCE_MS,
     DEFAULT_TIMEOUT_MS,

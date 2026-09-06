@@ -289,6 +289,97 @@ const createDbTablesOnce = async (pool) => {
 
         // Ensure transaction_time column exists (for existing databases)
         await pool.query("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS transaction_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP");
+
+        // Tournaments (Sept 2026, src/tournament/). A tournament's money moves
+        // through the same ledger as games — buy-in at registration, refund
+        // on withdrawal or cancellation, prize at the podium — keyed by
+        // tournament_id rather than game_id. Rounds and results are the
+        // director's own records; nothing here touches game_history or the
+        // season win/loss stats, because a tournament is a record of its own.
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS tournaments (
+                tournament_id SERIAL PRIMARY KEY,
+                season_id INTEGER NOT NULL REFERENCES seasons(season_id),
+                creator_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                name VARCHAR(80) NOT NULL,
+                venue VARCHAR(50) NOT NULL,
+                buy_in_cents INTEGER NOT NULL CHECK (buy_in_cents >= 0 AND buy_in_cents <= 5000),
+                starting_stack INTEGER NOT NULL CHECK (starting_stack IN (60, 90, 120, 180, 240)),
+                max_seats INTEGER NOT NULL CHECK (max_seats BETWEEN 3 AND 15),
+                start_rule VARCHAR(20) NOT NULL CHECK (start_rule IN ('at_time', 'when_full', 'creator')),
+                starts_at TIMESTAMP WITH TIME ZONE,
+                status VARCHAR(20) NOT NULL DEFAULT 'registering'
+                    CHECK (status IN ('registering', 'running', 'complete', 'cancelled', 'voided')),
+                current_round INTEGER NOT NULL DEFAULT 0,
+                close_reason TEXT,
+                created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                started_at TIMESTAMP WITH TIME ZONE,
+                ended_at TIMESTAMP WITH TIME ZONE
+            );
+        `);
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS tournament_entries (
+                entry_id SERIAL PRIMARY KEY,
+                tournament_id INTEGER NOT NULL REFERENCES tournaments(tournament_id) ON DELETE CASCADE,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                is_bot BOOLEAN NOT NULL DEFAULT FALSE,
+                status VARCHAR(20) NOT NULL DEFAULT 'registered'
+                    CHECK (status IN ('registered', 'withdrawn', 'playing', 'busted', 'finished', 'refunded')),
+                stack INTEGER NOT NULL,
+                sit_outs INTEGER NOT NULL DEFAULT 0,
+                deals INTEGER NOT NULL DEFAULT 0,
+                busted_round INTEGER,
+                place INTEGER,
+                prize_cents INTEGER NOT NULL DEFAULT 0,
+                joined_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (tournament_id, user_id)
+            );
+        `);
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS tournament_rounds (
+                round_id SERIAL PRIMARY KEY,
+                tournament_id INTEGER NOT NULL REFERENCES tournaments(tournament_id) ON DELETE CASCADE,
+                round_number INTEGER NOT NULL,
+                table_index INTEGER NOT NULL,
+                player_mode INTEGER NOT NULL,
+                seating JSONB NOT NULL,
+                dealer_user_id INTEGER,
+                sit_out_user_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+                bid_type VARCHAR(20),
+                bidder_user_id INTEGER,
+                deal_executed BOOLEAN NOT NULL DEFAULT FALSE,
+                point_changes JSONB NOT NULL DEFAULT '{}'::jsonb,
+                all_pass_redeals INTEGER NOT NULL DEFAULT 0,
+                created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+        await pool.query(`
+            CREATE INDEX IF NOT EXISTS idx_tournament_rounds_tournament
+            ON tournament_rounds (tournament_id, round_number);
+        `);
+        // The tournament record: every place, every prize, so a tournament
+        // season scoreboard can be ranked (by winnings first) and retuned
+        // later without touching the data.
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS tournament_results (
+                tournament_id INTEGER NOT NULL REFERENCES tournaments(tournament_id) ON DELETE CASCADE,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                season_id INTEGER NOT NULL REFERENCES seasons(season_id),
+                place INTEGER NOT NULL CHECK (place > 0),
+                field_size INTEGER NOT NULL CHECK (field_size >= 3),
+                buy_in_cents INTEGER NOT NULL,
+                prize_cents INTEGER NOT NULL DEFAULT 0 CHECK (prize_cents >= 0),
+                final_stack INTEGER,
+                busted_round INTEGER,
+                created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (tournament_id, user_id)
+            );
+        `);
+        await pool.query(`
+            CREATE INDEX IF NOT EXISTS idx_tournament_results_season_user
+            ON tournament_results (season_id, user_id);
+        `);
+        await pool.query("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS tournament_id INTEGER REFERENCES tournaments(tournament_id) ON DELETE SET NULL");
         // The first production schema called the event-time column `timestamp`.
         // When transaction_time was later added with a default, PostgreSQL gave
         // every pre-existing row the migration timestamp. Restore the original
@@ -900,6 +991,9 @@ const createDbTablesOnce = async (pool) => {
         // schema transaction and before recovery can insert refund records.
         await pool.query("ALTER TYPE transaction_type_enum ADD VALUE IF NOT EXISTS 'abandoned_refund'");
         await pool.query("ALTER TYPE transaction_type_enum ADD VALUE IF NOT EXISTS 'game_void_reversal'");
+        await pool.query("ALTER TYPE transaction_type_enum ADD VALUE IF NOT EXISTS 'tournament_buy_in'");
+        await pool.query("ALTER TYPE transaction_type_enum ADD VALUE IF NOT EXISTS 'tournament_prize'");
+        await pool.query("ALTER TYPE transaction_type_enum ADD VALUE IF NOT EXISTS 'tournament_refund'");
         // The crash-report trim runs OUT here, after COMMIT, on purpose: by the
         // end of the migration transaction it holds ACCESS EXCLUSIVE on users
         // and game_history, and an unbounded DELETE inside it would stall every

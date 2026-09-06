@@ -97,6 +97,11 @@
                         this._retryDueSettlement(tableId);
                     }
                 }
+                if (this.tournamentDirector) {
+                    Promise.resolve()
+                        .then(() => this.tournamentDirector.tick())
+                        .catch(error => console.error('[TOURNAMENT] Tick failed:', error.message));
+                }
             }, 1500);
         }
 
@@ -173,6 +178,63 @@
             });
         }
 
+        // ===================== TOURNAMENTS =====================
+        // The director (tournament/TournamentDirector.js) owns the room; the
+        // service owns the tables. Each tournament table is an ordinary engine
+        // registered here for the lifetime of one round, so the bot heartbeat,
+        // the AFK backstop and socket routing all work on it unchanged.
+
+        attachTournamentDirector(director) {
+            this.tournamentDirector = director || null;
+        }
+
+        // One lease owner per tournament: its house players stay leased to
+        // the tournament between rounds, so no Quick Play table can grab them.
+        createBotSeatLease(ownerKey) {
+            return this._createBotSeatLeaseController(String(ownerKey));
+        }
+
+        createTournamentEngine({ tableId, venue, tableName, leaseController = null }) {
+            if (this.engines[tableId]) throw new Error(`Table ${tableId} already exists.`);
+            const processTimerEffects = (effects = []) => this._executeEffects(tableId, effects);
+            const engine = new GameEngine(
+                tableId,
+                venue,
+                tableName,
+                processTimerEffects,
+                'tournament',
+                this.botAccounts,
+                leaseController,
+            );
+            this.engines[tableId] = engine;
+            return engine;
+        }
+
+        destroyTournamentEngine(tableId) {
+            const engine = this.engines[tableId];
+            if (!engine || engine.tableType !== 'tournament') return false;
+            if (engine.pendingBotAction) clearTimeout(engine.pendingBotAction);
+            engine.pendingBotAction = null;
+            for (const key of Object.keys(engine.internalTimers || {})) {
+                clearInterval(engine.internalTimers[key]);
+                clearTimeout(engine.internalTimers[key]);
+                delete engine.internalTimers[key];
+            }
+            this._clearRoundAdvanceTimer(tableId);
+            this._clearTerminalCleanupTimer(tableId);
+            const sockets = this.io?.sockets?.sockets;
+            for (const player of Object.values(engine.players)) {
+                const socket = player.socketId && sockets?.get?.(player.socketId);
+                socket?.leave?.(tableId);
+            }
+            // Bot leases belong to the tournament, not the table: nothing to
+            // release here.
+            engine.gameStarted = false;
+            engine.tournament = null;
+            delete this.engines[tableId];
+            return true;
+        }
+
         getEngineById(tableId) {
             return Object.prototype.hasOwnProperty.call(this.engines, tableId)
                 ? this.engines[tableId]
@@ -180,6 +242,7 @@
         }
         getAllEngines() { return this.engines; }
         hasActiveOrPendingGame() {
+            if (this.tournamentDirector?.hasRunning?.()) return true;
             return Object.values(this.engines).some(engine => (
                 engine.gameStartPending === true
                 || (engine.gameStarted === true
@@ -317,6 +380,11 @@
 
         _reconcileAutomaticNextRoundTimer(tableId, readiness = null) {
             const engine = this.getEngineById(tableId);
+            if (engine?.tournament) {
+                // The director reseats the room; the table never advances itself.
+                this._clearRoundAdvanceTimer(tableId);
+                return { status: 'inactive' };
+            }
             const summary = engine?.roundSummary;
             const presentationReadyAt = Number(summary?.presentationReadyAt);
             if (!engine || engine.state !== 'Awaiting Next Round Trigger'
@@ -459,7 +527,8 @@
         getLobbyState() {
             const groupedByTheme = THEMES.map(theme => {
                 const themeTables = Object.values(this.engines)
-                    .filter(engine => engine.theme === theme.id && engine.tableType !== 'quickplay')
+                    .filter(engine => engine.theme === theme.id
+                        && engine.tableType !== 'quickplay' && engine.tableType !== 'tournament')
                     .map(engine => {
                         const activePlayers = Object.values(engine.players).filter(p => !p.isSpectator);
                         return {
@@ -658,6 +727,9 @@
         isUserSeatedAnywhere(userId) {
             const id = Number(userId);
             if (!Number.isSafeInteger(id) || id <= 0) return false;
+            // Between rounds a tournament player sits at no table but still
+            // owns keyed state in the director.
+            if (this.tournamentDirector?.isUserInTournament?.(id)) return true;
             return Object.values(this.engines || {}).some(engine => {
                 const player = engine?.players?.[id];
                 return Boolean(player) && player.isSpectator !== true;
@@ -1384,6 +1456,9 @@
             let saved = 0;
             for (const [tableId, engine] of Object.entries(this.engines)) {
                 try {
+                    // Tournament tables have no game_history row; the director
+                    // voids and refunds an interrupted tournament at boot.
+                    if (engine.tournament) continue;
                     const hasHuman = Object.values(engine.players)
                         .some(p => !p.isBot && !p.isSpectator);
                     if (!hasHuman) continue;
@@ -2029,6 +2104,13 @@
                             ],
                         ).catch(err => console.error('[ROUND-LOG] insert failed:', err.message));
                         break;
+                    case 'TOURNAMENT_ROUND_COMPLETE':
+                        try {
+                            await this.tournamentDirector?.onTableComplete?.(effect.payload);
+                        } catch (error) {
+                            console.error(`[TOURNAMENT] Round completion failed on ${tableId}:`, error);
+                        }
+                        break;
                     case 'HANDLE_GAME_OVER': {
                         const settlement = await this._runSettlementWithRetry(
                             engine,
@@ -2309,6 +2391,7 @@
         // clock a fellow human would — reconnecting inside it clears it.
         _enforceLoneHumanForfeit(tableId) {
             const engine = this.getEngineById(tableId);
+            if (engine?.tournament) return; // no forfeit clock in a tournament
             if (!engine?.gameStarted || engine.internalTimers?.forfeit || engine.forfeiture?.targetPlayerName) return;
             if (['Game Over', 'DrawComplete', 'Draw Resolving'].includes(engine.state)) return;
             const seated = Object.values(engine.players).filter(p => p && !p.isSpectator);
@@ -2440,7 +2523,7 @@
         
                 if (engine.state === 'Dealing Pending' && engine.dealer == botUserId) {
                     scheduleTurnAction(this.dealCards, standardDelay, botUserId);
-                } else if (engine.state === 'Awaiting Next Round Trigger') {
+                } else if (engine.state === 'Awaiting Next Round Trigger' && !engine.tournament) {
                     // Check if this bot should trigger next round
                     if (engine.roundSummary && engine.roundSummary.dealerOfRoundId == botUserId) {
                         console.log(`[BOT] ${bot.playerName} scheduling next round trigger as dealer`);

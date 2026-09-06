@@ -50,6 +50,7 @@ const suites = [
     { name: 'champion line service', file: './championLine.test.js' },
     { name: 'store entitlements', file: './entitlements.test.js' },
     { name: 'frog discards', file: './frogDiscards.test.js' },
+    { name: 'tournament director', file: './tournament.test.js' },
 ];
 
 function loadRunner(suite) {

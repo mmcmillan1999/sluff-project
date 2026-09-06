@@ -46,7 +46,9 @@ function calculateRoundScores(engine) {
         }
     }
     
-    const isGameOver = Object.values(engine.scores).some(score => score <= 0);
+    // A tournament table never ends the game: a stack at zero is a bust the
+    // director applies once every table has finished the round.
+    const isGameOver = !engine.tournament && Object.values(engine.scores).some(score => score <= 0);
     
     engine.state = isGameOver ? "Game Over" : "Awaiting Next Round Trigger";
 
@@ -171,6 +173,25 @@ function calculateRoundScores(engine) {
     effects.push({ type: 'SYNC_PLAYER_TOKENS', payload: { playerIds: Object.keys(engine.players) } });
     effects.push({ type: 'BROADCAST_STATE' });
     
+    if (engine.tournament) {
+        // The director waits for every table's chip transfer before it
+        // reseats the room; this is the one message it needs from a table.
+        effects.push({
+            type: 'TOURNAMENT_ROUND_COMPLETE',
+            payload: {
+                tournamentId: engine.tournament.tournamentId,
+                roundNumber: engine.tournament.roundNumber,
+                tableIndex: engine.tournament.tableIndex,
+                tableId: engine.tableId,
+                scores: { ...engine.scores },
+                pointChanges: { ...roundData.pointChanges },
+                bidType: roundData.bidType,
+                bidderName,
+                dealExecuted: Boolean(engine.insurance.dealExecuted),
+                allPassRedeals: engine.tournamentAllPassRedeals || 0,
+            },
+        });
+    }
     return effects;
 }
 

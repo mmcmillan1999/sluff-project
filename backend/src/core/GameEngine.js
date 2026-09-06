@@ -99,7 +99,130 @@ class GameEngine {
             : null;
         this._nextBotId = -1;
         this.pendingBotAction = null;
+        // Tournament context (tournament/TournamentDirector.js). When set the
+        // table is one round of a tournament: it never ends the game itself,
+        // never advances its own round, and reports the chip transfer back
+        // to the director through a TOURNAMENT_ROUND_COMPLETE effect.
+        this.tournament = null;
+        this.tournamentAllPassRedeals = 0;
         this._initializeNewRoundState();
+    }
+
+    /**
+     * Three all-pass redeals in a tournament round and the table washes the
+     * round: nobody's stack moves and the director reseats the room. Without
+     * this a table of absent seats (or three players content to pass) could
+     * redeal forever and hold every other table hostage.
+     */
+    completeTournamentRoundAsWash() {
+        if (!this.tournament) return [];
+        this.state = "Awaiting Next Round Trigger";
+        this.roundSummary = {
+            message: 'Everyone passed three times. No points change hands this round.',
+            finalScores: { ...this.scores },
+            isGameOver: false,
+            gameWinner: null,
+            dealerOfRoundId: this.dealer,
+            widowForReveal: [...(this.originalDealtWidow || [])],
+            insuranceDealWasMade: false,
+            insuranceDetails: null,
+            insuranceHindsight: null,
+            allTricks: {},
+            finalBidderPoints: 0,
+            finalDefenderPoints: 0,
+            pointChanges: {},
+            cardPointChanges: {},
+            widowPointsValue: 0,
+            bidType: null,
+            lastCompletedTrick: null,
+            tournamentWash: true,
+            presentationReadyAt: null,
+            presentationForceReadyAt: null,
+            allConnectedHumansPresented: false,
+        };
+        this.startRoundPresentationWindow(5_000);
+        return [
+            { type: 'BROADCAST_STATE' },
+            {
+                type: 'TOURNAMENT_ROUND_COMPLETE',
+                payload: {
+                    tournamentId: this.tournament.tournamentId,
+                    roundNumber: this.tournament.roundNumber,
+                    tableIndex: this.tournament.tableIndex,
+                    tableId: this.tableId,
+                    scores: { ...this.scores },
+                    pointChanges: {},
+                    bidType: null,
+                    bidderName: null,
+                    dealExecuted: false,
+                    allPassRedeals: this.tournamentAllPassRedeals,
+                    wash: true,
+                },
+            },
+        ];
+    }
+
+    /**
+     * Seat a tournament table and open its round. Stacks arrive from the
+     * director (they are the players' tournament scores), the dealer and
+     * mode are the director's seating decision, and no buy-in changes hands
+     * here — the tournament ledger already did that at registration.
+     */
+    startTournamentRound({ tournament, seats, spectators = [], stacks, dealerUserId, playerMode }) {
+        if (this.gameStarted || this.gameStartPending) {
+            throw new Error(`[${this.tableId}] Cannot open a tournament round on a live table.`);
+        }
+        if (![3, 4].includes(playerMode)) throw new Error(`Bad tournament player mode ${playerMode}`);
+        this.tournament = { ...tournament };
+        this.tournamentAllPassRedeals = 0;
+        this.players = {};
+        this.bots = {};
+        this.scores = {};
+        this.playerOrder = new PlayerList();
+        for (const seat of seats) {
+            const userId = Number(seat.userId);
+            this.players[userId] = {
+                userId,
+                playerName: seat.playerName,
+                socketId: seat.socketId || null,
+                tokens: seat.tokens ?? null,
+                isSpectator: false,
+                // An absent human is still a seat: the backstop plays for them
+                // on the short tournament clock (core/afkTurnTimer.js).
+                disconnected: seat.isBot ? false : seat.connected !== true,
+                isBot: seat.isBot === true,
+                untimedBotGames: false,
+            };
+            if (seat.isBot) this.bots[userId] = new BotPlayer(userId, seat.playerName, this);
+            this.playerOrder.add(userId);
+            this.scores[seat.playerName] = Number(stacks[userId]);
+        }
+        for (const spectator of spectators) {
+            const userId = Number(spectator.userId);
+            this.players[userId] = {
+                userId,
+                playerName: spectator.playerName,
+                socketId: spectator.socketId || null,
+                tokens: spectator.tokens ?? null,
+                isSpectator: true,
+                disconnected: spectator.connected !== true,
+                isBot: spectator.isBot === true,
+                untimedBotGames: false,
+            };
+        }
+        this.playerMode = playerMode;
+        if (playerMode === 3) this.scores[PLACEHOLDER_ID] = 120;
+        // No game_history row: analytics effects keyed on gameId stay off and
+        // the director keeps its own round records.
+        this.gameId = null;
+        this.gameStarted = true;
+        this.gameStartPending = false;
+        this.settlement = this._newSettlementState();
+        this.roundHistory = [];
+        this.dealer = Number(dealerUserId);
+        this.playerOrder.setTurnOrder(this.dealer, playerMode === 4);
+        this._initializeNewRoundState();
+        this.state = "Dealing Pending";
     }
 
     _effects(a = []) { return { effects: a }; }
@@ -146,6 +269,7 @@ class GameEngine {
     // =================================================================
     
     startForfeitTimer(requestingUserId, targetPlayerName) {
+        if (this.tournament) return this._effects(); // tournaments have no forfeit clock
         const requester = this.players[requestingUserId];
         if (!this.gameStarted || !requester || requester.isSpectator || this.internalTimers.forfeit
             || ['Game Over', 'DrawComplete', 'Draw Resolving'].includes(this.state)) return this._effects();
@@ -163,6 +287,7 @@ class GameEngine {
     }
 
     forfeitGame(userId) {
+        if (this.tournament) return this._effects(); // quitting is the director's call
         const player = this.players[userId];
         if (!player || player.isSpectator || !this.gameStarted) return this._effects();
         return this._effects(this._resolveForfeit(player.playerName, "voluntary forfeit"));
@@ -454,6 +579,11 @@ class GameEngine {
             }
             this.playerOrder.remove(userId);
         }
+        else if (this.tournament && !playerInfo.isSpectator) {
+            // The seat belongs to the tournament, not the socket: the house
+            // plays for an absent player until they return or bust.
+            this.disconnectPlayer(userId);
+        }
         else if (this.gameId) {
             this.disconnectPlayer(userId);
         }
@@ -729,6 +859,8 @@ class GameEngine {
     }
 
     requestNextRound(requestingUserId) {
+        // A tournament table never advances itself: the director reseats the room.
+        if (this.tournament) return this._effects([{ type: 'BROADCAST_STATE' }]);
         if (this.state === "Awaiting Next Round Trigger"
             && requestingUserId === this.roundSummary?.dealerOfRoundId
             && this.isRoundPresentationAdvanceReady()) {
@@ -767,6 +899,7 @@ class GameEngine {
     }
 
     reset() {
+        if (this.tournament) return this._effects(); // the director tears tournament tables down
         if (this.settlement && !['idle', 'complete'].includes(this.settlement.status)) {
             console.warn(`[${this.tableId}] Reset blocked while ${this.settlement.kind || 'game'} settlement is ${this.settlement.status}.`);
             return this._effects();
@@ -963,6 +1096,7 @@ class GameEngine {
     }
 
     requestDraw(userId) {
+        if (this.tournament) return this._effects(); // no draws in a tournament
         const player = this.players[userId];
         if (!player || player.isSpectator || this.drawRequest.isActive
             || this.playoutVote?.isActive || this.state !== 'Playing Phase') return this._effects();
@@ -1066,6 +1200,7 @@ class GameEngine {
     // other draw. The service uses this to reclaim exhibition bots when a
     // funded human table needs them; any human seat makes it a no-op.
     preemptBotGame() {
+        if (this.tournament) return this._effects(); // never preempt a tournament table
         if (!this.gameStarted
             || ['Game Over', 'DrawComplete', 'Draw Resolving'].includes(this.state)) {
             return this._effects();
@@ -1101,6 +1236,7 @@ class GameEngine {
     // offer collects an explicit 'accept' from every present, seated player
     // (draw-vote shape) before the table is allowed to reset.
     requestRematch(userId) {
+        if (this.tournament) return this._effects();
         const player = this.players[userId];
         if (!player || player.isSpectator
             || !['Game Over', 'DrawComplete'].includes(this.state)
@@ -1292,6 +1428,13 @@ class GameEngine {
     
     _advanceRound() {
         if (!this.gameStarted) return;
+        if (this.tournament) {
+            // All pass in a tournament: redeal, same dealer, same round.
+            this.tournamentAllPassRedeals += 1;
+            this._initializeNewRoundState();
+            this.state = "Dealing Pending";
+            return;
+        }
         const roster = this.playerOrder.allIds;
         const oldDealerIndex = roster.indexOf(this.dealer);
         this.dealer = roster[(oldDealerIndex + 1) % roster.length];
@@ -1334,6 +1477,8 @@ class GameEngine {
             settlement: this.settlement,
             // Public per-round recap for the podium (names/points only).
             roundHistory: this.roundHistory || [],
+            // Tournament context, when this table is one round of a tournament.
+            tournament: this.tournament,
         };
         // When the AFK backstop is armed for the player on turn, clients get
         // the deadline (server epoch ms) plus the window length, so the nudge

@@ -10,6 +10,8 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 
 const GameService = require('./services/GameService');
+const { TournamentDirector } = require('./tournament/TournamentDirector');
+const { createPgStore: createTournamentStore } = require('./tournament/tournamentStore');
 const registerGameHandlers = require('./events/gameEvents');
 const createAuthRoutes = require('./api/auth');
 const createLeaderboardRoutes = require('./api/leaderboard');
@@ -184,6 +186,10 @@ async function initializeApplication() {
 
     const botAccounts = await ensureBotAccounts(pool);
     const gameService = new GameService(io, pool, { botAccounts });
+    // Tournaments: the director owns registration, the round loop and the
+    // podium; the service owns the tables (src/tournament/).
+    const tournamentDirector = new TournamentDirector({ gameService, store: createTournamentStore(pool), io });
+    gameService.attachTournamentDirector(tournamentDirector);
     const recoveryTiming = recoveryTimingFromEnvironment();
     recoveryMonitor = createAbandonedGameRecoveryMonitor({
         pool,
@@ -199,6 +205,9 @@ async function initializeApplication() {
     // before any socket can connect: a restored game must be live (and
     // heartbeating) by the time refund logic first looks at the ledger.
     await gameService.restorePendingSnapshots();
+    // Open registrations come back; a tournament interrupted mid-round is
+    // voided and refunded (deploy survival for tournaments is a later phase).
+    await tournamentDirector.restore();
 
     // Startup repair and the first live-game heartbeat finish before listen().
     // No socket or HTTP request can race financial reconciliation.

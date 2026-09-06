@@ -276,6 +276,10 @@ const registerGameHandlers = (io, gameService, options = {}) => {
         // dropped-socket auto-reconnect — and is what lets a player return to their
         // table after closing/backgrounding the app. It must NOT depend on the old
         // socket's 'disconnect' having been processed, nor on the async token query.
+        // A tournament player between rounds holds no table seat; the director
+        // remembers the socket for the next reseat (and reseats them now if
+        // their table is live).
+        gameService.tournamentDirector?.bindSocket?.(socket.user.id, socket);
         const engine = Object.values(gameService.getAllEngines()).find(e => e.players[socket.user.id]);
         if (engine) {
             socket.join(engine.tableId);                       // (1) so broadcasts reach this socket
