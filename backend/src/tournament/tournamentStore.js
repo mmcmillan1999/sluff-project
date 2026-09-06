@@ -37,6 +37,7 @@ function createMemoryStore({ seasonId = 1, balances = {} } = {}) {
         rounds: [],
         results: [],
         transactions: [],
+        snapshots: new Map(),
         balances: new Map(Object.entries(balances).map(([id, cents]) => [Number(id), Number(cents)])),
     };
     const balanceOf = userId => state.balances.get(Number(userId)) || 0;
@@ -152,6 +153,35 @@ function createMemoryStore({ seasonId = 1, balances = {} } = {}) {
                     tournament: { ...row },
                     entries: state.entries.filter(entry => entry.tournamentId === row.tournamentId && entry.status === 'registered'),
                 }));
+        },
+
+        async saveSnapshot(tournamentId, snapshot) {
+            state.snapshots.set(Number(tournamentId), { snapshot: structuredClone(snapshot), createdAt: Date.now() });
+        },
+
+        async claimSnapshots() {
+            const rows = [...state.snapshots.entries()].map(([tournamentId, saved]) => ({
+                tournamentId,
+                status: state.tournaments.get(tournamentId)?.status ?? null,
+                snapshot: structuredClone(saved.snapshot),
+                ageMs: Date.now() - saved.createdAt,
+            }));
+            state.snapshots.clear();
+            return rows;
+        },
+
+        async voidRunningExcept(keepIds = [], reason = 'The tournament could not be resumed after a restart.') {
+            const keep = new Set(keepIds.map(Number));
+            const voided = [];
+            for (const row of state.tournaments.values()) {
+                if (row.status !== 'running' || keep.has(row.tournamentId)) continue;
+                const refunds = state.entries
+                    .filter(entry => entry.tournamentId === row.tournamentId && !['withdrawn', 'refunded'].includes(entry.status))
+                    .map(entry => ({ userId: entry.userId, cents: row.buyInCents }));
+                await this.refundAll({ tournamentId: row.tournamentId, status: 'voided', refunds, reason });
+                voided.push(row.tournamentId);
+            }
+            return voided;
         },
 
         async voidRunning(reason = 'Server restarted mid-tournament.') {
@@ -394,6 +424,58 @@ function createPgStore(pool) {
                 });
             }
             return results;
+        },
+
+        async saveSnapshot(tournamentId, snapshot) {
+            await pool.query(
+                `INSERT INTO tournament_snapshots (tournament_id, snapshot)
+                 VALUES ($1, $2)
+                 ON CONFLICT (tournament_id) DO UPDATE SET snapshot = EXCLUDED.snapshot, created_at = CURRENT_TIMESTAMP`,
+                [tournamentId, JSON.stringify(snapshot)],
+            );
+        },
+
+        // Single-shot claim: two overlapping instances cannot both restore.
+        async claimSnapshots() {
+            const { rows } = await pool.query(
+                `DELETE FROM tournament_snapshots s
+                 USING tournaments t
+                 WHERE t.tournament_id = s.tournament_id
+                 RETURNING s.tournament_id, t.status, s.snapshot,
+                           EXTRACT(EPOCH FROM (NOW() - s.created_at)) * 1000 AS age_ms`,
+            );
+            return rows.map(row => ({
+                tournamentId: Number(row.tournament_id),
+                status: row.status,
+                snapshot: typeof row.snapshot === 'string' ? JSON.parse(row.snapshot) : row.snapshot,
+                ageMs: Number(row.age_ms),
+            }));
+        },
+
+        async voidRunningExcept(keepIds = [], reason = 'The tournament could not be resumed after a restart.') {
+            const { rows } = await pool.query(
+                `SELECT tournament_id, buy_in_cents FROM tournaments
+                 WHERE status = 'running' AND NOT (tournament_id = ANY($1::int[]))
+                 ORDER BY tournament_id`,
+                [keepIds.map(Number)],
+            );
+            const voided = [];
+            for (const row of rows) {
+                const tournamentId = Number(row.tournament_id);
+                const entries = await pool.query(
+                    `SELECT user_id FROM tournament_entries
+                     WHERE tournament_id = $1 AND status NOT IN ('withdrawn', 'refunded')`,
+                    [tournamentId],
+                );
+                await this.refundAll({
+                    tournamentId,
+                    status: 'voided',
+                    refunds: entries.rows.map(entry => ({ userId: Number(entry.user_id), cents: Number(row.buy_in_cents) })),
+                    reason,
+                });
+                voided.push(tournamentId);
+            }
+            return voided;
         },
 
         async voidRunning(reason = 'Server restarted mid-tournament.') {

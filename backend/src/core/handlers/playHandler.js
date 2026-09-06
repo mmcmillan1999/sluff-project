@@ -1,6 +1,7 @@
 // backend/src/core/handlers/playHandler.js
 
 const gameLogic = require('../logic');
+const tournamentClock = require('../tournamentClock');
 const { SUITS } = require('../constants');
 const scoringHandler = require('./scoringHandler');
 const { detectMidnightSpecial } = require('../midnightSpecial');
@@ -39,6 +40,11 @@ function playCard(engine, userId, card) {
     // is scheduler staggering, not thinking.
     const now = Date.now();
     const timingEffects = [];
+    // Tournament shot clock: a play that ran past the free allowance is
+    // paid for out of the seat's bank.
+    if (!player.isBot && engine.tournament && Number.isFinite(engine.turnStartedAt)) {
+        tournamentClock.chargeBank(engine, userId, now - engine.turnStartedAt);
+    }
     if (!player.isBot && engine.gameId && Number.isFinite(engine.turnStartedAt)) {
         timingEffects.push({
             type: 'LOG_PLAY_TIMING',

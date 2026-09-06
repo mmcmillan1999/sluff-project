@@ -54,6 +54,7 @@ import { buzz } from '../utils/haptics';
 import { useCosmetics } from '../utils/cosmetics';
 import { CARD_PLAY_STYLES, useCardPlayStyle, setCardPlayStyle } from '../utils/playStyle';
 import VoiceControls from './game/VoiceControls';
+import TournamentClockPill from './tournament/TournamentClockPill';
 
 // Admin-only dev overlay (~900 lines): fetched on first Shift+D instead of
 // shipping in every player's main chunk.
@@ -311,6 +312,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         afkTimeoutMs: Number.isFinite(afkTimeoutSecondsRaw) && afkTimeoutSecondsRaw > 0
             ? afkTimeoutSecondsRaw * 1000
             : null,
+        serverAuthoritative: Boolean(currentTableState?.tournament),
     });
     // Colour the rim with the player's own team so it reads as "you", not
     // "someone". Before the bid is settled there is no team, and it stays gold.
@@ -1453,6 +1455,12 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
             ref={gameViewRef}
         >
             {shareNotice && <div className="share-invite-notice">{shareNotice}</div>}
+            {currentTableState?.tournament && (
+                <TournamentClockPill
+                    clock={currentTableState.tournamentClock}
+                    playerName={currentTableState.players?.[playerId]?.playerName}
+                />
+            )}
             {!roundPresentationControlsLocked && createPortal(
                 <>
                     <DecorBoundary><TipsBeacon userId={playerId} /></DecorBoundary>

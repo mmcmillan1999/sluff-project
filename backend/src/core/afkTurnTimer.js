@@ -17,6 +17,7 @@
 const { getLegalMoves } = require('./legalMoves');
 const { CARD_POINT_VALUES } = require('./constants');
 const { frogDiscardStrategyFor } = require('./frogDiscards');
+const tournamentClock = require('./tournamentClock');
 
 // 45s relaxed by 15% (Matt, Sept 2026: "reduce the intensity of it's your
 // turn"); the client's 5s/15s call-up moved by the same factor.
@@ -74,17 +75,17 @@ function untimedForThisSeat(engine, player) {
 
 // In a tournament an absent seat is still the table's problem: the house
 // plays for a disconnected player on a short clock instead of waiting on a
-// forfeit that tournaments do not have.
-const TOURNAMENT_ABSENT_TIMEOUT_MS = 6_000;
+// forfeit that tournaments do not have. Every other tournament seat runs on
+// the shot clock (core/tournamentClock.js): a short free allowance per
+// decision plus a personal bank for card play.
+const TOURNAMENT_ABSENT_TIMEOUT_MS = tournamentClock.TOURNAMENT_CLOCK.absentMs;
 
 function absentSeat(engine, player) {
     return player?.disconnected === true && !engine?.tournament;
 }
 
 function effectiveTimeoutFor(engine, pending, timeoutMs) {
-    if (engine?.tournament && engine.players?.[pending?.userId]?.disconnected === true) {
-        return Math.min(timeoutMs, TOURNAMENT_ABSENT_TIMEOUT_MS);
-    }
+    if (engine?.tournament) return tournamentClock.allowanceMs(engine, pending);
     return timeoutMs;
 }
 
@@ -241,6 +242,8 @@ function evaluate(engine, { now = Date.now(), timeoutMs = DEFAULT_TIMEOUT_MS } =
     );
     const card = cheapestLegalCard(legal);
     if (!card) return null;
+    // The house is playing for a tournament seat: whatever bank it had is spent.
+    if (engine.tournament) tournamentClock.exhaustBank(engine, pending.userId);
     return { action: 'play', userId: pending.userId, card, playerName: pending.playerName };
 }
 
@@ -266,6 +269,8 @@ function deadlineFor(engine, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
  * @returns {boolean} whether the clock was extended
  */
 function refresh(engine, userId, { now = Date.now(), timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+    // On the tournament clock the bank is the extension; pings buy nothing.
+    if (engine?.tournament) return false;
     const pending = pendingHumanAction(engine);
     if (!pending || Number(pending.userId) !== Number(userId)) return false;
     if (!engine.afkWatch || engine.afkWatch.key !== turnKey(engine, pending)) return false;

@@ -379,6 +379,17 @@ const createDbTablesOnce = async (pool) => {
             CREATE INDEX IF NOT EXISTS idx_tournament_results_season_user
             ON tournament_results (season_id, user_id);
         `);
+        // Deploy survival: the dying instance saves every running tournament
+        // (stacks, seating, each live table mid-trick) here on SIGTERM and
+        // the replacement claims it at boot or on its sweep, like
+        // live_game_snapshots does for cash games.
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS tournament_snapshots (
+                tournament_id INTEGER PRIMARY KEY REFERENCES tournaments(tournament_id) ON DELETE CASCADE,
+                snapshot JSONB NOT NULL,
+                created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
         await pool.query("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS tournament_id INTEGER REFERENCES tournaments(tournament_id) ON DELETE SET NULL");
         // The first production schema called the event-time column `timestamp`.
         // When transaction_time was later added with a default, PostgreSQL gave

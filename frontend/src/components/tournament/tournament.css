@@ -545,3 +545,50 @@
   .tournament-venues { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .tournament-podium { grid-template-columns: 1fr; }
 }
+
+/* ---------- the shot clock on the felt ---------- */
+
+.tournament-clock-pill {
+  position: fixed;
+  top: calc(7.5vh + env(safe-area-inset-top, 0px) + 0.6vh);
+  left: calc(1.2vw + env(safe-area-inset-left, 0px));
+  z-index: 1500;
+  display: flex;
+  gap: 0.6em;
+  align-items: baseline;
+  padding: 0.35vh 1.4vw;
+  border-radius: 999px;
+  background: rgba(20, 22, 26, 0.82);
+  border: 1px solid rgba(242, 193, 78, 0.5);
+  color: #f5efdf;
+  font-family: 'Oswald', sans-serif;
+  font-size: clamp(0.65rem, 1.5vh, 0.85rem);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.tournament-clock-pill.on-the-clock {
+  background: rgba(120, 20, 20, 0.9);
+  border-color: #ff6f5e;
+  color: #ffe1dc;
+  animation: tournament-clock-pulse 1.2s ease-in-out infinite;
+}
+
+.tournament-clock-bank {
+  color: rgba(255, 255, 255, 0.75);
+  font-variant-numeric: tabular-nums;
+}
+
+.tournament-clock-pill.on-the-clock .tournament-clock-bank {
+  color: #ffd0c8;
+}
+
+@keyframes tournament-clock-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 111, 94, 0.55); }
+  50% { box-shadow: 0 0 0 0.6vh rgba(255, 111, 94, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tournament-clock-pill.on-the-clock { animation: none; }
+}

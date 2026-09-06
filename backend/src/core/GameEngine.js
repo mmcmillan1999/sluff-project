@@ -11,7 +11,8 @@ const {
 } = require('./constants');
 const BotPlayer = require('./BotPlayer');
 const { brainNameFor } = require('./bot-brains');
-const { deadlineFor: afkDeadlineFor } = require('./afkTurnTimer');
+const { deadlineFor: afkDeadlineFor, pendingHumanAction: afkPendingHumanAction } = require('./afkTurnTimer');
+const tournamentClock = require('./tournamentClock');
 
 // Quick Play seat-draft directive: list brain names here to force one bot
 // from each listed brain into every Quick Play table before any random
@@ -105,6 +106,7 @@ class GameEngine {
         // to the director through a TOURNAMENT_ROUND_COMPLETE effect.
         this.tournament = null;
         this.tournamentAllPassRedeals = 0;
+        this.tournamentClock = null;
         this._initializeNewRoundState();
     }
 
@@ -211,6 +213,8 @@ class GameEngine {
             };
         }
         this.playerMode = playerMode;
+        // The shot clock: every seat gets a fresh bank for the round.
+        this.tournamentClock = tournamentClock.newRoundClock(seats.map(seat => Number(seat.userId)));
         if (playerMode === 3) this.scores[PLACEHOLDER_ID] = 120;
         // No game_history row: analytics effects keyed on gameId stay off and
         // the director keeps its own round records.
@@ -1033,7 +1037,9 @@ class GameEngine {
         this.playoutVote.resolution = null;
         this.playoutVote.votes = {};
         activePlayers.forEach(p => { this.playoutVote.votes[p.playerName] = null; });
-        this.playoutVote.timer = 30;
+        // Tournaments keep the deal-struck vote short: silence still means
+        // "play it out", just sooner.
+        this.playoutVote.timer = this.tournament ? tournamentClock.TOURNAMENT_CLOCK.playoutVoteSeconds : 30;
 
         this.internalTimers.playoutTimer = setInterval(() => {
             if (this.playoutVote.isActive) {
@@ -1489,6 +1495,15 @@ class GameEngine {
         state.afkTimeoutSeconds = Number.isFinite(this.afkTimeoutMs)
             ? Math.round(this.afkTimeoutMs / 1000)
             : null;
+        if (this.tournament) {
+            // The shot clock: the seat's own allowance (free time plus its
+            // bank) is the countdown, and clients treat it as authoritative.
+            const pending = afkPendingHumanAction(this);
+            state.afkTimeoutSeconds = pending
+                ? Math.max(1, Math.round(tournamentClock.allowanceMs(this, pending) / 1000))
+                : null;
+            state.tournamentClock = tournamentClock.publicClock(this);
+        }
         state.biddingTurnPlayerName = this.players[this.biddingTurnPlayerId]?.playerName;
         state.trickTurnPlayerName = this.players[this.trickTurnPlayerId]?.playerName;
         return state;

@@ -53,6 +53,9 @@ export const useTurnNudge = ({
     onActivity,
     afkDeadline = null,
     afkTimeoutMs = null,
+    // Tournament tables run a shot clock the server owns outright: pings do
+    // not extend it, so the countdown reads the server deadline alone.
+    serverAuthoritative = false,
 } = {}) => {
     const [state, setState] = useState({ level: 0, afkSecondsLeft: null });
     const escalateRef = useRef(onEscalate);
@@ -65,7 +68,7 @@ export const useTurnNudge = ({
         escalateRef.current = onEscalate;
         activityRef.current = onActivity;
     });
-    afkRef.current = { deadline: afkDeadline, timeoutMs: afkTimeoutMs };
+    afkRef.current = { deadline: afkDeadline, timeoutMs: afkTimeoutMs, serverAuthoritative };
 
     useEffect(() => {
         setState({ level: 0, afkSecondsLeft: null });
@@ -104,12 +107,14 @@ export const useTurnNudge = ({
             const idleMs = now - lastInputAt;
             const nextLevel = idleMs >= URGENT_AT_MS ? 2 : (idleMs >= NUDGE_AT_MS ? 1 : 0);
 
-            const { deadline, timeoutMs } = afkRef.current;
+            const { deadline, timeoutMs, serverAuthoritative: authoritative } = afkRef.current;
             let afkSecondsLeft = null;
             // Published only while the nudge shows: computing it every second at
             // level 0 forced a render per second on a calm table for a number
             // nothing displays.
-            if (nextLevel > 0 && Number.isFinite(timeoutMs) && timeoutMs > 0) {
+            if (nextLevel > 0 && authoritative && Number.isFinite(deadline) && deadline > 0) {
+                afkSecondsLeft = Math.max(0, Math.ceil((deadline - now) / 1000));
+            } else if (nextLevel > 0 && Number.isFinite(timeoutMs) && timeoutMs > 0) {
                 const localDeadline = lastServerAnchor + timeoutMs;
                 const serverDeadline = Number.isFinite(deadline) ? deadline : 0;
                 afkSecondsLeft = Math.max(

@@ -45,7 +45,12 @@ Debug overlay in game: `Shift+D`.
   a TOURNAMENT_ROUND_COMPLETE effect. Socket edge: `tournament*` events in `gameEvents.js`; the
   client lives in `frontend/src/components/tournament/` (lobby slot + popup + create sheet, the
   `tournament` view in App.js, the header cube via BrandHeader's `tournament` prop, venue
-  `tournament-stage` in venueThemes.css). Spec: the tournament whiteboard artifact (see memory).
+  `tournament-stage` in venueThemes.css). Clock: `core/tournamentClock.js` (12 s bid, 8 s trump,
+  20 s discards, 6 s + 45 s bank per card; pace pressure at two-thirds done = 4 s free, bank drains 2×;
+  absent seat 6 s; playout vote 10 s) drives afkTurnTimer for tournament tables. Deploy survival:
+  `tournament_snapshots` (director.snapshotForShutdown on SIGTERM, restoreSnapshots at boot + sweep;
+  a running tournament with no snapshot is voided after a 10-min grace); `npm run deploy:check` blocks
+  on running tournaments with humans. Spec: the tournament whiteboard artifact (see memory).
 - Bot insurance (Aug 2026): `backend/src/core/bot-strategies/MarketInsuranceStrategy.js` prices
   asks/offers from a Monte Carlo rollout (`RolloutEstimator.js`) over public information only
   (`PublicRoundView.js` is the enforced no-cheating boundary — see `tests/marketInsurance.test.js`).

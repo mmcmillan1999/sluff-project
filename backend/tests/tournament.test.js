@@ -384,7 +384,10 @@ async function runTournamentTests() {
         const harness = buildHarness({ balances: { 11: 300, 12: 0, 13: 1000, 14: 250, 901: 1000, 902: 900, 903: 800, 904: 700, 905: 600, 906: 500 } });
         const { director, gameService, store } = harness;
         const matt = { id: 11, username: 'Matt', is_vip: true };
-        const t = await director.create(matt, { name: '  Saturday Sluff  ', buyInTokens: 1, startingStack: 120, maxSeats: 9, venue: 'fort-creek', startRule: 'creator' });
+        // A 60 stack keeps this bot-only run short; at 120 with no drain a
+        // nine-seat tournament can run past a hundred rounds (see the
+        // whiteboard's simulation), which is a scheduling fact, not a bug.
+        const t = await director.create(matt, { name: '  Saturday Sluff  ', buyInTokens: 1, startingStack: 60, maxSeats: 9, venue: 'fort-creek', startRule: 'creator' });
         assert.equal(t.name, 'Saturday Sluff');
         for (const human of [matt, { id: 12, username: 'Broke Bob' }, { id: 13, username: 'Cara' }, { id: 14, username: 'Dee' }]) {
             await director.register(t.id, human);
@@ -406,13 +409,13 @@ async function runTournamentTests() {
             assert.equal(engine.playerMode, 3);
             assert.equal(engine.gameId, null, 'no game_history row for a tournament round');
             assert.equal(engine.tournament.roundNumber, 1);
-            for (const seat of table.seats) assert.equal(engine.scores[live.entries.get(seat).username], 120);
+            for (const seat of table.seats) assert.equal(engine.scores[live.entries.get(seat).username], 60);
         }
         assert.equal(gameService.hasActiveOrPendingGame(), true, 'the deploy check sees a running tournament');
         pass('Starting seats the field, opens every table and deals at once.');
 
         let rounds = 0;
-        while (live.status === 'running' && rounds < 80) {
+        while (live.status === 'running' && rounds < 200) {
             rounds += 1;
             const alive = live.entries.size;
             await playRound(harness, live);

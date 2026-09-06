@@ -42,6 +42,24 @@ const LIVE_GAMES = `
 `;
 
 // Someone signed in and poking around is not mid-game, but they are about to be.
+// A running tournament with a person in it blocks a deploy the same way a
+// game does: the SIGTERM snapshot tries to resume it, but resume is
+// best-effort and a voided tournament refunds rather than plays on.
+const LIVE_TOURNAMENTS = `
+    SELECT t.tournament_id,
+           t.name,
+           t.current_round,
+           COUNT(DISTINCT e.user_id) FILTER (WHERE NOT COALESCE(u.is_bot, FALSE))::int AS humans,
+           ARRAY_AGG(DISTINCT u.username) FILTER (WHERE NOT COALESCE(u.is_bot, FALSE)) AS human_names
+    FROM tournaments t
+    JOIN tournament_entries e ON e.tournament_id = t.tournament_id
+    JOIN users u ON u.id = e.user_id
+    WHERE t.status = 'running'
+      AND e.status IN ('playing', 'registered')
+    GROUP BY t.tournament_id, t.name, t.current_round
+    ORDER BY t.tournament_id
+`;
+
 const RECENT_HUMAN_ACTIVITY = `
     SELECT COUNT(DISTINCT user_id)::int AS n
     FROM lobby_chat_messages
@@ -66,14 +84,23 @@ async function main() {
         const humanGames = rows.filter(row => row.humans > 0);
         const botGames = rows.filter(row => row.humans === 0);
         const chatter = (await pool.query(RECENT_HUMAN_ACTIVITY)).rows[0].n;
+        let humanTournaments = [];
+        try {
+            humanTournaments = (await pool.query(LIVE_TOURNAMENTS)).rows.filter(row => row.humans > 0);
+        } catch (error) {
+            // A database from before tournaments existed has no such table.
+            if (error.code !== '42P01') throw error;
+        }
 
         if (asJson) {
             console.log(JSON.stringify({
-                safe: humanGames.length === 0,
+                safe: humanGames.length === 0 && humanTournaments.length === 0,
                 humanGames: humanGames.length,
                 botOnlyGames: botGames.length,
+                humanTournaments: humanTournaments.length,
                 recentlyActiveHumans: chatter,
                 games: humanGames,
+                tournaments: humanTournaments,
             }, null, 2));
         } else {
             console.log(`\nLive games (activity in the last ${LIVE_WINDOW_MINUTES} min)`);
@@ -88,8 +115,14 @@ async function main() {
                 console.log(`      last activity ${game.idle_seconds}s ago`);
             }
 
+            for (const tournament of humanTournaments) {
+                const names = (tournament.human_names || []).join(', ');
+                console.log(`\n  ! tournament #${tournament.tournament_id} "${tournament.name}", round ${tournament.current_round}`);
+                console.log(`      ${tournament.humans} human(s): ${names}`);
+            }
+
             console.log('');
-            if (humanGames.length > 0) {
+            if (humanGames.length > 0 || humanTournaments.length > 0) {
                 console.log('DO NOT DEPLOY. A deploy restarts the backend; the SIGTERM snapshot tries to');
                 console.log('resume these games on the new instance, but resume is best-effort. Anything');
                 console.log('it cannot restore is refunded later — and the players notice either way.');
@@ -102,7 +135,7 @@ async function main() {
             console.log('');
         }
 
-        process.exit(humanGames.length > 0 ? 1 : 0);
+        process.exit(humanGames.length > 0 || humanTournaments.length > 0 ? 1 : 0);
     } finally {
         await pool.end();
     }

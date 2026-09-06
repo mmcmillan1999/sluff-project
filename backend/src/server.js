@@ -219,6 +219,8 @@ async function initializeApplication() {
     const resumeSweep = setInterval(() => {
         gameService.restorePendingSnapshots()
             .catch(error => console.error('[RESUME] Sweep failed:', error.message));
+        tournamentDirector.restoreSnapshots()
+            .catch(error => console.error('[RESUME] Tournament sweep failed:', error.message));
     }, 5000);
     resumeSweep.unref();
     setTimeout(() => clearInterval(resumeSweep), 10 * 60 * 1000).unref();
@@ -292,7 +294,7 @@ async function initializeApplication() {
         console.log('[EXHIBITION] Bot exhibition is off (BOT_EXHIBITION_ENABLED=false); bots only play alongside humans.');
     }
 
-    return { gameService, pool, recoveryMonitor, botExhibition, stopResumeSweep };
+    return { gameService, pool, recoveryMonitor, botExhibition, stopResumeSweep, tournamentDirector };
 }
 
 async function initializeThenListen({
@@ -350,6 +352,10 @@ function registerShutdownNotice(context = null) {
             context?.gameService
                 ? context.gameService.snapshotLiveGamesForShutdown()
                     .catch(error => console.error('[SHUTDOWN] Snapshot pass failed:', error.message))
+                : Promise.resolve(),
+            context?.tournamentDirector
+                ? context.tournamentDirector.snapshotForShutdown()
+                    .catch(error => console.error('[SHUTDOWN] Tournament snapshot failed:', error.message))
                 : Promise.resolve(),
         ]);
         const deadline = new Promise(resolve => setTimeout(resolve, 4000));

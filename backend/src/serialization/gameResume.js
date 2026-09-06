@@ -55,6 +55,9 @@ const COPY_FIELDS = [
     // Learner pacing: a resumed learner table keeps its slow bots, long
     // linger, and coach-suggestion roster.
     'botPaceMultiplier', 'trickLingerMs', 'learnerUserIds',
+    // Tournament tables: the round's context, its all-pass count and the
+    // shot clock (banks and pressure) come back with the cards.
+    'tournament', 'tournamentAllPassRedeals', 'tournamentClock',
 ];
 
 /**
@@ -63,7 +66,9 @@ const COPY_FIELDS = [
  * or already terminal).
  */
 function serializeEngineForResume(engine) {
-    if (!engine?.gameStarted || engine.gameStartPending || !engine.gameId) return null;
+    // Tournament tables have no game_history row; the director snapshots
+    // them by tournament instead (see TournamentDirector.snapshotForShutdown).
+    if (!engine?.gameStarted || engine.gameStartPending || (!engine.gameId && !engine.tournament)) return null;
     if (!RESUMABLE_STATES.has(engine.state)) return null;
     if (engine.settlement && !['idle', 'complete'].includes(engine.settlement.status)) return null;
 

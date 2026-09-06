@@ -52,6 +52,8 @@ const suites = [
     { name: 'frog discards', file: './frogDiscards.test.js' },
     { name: 'tournament director', file: './tournament.test.js' },
     { name: 'tournament socket events', file: './tournamentEvents.test.js' },
+    { name: 'tournament shot clock and pace', file: './tournamentClock.test.js' },
+    { name: 'tournament deploy survival', file: './tournamentResume.test.js' },
 ];
 
 function loadRunner(suite) {
