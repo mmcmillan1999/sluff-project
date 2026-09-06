@@ -17,6 +17,7 @@ const createAuthRoutes = require('./api/auth');
 const createLeaderboardRoutes = require('./api/leaderboard');
 const createPlayerRoutes = require('./api/players');
 const createSeasonRoutes = require('./api/seasons');
+const createTournamentRoutes = require('./api/tournaments');
 const createAdminRoutes = require('./api/admin');
 const createFeedbackRoutes = require('./api/feedback');
 const createChatRoutes = require('./api/chat');
@@ -231,6 +232,7 @@ async function initializeApplication() {
     app.use('/api/leaderboard', createLeaderboardRoutes(pool, jwt));
     app.use('/api/players', createPlayerRoutes(pool, jwt));
     app.use('/api/seasons', createSeasonRoutes(pool, jwt));
+    app.use('/api/tournaments', createTournamentRoutes(pool, jwt));
     app.use('/api/admin', createAdminRoutes(pool, jwt, io, {
         getLiveGameIds: () => liveGameIdsFromService(gameService),
         // Registered by gameEvents, which owns the voice rooms: a chat mute

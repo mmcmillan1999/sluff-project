@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { getCurrentSeasonStandings, getLeaderboard } from '../services/api';
+import { getCurrentSeasonStandings, getLeaderboard, getRecentTournaments, getTournamentScoreboard } from '../services/api';
 import PlayerProfileModal from './PlayerProfileModal';
 import './LeaderboardView.css';
 
@@ -68,6 +68,33 @@ const LeaderboardView = ({ user, onReturnToLobby, handleShowAdmin, onShowTokenLe
     const [error, setError] = useState('');
     const [showPercent, setShowPercent] = useState(false);
     const [profilePlayerName, setProfilePlayerName] = useState(null);
+    // The tournament record sits beside the season board: winnings first,
+    // then places played, podiums and wins; and the recent events.
+    const [panel, setPanel] = useState('season');
+    const [tournamentBoard, setTournamentBoard] = useState(null);
+    const [recentTournaments, setRecentTournaments] = useState([]);
+    const [tournamentError, setTournamentError] = useState('');
+    const [tournamentLoading, setTournamentLoading] = useState(true);
+
+    const fetchTournaments = useCallback(async () => {
+        setTournamentLoading(true);
+        setTournamentError('');
+        try {
+            const [board, recent] = await Promise.all([getTournamentScoreboard(), getRecentTournaments(8)]);
+            setTournamentBoard(board && Array.isArray(board.rows) ? board : { season: null, rows: [] });
+            setRecentTournaments(Array.isArray(recent?.tournaments) ? recent.tournaments : []);
+        } catch (loadError) {
+            setTournamentBoard(null);
+            setRecentTournaments([]);
+            setTournamentError(loadError?.message || 'Could not load the tournament scoreboard.');
+        } finally {
+            setTournamentLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchTournaments();
+    }, [fetchTournaments]);
 
     const fetchLeaderboard = useCallback(async () => {
         setIsLoading(true);
@@ -164,14 +191,49 @@ const LeaderboardView = ({ user, onReturnToLobby, handleShowAdmin, onShowTokenLe
         </table>
     );
 
+    const renderTournamentTable = (rows, extraClass = '') => (
+        <table className={`leaderboard-table tournament-board-table ${extraClass}`.trim()}>
+            <thead>
+                <tr>
+                    <th scope="col" className="leaderboard-rank-cell">#</th>
+                    <th scope="col">Player</th>
+                    <th scope="col" className="tournament-board-num">Won</th>
+                    <th scope="col" className="tournament-board-num">Played</th>
+                    <th scope="col" className="tournament-board-num">Podiums</th>
+                    <th scope="col" className="tournament-board-num">Wins</th>
+                </tr>
+            </thead>
+            <tbody>
+                {rows.map(row => (
+                    <tr key={row.username} className={row.username === currentUsername ? 'is-current-user' : undefined}>
+                        <td className="leaderboard-rank-cell">{row.rank}</td>
+                        <td>
+                            <button
+                                type="button"
+                                className="leaderboard-player-link"
+                                onClick={() => setProfilePlayerName(row.username)}
+                            >
+                                {row.username}
+                            </button>
+                        </td>
+                        <td className="tournament-board-num tournament-board-won">{row.winningsTokens}</td>
+                        <td className="tournament-board-num">{row.played}</td>
+                        <td className="tournament-board-num">{row.podiums}</td>
+                        <td className="tournament-board-num">{row.wins}</td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+    );
+
     return (
         <div className="leaderboard-view">
             <header className="leaderboard-header">
                 <div className="leaderboard-title-group">
                     <img src="/SluffLogo.png" alt="" aria-hidden="true" className="leaderboard-logo" />
                     <div>
-                        <span className="leaderboard-kicker">Current season</span>
-                        <h1 className="leaderboard-title">{seasonName}</h1>
+                        <span className="leaderboard-kicker">{panel === 'tournaments' ? 'Tournament winnings' : 'Current season'}</span>
+                        <h1 className="leaderboard-title">{panel === 'tournaments' ? (tournamentBoard?.season?.displayName || seasonName) : seasonName}</h1>
                     </div>
                 </div>
                 <div className="leaderboard-header-buttons">
@@ -184,18 +246,86 @@ const LeaderboardView = ({ user, onReturnToLobby, handleShowAdmin, onShowTokenLe
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" aria-hidden="true"><path d="M0 0h24v24H0z" fill="none"/><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
                     </button>
+                    {panel === 'season' && (
+                        <button
+                            type="button"
+                            onClick={() => setShowPercent(previous => !previous)}
+                            className="leaderboard-toggle-button"
+                        >
+                            {showPercent ? 'Totals' : '%'}
+                        </button>
+                    )}
                     <button
                         type="button"
-                        onClick={() => setShowPercent(previous => !previous)}
-                        className="leaderboard-toggle-button"
+                        onClick={() => setPanel(previous => (previous === 'season' ? 'tournaments' : 'season'))}
+                        className="leaderboard-toggle-button leaderboard-panel-toggle"
+                        aria-pressed={panel === 'tournaments'}
                     >
-                        {showPercent ? 'Totals' : '%'}
+                        {panel === 'season' ? 'Tournaments' : 'Season'}
                     </button>
                     <button type="button" onClick={onReturnToLobby} className="leaderboard-back-button">Lobby</button>
                 </div>
             </header>
 
             <main className="leaderboard-main">
+                {panel === 'tournaments' && (
+                    tournamentLoading ? (
+                        <p className="leaderboard-state" role="status">Loading tournaments…</p>
+                    ) : tournamentError ? (
+                        <div className="leaderboard-state is-error" role="alert">
+                            <span>{tournamentError}</span>
+                            <button type="button" onClick={fetchTournaments}>Try again</button>
+                        </div>
+                    ) : (tournamentBoard?.rows?.length ?? 0) === 0 ? (
+                        <div className="leaderboard-state">
+                            <strong>No tournament has finished this season yet.</strong>
+                            <span>Winners appear here after the first podium.</span>
+                        </div>
+                    ) : (
+                        <>
+                            {tournamentBoard.rows.some(row => row.username === currentUsername) && (
+                                <section className="current-user-section" aria-labelledby="your-tournament-standing-title">
+                                    <div className="leaderboard-section-heading">
+                                        <h2 id="your-tournament-standing-title">Your tournaments</h2>
+                                        <span>Winnings only ever go up</span>
+                                    </div>
+                                    {renderTournamentTable(tournamentBoard.rows.filter(row => row.username === currentUsername), 'current-user-table')}
+                                </section>
+                            )}
+                            <section className="full-leaderboard-container" aria-label="Tournament scoreboard">
+                                {renderTournamentTable(tournamentBoard.rows)}
+                                {recentTournaments.length > 0 && (
+                                    <div className="tournament-recent" aria-label="Recent tournaments">
+                                        <div className="leaderboard-section-heading">
+                                            <h2>Recent tournaments</h2>
+                                        </div>
+                                        <ul className="tournament-recent-list">
+                                            {recentTournaments.map(event => (
+                                                <li key={event.id} className="tournament-recent-item">
+                                                    <div className="tournament-recent-head">
+                                                        <strong>{event.name}</strong>
+                                                        <span>{event.fieldSize} players · {event.rounds} rounds · {event.buyInTokens} tokens</span>
+                                                    </div>
+                                                    <ol className="tournament-recent-podium">
+                                                        {event.podium.map(entry => (
+                                                            <li key={entry.username}>
+                                                                <span className="tournament-recent-place">{entry.place}</span>
+                                                                <button type="button" className="leaderboard-player-link" onClick={() => setProfilePlayerName(entry.username)}>{entry.username}</button>
+                                                                <span className="tournament-recent-prize">{entry.prizeTokens}</span>
+                                                            </li>
+                                                        ))}
+                                                    </ol>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </section>
+                        </>
+                    )
+                )}
+                {panel === 'season' && (
+                    <>
                 {isLegacyFallback && !isLoading && !error && (
                     <p className="leaderboard-rollout-note" role="status">
                         Showing the live legacy standings while season records finish loading.
@@ -229,6 +359,8 @@ const LeaderboardView = ({ user, onReturnToLobby, handleShowAdmin, onShowTokenLe
                         <section className="full-leaderboard-container" aria-label={`${seasonName} leaderboard`}>
                             {renderLeaderboardTable(leaderboardData)}
                         </section>
+                    </>
+                )}
                     </>
                 )}
             </main>

@@ -50,7 +50,10 @@ Debug overlay in game: `Shift+D`.
   absent seat 6 s; playout vote 10 s) drives afkTurnTimer for tournament tables. Deploy survival:
   `tournament_snapshots` (director.snapshotForShutdown on SIGTERM, restoreSnapshots at boot + sweep;
   a running tournament with no snapshot is voided after a 10-min grace); `npm run deploy:check` blocks
-  on running tournaments with humans. Spec: the tournament whiteboard artifact (see memory).
+  on running tournaments with humans. Record: `tournament_results` → GET /api/tournaments/scoreboard
+  (ranked by winnings = sum of prizes, never reduced) and /recent (podiums), the Tournaments panel in
+  LeaderboardView, `tournaments` on the player profile, ledger category 'tournament'. Tournaments never
+  touch wins/losses/washes. Spec: the tournament whiteboard artifact (see memory).
 - Bot insurance (Aug 2026): `backend/src/core/bot-strategies/MarketInsuranceStrategy.js` prices
   asks/offers from a Monte Carlo rollout (`RolloutEstimator.js`) over public information only
   (`PublicRoundView.js` is the enforced no-cheating boundary — see `tests/marketInsurance.test.js`).

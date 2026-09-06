@@ -1,17 +1,37 @@
 import React from 'react';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { getCurrentSeasonStandings, getLeaderboard, getPlayerProfile } from '../services/api';
+import { getCurrentSeasonStandings, getLeaderboard, getPlayerProfile, getRecentTournaments, getTournamentScoreboard } from '../services/api';
 import LeaderboardView from './LeaderboardView';
 
 vi.mock('../services/api', () => ({
     getCurrentSeasonStandings: vi.fn(),
     getLeaderboard: vi.fn(),
     getPlayerProfile: vi.fn(),
+    getTournamentScoreboard: vi.fn(),
+    getRecentTournaments: vi.fn(),
 }));
 
 beforeEach(() => {
     vi.clearAllMocks();
+    getTournamentScoreboard.mockResolvedValue({
+        season: { id: 2, number: 2, slug: 'alpha-season-2', displayName: 'Alpha Season 2' },
+        rows: [
+            { rank: 1, username: 'Human Player', winningsTokens: '4.50', played: 3, podiums: 2, wins: 1, bestPlace: 1 },
+            { rank: 2, username: 'Mike Knight', winningsTokens: '1.80', played: 3, podiums: 1, wins: 0, bestPlace: 3 },
+        ],
+    });
+    getRecentTournaments.mockResolvedValue({
+        season: { id: 2 },
+        tournaments: [{
+            id: 5, name: 'Saturday Sluff', venue: 'tournament-stage', buyInTokens: '1.00', startingStack: 120, rounds: 17, fieldSize: 9,
+            endedAt: '2026-09-06T03:00:00.000Z',
+            podium: [
+                { place: 1, username: 'Human Player', prizeTokens: '4.50' },
+                { place: 2, username: 'Mike Knight', prizeTokens: '2.70' },
+            ],
+        }],
+    });
     getCurrentSeasonStandings.mockResolvedValue({
         season: {
             slug: 'alpha-season-2',
@@ -224,4 +244,20 @@ test('routes administrators to the guarded admin panel without a direct token re
     expect(screen.queryByRole('button', { name: /reset all tokens/i })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Admin Panel' }));
     expect(handleShowAdmin).toHaveBeenCalledOnce();
+});
+
+
+test('the Tournaments panel ranks winnings and lists recent podiums', async () => {
+    const user = userEvent.setup();
+    render(<LeaderboardView user={{ username: 'Human Player' }} onReturnToLobby={vi.fn()} handleShowAdmin={vi.fn()} />);
+    await screen.findByRole('heading', { name: 'Alpha Season 2' });
+    await user.click(screen.getByRole('button', { name: 'Tournaments' }));
+    expect(screen.getByText('Tournament winnings')).toBeInTheDocument();
+    const rows = screen.getAllByRole('row');
+    expect(rows.some(row => row.textContent.includes('Human Player') && row.textContent.includes('4.50'))).toBe(true);
+    expect(screen.getByRole('heading', { name: 'Your tournaments' })).toBeInTheDocument();
+    expect(screen.getByText('Saturday Sluff')).toBeInTheDocument();
+    expect(screen.getByText('9 players · 17 rounds · 1.00 tokens')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Season' }));
+    expect(screen.getByText('Current season')).toBeInTheDocument();
 });

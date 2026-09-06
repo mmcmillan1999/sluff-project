@@ -76,7 +76,13 @@ describe('TokenLedgerView formatting', () => {
         expect(tokenActivityLabel('abandoned_refund')).toBe('Abandoned-game refund');
         expect(tokenActivityLabel('game_void_reversal')).toBe('Voided-game adjustment');
         expect(tokenActivityLabel('admin_adjustment')).toBe('Account adjustment');
+        expect(tokenActivityLabel('tournament_buy_in')).toBe('Tournament buy-in');
+        expect(tokenActivityLabel('tournament_prize')).toBe('Tournament prize');
+        expect(tokenActivityLabel('tournament_refund')).toBe('Tournament refund');
         expect(tokenActivityLabel('future_type')).toBe('Token activity');
+        expect(isUnexpectedLedgerEntry({ type: 'tournament_buy_in', amountCents: -100 })).toBe(false);
+        expect(isUnexpectedLedgerEntry({ type: 'tournament_prize', amountCents: 450 })).toBe(false);
+        expect(isUnexpectedLedgerEntry({ type: 'tournament_prize', amountCents: -450 })).toBe(true);
         expect(isUnexpectedLedgerEntry({ type: 'buy_in', amountCents: -100 })).toBe(false);
         expect(isUnexpectedLedgerEntry({ type: 'buy_in', amountCents: 400 })).toBe(true);
         expect(isUnexpectedLedgerEntry({ type: 'forfeit_loss', amountCents: 0 })).toBe(true);

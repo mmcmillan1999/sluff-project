@@ -15,6 +15,9 @@ const ACTIVITY_LABELS = {
     abandoned_refund: 'Abandoned-game refund',
     game_void_reversal: 'Voided-game adjustment',
     admin_adjustment: 'Account adjustment',
+    tournament_buy_in: 'Tournament buy-in',
+    tournament_prize: 'Tournament prize',
+    tournament_refund: 'Tournament refund',
 };
 
 const FILTER_OPTIONS = [
@@ -23,6 +26,7 @@ const FILTER_OPTIONS = [
     { value: 'mercy', label: 'Mercy tokens' },
     { value: 'refund', label: 'Refunds' },
     { value: 'adjustment', label: 'Adjustments' },
+    { value: 'tournament', label: 'Tournaments' },
 ];
 
 const toSafeCents = value => {
@@ -53,12 +57,14 @@ export const tokenActivityLabel = type => (
     ACTIVITY_LABELS[String(type || '').trim().toLowerCase()] || 'Token activity'
 );
 
-const EXPECTED_DEBIT_TYPES = new Set(['buy_in', 'forfeit_loss']);
+const EXPECTED_DEBIT_TYPES = new Set(['buy_in', 'forfeit_loss', 'tournament_buy_in']);
 const EXPECTED_CREDIT_TYPES = new Set([
     'win_payout',
     'wash_payout',
     'forfeit_payout',
     'abandoned_refund',
+    'tournament_prize',
+    'tournament_refund',
 ]);
 const FLEXIBLE_SIGN_TYPES = new Set(['game_void_reversal']);
 const KNOWN_TYPES = new Set([...Object.keys(ACTIVITY_LABELS)]);
@@ -94,6 +100,7 @@ export const normalizeTokenLedgerEntry = entry => ({
     ),
     description: typeof entry?.description === 'string' ? entry.description : '',
     gameId: entry?.gameId ?? entry?.game_id ?? null,
+    tournamentId: entry?.tournamentId ?? entry?.tournament_id ?? null,
     gameTheme: entry?.gameTheme ?? entry?.game_theme ?? null,
     gameOutcome: entry?.gameOutcome ?? entry?.game_outcome ?? null,
     gameStartedAt: entry?.gameStartedAt ?? entry?.game_started_at ?? null,
@@ -385,6 +392,12 @@ const TokenLedgerView = ({ onReturnToLobby }) => {
 
                                         {entry.description && (
                                             <p className="token-ledger-entry-description">{entry.description}</p>
+                                        )}
+
+                                        {entry.tournamentId !== null && entry.tournamentId !== undefined && (
+                                            <div className="token-ledger-entry-game">
+                                                <span>Tournament #{entry.tournamentId}</span>
+                                            </div>
                                         )}
 
                                         {(entry.gameId !== null || entry.gameNetCents !== null) && (

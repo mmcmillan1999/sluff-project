@@ -393,3 +393,86 @@
         touch-action: manipulation;
     }
 }
+
+/* The tournament record: winnings first, then the rest of the record. */
+.tournament-board-table td.tournament-board-num,
+.tournament-board-table th.tournament-board-num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    padding-right: 0.55rem;
+}
+
+.tournament-board-won {
+    color: #e0b65b;
+    font-weight: 600;
+}
+
+.leaderboard-panel-toggle[aria-pressed="true"] {
+    background: rgba(224, 182, 91, 0.22);
+    border-color: rgba(224, 182, 91, 0.7);
+}
+
+.tournament-recent {
+    margin-top: 0.9rem;
+}
+
+.tournament-recent-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.5rem;
+}
+
+.tournament-recent-item {
+    padding: 0.55rem 0.65rem;
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0.6rem;
+}
+
+.tournament-recent-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.6rem;
+    align-items: baseline;
+    flex-wrap: wrap;
+    margin-bottom: 0.3rem;
+}
+
+.tournament-recent-head strong {
+    font: 600 0.85rem 'Oswald', sans-serif;
+    letter-spacing: 0.04em;
+    color: #f5efdf;
+}
+
+.tournament-recent-head span {
+    font-size: 0.62rem;
+    color: #abb2ad;
+}
+
+.tournament-recent-podium {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.15rem;
+}
+
+.tournament-recent-podium li {
+    display: grid;
+    grid-template-columns: 1.4rem 1fr auto;
+    gap: 0.4rem;
+    align-items: center;
+    font-size: 0.78rem;
+}
+
+.tournament-recent-place {
+    font: 600 0.7rem 'Oswald', sans-serif;
+    color: #d9c287;
+}
+
+.tournament-recent-prize {
+    color: #e0b65b;
+    font-variant-numeric: tabular-nums;
+}

@@ -16,6 +16,9 @@ const TOKEN_LEDGER_CATEGORIES = Object.freeze({
     mercy: Object.freeze(['free_token_mercy']),
     adjustment: Object.freeze(['admin_adjustment']),
     refund: Object.freeze(['abandoned_refund', 'game_void_reversal']),
+    // Tournament money moves through the same ledger, keyed by tournament
+    // rather than game (see src/tournament/).
+    tournament: Object.freeze(['tournament_buy_in', 'tournament_prize', 'tournament_refund']),
 });
 
 const LEDGER_BALANCE_QUERY = `
@@ -35,6 +38,7 @@ const LEDGER_PAGE_QUERY = `
             t.transaction_type::text AS transaction_type,
             t.description,
             t.game_id,
+            t.tournament_id,
             ROW_NUMBER() OVER (
                 PARTITION BY t.user_id, t.game_id
                 ORDER BY t.transaction_id DESC
@@ -62,6 +66,9 @@ const LEDGER_PAGE_QUERY = `
                 WHEN t.transaction_type::text IN (
                     'abandoned_refund', 'game_void_reversal'
                 ) THEN 'refund'
+                WHEN t.transaction_type::text IN (
+                    'tournament_buy_in', 'tournament_prize', 'tournament_refund'
+                ) THEN 'tournament'
                 ELSE 'adjustment'
             END AS category
         FROM transactions t
@@ -73,6 +80,7 @@ const LEDGER_PAGE_QUERY = `
         ledger.transaction_type,
         ledger.description,
         ledger.game_id,
+        ledger.tournament_id,
         ledger.amount_cents,
         ledger.balance_after_cents,
         ledger.game_net_cents,
@@ -153,7 +161,7 @@ function parseLedgerPageOptions(query = {}) {
         : String(rawCategory).toLowerCase();
     if (normalizedCategory !== null
         && !Object.prototype.hasOwnProperty.call(TOKEN_LEDGER_CATEGORIES, normalizedCategory)) {
-        const error = new TypeError('category must be game, mercy, adjustment, or refund.');
+        const error = new TypeError('category must be game, mercy, adjustment, refund, or tournament.');
         error.statusCode = 400;
         throw error;
     }
@@ -182,6 +190,9 @@ function publicLedgerEntry(row) {
         balanceAfterCents: databaseInteger(row.balance_after_cents, 'running balance'),
         description: row.description ?? null,
         gameId,
+        tournamentId: row.tournament_id === null || row.tournament_id === undefined
+            ? null
+            : databaseInteger(row.tournament_id, 'tournament id'),
         gameNetCents: gameId === null
             ? null
             : databaseInteger(row.game_net_cents, 'game net'),

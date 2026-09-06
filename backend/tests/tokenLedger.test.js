@@ -178,6 +178,7 @@ async function testAuthenticatedLedgerEndpoint() {
                     gameCanVoid: true,
                     gameVoidStatus: null,
                     gameVoidedAt: null,
+                    tournamentId: null,
                 },
                 {
                     id: 91,
@@ -196,6 +197,7 @@ async function testAuthenticatedLedgerEndpoint() {
                     gameCanVoid: false,
                     gameVoidStatus: null,
                     gameVoidedAt: null,
+                    tournamentId: null,
                 },
             ],
             nextCursor: 91,
@@ -212,7 +214,7 @@ async function testAuthenticatedLedgerEndpoint() {
         });
         assert.equal(response.status, 400);
         assert.deepEqual(await response.json(), {
-            message: 'category must be game, mercy, adjustment, or refund.',
+            message: 'category must be game, mercy, adjustment, refund, or tournament.',
         });
         assert.equal(pool.state.connectCount, connectsBeforeInvalidRequest);
 

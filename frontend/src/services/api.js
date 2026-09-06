@@ -290,6 +290,32 @@ export const getLeaderboard = async () => {
     return data;
 };
 
+// The tournament record: the season scoreboard ranked by winnings, and the
+// recent events with their podiums.
+export const getTournamentScoreboard = async (season = null) => {
+    const params = new URLSearchParams();
+    if (season) params.set('season', season);
+    const query = params.toString();
+    const response = await configuredFetch(`/api/tournaments/scoreboard${query ? `?${query}` : ''}`, 'GET');
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.message || 'Failed to fetch the tournament scoreboard.');
+    }
+    return data;
+};
+
+export const getRecentTournaments = async (limit = 10, season = null) => {
+    const params = new URLSearchParams();
+    params.set('limit', String(limit));
+    if (season) params.set('season', season);
+    const response = await configuredFetch(`/api/tournaments/recent?${params.toString()}`, 'GET');
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.message || 'Failed to fetch recent tournaments.');
+    }
+    return data;
+};
+
 export const getPlayerProfile = async (username) => {
     if (typeof username !== 'string' || !username.trim()) {
         throw new Error('A player name is required.');

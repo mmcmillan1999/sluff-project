@@ -137,6 +137,10 @@ const PlayerProfileModal = ({ playerName, currentUsername, onClose, onShowTokenL
     const currentSeasonName = typeof currentSeasonMatchup?.season?.displayName === 'string'
         ? currentSeasonMatchup.season.displayName.trim()
         : '';
+    const tournaments = profile?.tournaments && typeof profile.tournaments === 'object' ? profile.tournaments : null;
+    const tournamentSeasonName = typeof tournaments?.currentSeason?.season?.displayName === 'string'
+        ? tournaments.currentSeason.season.displayName.trim()
+        : '';
     const initial = (player?.username || playerName).trim().charAt(0).toUpperCase() || 'S';
 
     return createPortal(
@@ -217,6 +221,25 @@ const PlayerProfileModal = ({ playerName, currentUsername, onClose, onShowTokenL
                                 <Stat label="Win rate" value={formatRate(player.winRate)} accent />
                             </div>
                         </div>
+
+                        {tournaments && (
+                            <div className="player-profile-career player-profile-tournaments" aria-label="Tournament record">
+                                <div className="player-profile-section-heading">
+                                    <span>Tournaments</span>
+                                    <em>{tournaments.played === 0
+                                        ? 'None played yet'
+                                        : (tournamentSeasonName
+                                            ? `${tournamentSeasonName} · ${safeCount(tournaments.currentSeason?.played)} played · ${tournaments.currentSeason?.winningsTokens ?? '0.00'} won`
+                                            : `${tournaments.played} played`)}</em>
+                                </div>
+                                <div className="player-profile-stats career-stats">
+                                    <Stat label="Played" value={safeCount(tournaments.played)} />
+                                    <Stat label="Podiums" value={safeCount(tournaments.podiums)} />
+                                    <Stat label="Wins" value={safeCount(tournaments.wins)} />
+                                    <Stat label="Won" value={`${tournaments.winningsTokens ?? '0.00'} tokens`} accent />
+                                </div>
+                            </div>
+                        )}
 
                         {isSelf ? (
                             <>

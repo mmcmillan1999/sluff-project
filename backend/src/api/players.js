@@ -248,6 +248,47 @@ function publicCurrentSeasonRecord(seasonRow, statsRow) {
     };
 }
 
+// The tournament record is its own thing (a tournament is much harder to win
+// than a game): places and prizes from tournament_results, career and current
+// season, never mixed into wins/losses/washes.
+const TOURNAMENT_RECORD_QUERY = `
+    SELECT
+        COUNT(*)::integer AS played,
+        COUNT(*) FILTER (WHERE place <= 3)::integer AS podiums,
+        COUNT(*) FILTER (WHERE place = 1)::integer AS wins,
+        COALESCE(SUM(prize_cents), 0)::bigint AS winnings_cents,
+        COUNT(*) FILTER (WHERE season_id = $2)::integer AS season_played,
+        COUNT(*) FILTER (WHERE season_id = $2 AND place <= 3)::integer AS season_podiums,
+        COUNT(*) FILTER (WHERE season_id = $2 AND place = 1)::integer AS season_wins,
+        COALESCE(SUM(prize_cents) FILTER (WHERE season_id = $2), 0)::bigint AS season_winnings_cents
+    FROM tournament_results
+    WHERE user_id = $1
+`;
+
+function publicTournamentRecord(row, seasonRow) {
+    const seasonId = nonnegativeInteger(seasonRow?.season_id, 'season id');
+    const seasonNumber = nonnegativeInteger(seasonRow?.season_number, 'season number');
+    const tokens = cents => (Number(cents || 0) / 100).toFixed(2);
+    return {
+        played: nonnegativeInteger(row?.played ?? 0, 'tournament count'),
+        podiums: nonnegativeInteger(row?.podiums ?? 0, 'tournament podium count'),
+        wins: nonnegativeInteger(row?.wins ?? 0, 'tournament win count'),
+        winningsTokens: tokens(row?.winnings_cents),
+        currentSeason: {
+            season: {
+                id: seasonId,
+                number: seasonNumber,
+                slug: seasonRow.slug,
+                displayName: seasonRow.display_name,
+            },
+            played: nonnegativeInteger(row?.season_played ?? 0, 'season tournament count'),
+            podiums: nonnegativeInteger(row?.season_podiums ?? 0, 'season tournament podium count'),
+            wins: nonnegativeInteger(row?.season_wins ?? 0, 'season tournament win count'),
+            winningsTokens: tokens(row?.season_winnings_cents),
+        },
+    };
+}
+
 module.exports = function createPlayerRoutes(pool, jwt) {
     const router = express.Router();
     const checkAuth = requireAuth(pool, jwt);
@@ -301,6 +342,12 @@ module.exports = function createPlayerRoutes(pool, jwt) {
                 );
             }
 
+            const tournamentResult = await client.query(
+                TOURNAMENT_RECORD_QUERY,
+                [target.id, activeSeason.season_id],
+            );
+            const tournaments = publicTournamentRecord(tournamentResult.rows?.[0], activeSeason);
+
             await client.query('COMMIT');
             transactionOpen = false;
 
@@ -309,6 +356,7 @@ module.exports = function createPlayerRoutes(pool, jwt) {
                 currentSeasonRecord,
                 headToHead,
                 currentSeasonHeadToHead,
+                tournaments,
             });
         } catch (error) {
             if (transactionOpen) {
@@ -331,6 +379,8 @@ module.exports = function createPlayerRoutes(pool, jwt) {
 module.exports.CURRENT_SEASON_RECORD_QUERY = CURRENT_SEASON_RECORD_QUERY;
 module.exports.HEAD_TO_HEAD_QUERY = HEAD_TO_HEAD_QUERY;
 module.exports.PUBLIC_PROFILE_QUERY = PUBLIC_PROFILE_QUERY;
+module.exports.TOURNAMENT_RECORD_QUERY = TOURNAMENT_RECORD_QUERY;
+module.exports.publicTournamentRecord = publicTournamentRecord;
 module.exports.nonnegativeInteger = nonnegativeInteger;
 module.exports.percentage = percentage;
 module.exports.publicCurrentSeasonHeadToHead = publicCurrentSeasonHeadToHead;

@@ -97,6 +97,12 @@ function makePool() {
             const record = seasonRecords.get(params[1]);
             return { rows: record ? [record] : [] };
         }
+        if (text === createPlayerRoutes.TOURNAMENT_RECORD_QUERY) {
+            if (params[0] === 77) {
+                return { rows: [{ played: 4, podiums: 2, wins: 1, winnings_cents: '720', season_played: 2, season_podiums: 1, season_wins: 1, season_winnings_cents: '450' }] };
+            }
+            return { rows: [{ played: 0, podiums: 0, wins: 0, winnings_cents: '0', season_played: 0, season_podiums: 0, season_wins: 0, season_winnings_cents: '0' }] };
+        }
         if (text === createPlayerRoutes.HEAD_TO_HEAD_QUERY) {
             if (params[2] === 99) throw new Error('injected comparison failure');
             if (params[2] === 88) {
@@ -230,13 +236,31 @@ async function runPlayerProfileTests() {
                 ties: 0,
                 winRate: 0,
             },
+            tournaments: {
+                played: 4,
+                podiums: 2,
+                wins: 1,
+                winningsTokens: '7.20',
+                currentSeason: {
+                    season: {
+                        id: 2,
+                        number: 2,
+                        slug: 'alpha-season-2',
+                        displayName: 'Alpha Season 2',
+                    },
+                    played: 2,
+                    podiums: 1,
+                    wins: 1,
+                    winningsTokens: '4.50',
+                },
+            },
         });
         assert(!Object.prototype.hasOwnProperty.call(target.body.player, 'id'));
         assert(!Object.prototype.hasOwnProperty.call(target.body.player, 'isBot'));
         assert(!Object.prototype.hasOwnProperty.call(target.body.player, 'is_bot'));
 
         const targetCalls = pool.calls.splice(0);
-        assert.strictEqual(targetCalls.length, 8, 'A target profile uses one guarded read transaction after authentication.');
+        assert.strictEqual(targetCalls.length, 9, 'A target profile uses one guarded read transaction after authentication.');
         assert.deepStrictEqual(targetCalls[0].params, [42], 'The current DB identity, not JWT claims, authenticates the caller.');
         assert.strictEqual(targetCalls[1].text, 'BEGIN READ ONLY');
         assert.match(targetCalls[2].text, /pg_advisory_xact_lock_shared/i);
@@ -245,7 +269,9 @@ async function runPlayerProfileTests() {
         assert.strictEqual(targetCalls[5].text, createPlayerRoutes.CURRENT_SEASON_RECORD_QUERY);
         assert.deepStrictEqual(targetCalls[5].params, [2, 77], 'The season record is scoped to the active season and the profiled player.');
         assert.deepStrictEqual(targetCalls[6].params, [[42, 77], 42, 77, 2]);
-        assert.strictEqual(targetCalls[7].text, 'COMMIT');
+        assert.strictEqual(targetCalls[7].text, createPlayerRoutes.TOURNAMENT_RECORD_QUERY);
+        assert.deepStrictEqual(targetCalls[7].params, [77, 2], 'The tournament record is scoped to the profiled player and the active season.');
+        assert.strictEqual(targetCalls[8].text, 'COMMIT');
         assert.strictEqual(pool.releases, 1, 'The target-profile connection is released after commit.');
 
         const profileSelect = createPlayerRoutes.PUBLIC_PROFILE_QUERY.split(/\bFROM\b/i)[0];
@@ -310,13 +336,14 @@ async function runPlayerProfileTests() {
             winRate: null,
         });
         const selfCalls = pool.calls.splice(0);
-        assert.strictEqual(selfCalls.length, 7, 'Self profiles use the guarded read transaction without manufacturing comparisons from games.');
+        assert.strictEqual(selfCalls.length, 8, 'Self profiles use the guarded read transaction without manufacturing comparisons from games.');
         assert.strictEqual(selfCalls[1].text, 'BEGIN READ ONLY');
         assert.match(selfCalls[2].text, /pg_advisory_xact_lock_shared/i);
         assert.match(selfCalls[4].text, /FROM seasons\s+WHERE status = 'active'/i);
         assert.strictEqual(selfCalls[5].text, createPlayerRoutes.CURRENT_SEASON_RECORD_QUERY);
         assert.deepStrictEqual(selfCalls[5].params, [2, 42]);
-        assert.strictEqual(selfCalls[6].text, 'COMMIT');
+        assert.strictEqual(selfCalls[6].text, createPlayerRoutes.TOURNAMENT_RECORD_QUERY);
+        assert.strictEqual(selfCalls[7].text, 'COMMIT');
         assert(!selfCalls.some(call => call.text === createPlayerRoutes.HEAD_TO_HEAD_QUERY));
         assert.strictEqual(pool.releases, 2, 'The self-profile connection is released after commit.');
 
@@ -366,6 +393,24 @@ async function runPlayerProfileTests() {
                 losses: 0,
                 ties: 0,
                 winRate: null,
+            },
+            tournaments: {
+                played: 0,
+                podiums: 0,
+                wins: 0,
+                winningsTokens: '0.00',
+                currentSeason: {
+                    season: {
+                        id: 2,
+                        number: 2,
+                        slug: 'alpha-season-2',
+                        displayName: 'Alpha Season 2',
+                    },
+                    played: 0,
+                    podiums: 0,
+                    wins: 0,
+                    winningsTokens: '0.00',
+                },
             },
         });
         const zeroGameCalls = pool.calls.splice(0);

@@ -54,6 +54,7 @@ const suites = [
     { name: 'tournament socket events', file: './tournamentEvents.test.js' },
     { name: 'tournament shot clock and pace', file: './tournamentClock.test.js' },
     { name: 'tournament deploy survival', file: './tournamentResume.test.js' },
+    { name: 'tournament scoreboard API', file: './tournamentScoreboard.test.js' },
 ];
 
 function loadRunner(suite) {
