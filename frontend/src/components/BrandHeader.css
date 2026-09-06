@@ -153,3 +153,18 @@
         transition: none;
     }
 }
+
+/* Tournament mode: the cube is a button that drops the standings sheet. */
+.brand-header--tournament .brand-cube-viewport {
+    cursor: pointer;
+}
+
+.brand-header--tournament .brand-cube-viewport:focus-visible {
+    outline: 2px solid #f2c14e;
+    outline-offset: -2px;
+}
+
+.brand-header-place--tournament {
+    font-size: 2.6vh;
+    line-height: 1;
+}

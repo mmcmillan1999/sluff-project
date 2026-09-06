@@ -5,6 +5,9 @@ import { getServerUrl, submitFeedback, updateTutorialStatus } from "./services/a
 import AuthContainer from "./components/AuthContainer.js";
 import LobbyView from "./components/LobbyView.js";
 import GameTableView from "./components/GameTableView.js";
+import TournamentView from './components/tournament/TournamentView';
+import TournamentPopup from './components/tournament/TournamentPopup';
+import TournamentCreateSheet from './components/tournament/TournamentCreateSheet';
 import LeaderboardView from "./components/LeaderboardView.js";
 import TokenLedgerView from "./components/TokenLedgerView.js";
 import BulletinView from "./components/BulletinView.js";
@@ -70,6 +73,18 @@ function App() {
     const [user, setUser] = useState(null);
     const [lobbyThemes, setLobbyThemes] = useState([]);
     const [currentTableState, setCurrentTableState] = useState(null);
+    // Tournaments (components/tournament): the open/running summary every
+    // player sees, the tournament this player is in (or is viewing), and the
+    // per-visit dismissal of the lobby popup.
+    const [tournamentLobby, setTournamentLobby] = useState({ open: null, running: [] });
+    const [myTournament, setMyTournament] = useState(null);
+    const [dismissedTournamentId, setDismissedTournamentId] = useState(null);
+    const [showTournamentCreate, setShowTournamentCreate] = useState(false);
+    const [tournamentBusy, setTournamentBusy] = useState(false);
+    const [tournamentError, setTournamentError] = useState('');
+    const myTournamentRef = React.useRef(null);
+    myTournamentRef.current = myTournament;
+    const pendingTournamentCreateRef = React.useRef(false);
     const [errorMessage, setErrorMessage] = useState('');
     const [connectionNotice, setConnectionNotice] = useState(null);
     const [serverVersion, setServerVersion] = useState('');
@@ -228,10 +243,16 @@ function App() {
     // on each table join dropped the toast auto-dismiss timers mid-toast.
     const handleLeaveTable = useCallback(() => {
         const tableId = tableRef.current?.tableId;
+        const inTournament = Boolean(tableRef.current?.tournament);
         if (tableId) {
             socket.emit("leaveTable", { tableId });
         }
-        handleReturnToLobby();
+        if (inTournament) {
+            // The seat stays the tournament's; the board is the way back.
+            setView('tournament');
+        } else {
+            handleReturnToLobby();
+        }
         setCurrentTableState(null);
     }, []);
 
@@ -257,6 +278,7 @@ function App() {
 
             const onConnect = () => {
                 serverRestartingRef.current = false;
+                socket.emit('tournamentSync');
                 // Only a genuine reconnect while seated expects a reseat; a
                 // recovered session gets no connect-time pushes at all.
                 awaitingReseatRef.current = hasConnectedRef.current
@@ -322,9 +344,10 @@ function App() {
                     setCurrentTableState(newTableState);
                     // Return to our seat after a fresh reload/reconnect: the server
                     // re-seats us and pushes state, but the view was reset to 'lobby'.
-                    // Only auto-switch from the lobby so we don't override an
+                    // Only auto-switch from the lobby (or the tournament board,
+                    // whose next round arrives this way) so we don't override an
                     // intentional view (leaderboard/feedback) while still seated.
-                    setView(v => (v === 'lobby' ? 'gameTable' : v));
+                    setView(v => (v === 'lobby' || v === 'tournament' ? 'gameTable' : v));
                 }
             };
             const onJoinedTable = ({ gameState }) => {
@@ -335,6 +358,39 @@ function App() {
                 setCurrentTableState(gameState);
                 setInviteJoinInFlight(false);
                 setView('gameTable');
+            };
+            const onTournamentLobby = (lobby) => {
+                setTournamentLobby(lobby && typeof lobby === 'object'
+                    ? { open: lobby.open || null, running: Array.isArray(lobby.running) ? lobby.running : [] }
+                    : { open: null, running: [] });
+            };
+            const onTournamentState = (state) => {
+                if (!state || typeof state !== 'object') return;
+                const currentUserId = JSON.parse(atob(token.split('.')[1])).id;
+                const mine = state.creatorUserId === currentUserId
+                    || (state.entries || []).some(entry => entry.userId === currentUserId);
+                const viewing = myTournamentRef.current?.id === state.id;
+                if (!mine && !viewing) return;
+                setMyTournament(state);
+                setTournamentBusy(false);
+                if (pendingTournamentCreateRef.current && state.creatorUserId === currentUserId) {
+                    pendingTournamentCreateRef.current = false;
+                    setShowTournamentCreate(false);
+                    setTournamentError('');
+                    setView('tournament');
+                }
+                // Between rounds the table is gone: move from the felt to the board.
+                const atTournamentTable = tableRef.current?.tournament?.tournamentId === state.id;
+                const seatedNow = (state.tables || []).some(table => table.tableId === tableRef.current?.tableId);
+                if (atTournamentTable && !seatedNow) {
+                    setCurrentTableState(null);
+                    setView(v => (v === 'gameTable' ? 'tournament' : v));
+                }
+            };
+            const onTournamentActionFailed = (failure) => {
+                setTournamentBusy(false);
+                setTournamentError(String(failure?.message || 'That did not work.'));
+                if (failure?.action === 'tournamentCreate') pendingTournamentCreateRef.current = false;
             };
             const onError = (error) => {
                 const msg = String(error?.message || error || 'Something went wrong.');
@@ -407,6 +463,9 @@ function App() {
             socket.on('identityChanged', onIdentityChanged);
             socket.on('accountDeleted', onAccountDeleted);
             socket.on('serverRestarting', onServerRestarting);
+            socket.on('tournamentLobby', onTournamentLobby);
+            socket.on('tournamentState', onTournamentState);
+            socket.on('tournamentActionFailed', onTournamentActionFailed);
 
             return () => {
                 socket.off('connect', onConnect);
@@ -416,6 +475,9 @@ function App() {
                 socket.off('lobbyState', onLobbyState);
                 socket.off('gameState', onGameState);
                 socket.off('joinedTable', onJoinedTable);
+                socket.off('tournamentLobby', onTournamentLobby);
+                socket.off('tournamentState', onTournamentState);
+                socket.off('tournamentActionFailed', onTournamentActionFailed);
                 socket.off('error', onError);
                 socket.off('connect_error', onConnectError);
                 socket.off('forceDisconnectAndReset', onForceReset);
@@ -639,6 +701,45 @@ function App() {
         socket.emit("joinTable", { tableId, asSpectator: true });
     };
 
+    // ---- Tournaments: every action is a socket event; the director answers
+    // with tournamentState (or tournamentActionFailed). ----
+    const tournamentEmit = (eventName, payload = {}) => {
+        setTournamentError('');
+        setTournamentBusy(true);
+        socket.emit(eventName, payload);
+        // A missed answer must never leave the buttons dead.
+        setTimeout(() => setTournamentBusy(false), 2500);
+    };
+    const handleOpenTournament = () => {
+        if (!myTournament || !['registering', 'running'].includes(myTournament.status)) {
+            const target = tournamentLobby.open || tournamentLobby.running[0] || null;
+            if (target) setMyTournament(target);
+        }
+        setView('tournament');
+    };
+    const handleTournamentJoin = (tournamentId) => {
+        enableSound();
+        setDismissedTournamentId(tournamentId);
+        tournamentEmit('tournamentJoin', { tournamentId });
+        setView('tournament');
+    };
+    const handleTournamentCreate = (settings) => {
+        pendingTournamentCreateRef.current = true;
+        tournamentEmit('tournamentCreate', { settings });
+    };
+    const handleTournamentBack = () => {
+        const entered = Boolean(myTournament) && (
+            myTournament.creatorUserId === user.id
+            || (myTournament.entries || []).some(entry => entry.userId === user.id)
+        );
+        // Keep only a tournament you are actually in and that is still going.
+        if (!entered || !['registering', 'running'].includes(myTournament.status)) setMyTournament(null);
+        handleReturnToLobby();
+    };
+    const tournamentActionFor = (eventName) => () => {
+        if (myTournament) tournamentEmit(eventName, { tournamentId: myTournament.id });
+    };
+
     const emitEvent = (eventName, payload = {}) => {
         if (currentTableState) {
             socket.emit(eventName, { ...payload, tableId: currentTableState.tableId });
@@ -646,6 +747,11 @@ function App() {
             socket.emit(eventName, payload);
         }
     };
+
+    // The tournament popup shows once per tournament per lobby visit.
+    useEffect(() => {
+        if (view !== 'lobby') setDismissedTournamentId(null);
+    }, [view]);
 
     // Toggle body class for no-scroll when in game view
     useEffect(() => {
@@ -703,13 +809,15 @@ function App() {
             case 'lobby':
                 return <DecorBoundary><LobbyHeader /></DecorBoundary>;
             case 'gameTable':
-                return <DecorBoundary><GameHeader /></DecorBoundary>;
+                return <DecorBoundary><GameHeader tournament={myTournament} viewerUserId={user.id} /></DecorBoundary>;
+            case 'tournament':
+                return <DecorBoundary><LobbyHeader /></DecorBoundary>;
             default:
                 return null; // No header for admin, leaderboard, feedback, or auth views
         }
     };
 
-    const hasAdvertisingHeader = view === 'lobby' || view === 'gameTable';
+    const hasAdvertisingHeader = view === 'lobby' || view === 'gameTable' || view === 'tournament';
 
     return (
         <>
@@ -731,6 +839,26 @@ function App() {
             {renderHeader()}
             
             <div className={`app-content-container ${hasAdvertisingHeader ? 'with-header' : 'no-header'} app-view-${view}`}>
+                <TournamentCreateSheet
+                    show={showTournamentCreate}
+                    defaultName={`${user.username}'s Tournament`}
+                    busy={tournamentBusy}
+                    error={tournamentError}
+                    onClose={() => { setShowTournamentCreate(false); setTournamentError(''); pendingTournamentCreateRef.current = false; }}
+                    onCreate={handleTournamentCreate}
+                />
+                {view === 'lobby' && tournamentLobby.open
+                    && dismissedTournamentId !== tournamentLobby.open.id
+                    && tournamentLobby.open.creatorUserId !== user.id
+                    && !(tournamentLobby.open.entries || []).some(entry => entry.userId === user.id)
+                    && !(myTournament && ['registering', 'running'].includes(myTournament.status)) && (
+                    <TournamentPopup
+                        tournament={tournamentLobby.open}
+                        busy={tournamentBusy}
+                        onJoin={() => handleTournamentJoin(tournamentLobby.open.id)}
+                        onDismiss={() => setDismissedTournamentId(tournamentLobby.open.id)}
+                    />
+                )}
                 <MercyWindow show={showMercyWindow} onClose={() => setShowMercyWindow(false)} emitEvent={emitEvent} user={user} />
                 <FeedbackModal show={showFeedbackModal} onClose={handleCloseFeedbackModal} onSubmit={handleSubmitFeedback} gameContext={feedbackGameContext} />
                 <HowToPlayModal
@@ -778,7 +906,24 @@ function App() {
                 {(() => {
                     switch (view) {
                         case 'lobby':
-                            return <LobbyView user={user} lobbyThemes={lobbyThemes} serverVersion={serverVersion} wheelAudio={wheelAudio} handleJoinTable={handleJoinTable} handleQuickPlay={handleQuickPlay} handleJoinTableAsSpectator={handleJoinTableAsSpectator} handleLogout={handleLogout} handleRequestFreeToken={handleRequestFreeToken} handleShowLeaderboard={() => setView('leaderboard')} handleShowSeasonRecaps={() => setView('seasonRecaps')} handleShowTokenLedger={() => setView('tokenLedger')} handleShowBulletin={() => setView('bulletin')} handleShowAdmin={handleShowAdmin} handleShowFeedback={() => setView('feedback')} handleShowHowToPlay={handleShowHowToPlay} handleResetTutorial={handleResetTutorial} handleShowAccountSettings={() => setShowAccountSettings(true)} handleShowPrivacy={() => handleShowLegalPage('privacy')} handleShowTerms={() => handleShowLegalPage('terms')} errorMessage={errorMessage} socket={socket} soundSettings={soundSettings} />;
+                            return <LobbyView user={user} lobbyThemes={lobbyThemes} serverVersion={serverVersion} wheelAudio={wheelAudio} handleJoinTable={handleJoinTable} handleQuickPlay={handleQuickPlay} handleJoinTableAsSpectator={handleJoinTableAsSpectator} handleLogout={handleLogout} handleRequestFreeToken={handleRequestFreeToken} handleShowLeaderboard={() => setView('leaderboard')} handleShowSeasonRecaps={() => setView('seasonRecaps')} handleShowTokenLedger={() => setView('tokenLedger')} handleShowBulletin={() => setView('bulletin')} handleShowAdmin={handleShowAdmin} handleShowFeedback={() => setView('feedback')} handleShowHowToPlay={handleShowHowToPlay} handleResetTutorial={handleResetTutorial} handleShowAccountSettings={() => setShowAccountSettings(true)} handleShowPrivacy={() => handleShowLegalPage('privacy')} handleShowTerms={() => handleShowLegalPage('terms')} errorMessage={errorMessage} socket={socket} soundSettings={soundSettings} tournamentLobby={tournamentLobby} myTournament={myTournament} handleOpenTournament={handleOpenTournament} handleCreateTournament={() => { setTournamentError(''); setShowTournamentCreate(true); }} />;
+                        case 'tournament':
+                            return (
+                                <TournamentView
+                                    tournament={myTournament}
+                                    user={user}
+                                    busy={tournamentBusy}
+                                    error={tournamentError}
+                                    onJoin={() => myTournament && handleTournamentJoin(myTournament.id)}
+                                    onLeave={tournamentActionFor('tournamentLeave')}
+                                    onFindPlayer={tournamentActionFor('tournamentFindPlayer')}
+                                    onStart={tournamentActionFor('tournamentStart')}
+                                    onCancel={tournamentActionFor('tournamentCancel')}
+                                    onQuit={tournamentActionFor('tournamentQuit')}
+                                    onWatch={handleJoinTableAsSpectator}
+                                    onBack={handleTournamentBack}
+                                />
+                            );
                         case 'gameTable':
                             return currentTableState ? <GameTableView user={user} playerId={user.id} currentTableState={currentTableState} handleLeaveTable={handleLeaveTable} handleLogout={handleLogout} handleShowHowToPlay={handleShowHowToPlay} errorMessage={errorMessage} emitEvent={emitEvent} playSound={playSound} playDealSounds={playDealSounds} playMidnightSpecial={playMidnightSpecial} prefetchChampionLine={prefetchChampionLine} playChampionSting={playChampionSting} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} soundSettings={soundSettings} tutorialState={{ tutorialVersion: Number(user.tutorial_version) || 0, activeVersion: Number(user.tutorial_active_version) || 0, gamesPlayed: Number(user.games_played) || 0 }} onTutorialAction={handleTutorialAction} onShowTokenLedger={() => setView('tokenLedger')} /> : <div>Loading table...</div>;
                         case 'leaderboard':

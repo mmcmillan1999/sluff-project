@@ -23,6 +23,14 @@ export const THEME_PRESENTATION = Object.freeze({
         eyebrow: "Miss Paul's classroom",
         description: 'Learn the game on the green table',
     }),
+    // Tournament venue (Sept 2026): picked on the creator sheet, never on
+    // the wheel, which is a cash buy-in picker. Cosmetic only.
+    'tournament-stage': Object.freeze({
+        id: 'tournament-stage',
+        name: 'The Stage',
+        eyebrow: 'Tournament night',
+        description: 'Glass floor, spotlights & the big board',
+    }),
 });
 
 export const THEME_IDS = Object.freeze([

@@ -303,6 +303,23 @@ const registerGameHandlers = (io, gameService, options = {}) => {
         
         socket.emit("lobbyState", gameService.getLobbyState());
 
+        // ===================== TOURNAMENTS =====================
+        // The director (src/tournament/) owns the room; these handlers are
+        // the socket edge: validate, hand off, and turn a TournamentError
+        // into a player-facing message. The director itself broadcasts
+        // tournamentLobby / tournamentState on every change.
+        const tournamentDirector = () => gameService.tournamentDirector || null;
+        const emitTournamentSync = () => {
+            const director = tournamentDirector();
+            if (!director) return;
+            socket.emit('tournamentLobby', director.lobbyState());
+            const mine = typeof director.tournamentFor === 'function'
+                ? director.tournamentFor(socket.user.id)
+                : director.tournamentOf(socket.user.id);
+            if (mine) socket.emit('tournamentState', director.publicState(mine, socket.user.id));
+        };
+        emitTournamentSync();
+
         const onTableAction = (eventName, options, handler) => {
             socket.on(eventName, async (payload) => {
                 if (options.adminOnly && !(await requireFreshAdmin())) return;
@@ -472,6 +489,11 @@ const registerGameHandlers = (io, gameService, options = {}) => {
 
             const engineToJoin = gameService.getEngineById(tableId);
             if (!engineToJoin) return socket.emit("error", { message: "Table not found." });
+            // A tournament player's seat belongs to the tournament until it
+            // is over; watching a table is still fine.
+            if (!asSpectator && tournamentDirector()?.tournamentOf(socket.user.id)) {
+                return socket.emit("error", { message: "You're in a tournament. Leave it before joining a table." });
+            }
 
             // A rename is committing for this account right now. Seating them
             // mid-transaction would key the engine on the outgoing name.
@@ -507,6 +529,9 @@ const registerGameHandlers = (io, gameService, options = {}) => {
                 return socket.emit('error', { message: 'Invalid quick play request.' });
             }
             const { theme } = payload;
+            if (tournamentDirector()?.tournamentOf(socket.user.id)) {
+                return socket.emit("error", { message: "You're in a tournament. Leave it before joining a table." });
+            }
             try {
                 const tokens = await readTokenBalance();
                 // Balance I/O yields. A disconnect or replacement connection in
@@ -560,6 +585,62 @@ const registerGameHandlers = (io, gameService, options = {}) => {
                 socket.emit("error", { message });
             }
         });
+
+        const tournamentAction = async (eventName, payload, work) => {
+            const director = tournamentDirector();
+            if (!director) return socket.emit('error', { message: 'Tournaments are not available right now.' });
+            if (!isPlainObject(payload)) return socket.emit('error', { message: 'Invalid tournament request.' });
+            try {
+                const state = await work(director, payload);
+                if (state) socket.emit('tournamentState', state);
+            } catch (error) {
+                if (error?.name === 'TournamentError' || error?.code === 'INSUFFICIENT_TOKENS') {
+                    socket.emit('error', { message: error.message });
+                    socket.emit('tournamentActionFailed', { action: eventName, code: error.code || 'ERROR', message: error.message });
+                } else {
+                    console.error(`[SOCKET] ${eventName} failed for user ${socket.user.id}:`, error);
+                    socket.emit('error', { message: 'The tournament action could not be completed.' });
+                }
+            }
+        };
+        const tournamentIdFrom = payload => Number(payload.tournamentId);
+
+        socket.on('tournamentSync', () => emitTournamentSync());
+
+        socket.on('tournamentCreate', payload => tournamentAction('tournamentCreate', payload, async director => {
+            // VIP is a database fact, not a token claim: read it fresh.
+            const vipResult = await gameService.pool.query('SELECT is_vip FROM users WHERE id = $1', [socket.user.id]);
+            const creator = { ...socket.user, is_vip: vipResult.rows?.[0]?.is_vip === true };
+            const settings = isPlainObject(payload.settings) ? payload.settings : payload;
+            return director.create(creator, settings);
+        }));
+
+        socket.on('tournamentJoin', payload => tournamentAction('tournamentJoin', payload, async director => {
+            if (findSeatEngines().some(engine => activeSeatIsLocked(engine, engine.players[socket.user.id]))) {
+                const error = new Error('Finish your current game before joining a tournament.');
+                error.name = 'TournamentError';
+                error.code = 'SEATED_ELSEWHERE';
+                throw error;
+            }
+            const tokens = await readTokenBalance();
+            return director.register(tournamentIdFrom(payload), socket.user, { socketId: socket.id, tokens });
+        }));
+
+        socket.on('tournamentLeave', payload => tournamentAction('tournamentLeave', payload, director => (
+            director.withdraw(tournamentIdFrom(payload), socket.user.id)
+        )));
+        socket.on('tournamentFindPlayer', payload => tournamentAction('tournamentFindPlayer', payload, director => (
+            director.findPlayer(tournamentIdFrom(payload), socket.user.id)
+        )));
+        socket.on('tournamentStart', payload => tournamentAction('tournamentStart', payload, director => (
+            director.start(tournamentIdFrom(payload), socket.user.id)
+        )));
+        socket.on('tournamentCancel', payload => tournamentAction('tournamentCancel', payload, director => (
+            director.cancel(tournamentIdFrom(payload), socket.user.id)
+        )));
+        socket.on('tournamentQuit', payload => tournamentAction('tournamentQuit', payload, director => (
+            director.quit(tournamentIdFrom(payload), socket.user.id)
+        )));
 
         onTableAction("leaveTable", { allowSpectator: true }, async ({ engine: engineToLeave, payload: { tableId } }) => {
             leaveVoiceRoom(tableId, socket.user.id);

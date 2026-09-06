@@ -511,3 +511,43 @@
     display: none;
   }
 }
+
+/* The Stage — the tournament venue (Sept 2026). A game-show glass floor:
+   lit glass over a dark stage, a slow colour wash underneath, chrome rim,
+   spotlights in the atmosphere. Pure gradients, no textures, so the look
+   can be art-directed later without touching the components. */
+[data-theme="tournament-stage"],
+[data-table-theme="tournament-stage"] {
+  --venue-accent: #f2c14e;
+  --venue-accent-soft: rgba(242, 193, 78, 0.28);
+  --venue-accent-faint: rgba(242, 193, 78, 0.12);
+  --venue-text: #f7f9ff;
+  --venue-muted: #b9c3d8;
+  --venue-panel: #131a2b;
+  --venue-panel-deep: #090d17;
+  --venue-rim: #9aa7bd;
+  --venue-pinstripe: rgba(120, 200, 255, 0.4);
+  --venue-atmosphere:
+    radial-gradient(ellipse at 22% 8%, rgba(255, 244, 200, 0.22), transparent 30%),
+    radial-gradient(ellipse at 78% 10%, rgba(180, 220, 255, 0.18), transparent 32%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 7vw),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 7vw),
+    linear-gradient(180deg, #0b1020 0%, #0a0e1c 55%, #05070f 100%);
+  --venue-table-surface:
+    radial-gradient(ellipse at 50% 42%, rgba(255, 255, 255, 0.14) 0%, rgba(120, 200, 255, 0.08) 38%, rgba(6, 10, 24, 0.55) 78%, rgba(3, 5, 12, 0.85) 100%),
+    conic-gradient(from 210deg at 50% 50%, rgba(80, 160, 255, 0.28), rgba(255, 90, 170, 0.2), rgba(90, 255, 200, 0.22), rgba(255, 210, 90, 0.22), rgba(80, 160, 255, 0.28)),
+    linear-gradient(180deg, #16223f 0%, #0c1329 100%);
+  --venue-table-size: auto, auto, auto;
+  --venue-table-position: center;
+  --venue-table-repeat: no-repeat;
+  --venue-table-shadow: 0 1vh 3.4vh rgba(0, 0, 0, 0.8), 0 0 3vh rgba(120, 200, 255, 0.28), inset 0 0 0 0.35vh rgba(200, 214, 235, 0.55);
+  --venue-lobby-surface:
+    radial-gradient(ellipse at 30% 0%, rgba(255, 244, 200, 0.18), transparent 40%),
+    linear-gradient(180deg, #0f1730 0%, #070a14 100%);
+  --venue-lobby-size: auto, auto;
+  --venue-lobby-position: center;
+  --venue-lobby-repeat: no-repeat;
+  --venue-menu-surface: linear-gradient(155deg, rgba(20, 28, 48, 0.98), rgba(8, 11, 20, 0.99));
+  --venue-footer-surface: linear-gradient(90deg, rgba(14, 20, 36, 0.97), rgba(8, 11, 20, 0.97));
+  --venue-control-surface: linear-gradient(145deg, #34456b, #1a2238);
+}

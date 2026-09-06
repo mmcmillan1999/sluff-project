@@ -7,6 +7,8 @@ import BrandHeader from './BrandHeader';
  * Ads are retired until there is a player base worth monetizing;
  * render the branded season strip instead (same 7.5vh slot).
  */
-const GameHeader = () => <BrandHeader viewType="game" />;
+const GameHeader = ({ tournament = null, viewerUserId = null }) => (
+    <BrandHeader viewType="game" tournament={tournament} viewerUserId={viewerUserId} />
+);
 
 export default GameHeader;

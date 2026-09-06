@@ -51,6 +51,7 @@ const suites = [
     { name: 'store entitlements', file: './entitlements.test.js' },
     { name: 'frog discards', file: './frogDiscards.test.js' },
     { name: 'tournament director', file: './tournament.test.js' },
+    { name: 'tournament socket events', file: './tournamentEvents.test.js' },
 ];
 
 function loadRunner(suite) {

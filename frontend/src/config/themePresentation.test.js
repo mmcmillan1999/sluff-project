@@ -16,7 +16,10 @@ describe('theme presentation contract', () => {
             'miss-pauls-academy',
         ]);
         expect(THEME_IDS).toHaveLength(4);
-        expect(Object.keys(THEME_PRESENTATION)).toEqual(THEME_IDS);
+        // The tournament venue is a fifth server-facing theme id, but it is
+        // never on the wheel (a cash buy-in picker), so THEME_IDS stays four.
+        expect(Object.keys(THEME_PRESENTATION)).toEqual([...THEME_IDS, 'tournament-stage']);
+        expect(getThemePresentation('tournament-stage')).toMatchObject({ name: 'The Stage', eyebrow: 'Tournament night' });
         THEME_IDS.forEach(themeId => {
             expect(isCanonicalThemeId(themeId)).toBe(true);
             expect(THEME_PRESENTATION[themeId]?.id).toBe(themeId);

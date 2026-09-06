@@ -1416,7 +1416,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                             className="game-menu-button secondary"
                             aria-describedby={activeSeatIsHeld ? 'game-menu-seat-held-note' : undefined}
                         >
-                            Return to Lobby
+                            {currentTableState?.tournament ? 'Back to the tournament' : 'Return to Lobby'}
                         </button>
                         {activeSeatIsHeld && (
                             <p id="game-menu-seat-held-note" className="game-menu-helper">

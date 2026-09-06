@@ -42,7 +42,10 @@ Debug overlay in game: `Shift+D`.
   are pure; `tournamentStore.js` has the Postgres store and an in-memory one for tests. Tables are
   ordinary GameEngines with `engine.tournament` set (`tableType: 'tournament'`, gameId null, never game
   over, no draws/forfeits/rematch, all-pass redeals keep the dealer and wash after three) that report
-  a TOURNAMENT_ROUND_COMPLETE effect. Spec: the tournament whiteboard artifact (see memory).
+  a TOURNAMENT_ROUND_COMPLETE effect. Socket edge: `tournament*` events in `gameEvents.js`; the
+  client lives in `frontend/src/components/tournament/` (lobby slot + popup + create sheet, the
+  `tournament` view in App.js, the header cube via BrandHeader's `tournament` prop, venue
+  `tournament-stage` in venueThemes.css). Spec: the tournament whiteboard artifact (see memory).
 - Bot insurance (Aug 2026): `backend/src/core/bot-strategies/MarketInsuranceStrategy.js` prices
   asks/offers from a Monte Carlo rollout (`RolloutEstimator.js`) over public information only
   (`PublicRoundView.js` is the enforced no-cheating boundary — see `tests/marketInsurance.test.js`).

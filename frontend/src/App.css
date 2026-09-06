@@ -38,6 +38,7 @@ body.allow-scroll {
 }
 
 .app-content-container.app-view-lobby,
+.app-content-container.app-view-tournament,
 .app-content-container.app-view-gameTable {
   overflow: hidden;
 }

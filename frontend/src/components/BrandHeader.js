@@ -14,6 +14,8 @@
 // When monetization returns, swap this back for AdvertisingHeader.
 import React, { useEffect, useMemo, useState } from 'react';
 import { getCurrentSeasonStandings } from '../services/api';
+import { tournamentFaces } from './tournament/tournamentFormat';
+import TournamentStandingsSheet from './tournament/TournamentStandingsSheet';
 import './BrandHeader.css';
 
 const FACE_INTERVAL_MS = 5000;
@@ -70,13 +72,29 @@ const PlayerFace = ({ face }) => (
     </>
 );
 
-const FaceContent = ({ face }) => (
-    face?.type === 'player' ? <PlayerFace face={face} /> : <BrandFace />
+// During a tournament the cube carries the tournament instead of the
+// season: the round, the leaders, you, the latest bust.
+const TournamentFace = ({ face }) => (
+    <>
+        <span className="brand-header-place brand-header-place--tournament" aria-hidden="true">🏆</span>
+        <div className="brand-header-text">
+            <span className="brand-header-season">{face.title}</span>
+            <span className="brand-header-tagline">{face.sub}</span>
+        </div>
+    </>
 );
 
-const BrandHeader = ({ viewType = 'default' }) => {
+const FaceContent = ({ face }) => {
+    if (face?.type === 'player') return <PlayerFace face={face} />;
+    if (face?.type === 'tournament') return <TournamentFace face={face} />;
+    return <BrandFace />;
+};
+
+const BrandHeader = ({ viewType = 'default', tournament = null, viewerUserId = null }) => {
     const [topThree, setTopThree] = useState([]);
     const [turns, setTurns] = useState(0);
+    const [showStandings, setShowStandings] = useState(false);
+    const inTournament = Boolean(tournament && ['registering', 'running', 'complete'].includes(tournament.status));
 
     useEffect(() => {
         let cancelled = false;
@@ -99,15 +117,19 @@ const BrandHeader = ({ viewType = 'default' }) => {
         };
     }, []);
 
-    const faces = useMemo(() => ([
-        { type: 'brand' },
-        ...topThree.map((player, index) => ({
-            type: 'player',
-            place: index + 1,
-            name: player.displayName || player.username || 'Unknown player',
-            record: recordFor(player),
-        })),
-    ]), [topThree]);
+    const faces = useMemo(() => (
+        inTournament
+            ? tournamentFaces(tournament, viewerUserId).map(face => ({ type: 'tournament', ...face }))
+            : [
+                { type: 'brand' },
+                ...topThree.map((player, index) => ({
+                    type: 'player',
+                    place: index + 1,
+                    name: player.displayName || player.username || 'Unknown player',
+                    record: recordFor(player),
+                })),
+            ]
+    ), [inTournament, topThree, tournament, viewerUserId]);
 
     const faceCount = faces.length;
 
@@ -129,8 +151,22 @@ const BrandHeader = ({ viewType = 'default' }) => {
     };
 
     return (
-        <div className={`brand-header brand-header--${viewType}`}>
-            <div className="brand-cube-viewport">
+        <div className={`brand-header brand-header--${viewType}${inTournament ? ' brand-header--tournament' : ''}`}>
+            {showStandings && inTournament && (
+                <TournamentStandingsSheet
+                    tournament={tournament}
+                    viewerUserId={viewerUserId}
+                    onClose={() => setShowStandings(false)}
+                />
+            )}
+            <div
+                className="brand-cube-viewport"
+                onClick={inTournament ? () => setShowStandings(current => !current) : undefined}
+                role={inTournament ? 'button' : undefined}
+                tabIndex={inTournament ? 0 : undefined}
+                aria-label={inTournament ? 'Tournament standings' : undefined}
+                onKeyDown={inTournament ? (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setShowStandings(current => !current); } } : undefined}
+            >
                 <div
                     className="brand-cube"
                     style={{ transform: `translateZ(-3.75vh) rotateX(${turns * 90}deg)` }}

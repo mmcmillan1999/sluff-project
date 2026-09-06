@@ -7,6 +7,7 @@ import LobbyTableCard from './LobbyTableCard';
 import VenueWheel from './VenueWheel';
 import DecorBoundary from './DecorBoundary';
 import LobbyChat from './LobbyChat';
+import TournamentLobbySlot from './tournament/TournamentLobbySlot';
 import SoundControls from './game/SoundControls';
 import { getLobbyChatHistory } from '../services/api';
 import { BUILD_ID } from '../utils/clientVersion';
@@ -33,7 +34,7 @@ export const deriveLobbyPlayerStats = (user = {}) => {
     };
 };
 
-const LobbyView = ({ user, lobbyThemes, serverVersion, wheelAudio, handleJoinTable, handleQuickPlay, handleJoinTableAsSpectator, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowSeasonRecaps, handleShowTokenLedger, handleShowBulletin, handleShowAdmin, handleShowFeedback, handleShowHowToPlay, handleResetTutorial, handleShowAccountSettings, handleShowPrivacy, handleShowTerms, socket, soundSettings }) => {
+const LobbyView = ({ user, lobbyThemes, serverVersion, wheelAudio, handleJoinTable, handleQuickPlay, handleJoinTableAsSpectator, handleLogout, handleRequestFreeToken, handleShowLeaderboard, handleShowSeasonRecaps, handleShowTokenLedger, handleShowBulletin, handleShowAdmin, handleShowFeedback, handleShowHowToPlay, handleResetTutorial, handleShowAccountSettings, handleShowPrivacy, handleShowTerms, socket, soundSettings, tournamentLobby, myTournament, handleOpenTournament, handleCreateTournament }) => {
 
     const [activeTab, setActiveTab] = useState('');
     const [showMenu, setShowMenu] = useState(false);
@@ -344,6 +345,15 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, wheelAudio, handleJoinTab
                         />
                     </DecorBoundary>
                 </div>
+
+                {/* ============ TOURNAMENT — create, join, or find your way back ============ */}
+                <TournamentLobbySlot
+                    user={user}
+                    tournamentLobby={tournamentLobby}
+                    myTournament={myTournament}
+                    onOpen={handleOpenTournament}
+                    onCreate={handleCreateTournament}
+                />
 
                 {/* ============ PRIVATE TABLES — play with friends ============ */}
                 <div
