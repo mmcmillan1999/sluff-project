@@ -48,7 +48,7 @@ import McMillanCrest from './game/McMillanCrest';
 import TipsBeacon from './game/TipsBeacon';
 import TurnNudge from './game/TurnNudge';
 import WidowSpider from './game/WidowSpider';
-import { useTurnNudge } from '../hooks/useTurnNudge';
+import { useTurnNudge, turnPressureSuppressed } from '../hooks/useTurnNudge';
 import { getPendingSelfAction, pendingActionKey } from '../utils/pendingSelfAction';
 import { buzz } from '../utils/haptics';
 import { useCosmetics } from '../utils/cosmetics';
@@ -278,8 +278,15 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         ? rawAfkDeadline - serverOffsetRef.current
         : null;
     const afkTimeoutSecondsRaw = Number(currentTableState?.afkTimeoutSeconds);
+    // No pressure while the deal is still landing, and none at all for a VIP
+    // who opted out of timing when they are the only person at the table.
+    const turnPressureOff = turnPressureSuppressed({
+        dealActive: dealPresentation.active,
+        untimedBotGames: user?.untimed_bot_games === true,
+        players: currentTableState?.players,
+    });
     const { level: turnNudgeLevel, afkSecondsLeft: turnNudgeCountdown } = useTurnNudge({
-        actionKey: turnNudgeKey,
+        actionKey: turnPressureOff ? null : turnNudgeKey,
         onEscalate: handleTurnEscalation,
         onActivity: handleTurnActivity,
         afkDeadline: afkDeadlineLocal,

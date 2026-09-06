@@ -1,5 +1,6 @@
 const CURRENT_USER_QUERY = `
-    SELECT id, username, is_admin, sessions_valid_after
+    SELECT id, username, is_admin, sessions_valid_after,
+           COALESCE(untimed_bot_games, FALSE) AS untimed_bot_games
     FROM users
     WHERE id = $1
       AND COALESCE(is_bot, FALSE) = FALSE
@@ -35,6 +36,8 @@ async function loadCurrentUserByTokenId(pool, tokenUser) {
         id: currentUser.id,
         username: currentUser.username,
         is_admin: currentUser.is_admin === true,
+        // Read by GameEngine.joinTable: the seat copies it for the AFK timer.
+        untimed_bot_games: currentUser.untimed_bot_games === true,
     };
     // Carried on the socket so the 60 s identity refresh can re-check
     // revocation without the original token.

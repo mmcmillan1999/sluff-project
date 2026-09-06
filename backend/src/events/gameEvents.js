@@ -926,7 +926,8 @@ const registerGameHandlers = (io, gameService, options = {}) => {
                 const userQuery = `
                     SELECT id, username, email, created_at, wins, losses, washes,
                            is_admin, is_vip, tutorial_version, tutorial_active_version,
-                           username_changed_at
+                           username_changed_at,
+                           COALESCE(untimed_bot_games, FALSE) AS untimed_bot_games
                     FROM users
                     WHERE id = $1
                 `;

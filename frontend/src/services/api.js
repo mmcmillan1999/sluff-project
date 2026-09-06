@@ -402,6 +402,16 @@ export const changeUsername = async (username) => {
     return data;
 };
 
+// Settings a player changes about themselves. Today that is one switch, for
+// VIP (alpha tester) accounts only: untimed turns when they are the only
+// person at the table. The server refuses it for anyone else.
+export const updateAccountSettings = async ({ untimedBotGames }) => {
+    const response = await configuredFetch('/api/auth/settings', 'POST', { untimedBotGames });
+    const data = await readJsonResponse(response);
+    if (!response.ok) throw accountError(data, 'Could not save your settings.');
+    return data;
+};
+
 // POST, not DELETE: the server's CORS policy allows only GET and POST.
 export const deleteAccount = async (password) => {
     const response = await configuredFetch('/api/auth/account/delete', 'POST', { password });

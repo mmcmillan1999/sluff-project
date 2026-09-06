@@ -166,6 +166,33 @@ test('falls back to the legacy array leaderboard during a rolling deploy', async
     expect(getLeaderboard).toHaveBeenCalledTimes(1);
 });
 
+test('shows a season win rate column and colour-codes wins, losses and washes', async () => {
+    const user = userEvent.setup();
+    render(
+        <LeaderboardView
+            user={{ username: 'Human Player', is_admin: false }}
+            onReturnToLobby={vi.fn()}
+        />,
+    );
+
+    const botName = await screen.findByText('Mike Knight');
+    expect(screen.getAllByRole('columnheader', { name: 'Win%' }).length).toBeGreaterThan(0);
+    const botRow = botName.closest('tr');
+    // 4 wins of 6 games: the win rate column, green.
+    const winRate = within(botRow).getByText('67%');
+    expect(winRate).toHaveClass('leaderboard-stat--win');
+    // Totals view: each figure carries its colour class.
+    expect(within(botRow).getByText('4')).toHaveClass('leaderboard-stat--win');
+    expect(within(botRow).getByText('2')).toHaveClass('leaderboard-stat--loss');
+    expect(within(botRow).getByText('0')).toHaveClass('leaderboard-stat--wash');
+
+    // Percent view: every figure gets its own % sign, not only the last one.
+    await user.click(screen.getByRole('button', { name: '%' }));
+    expect(within(botRow).getByText('33%')).toHaveClass('leaderboard-stat--loss');
+    expect(within(botRow).getByText('0%')).toHaveClass('leaderboard-stat--wash');
+    expect(within(botRow).getAllByText('67%')).toHaveLength(2);
+});
+
 test('opens a player profile from a leaderboard name without exposing an account id', async () => {
     const user = userEvent.setup();
     render(

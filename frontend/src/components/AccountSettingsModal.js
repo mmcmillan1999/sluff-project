@@ -5,7 +5,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { changeUsername, deleteAccount } from '../services/api';
+import { changeUsername, deleteAccount, updateAccountSettings } from '../services/api';
 import { useModalFocus } from '../hooks/useModalFocus';
 import './AccountSettingsModal.css';
 
@@ -31,10 +31,15 @@ const describeUnlock = (isoDate) => {
     return `in ${minutes} minute${minutes === 1 ? '' : 's'}`;
 };
 
-const AccountSettingsModal = ({ show, user, onClose, onUsernameChanged, onAccountDeleted }) => {
+const AccountSettingsModal = ({ show, user, onClose, onUsernameChanged, onAccountDeleted, onSettingsChanged }) => {
     const [nextName, setNextName] = useState('');
     const [renameState, setRenameState] = useState({ busy: false, error: null, notice: null });
     const [unlockAt, setUnlockAt] = useState(null);
+    // VIP-only: untimed turns when they are the only person at the table.
+    // The switch reads from the synced user, so a save is followed by a
+    // user sync (onSettingsChanged) rather than local optimistic state.
+    const [timerState, setTimerState] = useState({ busy: false, error: null });
+    const untimedAlone = user?.untimed_bot_games === true;
 
     const [confirmingDelete, setConfirmingDelete] = useState(false);
     const [password, setPassword] = useState('');
@@ -84,6 +89,18 @@ const AccountSettingsModal = ({ show, user, onClose, onUsernameChanged, onAccoun
         } catch (error) {
             if (error.nextChangeAllowedAt) setUnlockAt(error.nextChangeAllowedAt);
             setRenameState({ busy: false, error: error.message, notice: null });
+        }
+    };
+
+    const toggleUntimedAlone = async () => {
+        if (timerState.busy) return;
+        setTimerState({ busy: true, error: null });
+        try {
+            const result = await updateAccountSettings({ untimedBotGames: !untimedAlone });
+            setTimerState({ busy: false, error: null });
+            onSettingsChanged?.(result);
+        } catch (error) {
+            setTimerState({ busy: false, error: error.message });
         }
     };
 
@@ -156,6 +173,29 @@ const AccountSettingsModal = ({ show, user, onClose, onUsernameChanged, onAccoun
                         <p className="account-status account-status--bad" role="alert">{renameState.error}</p>
                     )}
                 </section>
+
+                {user?.is_vip && (
+                    <section className="account-section">
+                        <h3 className="account-section-title">Turn timer</h3>
+                        <p className="account-hint">
+                            When you're the only person at a table, nobody is waiting on you.
+                            Turn this on and your turns there won't be timed or played for you.
+                            With other people seated, the usual timer applies.
+                        </p>
+                        <button
+                            type="button"
+                            className={`account-button${untimedAlone ? ' account-button--primary' : ''}`}
+                            onClick={toggleUntimedAlone}
+                            disabled={timerState.busy}
+                            aria-pressed={untimedAlone}
+                        >
+                            Untimed turns when I'm the only person at the table: {untimedAlone ? 'On' : 'Off'}
+                        </button>
+                        {timerState.error && (
+                            <p className="account-status account-status--bad" role="alert">{timerState.error}</p>
+                        )}
+                    </section>
+                )}
 
                 <section className="account-section account-section--danger">
                     <h3 className="account-section-title">Delete your account</h3>

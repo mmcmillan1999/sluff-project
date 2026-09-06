@@ -53,7 +53,7 @@ function createHttpPool() {
             const sql = String(text);
             state.queries.push({ text: sql, params });
 
-            if (/SELECT\s+id,\s*username,\s*is_admin(?:,\s*sessions_valid_after)?\s+FROM\s+users\s+WHERE\s+id\s*=\s*\$1/i.test(sql)) {
+            if (/SELECT\s+id,\s*username,\s*is_admin(?:,\s*sessions_valid_after)?(?:,\s*COALESCE\(untimed_bot_games,\s*FALSE\)\s+AS\s+untimed_bot_games)?\s+FROM\s+users\s+WHERE\s+id\s*=\s*\$1/i.test(sql)) {
                 const user = users.get(Number(params[0]));
                 if (user?.is_bot && /COALESCE\(is_bot, FALSE\)\s*=\s*FALSE/i.test(sql)) {
                     return { rows: [] };
@@ -279,7 +279,7 @@ function createSocketPool() {
                 const user = users.get(Number(params[0]));
                 return { rows: user ? [{ ...user }] : [] };
             }
-            if (/SELECT\s+id,\s*username,\s*is_admin(?:,\s*sessions_valid_after)?\s+FROM\s+users/i.test(sql)) {
+            if (/SELECT\s+id,\s*username,\s*is_admin(?:,\s*sessions_valid_after)?(?:,\s*COALESCE\(untimed_bot_games,\s*FALSE\)\s+AS\s+untimed_bot_games)?\s+FROM\s+users/i.test(sql)) {
                 state.identityReads += 1;
                 if (state.failIdentityReads) throw new Error('forced identity refresh failure');
                 const user = users.get(Number(params[0]));
@@ -358,6 +358,8 @@ async function testSocketAuthenticationAndAdminRevocation() {
             id: 7,
             username: 'DatabaseName',
             is_admin: true,
+            // The seat copies this for the AFK timer; absent column reads as off.
+            untimed_bot_games: false,
         }, 'socket identity and privileges are hydrated from the database');
         // The token's iat rides along so the 60 s refresh can re-check
         // sessions_valid_after (password-reset revocation) without the token.

@@ -42,11 +42,22 @@ const rankingValue = (value, rankingMethod) => (
     rankingMethod === 'game_token_net' ? signedValue(value) : numericValue(value).toFixed(2)
 );
 
-const recordValue = (player, showPercent) => {
-    if (!showPercent) return `${player.wins}-${player.losses}-${player.washes}`;
-    if (!player.gamesPlayed) return '0 · 0 · 0%';
-    const percentage = value => Math.round((value / player.gamesPlayed) * 100);
-    return `${percentage(player.wins)} · ${percentage(player.losses)} · ${percentage(player.washes)}%`;
+const percentOf = (value, games) => (games > 0 ? `${Math.round((value / games) * 100)}%` : null);
+
+// Wins green, losses red, washes grey, in both the totals and the % views,
+// and a % sign on every figure: the colour carries the meaning, so nobody
+// has to remember the W-L-Wash order or read "17%" as the win rate.
+const RecordStats = ({ player, showPercent }) => {
+    const figure = (value) => (showPercent ? (percentOf(value, player.gamesPlayed) ?? '0%') : value);
+    return (
+        <>
+            <span className="leaderboard-stat leaderboard-stat--win">{figure(player.wins)}</span>
+            <span className="leaderboard-stat-sep" aria-hidden="true">·</span>
+            <span className="leaderboard-stat leaderboard-stat--loss">{figure(player.losses)}</span>
+            <span className="leaderboard-stat-sep" aria-hidden="true">·</span>
+            <span className="leaderboard-stat leaderboard-stat--wash">{figure(player.washes)}</span>
+        </>
+    );
 };
 
 const LeaderboardView = ({ user, onReturnToLobby, handleShowAdmin, onShowTokenLedger }) => {
@@ -121,8 +132,12 @@ const LeaderboardView = ({ user, onReturnToLobby, handleShowAdmin, onShowTokenLe
                     )}
                 </td>
                 <td className="leaderboard-record-cell">
-                    <strong>{recordValue(player, showPercent)}</strong>
+                    <strong><RecordStats player={player} showPercent={showPercent} /></strong>
                     <small>{showPercent ? 'W · L · Wash' : `${player.gamesPlayed} games`}</small>
+                </td>
+                <td className="leaderboard-winpct-cell">
+                    <strong className="leaderboard-stat--win">{percentOf(player.wins, player.gamesPlayed) ?? '—'}</strong>
+                    <small>win rate</small>
                 </td>
                 <td className="leaderboard-season-score">
                     <strong>{rankingValue(player.rankingTokens, season?.rankingMethod)}</strong>
@@ -139,6 +154,7 @@ const LeaderboardView = ({ user, onReturnToLobby, handleShowAdmin, onShowTokenLe
                     <th className="rank-col">#</th>
                     <th className="username-col">Player</th>
                     <th className="record-col">{showPercent ? '% W-L-Wash' : 'W-L-Wash'}</th>
+                    <th className="winpct-col">Win%</th>
                     <th className="season-score-col">{rankingLabel}</th>
                 </tr>
             </thead>

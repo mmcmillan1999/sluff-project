@@ -2,6 +2,7 @@
 
 const assert = require('node:assert/strict');
 const {
+    DEAL_ALLOWANCE_MS,
     DEFAULT_TIMEOUT_MS,
     MAX_TURN_WINDOWS,
     cheapestLegalCard,
@@ -111,11 +112,73 @@ function testItPassesRatherThanBids() {
     const start = 1_000_000;
     evaluate(engine, { now: start });
 
-    const decision = evaluate(engine, { now: start + DEFAULT_TIMEOUT_MS });
+    // The opening bid starts while the cards are still being dealt on screen,
+    // so its window begins after the deal allowance, not at the deal.
+    assert.equal(evaluate(engine, { now: start + DEFAULT_TIMEOUT_MS }), null, 'the deal is still landing');
+    const decision = evaluate(engine, { now: start + DEAL_ALLOWANCE_MS + DEFAULT_TIMEOUT_MS });
     assert.deepEqual(decision, {
         action: 'bid', userId: 1, bid: 'Pass', playerName: 'You',
     }, 'passing can never cost the absent player more than they already risked');
     console.log('  an absent bidder passes');
+}
+
+function testOnlyTheOpeningBidGetsTheDealAllowance() {
+    const start = 1_000_000;
+    // Second bidder: someone already passed, the deal is long over.
+    const engine = engineFor({
+        state: 'Bidding Phase',
+        biddingTurnPlayerId: 1,
+        trickTurnPlayerId: null,
+        playersWhoPassedThisRound: ['Brandi'],
+    });
+    evaluate(engine, { now: start });
+    assert.equal(deadlineFor(engine), start + DEFAULT_TIMEOUT_MS, 'no allowance once bidding is under way');
+    assert.equal(evaluate(engine, { now: start + DEFAULT_TIMEOUT_MS })?.action, 'bid');
+
+    // Opening bid: the published deadline carries the allowance too, so the
+    // client's countdown agrees with the server.
+    const opening = engineFor({
+        state: 'Bidding Phase',
+        biddingTurnPlayerId: 1,
+        trickTurnPlayerId: null,
+    });
+    evaluate(opening, { now: start });
+    assert.equal(deadlineFor(opening), start + DEAL_ALLOWANCE_MS + DEFAULT_TIMEOUT_MS);
+
+    // A play turn never gets it.
+    const play = engineFor();
+    evaluate(play, { now: start });
+    assert.equal(deadlineFor(play), start + DEFAULT_TIMEOUT_MS);
+    console.log('  only the opening bid waits for the deal');
+}
+
+function testUntimedTurnsWhenAloneWithBots() {
+    const start = 1_000_000;
+    const optedOut = { ...HUMAN, untimedBotGames: true };
+    // Alone with bots: no pending action at all, so no clock and no deadline.
+    const alone = engineFor({ players: { 1: optedOut, 2: BOT, 3: { ...BOT, playerName: 'Elena' } } });
+    assert.equal(pendingHumanAction(alone), null);
+    evaluate(alone, { now: start });
+    assert.equal(alone.afkWatch, null, 'nothing is armed');
+    assert.equal(deadlineFor(alone), null);
+    assert.equal(evaluate(alone, { now: start + 10 * DEFAULT_TIMEOUT_MS }), null, 'never plays for them');
+
+    // A second human at the table: the setting is ignored, the backstop is
+    // back on for everyone.
+    const company = engineFor({ players: { 1: optedOut, 2: BOT, 3: { ...HUMAN, playerName: 'Elena' } } });
+    assert.equal(pendingHumanAction(company)?.userId, 1);
+    evaluate(company, { now: start });
+    assert.equal(deadlineFor(company), start + DEFAULT_TIMEOUT_MS);
+
+    // A disconnected human still counts as a person at the table (they may
+    // come back), so the opt-out stays off.
+    const withGone = engineFor({ players: { 1: optedOut, 2: BOT, 3: GONE } });
+    assert.equal(pendingHumanAction(withGone)?.userId, 1);
+
+    // Without the setting, being alone with bots changes nothing.
+    const plain = engineFor({ players: { 1: HUMAN, 2: BOT, 3: { ...BOT, playerName: 'Elena' } } });
+    assert.equal(pendingHumanAction(plain)?.userId, 1);
+    console.log('  an opted-out VIP alone with bots is never timed');
 }
 
 function testItPlaysTheCheapestLegalCard() {
@@ -383,6 +446,8 @@ function run() {
     testAnAbsentFrogBidderDeclinesTheUpgrade();
     testAnAbsentSoloBidderGetsTheirLongestSuit();
     testAnAbsentFrogBidderBuriesTheDefaultDiscards();
+    testOnlyTheOpeningBidGetsTheDealAllowance();
+    testUntimedTurnsWhenAloneWithBots();
     testTheNewPromptsStillRespectVotesAndTheDeadline();
     console.log('AFK turn timer tests passed.');
 }

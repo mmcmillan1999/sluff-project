@@ -1,11 +1,27 @@
 // frontend/src/hooks/useTurnNudge.js
 import { useEffect, useRef, useState } from 'react';
 
-export const NUDGE_AT_MS = 5000;
-export const URGENT_AT_MS = 15000;
+// 5s / 15s relaxed by 15% (Matt, Sept 2026: "reduce the intensity of it's
+// your turn"); the server's AFK backstop moved by the same factor.
+export const NUDGE_AT_MS = 5750;
+export const URGENT_AT_MS = 17250;
 // How often, at most, to tell the server this player is still interacting.
 export const ACTIVITY_PING_MS = 8000;
 const TICK_MS = 250;
+
+// When the call-up should stand down entirely (the caller passes a null
+// actionKey): while the deal is still animating, because the server opens
+// the first bidding turn as it deals and the clock was visibly running
+// before the cards had landed; or for a VIP tester who opted out of timing
+// when they are the only person at the table, for whom the server arms no
+// backstop either (core/afkTurnTimer.js). A disconnected person still counts
+// as company, matching the server.
+export const turnPressureSuppressed = ({ dealActive = false, untimedBotGames = false, players = null } = {}) => {
+    if (dealActive) return true;
+    if (untimedBotGames !== true || !players) return false;
+    const humans = Object.values(players).filter(seat => seat && !seat.isBot && !seat.isSpectator);
+    return humans.length === 1;
+};
 
 // Escalation levels: 0 calm, 1 nudge, 2 urgent.
 //

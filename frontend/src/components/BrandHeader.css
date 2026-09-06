@@ -116,6 +116,11 @@
     color: #9fb3a6;
 }
 
+/* Same colour code as the leaderboard: wins green, losses red. */
+.brand-header-stat { font-weight: 600; }
+.brand-header-stat--win { color: #7fd693; }
+.brand-header-stat--loss { color: #e07b73; }
+
 .brand-header-place {
     display: flex;
     align-items: center;

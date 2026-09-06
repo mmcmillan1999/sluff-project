@@ -72,6 +72,12 @@ const createDbTablesOnce = async (pool) => {
         `);
         
         await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_bot BOOLEAN NOT NULL DEFAULT FALSE");
+        // VIP = the alpha testers. Every account that existed in Sept 2026 is
+        // VIP (ensure-vip-column.sql set them); accounts created from here on
+        // are not, so tester-only options (untimed turns against bots) stay
+        // off the release build's players.
+        await pool.query("ALTER TABLE users ALTER COLUMN is_vip SET DEFAULT FALSE");
+        await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS untimed_bot_games BOOLEAN NOT NULL DEFAULT FALSE");
         await pool.query("ALTER TABLE users ALTER COLUMN is_bot SET DEFAULT FALSE");
         await pool.query("UPDATE users SET is_bot = FALSE WHERE is_bot IS NULL");
         await pool.query("ALTER TABLE users ALTER COLUMN is_bot SET NOT NULL");

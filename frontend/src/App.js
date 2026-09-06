@@ -766,6 +766,7 @@ function App() {
                     onClose={() => setShowAccountSettings(false)}
                     onUsernameChanged={handleUsernameChanged}
                     onAccountDeleted={handleAccountDeleted}
+                    onSettingsChanged={() => { if (socket.connected) socket.emit("requestUserSync"); }}
                 />
                 {welcomeIsEligible && welcomeDelayElapsed && (
                     <FirstGameWelcome

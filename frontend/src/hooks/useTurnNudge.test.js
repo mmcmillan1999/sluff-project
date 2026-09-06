@@ -1,5 +1,38 @@
 import { act, renderHook } from '@testing-library/react';
-import { ACTIVITY_PING_MS, NUDGE_AT_MS, URGENT_AT_MS, useTurnNudge } from './useTurnNudge';
+import { ACTIVITY_PING_MS, NUDGE_AT_MS, URGENT_AT_MS, turnPressureSuppressed, useTurnNudge } from './useTurnNudge';
+
+describe('turn pressure timing and suppression', () => {
+    test('the call-up is the July timings relaxed by fifteen percent', () => {
+        expect(NUDGE_AT_MS).toBe(5750);
+        expect(URGENT_AT_MS).toBe(17250);
+    });
+
+    const bots = { 2: { playerName: 'Brandi', isBot: true }, 3: { playerName: 'Elena', isBot: true } };
+    const me = { 1: { playerName: 'You', isBot: false } };
+
+    test('stands down while the deal is still landing', () => {
+        expect(turnPressureSuppressed({ dealActive: true })).toBe(true);
+        expect(turnPressureSuppressed({ dealActive: false })).toBe(false);
+    });
+
+    test('stands down for an opted-out player only when they are the sole person at the table', () => {
+        expect(turnPressureSuppressed({ untimedBotGames: true, players: { ...me, ...bots } })).toBe(true);
+        const company = { ...me, ...bots, 4: { playerName: 'Pat', isBot: false } };
+        expect(turnPressureSuppressed({ untimedBotGames: true, players: company })).toBe(false);
+        // A disconnected person still counts as company, matching the server.
+        const gone = { ...me, ...bots, 4: { playerName: 'Pat', isBot: false, disconnected: true } };
+        expect(turnPressureSuppressed({ untimedBotGames: true, players: gone })).toBe(false);
+        // Spectators are not company.
+        const watched = { ...me, ...bots, 4: { playerName: 'Pat', isBot: false, isSpectator: true } };
+        expect(turnPressureSuppressed({ untimedBotGames: true, players: watched })).toBe(true);
+    });
+
+    test('never stands down for a player without the setting', () => {
+        expect(turnPressureSuppressed({ untimedBotGames: false, players: { ...me, ...bots } })).toBe(false);
+        expect(turnPressureSuppressed({ players: { ...me, ...bots } })).toBe(false);
+        expect(turnPressureSuppressed({ untimedBotGames: true, players: null })).toBe(false);
+    });
+});
 
 describe('useTurnNudge', () => {
     beforeEach(() => { vi.useFakeTimers(); });
@@ -117,9 +150,10 @@ describe('useTurnNudge AFK countdown and activity pings', () => {
 
         advance(NUDGE_AT_MS);
         expect(result.current.level).toBe(1);
-        expect(result.current.afkSecondsLeft).toBe(40);
+        // 300ms + the 5.75s nudge have elapsed of the 45s window.
+        expect(result.current.afkSecondsLeft).toBe(39);
         advance(20000);
-        expect(result.current.afkSecondsLeft).toBe(20);
+        expect(result.current.afkSecondsLeft).toBe(19);
         advance(30000);
         expect(result.current.afkSecondsLeft).toBe(0);
     });
@@ -144,7 +178,8 @@ describe('useTurnNudge AFK countdown and activity pings', () => {
         // heard), so the window restarts from there.
         advance(NUDGE_AT_MS);
         expect(result.current.level).toBe(1);
-        expect(result.current.afkSecondsLeft).toBe(40);
+        // Anchored to the ping: 300ms + the 5.75s nudge later, 39s remain.
+        expect(result.current.afkSecondsLeft).toBe(39);
     });
 
     test('a later server deadline wins over the local anchor', () => {
@@ -156,7 +191,8 @@ describe('useTurnNudge AFK countdown and activity pings', () => {
         }));
 
         advance(NUDGE_AT_MS + 250);
-        expect(result.current.afkSecondsLeft).toBe(55);
+        // 6s into a 60s server window.
+        expect(result.current.afkSecondsLeft).toBe(54);
     });
 
     test('no timeout config means no countdown', () => {

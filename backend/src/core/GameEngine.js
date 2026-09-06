@@ -182,6 +182,7 @@ class GameEngine {
             this.players[id].disconnected = false;
             this.players[id].socketId = socketId;
             if (tokens !== null) this.players[id].tokens = tokens;
+            this.players[id].untimedBotGames = user.untimed_bot_games === true;
             
             // Force spectator mode - handle both conversion cases
             // The funded roster is immutable once its start transaction has
@@ -200,7 +201,12 @@ class GameEngine {
             }
         } else {
             const activePlayersCount = this.playerOrder.count;
-            const playerBase = { userId: id, playerName: username, socketId, tokens };
+            // untimedBotGames: a VIP tester's opt-out from the AFK backstop when
+            // they are the only person at the table (core/afkTurnTimer.js).
+            const playerBase = {
+                userId: id, playerName: username, socketId, tokens,
+                untimedBotGames: user.untimed_bot_games === true,
+            };
 
             // A late arrival while buy-ins are committing may observe, but
             // must not enter the captured/charged active roster.

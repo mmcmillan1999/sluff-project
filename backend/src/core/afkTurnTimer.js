@@ -18,7 +18,14 @@ const { getLegalMoves } = require('./legalMoves');
 const { CARD_POINT_VALUES } = require('./constants');
 const { frogDiscardStrategyFor } = require('./frogDiscards');
 
-const DEFAULT_TIMEOUT_MS = 45_000;
+// 45s relaxed by 15% (Matt, Sept 2026: "reduce the intensity of it's your
+// turn"); the client's 5s/15s call-up moved by the same factor.
+const DEFAULT_TIMEOUT_MS = 51_750;
+// The first bidding turn of a round opens the moment the server deals, while
+// the client is still flying the cards out (36-47 cards at 115ms plus an
+// 800ms flight, up to ~6.2s in four-player). Without this allowance the clock
+// was visibly running before the player could see their hand.
+const DEAL_ALLOWANCE_MS = 7_000;
 // A turn can be extended by activity pings to at most this many windows. The
 // pings exist so a THINKING player is not auto-played; without a ceiling they
 // also let a LOSING player script pings forever, holding a funded table
@@ -54,7 +61,24 @@ function cheapestLegalCard(legalMoves) {
  * is a bot (the bot loop owns those) or a disconnected human (the forfeit timer
  * owns those).
  */
+// A VIP tester's opt-out (account settings): when they are the only person
+// at the table there is nobody for the backstop to protect, so their turns
+// are untimed and the client shows no countdown. Never applies with a second
+// human seated, whatever the setting says.
+function untimedForThisSeat(engine, player) {
+    if (player?.untimedBotGames !== true) return false;
+    const humans = Object.values(engine.players || {})
+        .filter(seat => seat && !seat.isBot && !seat.isSpectator);
+    return humans.length === 1;
+}
+
 function pendingHumanAction(engine) {
+    const pending = pendingSeatAction(engine);
+    if (!pending) return null;
+    return untimedForThisSeat(engine, engine.players?.[pending.userId]) ? null : pending;
+}
+
+function pendingSeatAction(engine) {
     if (!engine || !engine.gameStarted) return null;
     // A vote in flight is its own timed interaction; do not race it.
     if (engine.drawRequest?.isActive || engine.playoutVote?.isActive) return null;
@@ -137,6 +161,14 @@ function turnKey(engine, pending) {
     ].join('|');
 }
 
+// The first bid after the deal: bidding just opened, nobody has passed or bid.
+function isOpeningBid(engine, pending) {
+    return pending?.kind === 'bid'
+        && engine.state === 'Bidding Phase'
+        && (engine.playersWhoPassedThisRound?.length ?? 0) === 0
+        && !engine.currentHighestBidDetails;
+}
+
 /**
  * Advances the timer for one engine. Pure bookkeeping plus a decision — the
  * caller performs the action, so this stays testable without a live table.
@@ -155,7 +187,10 @@ function evaluate(engine, { now = Date.now(), timeoutMs = DEFAULT_TIMEOUT_MS } =
     }
 
     if (!engine.afkWatch || engine.afkWatch.key !== key) {
-        engine.afkWatch = { key, since: now, armedAt: now };
+        // The opening bid of a round is the one turn that starts while the
+        // cards are still being dealt on screen; give it the deal's duration.
+        const allowance = isOpeningBid(engine, pending) ? DEAL_ALLOWANCE_MS : 0;
+        engine.afkWatch = { key, since: now + allowance, armedAt: now };
         return null;
     }
 
@@ -234,6 +269,7 @@ function refresh(engine, userId, { now = Date.now(), timeoutMs = DEFAULT_TIMEOUT
 module.exports = {
     CARD_POINTS,
     MAX_TURN_WINDOWS,
+    DEAL_ALLOWANCE_MS,
     DEFAULT_TIMEOUT_MS,
     cardCost,
     cheapestLegalCard,

@@ -46,7 +46,8 @@ const DELETE_STATUS_BY_CODE = {
 const PROFILE_COLUMNS = `
     id, username, email, created_at, wins, losses, washes,
     is_admin, is_vip, tutorial_version, tutorial_active_version,
-    username_changed_at
+    username_changed_at,
+    COALESCE(untimed_bot_games, FALSE) AS untimed_bot_games
 `;
 
 async function tokenBalanceForUser(pool, userId) {
@@ -66,6 +67,7 @@ function publicUserProfile(user, tokens) {
         tokens,
         is_admin: user.is_admin === true,
         is_vip: user.is_vip === true,
+        ...(user.untimed_bot_games !== undefined ? { untimed_bot_games: user.untimed_bot_games === true } : {}),
         // Lets the account screen show when the next rename unlocks instead of
         // only finding out by being refused.
         ...(user.username_changed_at !== undefined
@@ -271,7 +273,8 @@ module.exports = function(pool, bcrypt, jwt, io, gameService) {
             const userQuery = `
                 SELECT id, username, password_hash, is_admin, is_verified, is_vip,
                        wins, losses, washes, tutorial_version, tutorial_active_version,
-                       username_changed_at
+                       username_changed_at,
+                       COALESCE(untimed_bot_games, FALSE) AS untimed_bot_games
                 FROM users
                 WHERE email = $1
                   AND COALESCE(is_bot, FALSE) = FALSE
@@ -368,6 +371,31 @@ module.exports = function(pool, bcrypt, jwt, io, gameService) {
     // Self-service rename, at most once a week. The engine keys live game state
     // (seats, scores, hands, turn order) on the player name, so this is
     // deliberately not reachable mid-game — a rename would orphan those keys.
+    // Settings a player changes about themselves. The untimed-versus-bots
+    // option exists for the alpha testers (VIP accounts) and is not meant to
+    // reach release players (Matt, Sept 2026), so it is refused for everyone
+    // else even if the client shows it.
+    router.post('/settings', checkAuth, accountChangeLimiter, async (req, res) => {
+        const { untimedBotGames } = req.body || {};
+        if (typeof untimedBotGames !== 'boolean') {
+            return res.status(400).json({ message: 'untimedBotGames must be true or false.' });
+        }
+        try {
+            const current = await pool.query('SELECT is_vip FROM users WHERE id = $1', [req.user.id]);
+            if (current.rows?.[0]?.is_vip !== true) {
+                return res.status(403).json({ code: 'VIP_ONLY', message: 'This setting is available to VIP accounts only.' });
+            }
+            await pool.query('UPDATE users SET untimed_bot_games = $1 WHERE id = $2', [untimedBotGames, req.user.id]);
+            // A seated player carries a copy of the flag; update it live so the
+            // change applies to the game they are in, not the next one.
+            gameService?.applyAccountSettings?.(req.user.id, { untimedBotGames });
+            return res.json({ untimed_bot_games: untimedBotGames });
+        } catch (error) {
+            console.error('Settings update error:', error);
+            return res.status(500).json({ message: 'Unable to save your settings.' });
+        }
+    });
+
     router.post('/username', checkAuth, accountChangeLimiter, async (req, res) => {
         res.set('Cache-Control', 'private, no-store');
         // Held for the whole check-then-commit sequence so a join arriving in

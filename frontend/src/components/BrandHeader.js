@@ -21,11 +21,32 @@ const SLOT_NAMES = ['front', 'bottom', 'back', 'top'];
 
 const PLACE_LABELS = { 1: '1st', 2: '2nd', 3: '3rd' };
 
-const recordLine = (player) => {
+// Wins green, losses red, plus the season win rate — the same colour code as
+// the leaderboard, so the numbers read without decoding.
+const recordFor = (player) => {
     const wins = Number(player?.wins) || 0;
     const losses = Number(player?.losses) || 0;
-    return `${wins}W · ${losses}L this season`;
+    const washes = Number(player?.washes) || 0;
+    const games = wins + losses + washes;
+    return {
+        wins,
+        losses,
+        winPct: games > 0 ? `${Math.round((wins / games) * 100)}%` : null,
+    };
 };
+
+const RecordLine = ({ record }) => (
+    <span className="brand-header-tagline">
+        <span className="brand-header-stat brand-header-stat--win">{record.wins}W</span>
+        {' · '}
+        <span className="brand-header-stat brand-header-stat--loss">{record.losses}L</span>
+        {record.winPct ? ' · ' : ''}
+        {record.winPct && (
+            <span className="brand-header-stat brand-header-stat--win">{record.winPct}</span>
+        )}
+        {' this season'}
+    </span>
+);
 
 const BrandFace = () => (
     <>
@@ -44,7 +65,7 @@ const PlayerFace = ({ face }) => (
         </span>
         <div className="brand-header-text">
             <span className="brand-header-season">{face.name}</span>
-            <span className="brand-header-tagline">{face.record}</span>
+            <RecordLine record={face.record} />
         </div>
     </>
 );
@@ -84,7 +105,7 @@ const BrandHeader = ({ viewType = 'default' }) => {
             type: 'player',
             place: index + 1,
             name: player.displayName || player.username || 'Unknown player',
-            record: recordLine(player),
+            record: recordFor(player),
         })),
     ]), [topThree]);
 

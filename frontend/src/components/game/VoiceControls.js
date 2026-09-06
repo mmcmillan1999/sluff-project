@@ -382,9 +382,13 @@ const VoiceControls = ({ socket, tableId }) => {
                             setVoiceEnabled(true);
                         }}
                         title="Talk to the other players at this table using your microphone"
+                        aria-label="Turn on voice chat"
                     >
                         <MicrophoneIcon muted />
-                        <span className="voice-enable-label">Turn on voice</span>
+                        {/* Just "Turn on": with "voice" the footer clipped the
+                            insurance and chat buttons on phones. The mic says
+                            the rest; the title and aria-label keep it explicit. */}
+                        <span className="voice-enable-label">Turn on</span>
                     </button>
                 </div>
             </div>

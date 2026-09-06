@@ -200,7 +200,14 @@
 .leaderboard-table .rank-col { width: 2.15rem; text-align: center; }
 .leaderboard-table .username-col { width: auto; }
 .leaderboard-table .record-col { width: 5.4rem; text-align: center; }
+.leaderboard-table .winpct-col { width: 3.3rem; text-align: center; }
 .leaderboard-table .season-score-col { width: 4.65rem; text-align: right; }
+
+/* Colour code shared with the lobby header: wins green, losses red, washes grey. */
+.leaderboard-stat--win { color: #7fd693; }
+.leaderboard-stat--loss { color: #e07b73; }
+.leaderboard-stat--wash { color: #9aa39e; }
+.leaderboard-stat-sep { color: #5f6b64; padding: 0 0.18rem; }
 
 .leaderboard-rank-cell {
     color: #dcb75f;
@@ -248,11 +255,13 @@
 }
 
 .leaderboard-record-cell,
+.leaderboard-winpct-cell,
 .leaderboard-season-score {
     text-align: center !important;
 }
 
 .leaderboard-record-cell strong,
+.leaderboard-winpct-cell strong,
 .leaderboard-season-score strong {
     display: block;
     color: #f1eee5;
@@ -260,7 +269,10 @@
     white-space: nowrap;
 }
 
+.leaderboard-winpct-cell strong { color: #7fd693; }
+
 .leaderboard-record-cell small,
+.leaderboard-winpct-cell small,
 .leaderboard-season-score small {
     display: block;
     overflow: hidden;
@@ -365,11 +377,13 @@
 
     .leaderboard-table .rank-col { width: 3.5rem; }
     .leaderboard-table .record-col { width: 8rem; }
+    .leaderboard-table .winpct-col { width: 4.5rem; }
     .leaderboard-table .season-score-col { width: 7rem; }
 
     .leaderboard-player-link { font-size: 0.9rem; }
     .leaderboard-wallet { font-size: 0.62rem; }
     .leaderboard-record-cell strong,
+    .leaderboard-winpct-cell strong,
     .leaderboard-season-score strong { font-size: 0.85rem; }
 }
 

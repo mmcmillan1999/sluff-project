@@ -528,6 +528,20 @@
             return loadBotBalances(this.pool, this.botAccounts.map(profile => profile.id));
         }
 
+        // A player's own account settings changed (api/auth /settings). Seated
+        // players carry a copy of the flags the engine reads, so update it in
+        // place and republish the table: the AFK deadline the client counts
+        // down comes from that state, and it should vanish (or appear) now.
+        applyAccountSettings(userId, { untimedBotGames } = {}) {
+            const id = Number(userId);
+            for (const [tableId, engine] of Object.entries(this.engines)) {
+                const player = engine?.players?.[id];
+                if (!player) continue;
+                if (typeof untimedBotGames === 'boolean') player.untimedBotGames = untimedBotGames;
+                this.emitGameState(tableId);
+            }
+        }
+
         // Log the gate only when it flips, not on every 45s tick.
         _noteExhibitionFundingGate(verdict) {
             if (!verdict.known || verdict.paused === this._exhibitionGatePaused) return;
