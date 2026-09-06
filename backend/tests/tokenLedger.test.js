@@ -277,7 +277,7 @@ function testQueryValidationAndWindowOrder() {
     assert.match(LEDGER_PAGE_QUERY, /ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW/);
     assert.match(LEDGER_PAGE_QUERY, /PARTITION BY t\.user_id, t\.game_id/);
     assert.match(LEDGER_PAGE_QUERY, /ROW_NUMBER\(\) OVER/);
-    assert.match(LEDGER_PAGE_QUERY, /game\.reconciliation_status = 'player_voided'/);
+    assert.match(LEDGER_PAGE_QUERY, /game\.reconciliation_status IN \('player_voided', 'exhibition_pruned'\)/);
     assert.match(LEDGER_PAGE_QUERY, /game_season\.status = 'active'/);
 }
 

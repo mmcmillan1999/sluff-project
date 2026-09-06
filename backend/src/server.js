@@ -40,6 +40,7 @@ const {
 } = require('./services/adminGameRecoveryService');
 const {
     createBotExhibitionManager,
+    DEFAULT_EXHIBITION_FUNDING_GATE,
     DEFAULT_EXHIBITION_INTERVAL_MS,
     MINIMUM_EXHIBITION_INTERVAL_MS,
     DEFAULT_EXHIBITION_TABLE_IDS,
@@ -99,10 +100,23 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '100kb' }));
 
 function botExhibitionConfigFromEnvironment() {
-    // Off unless explicitly enabled (Sept 2026): bot-only games were running
-    // ten to one against human games and inflating the season board. Set
-    // BOT_EXHIBITION_ENABLED=true on the service to bring the exhibition back.
-    const enabled = process.env.BOT_EXHIBITION_ENABLED === 'true';
+    // On by default, governed by the funding gate (Sept 2026): bot-only games
+    // only run while the richest bots are poor enough to need feeding, so the
+    // loop can no longer run away with the season board the way the
+    // unthrottled version did. BOT_EXHIBITION_ENABLED=false is the kill switch.
+    const enabled = process.env.BOT_EXHIBITION_ENABLED !== 'false';
+    const topBots = process.env.BOT_EXHIBITION_TOP_BOTS === undefined
+        ? DEFAULT_EXHIBITION_FUNDING_GATE.topBots
+        : Number(process.env.BOT_EXHIBITION_TOP_BOTS);
+    const capTokens = process.env.BOT_EXHIBITION_TOP_BOTS_CAP_TOKENS === undefined
+        ? DEFAULT_EXHIBITION_FUNDING_GATE.capTokens
+        : Number(process.env.BOT_EXHIBITION_TOP_BOTS_CAP_TOKENS);
+    if (!Number.isInteger(topBots) || topBots < 1) {
+        throw new Error('BOT_EXHIBITION_TOP_BOTS must be a whole number of at least 1.');
+    }
+    if (!Number.isFinite(capTokens) || capTokens < 0) {
+        throw new Error('BOT_EXHIBITION_TOP_BOTS_CAP_TOKENS must be a number of at least 0.');
+    }
     // The comma-separated list wins; the legacy single-table variable is
     // still honored so an existing Render override keeps working.
     const rawTables = process.env.BOT_EXHIBITION_TABLE_IDS
@@ -118,7 +132,12 @@ function botExhibitionConfigFromEnvironment() {
     if (!Number.isFinite(intervalSeconds) || intervalSeconds * 1000 < MINIMUM_EXHIBITION_INTERVAL_MS) {
         throw new Error('BOT_EXHIBITION_INTERVAL_SECONDS must be at least 10.');
     }
-    return { enabled, tableIds, intervalMs: Math.round(intervalSeconds * 1000) };
+    return {
+        enabled,
+        tableIds,
+        intervalMs: Math.round(intervalSeconds * 1000),
+        fundingGate: { topBots, capTokens },
+    };
 }
 
 function recoveryTimingFromEnvironment() {
@@ -257,10 +276,11 @@ async function initializeApplication() {
             gameService,
             tableIds: exhibitionConfig.tableIds,
             intervalMs: exhibitionConfig.intervalMs,
+            fundingGate: exhibitionConfig.fundingGate,
         });
         botExhibition.start();
     } else {
-        console.log('[EXHIBITION] Bot exhibition is off (BOT_EXHIBITION_ENABLED is not "true"); bots only play alongside humans.');
+        console.log('[EXHIBITION] Bot exhibition is off (BOT_EXHIBITION_ENABLED=false); bots only play alongside humans.');
     }
 
     return { gameService, pool, recoveryMonitor, botExhibition, stopResumeSweep };

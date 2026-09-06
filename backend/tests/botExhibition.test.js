@@ -4,7 +4,11 @@
 
 const assert = require('assert');
 const GameService = require('../src/services/GameService');
-const { createBotExhibitionManager } = require('../src/maintenance/botExhibition');
+const {
+    createBotExhibitionManager,
+    evaluateExhibitionFundingGate,
+    DEFAULT_EXHIBITION_FUNDING_GATE,
+} = require('../src/maintenance/botExhibition');
 const { createGameServiceWithoutHeartbeat, withControlledTimeouts } = require('./test-helpers');
 
 const mockIo = { to: () => ({ emit: () => {} }), emit: () => {}, sockets: { sockets: new Map() } };
@@ -183,6 +187,110 @@ async function runBotExhibitionTests() {
         assert.strictEqual(mixed[0].status, 'error');
         assert.notStrictEqual(mixed[1].status, 'error', 'second table still ticks after the first fails');
         pass('Runs both stakes tables and isolates per-table failures.');
+    }
+
+    {
+        // Funding gate, pure: sum the richest N, pause strictly above the cap.
+        const gate = { topBots: 3, capTokens: 100 };
+        assert.deepStrictEqual(DEFAULT_EXHIBITION_FUNDING_GATE, gate);
+
+        const rich = evaluateExhibitionFundingGate(new Map([[1, 60], [2, 30], [3, 20], [4, 0]]), gate);
+        assert.strictEqual(rich.paused, true);
+        assert.strictEqual(rich.total, 110);
+        assert.deepStrictEqual(rich.richest.map(b => b.botId), [1, 2, 3]);
+
+        const poor = evaluateExhibitionFundingGate(new Map([[1, 40], [2, 30], [3, 25], [4, 5]]), gate);
+        assert.strictEqual(poor.paused, false);
+        assert.strictEqual(poor.total, 95);
+
+        const boundary = evaluateExhibitionFundingGate(new Map([[1, 50], [2, 30], [3, 20]]), gate);
+        assert.strictEqual(boundary.paused, false, 'exactly the cap still runs; only "over" pauses');
+
+        // It is the richest that count, not the first listed, and a lone
+        // whale is enough.
+        const whale = evaluateExhibitionFundingGate(new Map([[1, 1], [2, 1], [3, 1], [4, 200]]), gate);
+        assert.strictEqual(whale.paused, true);
+        assert.strictEqual(whale.total, 202);
+
+        // Unknown balances (no persistent bot roster) never block.
+        const unknown = evaluateExhibitionFundingGate(null, gate);
+        assert.strictEqual(unknown.known, false);
+        assert.strictEqual(unknown.paused, false);
+
+        assert.throws(() => evaluateExhibitionFundingGate(new Map(), { topBots: 0, capTokens: 100 }), /topBots/);
+        assert.throws(() => evaluateExhibitionFundingGate(new Map(), { topBots: 3, capTokens: -1 }), /capTokens/);
+        pass('Funding gate sums the richest bots and pauses only over the cap.');
+    }
+
+    {
+        // The gate governs starts only: a running game is never cut, an idle
+        // trio is cleared while paused, and unknown balances never block.
+        const gate = { topBots: 3, capTokens: 100 };
+        const { gameService, starts } = makeService();
+        const engine = gameService.getEngineById('table-10');
+
+        gameService._loadAllBotBalances = async () => new Map([[1, 60], [2, 30], [3, 20]]);
+        const paused = await gameService.ensureExhibitionGame('table-10', { fundingGate: gate });
+        assert.strictEqual(paused.status, 'bots_funded');
+        assert.strictEqual(paused.total, 110);
+        assert.strictEqual(paused.capTokens, 100);
+        assert.strictEqual(starts.length, 0);
+        assert.strictEqual(engine.playerOrder.count, 0);
+
+        gameService._loadAllBotBalances = async () => new Map([[1, 40], [2, 30], [3, 25]]);
+        const resumed = await gameService.ensureExhibitionGame('table-10', { fundingGate: gate });
+        assert.strictEqual(resumed.status, 'started');
+        assert.strictEqual(starts.length, 1);
+
+        // The bots got rich mid-game: the game runs to its end untouched.
+        gameService._loadAllBotBalances = async () => new Map([[1, 500], [2, 500], [3, 500]]);
+        const running = await gameService.ensureExhibitionGame('table-10', { fundingGate: gate });
+        assert.strictEqual(running.status, 'game_running');
+        assert.strictEqual(engine.playerOrder.count, 3);
+
+        // Game over, trio still parked at the table, gate closed: the seats
+        // are freed instead of holding three bots idle.
+        engine.gameStarted = false;
+        engine.gameId = null;
+        engine.state = 'Ready to Start';
+        const parked = await gameService.ensureExhibitionGame('table-10', { fundingGate: gate });
+        assert.strictEqual(parked.status, 'bots_funded');
+        assert.strictEqual(engine.playerOrder.count, 0);
+        assert.strictEqual(starts.length, 1);
+
+        gameService._loadAllBotBalances = async () => null;
+        const unknown = await gameService.ensureExhibitionGame('table-10', { fundingGate: gate });
+        assert.strictEqual(unknown.status, 'started');
+
+        // No gate passed (direct callers, older tests): unchanged behaviour.
+        const { gameService: ungated, starts: ungatedStarts } = makeService();
+        ungated._loadAllBotBalances = async () => new Map([[1, 999]]);
+        assert.strictEqual((await ungated.ensureExhibitionGame('table-10')).status, 'started');
+        assert.strictEqual(ungatedStarts.length, 1);
+        pass('Gate blocks starts only, clears a parked trio, never cuts a running game.');
+    }
+
+    {
+        // The manager carries its gate into every tick and validates it.
+        const { gameService } = makeService();
+        const seen = [];
+        gameService.ensureExhibitionGame = async (tableId, options) => {
+            seen.push([tableId, options && options.fundingGate]);
+            return { status: 'started' };
+        };
+        const manager = createBotExhibitionManager({ gameService, fundingGate: { topBots: 2, capTokens: 50 } });
+        assert.deepStrictEqual(manager.fundingGate, { topBots: 2, capTokens: 50 });
+        await manager.runNow();
+        assert.deepStrictEqual(seen, [
+            ['table-10', { topBots: 2, capTokens: 50 }],
+            ['table-20', { topBots: 2, capTokens: 50 }],
+        ]);
+
+        const defaults = createBotExhibitionManager({ gameService });
+        assert.deepStrictEqual(defaults.fundingGate, { topBots: 3, capTokens: 100 });
+        assert.throws(() => createBotExhibitionManager({ gameService, fundingGate: { topBots: 0, capTokens: 100 } }), /topBots/);
+        assert.throws(() => createBotExhibitionManager({ gameService, fundingGate: { topBots: 3, capTokens: NaN } }), /capTokens/);
+        pass('Manager passes its funding gate to every tick and validates it.');
     }
 
     console.log('All bot exhibition tests passed!');

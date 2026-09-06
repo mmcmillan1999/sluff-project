@@ -101,7 +101,7 @@ const LEDGER_PAGE_QUERY = `
             ELSE FALSE
         END AS game_can_void,
         CASE
-            WHEN game.reconciliation_status = 'player_voided'
+            WHEN game.reconciliation_status IN ('player_voided', 'exhibition_pruned')
             THEN game.reconciliation_status
             ELSE NULL
         END AS game_void_status,

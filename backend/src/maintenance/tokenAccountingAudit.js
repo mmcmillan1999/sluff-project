@@ -247,7 +247,9 @@ const GAME_VOID_REVERSAL_ISSUES_QUERY = `
                 WHEN reversal_idempotency_key IS DISTINCT FROM
                      ('game-void:' || game_id || ':' || source_transaction_id)
                     THEN 'manifest_idempotency_mismatch'
-                WHEN reconciliation_status IS DISTINCT FROM 'player_voided' THEN 'game_not_marked_voided'
+                WHEN reconciliation_status IS NULL
+                  OR reconciliation_status NOT IN ('player_voided', 'exhibition_pruned')
+                    THEN 'game_not_marked_voided'
                 WHEN live_user_id IS NULL
                  AND ((live_source_transaction_id IS NULL)
                       IS DISTINCT FROM (live_reversal_transaction_id IS NULL))
@@ -397,7 +399,8 @@ const GAME_VOID_REVERSAL_ISSUES_QUERY = `
             reconciliation_status,
             TRUE AS has_game_void,
             CASE
-                WHEN reconciliation_status IS DISTINCT FROM 'player_voided'
+                WHEN reconciliation_status IS NULL
+                  OR reconciliation_status NOT IN ('player_voided', 'exhibition_pruned')
                     THEN 'game_not_marked_voided'
                 WHEN source_transaction_count IS DISTINCT FROM reversal_transaction_count
                     THEN 'marker_count_mismatch'

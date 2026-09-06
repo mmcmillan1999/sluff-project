@@ -147,7 +147,10 @@ async function testAuditIsReadOnlyAndScoped() {
         GAME_VOID_REVERSAL_ISSUES_QUERY,
         /live_user_id IS NULL\s+AND \(\(live_source_transaction_id IS NULL\)\s+IS DISTINCT FROM \(live_reversal_transaction_id IS NULL\)\)/,
     );
-    assert.match(GAME_VOID_REVERSAL_ISSUES_QUERY, /IS DISTINCT FROM 'player_voided'/);
+    // Both reversal paths (a player's void and the admin exhibition prune)
+    // mark the game; anything else with a manifest is an integrity issue.
+    assert.match(GAME_VOID_REVERSAL_ISSUES_QUERY, /reconciliation_status NOT IN \('player_voided', 'exhibition_pruned'\)/);
+    assert.match(GAME_VOID_REVERSAL_ISSUES_QUERY, /reconciliation_status IS NULL\s+OR reconciliation_status NOT IN/);
     assert.match(GAME_VOID_REVERSAL_ISSUES_QUERY, /game_void\.affected_player_count/);
     assert.match(GAME_VOID_REVERSAL_ISSUES_QUERY, /'marker_count_mismatch'/);
     assert.match(GAME_VOID_REVERSAL_ISSUES_QUERY, /'manifest_count_mismatch'/);

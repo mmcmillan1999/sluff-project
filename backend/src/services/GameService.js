@@ -4,6 +4,7 @@
     const afkTurnTimer = require('../core/afkTurnTimer');
     const transactionManager = require('../data/transactionManager');
     const { loadBotBalances } = require('../data/botAccounts');
+    const { evaluateExhibitionFundingGate } = require('../maintenance/botExhibition');
     const {
         THEMES,
         TABLE_COSTS,
@@ -518,6 +519,21 @@
             return new Map([...balances].filter(([, tokens]) => (
                 Math.round(Number(tokens) * 100) >= buyInCents
             )));
+        }
+
+        // Every bot's wallet, affordable or not: the exhibition funding gate
+        // sums the richest few. null when there is no persistent bot roster.
+        async _loadAllBotBalances() {
+            if (this.botAccounts.length === 0) return null;
+            return loadBotBalances(this.pool, this.botAccounts.map(profile => profile.id));
+        }
+
+        // Log the gate only when it flips, not on every 45s tick.
+        _noteExhibitionFundingGate(verdict) {
+            if (!verdict.known || verdict.paused === this._exhibitionGatePaused) return;
+            this._exhibitionGatePaused = verdict.paused;
+            const holding = `top ${verdict.topBots} bots hold ${verdict.total} tokens between them (cap ${verdict.capTokens})`;
+            console.log(`[EXHIBITION] ${verdict.paused ? 'Paused: no new bot games while the' : 'Resumed: the'} ${holding}.`);
         }
 
         // Rooms priced above the bot mercy floor only admit bots that won
@@ -1210,7 +1226,7 @@
         // continuous bot-only game running on the designated table. Each game
         // gets a fresh random trio so play volume varies across the roster,
         // and the table is handed back to humans the moment one takes a seat.
-        async ensureExhibitionGame(tableId) {
+        async ensureExhibitionGame(tableId, { fundingGate = null } = {}) {
             const engine = this.getEngineById(tableId);
             if (!engine || engine.tableType === 'quickplay') return { status: 'no_engine' };
             // Marks the table so the terminal-cleanup restart loop defers to
@@ -1227,6 +1243,27 @@
             if (engine.gameStarted || engine.gameStartPending) return { status: 'game_running' };
             if (!['Waiting for Players', 'Ready to Start'].includes(engine.state)) {
                 return { status: 'busy', state: engine.state };
+            }
+
+            // Funding gate (botExhibition.js): no new bot game while the
+            // richest bots are already rich enough. Checked only here, after
+            // the running-game checks above, so a game in progress is never
+            // cut. While paused, don't leave the last trio parked at the
+            // table — quick play can use those bots, and the lobby shouldn't
+            // show three bots sitting on their hands.
+            if (fundingGate) {
+                const verdict = evaluateExhibitionFundingGate(await this._loadAllBotBalances(), fundingGate);
+                this._noteExhibitionFundingGate(verdict);
+                if (verdict.paused) {
+                    for (const player of seated) engine.removeBotPlayer(player.userId);
+                    if (seated.length > 0) this.emitGameState(tableId);
+                    return {
+                        status: 'bots_funded',
+                        total: verdict.total,
+                        capTokens: verdict.capTokens,
+                        topBots: verdict.topBots,
+                    };
+                }
             }
 
             // Fresh trio every game — brains as distinct as funding allows,

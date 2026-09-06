@@ -19,8 +19,8 @@
 //                 (dev CORS origins and HTML stack traces are gated on it)
 //   --set-env KEY=VALUE  with --execute: set one NON-SECRET variable on the
 //                 service and redeploy, behind the same mid-game check
-//                 (e.g. --set-env BOT_EXHIBITION_ENABLED=true brings the bot
-//                 exhibition back; it is off by default since Sept 2026). The value
+//                 (e.g. --set-env BOT_EXHIBITION_ENABLED=false is the bot
+//                 exhibition's kill switch). The value
 //                 sits on your command line and in shell history, so keys that
 //                 look like secrets are refused — rotate those instead.
 //
