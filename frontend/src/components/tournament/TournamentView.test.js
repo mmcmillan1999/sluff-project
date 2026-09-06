@@ -5,6 +5,7 @@ import TournamentPopup from './TournamentPopup';
 import TournamentLobbySlot from './TournamentLobbySlot';
 import { validateSettings } from './TournamentCreateSheet';
 import { describeViewer, rankEntries, tournamentFaces, ordinal } from './tournamentFormat';
+import { vi } from 'vitest';
 
 const entry = (userId, username, extra = {}) => ({
     userId, username, status: 'registered', stack: 120, sitOuts: 0, place: null, prizeTokens: 0, bustedRound: null, ...extra,
@@ -191,4 +192,15 @@ test('a finished table waits on the others with their trick counts, and the stak
     expect(screen.getByRole('heading', { name: 'Waiting on one table' })).toBeInTheDocument();
     expect(screen.getAllByText(/Trick 7 of 11/).length).toBeGreaterThan(0);
     expect(screen.getByRole('heading', { name: 'You · Stakes ×1.21' })).toBeInTheDocument();
+});
+
+
+test('the Share link button copies a link that opens the tournament', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    render(<TournamentView tournament={registering()} user={{ id: 99, username: 'Zed' }} onJoin={() => {}} onBack={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Share link to this tournament' }));
+    expect(await screen.findByText(/Link copied/)).toBeInTheDocument();
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/tournament/1`);
+    delete navigator.clipboard;
 });

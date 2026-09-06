@@ -5,6 +5,7 @@
 import React, { useEffect, useState } from 'react';
 import { describeViewer, formatTokens, ordinal, stakesLabel, startLabel, statusLabel, tableProgressLabel, MIN_SEATS } from './tournamentFormat';
 import { TournamentVoiceSlot } from './TournamentVoiceDock';
+import { getTournamentInviteUrl, shareTournamentInvite } from '../../utils/tournamentInvites';
 import { getThemePresentation } from '../../config/themePresentation';
 import './tournament.css';
 
@@ -72,6 +73,18 @@ const TournamentView = ({
     onBack,
 }) => {
     const [confirming, setConfirming] = useState(null);
+    // "Link copied" after a share that had no share sheet; clears itself.
+    const [shareNotice, setShareNotice] = useState('');
+    useEffect(() => {
+        if (!shareNotice) return undefined;
+        const timer = setTimeout(() => setShareNotice(''), 4000);
+        return () => clearTimeout(timer);
+    }, [shareNotice]);
+    const handleShare = async () => {
+        const result = await shareTournamentInvite(tournament);
+        if (result === 'copied') setShareNotice('Link copied — paste it into a message.');
+        else if (result === 'failed') window.prompt('Copy this tournament link:', getTournamentInviteUrl(tournament.id));
+    };
     useEffect(() => { setConfirming(null); }, [tournament?.id, tournament?.status]);
 
     if (!tournament) {
@@ -111,6 +124,7 @@ const TournamentView = ({
             </div>
 
             {error && <p className="tournament-error" role="alert">{error}</p>}
+            {shareNotice && <p className="tournament-notice" role="status">{shareNotice}</p>}
 
             {registering && (
                 <>
@@ -128,6 +142,7 @@ const TournamentView = ({
                             {entered && isCreator && confirming !== 'leave' && confirming !== 'cancel' && (
                                 <button type="button" className="tournament-btn secondary" onClick={() => setConfirming('leave')} disabled={busy}>Leave</button>
                             )}
+                            <button type="button" className="tournament-btn secondary" onClick={handleShare} title="Share a link that opens this tournament" aria-label="Share link to this tournament">Share link</button>
                         </div>
                         {confirming === 'leave' && (
                             <ConfirmRow prompt="Leave and take your buy-in back?" confirmLabel="Leave" busy={busy} onCancel={() => setConfirming(null)} onConfirm={() => { setConfirming(null); onLeave(); }} />
@@ -192,9 +207,12 @@ const TournamentView = ({
                         {me?.status === 'playing' && !myTable && <p>The round is over. The room is being reseated; your next table is moments away.</p>}
                         {me?.status === 'busted' && <p>You went out in round {me.bustedRound}. You can watch the rest from here.</p>}
                         {me && <p>Stack <strong>{me.stack}</strong> · {ordinal(me.rank)} of {tournament.playersLeft} left.</p>}
-                        {me?.status === 'playing' && confirming !== 'quit' && (
+                        {confirming !== 'quit' && (
                             <div className="tournament-actions">
-                                <button type="button" className="tournament-btn danger" onClick={() => setConfirming('quit')} disabled={busy}>Quit tournament</button>
+                                <button type="button" className="tournament-btn secondary" onClick={handleShare} aria-label="Share link to this tournament">Share link</button>
+                                {me?.status === 'playing' && (
+                                    <button type="button" className="tournament-btn danger" onClick={() => setConfirming('quit')} disabled={busy}>Quit tournament</button>
+                                )}
                             </div>
                         )}
                         {confirming === 'quit' && (

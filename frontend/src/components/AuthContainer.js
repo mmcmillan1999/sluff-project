@@ -23,7 +23,7 @@ const viewFromLocation = () => {
     return 'landing';
 };
 
-const AuthContainer = ({ onLoginSuccess, inviteTableId }) => {
+const AuthContainer = ({ onLoginSuccess, inviteTableId, inviteTournamentId = null }) => {
     const [view, setView] = useState(viewFromLocation);
 
     useEffect(() => {
@@ -33,11 +33,16 @@ const AuthContainer = ({ onLoginSuccess, inviteTableId }) => {
     }, []);
 
     const handleNavigate = (newView) => {
+        // Keep whichever invite brought the visitor here on every auth page,
+        // so it is still there when they land in the lobby.
         const encodedInvite = inviteTableId ? encodeURIComponent(inviteTableId) : null;
-        const inviteQuery = encodedInvite ? `?join=${encodedInvite}` : '';
-        const url = newView === 'landing'
-            ? (encodedInvite ? `/join/${encodedInvite}` : '/')
-            : `/${newView}${inviteQuery}`;
+        const inviteQuery = encodedInvite
+            ? `?join=${encodedInvite}`
+            : (inviteTournamentId ? `?tournament=${encodeURIComponent(inviteTournamentId)}` : '');
+        const landingPath = encodedInvite
+            ? `/join/${encodedInvite}`
+            : (inviteTournamentId ? `/tournament/${encodeURIComponent(inviteTournamentId)}` : '/');
+        const url = newView === 'landing' ? landingPath : `/${newView}${inviteQuery}`;
 
         window.history.pushState({}, '', url);
         setView(newView);
@@ -65,6 +70,7 @@ const AuthContainer = ({ onLoginSuccess, inviteTableId }) => {
             case 'landing':
                 return <ClaudeLanding
                     inviteTableId={inviteTableId}
+                    inviteTournamentId={inviteTournamentId}
                     onRegister={() => handleNavigate('register')}
                     onLogin={() => handleNavigate('login')}
                     onNavigate={handleNavigate}
@@ -84,6 +90,11 @@ const AuthContainer = ({ onLoginSuccess, inviteTableId }) => {
             {inviteTableId && (view === 'login' || view === 'register') && (
                 <div className="auth-invite-banner" role="status">
                     A friend invited you to their table. Sign in or create an account and you will be seated automatically.
+                </div>
+            )}
+            {!inviteTableId && inviteTournamentId && (view === 'login' || view === 'register') && (
+                <div className="auth-invite-banner" role="status">
+                    A friend invited you to their tournament. Sign in or create an account and you will land on its registration page.
                 </div>
             )}
             {renderView()}

@@ -20,14 +20,22 @@ export async function initNative() {
     try {
         const { App } = await import('@capacitor/app');
         const { extractInviteTableId } = await import('./tableInvites.js');
-        // Invite deep links (https://playsluff.com/join/<tableId>). The stashed
-        // global covers cold starts where the link arrives before React mounts;
-        // the window event covers warm opens while the app is already running.
+        const { extractInviteTournamentId } = await import('./tournamentInvites.js');
+        // Invite deep links (https://playsluff.com/join/<tableId> and
+        // /tournament/<id>). The stashed global covers cold starts where the
+        // link arrives before React mounts; the window event covers warm opens
+        // while the app is already running.
         const handleInviteUrl = (url) => {
             const tableId = extractInviteTableId(url);
-            if (!tableId) return;
-            window.__sluffInviteTableId = tableId;
-            window.dispatchEvent(new CustomEvent('sluff:invite', { detail: { tableId } }));
+            if (tableId) {
+                window.__sluffInviteTableId = tableId;
+                window.dispatchEvent(new CustomEvent('sluff:invite', { detail: { tableId } }));
+                return;
+            }
+            const tournamentId = extractInviteTournamentId(url);
+            if (!tournamentId) return;
+            window.__sluffInviteTournamentId = tournamentId;
+            window.dispatchEvent(new CustomEvent('sluff:invite', { detail: { tournamentId } }));
         };
         App.addListener('appUrlOpen', ({ url }) => handleInviteUrl(url));
         // Android hardware back. Registering a listener switches off

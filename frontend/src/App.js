@@ -29,6 +29,7 @@ import OrientationScrim from "./components/OrientationScrim.js";
 import SluffIdent from "./components/SluffIdent.js";
 import DecorBoundary from "./components/DecorBoundary.js";
 import { extractInviteTableId } from "./utils/tableInvites.js";
+import { extractInviteTournamentId } from "./utils/tournamentInvites.js";
 import { newBuildAvailable } from "./utils/clientVersion.js";
 import "./App.css";
 import "./components/AdminView.css";
@@ -129,6 +130,11 @@ function App() {
     const [inviteJoinInFlight, setInviteJoinInFlight] = useState(() => Boolean(
         extractInviteTableId(window.location.href) || window.__sluffInviteTableId
     ));
+    // Tournament link (/tournament/<id>): held the same way, then consumed
+    // once the lobby state has arrived by opening that tournament's page.
+    const [pendingInviteTournamentId, setPendingInviteTournamentId] = useState(() =>
+        extractInviteTournamentId(window.location.href) || window.__sluffInviteTournamentId || null
+    );
     const hasConnectedRef = React.useRef(false);
     const errorMessageTimerRef = React.useRef(null);
     const connectionNoticeTimerRef = React.useRef(null);
@@ -363,9 +369,21 @@ function App() {
                 setView('gameTable');
             };
             const onTournamentLobby = (lobby) => {
-                setTournamentLobby(lobby && typeof lobby === 'object'
-                    ? { open: lobby.open || null, running: Array.isArray(lobby.running) ? lobby.running : [] }
-                    : { open: null, running: [] });
+                const next = lobby && typeof lobby === 'object'
+                    ? { open: lobby.open || null, running: Array.isArray(lobby.running) ? lobby.running : [], loaded: true }
+                    : { open: null, running: [], loaded: true };
+                setTournamentLobby(next);
+                // Someone looking at a tournament they are not in (a shared
+                // link, the lobby slot) only hears about it through the lobby
+                // broadcast, so keep their copy fresh from it.
+                const viewing = myTournamentRef.current;
+                if (viewing) {
+                    const currentUserId = JSON.parse(atob(token.split('.')[1])).id;
+                    const mine = viewing.creatorUserId === currentUserId
+                        || (viewing.entries || []).some(entry => entry.userId === currentUserId);
+                    const copy = [next.open, ...next.running].find(candidate => candidate && candidate.id === viewing.id);
+                    if (!mine && copy) setMyTournament(copy);
+                }
             };
             const onTournamentState = (state) => {
                 if (!state || typeof state !== 'object') return;
@@ -618,6 +636,8 @@ function App() {
             if (e.detail?.tableId) {
                 setInviteJoinInFlight(true);
                 setPendingInviteTableId(e.detail.tableId);
+            } else if (e.detail?.tournamentId) {
+                setPendingInviteTournamentId(e.detail.tournamentId);
             }
         };
         window.addEventListener('sluff:invite', onInvite);
@@ -647,6 +667,33 @@ function App() {
             return () => socket.off('connect', join);
         }
     }, [token, user, pendingInviteTableId]);
+
+    // Consume a pending tournament link: once we're signed in and the lobby
+    // broadcast has arrived, open that tournament's page (registration or the
+    // board). A link to a tournament that is over just says so.
+    useEffect(() => {
+        if (!token || !user || !pendingInviteTournamentId || !tournamentLobby.loaded) return;
+        const target = [tournamentLobby.open, ...tournamentLobby.running]
+            .find(candidate => candidate && candidate.id === pendingInviteTournamentId);
+        setPendingInviteTournamentId(null);
+        delete window.__sluffInviteTournamentId;
+        if (/^\/tournament\//.test(window.location.pathname) || new URLSearchParams(window.location.search).has('tournament')) {
+            window.history.replaceState({}, '', '/');
+        }
+        if (target) {
+            setDismissedTournamentId(target.id);
+            // An entrant already holds the richer per-viewer copy from the
+            // server; only a visitor needs the public one from the lobby.
+            const mine = target.creatorUserId === user.id
+                || (target.entries || []).some(entry => entry.userId === user.id);
+            if (!(mine && myTournamentRef.current?.id === target.id)) setMyTournament(target);
+            setView('tournament');
+        } else {
+            if (errorMessageTimerRef.current) clearTimeout(errorMessageTimerRef.current);
+            setErrorMessage('That tournament is over. Look under the wheel for the next one.');
+            errorMessageTimerRef.current = setTimeout(() => setErrorMessage(''), 6000);
+        }
+    }, [token, user, pendingInviteTournamentId, tournamentLobby]);
 
     const handleJoinTable = (tableId) => {
         enableSound();
@@ -796,7 +843,7 @@ function App() {
                     <SluffIdent key={bootIdentRun} onDone={() => setShowBootIdent(false)} />
                 )}
                 <OrientationScrim />
-                <AuthContainer onLoginSuccess={handleLoginSuccess} inviteTableId={pendingInviteTableId} />
+                <AuthContainer onLoginSuccess={handleLoginSuccess} inviteTableId={pendingInviteTableId} inviteTournamentId={pendingInviteTournamentId} />
             </div>
         );
     }
@@ -866,6 +913,7 @@ function App() {
                     )}
                 {view === 'lobby' && tournamentLobby.open
                     && dismissedTournamentId !== tournamentLobby.open.id
+                    && !pendingInviteTournamentId
                     && tournamentLobby.open.creatorUserId !== user.id
                     && !(tournamentLobby.open.entries || []).some(entry => entry.userId === user.id)
                     && !(myTournament && ['registering', 'running'].includes(myTournament.status)) && (
@@ -886,6 +934,7 @@ function App() {
                         && !currentTableState
                         && socketSessionReady
                         && !pendingInviteTableId
+                        && !pendingInviteTournamentId
                         && !inviteJoinInFlight
                         ? handleStartGuidedTutorial
                         : undefined}

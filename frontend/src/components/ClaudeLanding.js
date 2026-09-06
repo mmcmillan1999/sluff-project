@@ -91,9 +91,12 @@ const HAND_CARDS = [
     { rank: 'Q', suit: '♣', red: false },
 ];
 
-const ClaudeLanding = ({ inviteTableId, onRegister, onLogin, onNavigate }) => {
-    const invited = Boolean(inviteTableId);
-    const primaryCta = invited ? 'Join your friend’s table' : 'Play free now';
+const ClaudeLanding = ({ inviteTableId, inviteTournamentId = null, onRegister, onLogin, onNavigate }) => {
+    const invitedToTournament = !inviteTableId && Boolean(inviteTournamentId);
+    const invited = Boolean(inviteTableId) || invitedToTournament;
+    const primaryCta = invited
+        ? (invitedToTournament ? 'Join your friend’s tournament' : 'Join your friend’s table')
+        : 'Play free now';
     const heroHandRef = useRef(null);
 
     const handleRegisterCta = () => {
@@ -132,8 +135,10 @@ const ClaudeLanding = ({ inviteTableId, onRegister, onLogin, onNavigate }) => {
                         <div className="cl-hero-copy">
                             {invited ? (
                                 <p className="cl-invite-banner" role="status">
-                                    <strong>You’re invited.</strong> A friend saved you a seat
-                                    at their Sluff table — create a free account and jump in.
+                                    <strong>You’re invited.</strong>{' '}
+                                    {invitedToTournament
+                                        ? 'A friend wants you in their Sluff tournament — create a free account and register.'
+                                        : 'A friend saved you a seat at their Sluff table — create a free account and jump in.'}
                                 </p>
                             ) : (
                                 <p className="cl-eyebrow">Free to play · Alpha Season 2 is live</p>

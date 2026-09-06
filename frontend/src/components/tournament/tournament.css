@@ -181,6 +181,15 @@
   margin-top: 0.8rem;
 }
 
+.tournament-notice {
+  margin: 0.4rem 0 0;
+  padding: 0.5rem 0.7rem;
+  border-radius: 0.5rem;
+  background: rgba(120, 200, 140, 0.16);
+  color: #cdf5d6;
+  font-size: 0.9rem;
+}
+
 .tournament-error {
   margin: 0.4rem 0 0;
   padding: 0.5rem 0.7rem;
