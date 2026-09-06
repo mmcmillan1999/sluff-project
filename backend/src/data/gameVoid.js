@@ -42,7 +42,13 @@ function requireRequester(requester) {
         || typeof requester?.username !== 'string' || !requester.username.trim()) {
         throw new GameVoidError('AUTHENTICATION_REQUIRED', 'Authentication required.', 401);
     }
-    return { id: userId, username: requester.username.trim() };
+    // is_admin comes from the hydrated request user (requireAuth reads it
+    // from the users row per request), never from the client body.
+    return {
+        id: userId,
+        username: requester.username.trim(),
+        isAdmin: requester?.is_admin === true || requester?.isAdmin === true,
+    };
 }
 
 function toCents(value, label = 'ledger amount') {
@@ -574,19 +580,24 @@ async function voidGame(pool, { gameId: rawGameId, requester: rawRequester, atte
                 `A game can only be voided within ${VOID_WINDOW_HOURS} hours of ending.`,
             );
         }
-        const quotaResult = await client.query(
-            `SELECT COUNT(*)::int AS used
-             FROM game_voids v
-             JOIN game_history g ON g.game_id = v.game_id
-             WHERE v.requested_by_user_id = $1 AND g.season_id = $2`,
-            [requester.id, Number(game.season_id)],
-        );
-        const voidsUsed = Number(quotaResult.rows?.[0]?.used || 0);
-        if (voidsUsed >= VOID_QUOTA_PER_SEASON) {
-            throw new GameVoidError(
-                'GAME_VOID_QUOTA_REACHED',
-                `You have used all ${VOID_QUOTA_PER_SEASON} game voids for this season.`,
+        // Admins are exempt from the per-season quota (Matt, Sept 2026): they
+        // void to repair games for the table, not to take mulligans. The
+        // 24h window and the funded-participant rule still apply to them.
+        if (!requester.isAdmin) {
+            const quotaResult = await client.query(
+                `SELECT COUNT(*)::int AS used
+                 FROM game_voids v
+                 JOIN game_history g ON g.game_id = v.game_id
+                 WHERE v.requested_by_user_id = $1 AND g.season_id = $2`,
+                [requester.id, Number(game.season_id)],
             );
+            const voidsUsed = Number(quotaResult.rows?.[0]?.used || 0);
+            if (voidsUsed >= VOID_QUOTA_PER_SEASON) {
+                throw new GameVoidError(
+                    'GAME_VOID_QUOTA_REACHED',
+                    `You have used all ${VOID_QUOTA_PER_SEASON} game voids for this season.`,
+                );
+            }
         }
 
         const initialValidated = validateSourceLedger(initialLedgerRows, {

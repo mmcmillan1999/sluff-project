@@ -4,8 +4,10 @@
 // mechanics (gameVoid.js) are exact and idempotent; this is the policy that
 // keeps them from being a mulligan button: a void is a mistake-correction
 // requested soon after the game, and each account gets a few per season.
-// Shared by the void itself and by the ledger read that decides whether to
-// show the button, so the two can never disagree.
+// Admin accounts are exempt from the quota (not from the window): they void
+// to repair games for the table. Shared by the void itself and by the ledger
+// read that decides whether to show the button, so the two can never
+// disagree.
 
 const positiveInteger = (raw, fallback) => {
     const value = Number.parseInt(raw, 10);

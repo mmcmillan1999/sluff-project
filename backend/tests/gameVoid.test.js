@@ -101,7 +101,7 @@ function createVoidPool(state = baseState()) {
         get releaseCount() { return releaseCount; },
         async query(text, params) {
             calls.push({ sql: String(text).replace(/\s+/g, ' ').trim(), params, scope: 'pool' });
-            if (/SELECT\s+id,\s*username,\s*is_admin(?:,\s*sessions_valid_after)?\s+FROM\s+users/i.test(String(text))) {
+            if (/SELECT\s+id,\s*username,\s*is_admin(?:,\s*sessions_valid_after)?(?:,\s*COALESCE\(untimed_bot_games,\s*FALSE\)\s+AS\s+untimed_bot_games)?\s+FROM\s+users/i.test(String(text))) {
                 const user = state.users.get(Number(params[0]));
                 return { rows: user ? [{ id: user.id, username: user.username, is_admin: false }] : [] };
             }
@@ -423,6 +423,39 @@ async function testAuthorizationAndEligibilityFailures() {
         );
         assert.equal(pool.state.transactions.filter(row => row.type === GAME_VOID_TRANSACTION_TYPE).length, 0);
     }
+
+    // Admins are exempt from the per-season quota (they void to repair games
+    // for the table), but not from the window or the participant rule.
+    const adminPool = createVoidPool(baseState({ game: { voidsUsed: 3 } }));
+    const adminResult = await voidGame(adminPool, {
+        gameId: 44,
+        requester: { id: 1, username: 'Player1', is_admin: true },
+        attestation: 'scouts_honor',
+    });
+    assert.equal(adminResult.alreadyVoided, false, 'an admin voids past the quota');
+    assert.ok(adminPool.state.voidRecord, 'the void is recorded like any other');
+    assert.ok(adminPool.state.transactions.some(row => row.type === GAME_VOID_TRANSACTION_TYPE));
+
+    const adminLatePool = createVoidPool(baseState({ game: { endTime: '2026-07-17T10:30:00.000Z' } }));
+    await assert.rejects(
+        voidGame(adminLatePool, {
+            gameId: 44,
+            requester: { id: 1, username: 'Player1', is_admin: true },
+            attestation: 'scouts_honor',
+        }),
+        error => error instanceof GameVoidError && error.code === 'GAME_VOID_WINDOW_CLOSED',
+    );
+    // A client cannot claim admin for itself: only the hydrated request user
+    // carries is_admin, and a stringy or truthy-looking value does not count.
+    const impostorPool = createVoidPool(baseState({ game: { voidsUsed: 3 } }));
+    await assert.rejects(
+        voidGame(impostorPool, {
+            gameId: 44,
+            requester: { id: 1, username: 'Player1', is_admin: 'true' },
+            attestation: 'scouts_honor',
+        }),
+        error => error instanceof GameVoidError && error.code === 'GAME_VOID_QUOTA_REACHED',
+    );
 }
 
 function testStatDerivationAndAmbiguousLedgers() {
