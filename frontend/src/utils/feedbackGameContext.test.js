@@ -129,3 +129,11 @@ describe('sanitizeFeedbackGameContext', () => {
         expect(sanitizeFeedbackGameContext('PRIVATE-CARD')).toBeNull();
     });
 });
+
+test('the viewport snapshot rides along as flat scalars', () => {
+    const result = sanitizeFeedbackGameContext({
+        tableId: 'table-1',
+        viewport: { innerWidth: 390, innerHeight: 750, dvhPx: 750, standalone: false, gameViewRect: '0,63 390x687', nested: { no: true } },
+    });
+    expect(result.viewport).toEqual({ innerWidth: 390, innerHeight: 750, dvhPx: 750, standalone: false, gameViewRect: '0,63 390x687' });
+});

@@ -4,6 +4,7 @@
 
 import React, { useState, useEffect } from 'react';
 import './PlayerSeatPositioner.css';
+import { onViewportSettle } from '../../utils/viewportSettle';
 
 // Seat anchors ride the VISIBLE viewport (dvh), matching the app shell, the
 // game-view box, and every innerHeight-based JS measurement (cards, hand,
@@ -110,9 +111,9 @@ const PlayerSeatPositioner = ({
         };
         
         checkSeatWidth();
-        window.addEventListener('resize', checkSeatWidth);
-        
-        return () => window.removeEventListener('resize', checkSeatWidth);
+        // Rotation and browser-bar changes report stale sizes on the first
+        // frame; re-check once the viewport has settled.
+        return onViewportSettle(checkSeatWidth);
     }, [debugMode, seatPosition]);
     
     // Select anchors based on mode (collision prevention mode when seat width > 25vw)

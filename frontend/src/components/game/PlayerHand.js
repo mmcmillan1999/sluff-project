@@ -10,6 +10,7 @@ import CardSpacingEngine from '../../utils/CardSpacingEngine';
 import { useCardPlayStyle } from '../../utils/playStyle';
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion';
 import { TurnBeacon } from './TurnNudge';
+import { onViewportSettle } from '../../utils/viewportSettle';
 // import { useViewport } from '../../hooks/useViewport'; // Currently unused
 
 // Fast play style timings. First click raises the card; a second click within
@@ -201,8 +202,9 @@ const PlayerHand = ({
         const handleResize = () => calculateLayout(true);
         
         calculateLayout();
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
+        // Re-measure on every viewport move and again once it has settled:
+        // a rotation (or Safari's bar) reports stale sizes on the first frame.
+        return onViewportSettle(handleResize);
     }, [myHand, usePhysics]);  // Recalculate on any hand change
 
 
@@ -330,8 +332,7 @@ const PlayerHand = ({
                 },
             }));
         };
-        window.addEventListener('resize', retarget);
-        return () => window.removeEventListener('resize', retarget);
+        return onViewportSettle(retarget);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [Boolean(fastFlight), dropZoneRef]);
 

@@ -30,6 +30,7 @@ import SluffIdent from "./components/SluffIdent.js";
 import DecorBoundary from "./components/DecorBoundary.js";
 import { extractInviteTableId } from "./utils/tableInvites.js";
 import { extractInviteTournamentId } from "./utils/tournamentInvites.js";
+import { onViewportSettle, resetStrayScroll, viewportSnapshot } from "./utils/viewportSettle.js";
 import { newBuildAvailable } from "./utils/clientVersion.js";
 import "./App.css";
 import "./components/AdminView.css";
@@ -221,7 +222,9 @@ function App() {
     };
 
     const handleOpenFeedbackModal = (context = null) => {
-        setFeedbackGameContext(context);
+        // In-game feedback carries a viewport snapshot: the layout bugs that
+        // only show on someone's phone are impossible to chase without it.
+        setFeedbackGameContext(context ? { ...context, viewport: viewportSnapshot() } : context);
         setShowFeedbackModal(true);
     };
 
@@ -832,15 +835,20 @@ function App() {
         if (view !== 'lobby') setDismissedTournamentId(null);
     }, [view]);
 
-    // Toggle body class for no-scroll when in game view
+    // Toggle body class for no-scroll when in game view. While the felt is
+    // up, any stray document scroll (iOS toolbar collapse, keyboard close)
+    // is undone as the viewport settles, so the bottom of the table is never
+    // left cut off.
     useEffect(() => {
         if (view === 'gameTable') {
             document.body.classList.add('game-active');
-        } else {
-            document.body.classList.remove('game-active');
+            const stop = onViewportSettle(resetStrayScroll, { immediate: true });
+            return () => {
+                stop();
+                document.body.classList.remove('game-active');
+            };
         }
-        
-        // Cleanup on unmount
+        document.body.classList.remove('game-active');
         return () => {
             document.body.classList.remove('game-active');
         };

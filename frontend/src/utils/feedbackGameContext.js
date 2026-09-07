@@ -195,6 +195,10 @@ export function sanitizeFeedbackGameContext(gameContext) {
         value => copyScalarFields(value, ['status', 'kind', 'attempts', 'lastErrorCode']) || {},
     );
     addObjectWhenPresent(result, 'roundSummary', gameContext.roundSummary, sanitizeRoundSummary);
+    // Viewport snapshot (utils/viewportSettle.js): flat scalars about the
+    // visible area versus the layout, for phone-only layout reports.
+    const viewport = copyScalarMap(gameContext.viewport);
+    if (viewport) result.viewport = viewport;
 
     return result;
 }
