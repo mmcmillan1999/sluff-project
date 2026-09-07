@@ -171,15 +171,16 @@ const TableLayout = ({
     }, [arrivalSignature, prefersReducedMotion]);
 
     // When a trick is captured, hold the pile count until the magnet has slid the
-    // cards onto the pile (~hold + fly). Resets/new rounds update immediately, and
-    // spectators (who don't see the magnet) update immediately too.
+    // cards onto the pile (~hold + fly). Resets/new rounds update immediately.
+    // Spectators see the magnet too (Matt: without it, watching a table is hard
+    // to follow), so their pile counts lag the same way.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         const captured = currentTableState.capturedTricks || {};
         const newTotal = trickTotal(captured);
         const oldTotal = displayedTrickTotalRef.current;
 
-        if (!isSpectator && !prefersReducedMotion && newTotal > oldTotal) {
+        if (!prefersReducedMotion && newTotal > oldTotal) {
             if (pendingTrickTargetRef.current !== newTotal) {
                 pendingTrickTargetRef.current = newTotal;
                 if (laggedTrickTimerRef.current) clearTimeout(laggedTrickTimerRef.current);
@@ -189,7 +190,7 @@ const TableLayout = ({
                     pendingTrickTargetRef.current = null;
                 }, FINAL_TRICK_HOLD_MS + FINAL_TRICK_FLY_MS);
             }
-        } else if (newTotal !== oldTotal || isSpectator) {
+        } else if (newTotal !== oldTotal) {
             if (laggedTrickTimerRef.current) {
                 clearTimeout(laggedTrickTimerRef.current);
                 laggedTrickTimerRef.current = null;
@@ -198,7 +199,7 @@ const TableLayout = ({
             setLaggedCapturedTricks(captured);
             displayedTrickTotalRef.current = newTotal;
         }
-    }, [currentTableState.capturedTricks, isSpectator, prefersReducedMotion]);
+    }, [currentTableState.capturedTricks, prefersReducedMotion]);
 
     // Shared helper: measure the played cards + the winning pile, hold, then slide
     // and shrink the cards onto that pile. Used by both the per-trick linger and
@@ -261,7 +262,7 @@ const TableLayout = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useLayoutEffect(() => {
         const { state, lastCompletedTrick, bidWinnerInfo } = currentTableState;
-        if (state !== 'TrickCompleteLinger' || isSpectator || prefersReducedMotion || !lastCompletedTrick || !bidWinnerInfo) {
+        if (state !== 'TrickCompleteLinger' || prefersReducedMotion || !lastCompletedTrick || !bidWinnerInfo) {
             return undefined;
         }
         flyTrickToWinnerPile(lastCompletedTrick.winnerName === bidWinnerInfo.playerName);
@@ -295,7 +296,7 @@ const TableLayout = ({
             // mid-round trick and the widow flourish would mislead.
             && !roundSummary.insuranceWrap
             && !terminalSettlementPending
-            && lastCompletedTrick && bidWinnerInfo && !isSpectator && !prefersReducedMotion;
+            && lastCompletedTrick && bidWinnerInfo && !prefersReducedMotion;
 
         if (!isRoundEnd) {
             // Reset once we've moved on to the next round / away from the recap.
@@ -328,6 +329,10 @@ const TableLayout = ({
                 el.style.opacity = '0';
             });
         }, FINAL_TRICK_HOLD_MS + FINAL_TRICK_FLY_MS));
+
+        // Spectators get the final trick onto its pile and stop there: their
+        // widow is shown revealed on the plate (below), not lifted and flipped.
+        if (isSpectator) return;
 
         // 2) Drumroll begins (anticipation). The widow movement and flip make
         // the reveal self-explanatory, so no text banner covers the table.

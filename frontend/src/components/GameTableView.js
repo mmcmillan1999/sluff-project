@@ -19,6 +19,8 @@ import buildBidHintCopy from '../utils/bidHintCopy';
 import {
     END_ROUND_TOTAL_MS,
     ROUND_RECAP_ACTION_MS,
+    FINAL_TRICK_HOLD_MS,
+    FINAL_TRICK_FLY_MS,
 } from '../config/endRoundTiming';
 import LobbyChat from './LobbyChat';
 import AdminObserverMode from './AdminObserverMode';
@@ -971,8 +973,11 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 setShowRoundSummaryModal(false);
                 // Forfeits and insurance wraps skip the celebration: their
                 // rounds end without a played-out final trick.
-                const delay = (isSpectator || roundSummary.forfeit || roundSummary.insuranceWrap)
-                    ? 0 : END_ROUND_TOTAL_MS;
+                // Spectators watch the final trick land on its pile, then get
+                // the recap; the widow flourish is players-only.
+                const delay = (roundSummary.forfeit || roundSummary.insuranceWrap)
+                    ? 0
+                    : (isSpectator ? FINAL_TRICK_HOLD_MS + FINAL_TRICK_FLY_MS + 300 : END_ROUND_TOTAL_MS);
                 roundModalTimerRef.current = setTimeout(() => {
                     roundModalTimerRef.current = null;
                     setRoundPresentationPhase('recap');

@@ -2,7 +2,7 @@ import React from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import GameTableView from './GameTableView';
-import { END_ROUND_TOTAL_MS } from '../config/endRoundTiming';
+import { END_ROUND_TOTAL_MS, FINAL_TRICK_HOLD_MS, FINAL_TRICK_FLY_MS } from '../config/endRoundTiming';
 
 vi.mock('../services/api', () => ({
     getLobbyChatHistory: vi.fn(() => new Promise(() => {})),
@@ -321,6 +321,22 @@ describe('GameTableView round presentation sequence', () => {
         expect(screen.queryByRole('button', { name: 'Collect Points' })).not.toBeInTheDocument();
         act(() => vi.advanceTimersByTime(1));
         expect(screen.getByRole('button', { name: 'Collect Points' })).toBeInTheDocument();
+    });
+
+    test('a spectator gets the recap once the final trick has landed on its pile, without the widow flourish', () => {
+        vi.useFakeTimers();
+        motionPreference.reduced = false;
+        const state = makeState();
+        state.players[1].isSpectator = true;
+        renderGame(state);
+
+        const spectatorDelay = FINAL_TRICK_HOLD_MS + FINAL_TRICK_FLY_MS + 300;
+        expect(screen.queryAllByRole('dialog')).toHaveLength(0);
+        act(() => vi.advanceTimersByTime(spectatorDelay - 1));
+        expect(screen.queryAllByRole('dialog')).toHaveLength(0);
+        act(() => vi.advanceTimersByTime(1));
+        expect(screen.getAllByRole('dialog').length).toBeGreaterThan(0);
+        expect(spectatorDelay).toBeLessThan(END_ROUND_TOTAL_MS);
     });
 
     test('personalizes the recap action for the player giving up round points', () => {
