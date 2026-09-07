@@ -21,7 +21,7 @@ export const TIPS = [
     {
         id: 'card-helper-on-2026-09',
         title: 'Card helper is on',
-        body: 'Every card shows its point value, and coaching tips appear on the felt at the moments that matter. Prefer a clean table? Open the menu and switch Card helper off — it comes back whenever you want it.',
+        body: 'Every card shows its point value. Coaching tips appear on the felt during your first few games and then step aside. Prefer a clean table, or want the tips back? Both switches live in the game menu.',
     },
 ];
 

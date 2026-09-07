@@ -24,28 +24,49 @@ export const isLearner = (tutorialState) => (
     (Number(tutorialState?.gamesPlayed) || 0) < LEARNER_GAMES
 );
 
-// Manual override from the game menu. Unset = ON for everyone (Matt, Sept
-// 2026: "turn on card helper by default for users"); the menu and a quick
-// tip tell players they can switch it off. isLearner (first three games)
-// still drives the things that should only happen to a NEW player, such as
-// the turn call-up exemption.
+// Two switches in the game menu, each with a manual override in storage:
+//
+//  - Card helper (point badges on every card): unset = ON for everyone
+//    (Matt, Sept 6 2026: "turn on card helper by default for users").
+//  - Coaching tips (the writing on the felt): unset = ON for a NEW player
+//    only — the first three games. Veterans asked why the introduction was
+//    explaining the game to them after the Sept 6 change had switched the
+//    tips on for everyone (they rode on the helper flag); now they follow
+//    isLearner unless a player turns them on for good.
+//
+// isLearner also drives the things that should only happen to a NEW
+// player, such as the turn call-up exemption.
 const HELPER_KEY = 'sluff_card_helper';
+const TIPS_KEY = 'sluff_coach_tips';
 
-export const getCardHelperOverride = () => {
+const readOverride = (key) => {
     try {
-        const value = window.localStorage.getItem(HELPER_KEY);
+        const value = window.localStorage.getItem(key);
         return value === 'on' || value === 'off' ? value : null;
     } catch {
         return null;
     }
 };
 
-export const setCardHelperOverride = (value) => {
+const writeOverride = (key, value) => {
     try {
-        if (value === 'on' || value === 'off') window.localStorage.setItem(HELPER_KEY, value);
-        else window.localStorage.removeItem(HELPER_KEY);
+        if (value === 'on' || value === 'off') window.localStorage.setItem(key, value);
+        else window.localStorage.removeItem(key);
     } catch { /* private browsing: session state stands */ }
 };
+
+export const getCoachTipsOverride = () => readOverride(TIPS_KEY);
+export const setCoachTipsOverride = (value) => writeOverride(TIPS_KEY, value);
+
+// The coaching tips: explicit on/off wins; otherwise only a new player.
+export const coachTipsActive = (tutorialState) => {
+    const override = getCoachTipsOverride();
+    if (override) return override === 'on';
+    return isLearner(tutorialState);
+};
+
+export const getCardHelperOverride = () => readOverride(HELPER_KEY);
+export const setCardHelperOverride = (value) => writeOverride(HELPER_KEY, value);
 
 export const cardHelperActive = () => {
     const override = getCardHelperOverride();

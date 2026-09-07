@@ -28,7 +28,7 @@ import DecorBoundary from './DecorBoundary';
 import { getLobbyChatHistory, fetchChampionLine, updateAccountSettings } from '../services/api';
 import { haptic } from '../utils/haptics';
 import LearnerCoach from './game/coach/LearnerCoach';
-import { cardHelperActive, isLearner, setCardHelperOverride } from './game/coach/learnerLessons';
+import { cardHelperActive, coachTipsActive, isLearner, setCardHelperOverride, setCoachTipsOverride } from './game/coach/learnerLessons';
 import SoundControls from './game/SoundControls';
 import { useModalFocus } from '../hooks/useModalFocus';
 import { shareInvite, getInviteUrl } from '../utils/tableInvites';
@@ -279,6 +279,13 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const learnerMode = useMemo(
         () => !isSpectator && cardHelperActive(tutorialState),
+        [isSpectator, tutorialState, cardHelperNonce],
+    );
+    // The coaching tips (the writing on the felt) have their own switch:
+    // on for a new player, off for a veteran, unless set by hand.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const coachTips = useMemo(
+        () => !isSpectator && coachTipsActive(tutorialState),
         [isSpectator, tutorialState, cardHelperNonce],
     );
 
@@ -1394,8 +1401,20 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                             Card helper: {learnerMode ? 'On' : 'Off'}
                         </button>
                         <p className="game-menu-helper">
-                            Point values on every card plus coaching tips on the felt.
-                            On by default; switch it off here whenever you like.
+                            Point values on every card. On by default; switch it off for a clean table.
+                        </p>
+                        <button
+                            onClick={() => {
+                                setCoachTipsOverride(coachTips ? 'off' : 'on');
+                                setCardHelperNonce(n => n + 1);
+                            }}
+                            className="game-menu-button"
+                            aria-pressed={coachTips}
+                        >
+                            Coaching tips: {coachTips ? 'On' : 'Off'}
+                        </button>
+                        <p className="game-menu-helper">
+                            Short notes on the felt at the moments that matter. On for your first few games, then off unless you keep them.
                         </p>
                         {user?.is_vip && (
                             <>
@@ -1813,7 +1832,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                 Quick Play novices where they actually are. */}
             <DecorBoundary>
                 <LearnerCoach
-                    active={learnerMode && !tutorialCoachActive}
+                    active={coachTips && !tutorialCoachActive}
                     currentTableState={currentTableState}
                     selfPlayerName={selfPlayerName}
                     userId={playerId}

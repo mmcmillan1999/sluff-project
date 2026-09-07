@@ -1,7 +1,7 @@
 // The learner-mode lesson picker: fires the right lesson at the right
 // moment, one at a time, never twice, and only from public client state.
 
-import { pickLearnerLesson, explainTrick, pointsMilestone, isLearner, LEARNER_GAMES, cardHelperActive, setCardHelperOverride } from './learnerLessons';
+import { pickLearnerLesson, explainTrick, pointsMilestone, isLearner, LEARNER_GAMES, cardHelperActive, setCardHelperOverride, coachTipsActive, setCoachTipsOverride } from './learnerLessons';
 
 const baseState = (overrides = {}) => ({
     state: 'Playing Phase',
@@ -24,6 +24,23 @@ describe('isLearner', () => {
         expect(isLearner({ gamesPlayed: LEARNER_GAMES - 1 })).toBe(true);
         expect(isLearner({ gamesPlayed: LEARNER_GAMES })).toBe(false);
         expect(isLearner(undefined)).toBe(true);
+    });
+});
+
+describe('coachTipsActive', () => {
+    test('the coaching tips follow the new-player window unless switched by hand', () => {
+        setCoachTipsOverride(null);
+        expect(coachTipsActive({ gamesPlayed: 0 })).toBe(true);
+        expect(coachTipsActive({ gamesPlayed: LEARNER_GAMES })).toBe(false);
+        expect(coachTipsActive({ gamesPlayed: 400 })).toBe(false);
+        setCoachTipsOverride('on');
+        expect(coachTipsActive({ gamesPlayed: 400 })).toBe(true);
+        setCoachTipsOverride('off');
+        expect(coachTipsActive({ gamesPlayed: 0 })).toBe(false);
+        setCoachTipsOverride(null);
+        // The point badges keep their own, everyone-on default.
+        setCardHelperOverride(null);
+        expect(cardHelperActive({ gamesPlayed: 400 })).toBe(true);
     });
 });
 
