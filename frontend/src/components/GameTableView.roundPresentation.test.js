@@ -331,12 +331,12 @@ describe('GameTableView round presentation sequence', () => {
         renderGame(state);
 
         const spectatorDelay = FINAL_TRICK_HOLD_MS + FINAL_TRICK_FLY_MS + 300;
-        expect(screen.queryAllByRole('dialog')).toHaveLength(0);
-        act(() => vi.advanceTimersByTime(spectatorDelay - 1));
-        expect(screen.queryAllByRole('dialog')).toHaveLength(0);
-        act(() => vi.advanceTimersByTime(1));
-        expect(screen.getAllByRole('dialog').length).toBeGreaterThan(0);
         expect(spectatorDelay).toBeLessThan(END_ROUND_TOTAL_MS);
+        expect(screen.queryByRole('button', { name: 'Collect Points' })).not.toBeInTheDocument();
+        act(() => vi.advanceTimersByTime(spectatorDelay - 1));
+        expect(screen.queryByRole('button', { name: 'Collect Points' })).not.toBeInTheDocument();
+        act(() => vi.advanceTimersByTime(1));
+        expect(screen.getByRole('button', { name: 'Collect Points' })).toBeInTheDocument();
     });
 
     test('personalizes the recap action for the player giving up round points', () => {
