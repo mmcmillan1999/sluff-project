@@ -44,11 +44,18 @@ export const TRUMP_BROKEN_FX = [
         name: 'Fault Line',
         description: 'An obsidian slab splits in two and molten light bleeds out.',
     },
+    {
+        id: 'magma',
+        name: 'Magma',
+        description: 'The trump card cracks the felt and lava burns a hole through the table. The scar smoulders all round.',
+    },
 ];
 
 const DEFAULTS = Object.freeze({
     deckSkin: 'classic',
-    trumpBrokenFx: 'lightning',
+    // Magma is the house effect (Matt, Sept 7 2026: "more tangible");
+    // the banners stay on the shelf for anyone who prefers them.
+    trumpBrokenFx: 'magma',
 });
 
 const VALID_VALUES = {

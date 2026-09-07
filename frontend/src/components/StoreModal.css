@@ -310,6 +310,68 @@
     box-shadow: none;
 }
 
+/* Magma: a dark felt square with a molten hole burning open. */
+.store-fx-preview--magma {
+    position: relative;
+    overflow: hidden;
+    border: 1.5px solid #3e2723;
+    background: radial-gradient(ellipse at 50% 35%, #15673a 0%, #0f4d2a 55%, #0a3a1f 100%);
+}
+
+.store-fx-preview--magma .store-fx-magma-glow {
+    position: absolute;
+    left: 50%;
+    top: 58%;
+    width: 120%;
+    height: 90%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(255, 140, 30, 0.6), rgba(255, 60, 0, 0) 70%);
+    mix-blend-mode: screen;
+    animation: store-magma-glow 2.4s ease-out both;
+}
+
+.store-fx-preview--magma .store-fx-magma-hole {
+    position: absolute;
+    left: 50%;
+    top: 60%;
+    width: 46%;
+    height: 40%;
+    transform: translate(-50%, -50%) rotate(-8deg);
+    clip-path: polygon(50% 0%, 61% 6%, 74% 3%, 82% 14%, 95% 20%, 92% 34%, 100% 48%, 93% 60%, 96% 76%, 84% 82%, 76% 96%, 62% 90%, 50% 100%, 38% 92%, 24% 97%, 17% 84%, 4% 78%, 8% 63%, 0% 50%, 7% 36%, 3% 22%, 15% 15%, 22% 4%, 36% 8%);
+    background:
+        radial-gradient(ellipse at 48% 50%, #fff6d8 0%, #ffd24a 14%, #ff8a1f 34%, #e8420b 58%, #8a1a04 80%, #1a0d08 100%);
+    animation: store-magma-open 0.7s cubic-bezier(0.2, 0.9, 0.25, 1) 0.2s both, store-magma-cool 1.2s ease-in 1.6s forwards;
+}
+
+.store-fx-preview--magma .store-fx-mini {
+    position: relative;
+    color: #fff1cf;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.85), 0 0 6px rgba(255, 130, 30, 0.9);
+    animation: store-magma-text 2.2s cubic-bezier(0.2, 0.8, 0.3, 1) 0.35s both;
+}
+
+@keyframes store-magma-glow {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.2); }
+    30% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    100% { opacity: 0.25; transform: translate(-50%, -50%) scale(0.9); }
+}
+
+@keyframes store-magma-open {
+    from { transform: translate(-50%, -50%) rotate(-8deg) scale(0.05); }
+    to { transform: translate(-50%, -50%) rotate(-8deg) scale(1); }
+}
+
+@keyframes store-magma-cool {
+    to { filter: brightness(0.35) saturate(0.7); }
+}
+
+@keyframes store-magma-text {
+    0% { opacity: 0; transform: translateY(40%) scale(0.7); }
+    25% { opacity: 1; transform: translateY(-20%) scale(1); }
+    100% { opacity: 1; transform: translateY(-30%) scale(1); }
+}
+
 .store-fx-preview--faultline .store-fx-half {
     position: absolute;
     inset: 0;

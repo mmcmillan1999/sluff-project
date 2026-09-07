@@ -35,6 +35,16 @@ const FxPreviewBody = ({ fxId }) => {
             </>
         );
     }
+    if (fxId === 'magma') {
+        // A miniature of the burn: the glow, the hole, the words rising.
+        return (
+            <>
+                <span className="store-fx-magma-glow" />
+                <span className="store-fx-magma-hole" />
+                <span className="store-fx-mini">TRUMP BROKEN!</span>
+            </>
+        );
+    }
     return (
         <span className="store-fx-mini">
             {fxId === 'lightning' ? '⚡ TRUMP BROKEN! ⚡' : '✦ TRUMP BROKEN! ✦'}

@@ -6,12 +6,12 @@ describe('cosmetics loadout', () => {
     });
 
     test('defaults to the classic deck and lightning trump effect', () => {
-        expect(getCosmetics()).toEqual({ deckSkin: 'classic', trumpBrokenFx: 'lightning' });
+        expect(getCosmetics()).toEqual({ deckSkin: 'classic', trumpBrokenFx: 'magma' });
     });
 
     test('registries include the alpha catalogue', () => {
         expect(DECK_SKINS.map(s => s.id)).toEqual(['classic', 'mcmillan']);
-        expect(TRUMP_BROKEN_FX.map(f => f.id)).toEqual(['lightning', 'shatter', 'faultline']);
+        expect(TRUMP_BROKEN_FX.map(f => f.id)).toEqual(['lightning', 'shatter', 'faultline', 'magma']);
     });
 
     test('persists a swap and broadcasts the change event', () => {
@@ -30,12 +30,12 @@ describe('cosmetics loadout', () => {
     test('rejects unknown keys and values without corrupting the loadout', () => {
         setCosmetic('deckSkin', 'stolen-skin');
         setCosmetic('walletDrain', 'yes');
-        expect(getCosmetics()).toEqual({ deckSkin: 'classic', trumpBrokenFx: 'lightning' });
+        expect(getCosmetics()).toEqual({ deckSkin: 'classic', trumpBrokenFx: 'magma' });
     });
 
     test('falls back to defaults when storage holds corrupt or stale data', () => {
         window.localStorage.setItem('sluff_cosmetics', 'not-json{');
-        expect(getCosmetics()).toEqual({ deckSkin: 'classic', trumpBrokenFx: 'lightning' });
+        expect(getCosmetics()).toEqual({ deckSkin: 'classic', trumpBrokenFx: 'magma' });
 
         window.localStorage.setItem('sluff_cosmetics', JSON.stringify({ deckSkin: 'retired-skin', trumpBrokenFx: 'faultline' }));
         expect(getCosmetics()).toEqual({ deckSkin: 'classic', trumpBrokenFx: 'faultline' });

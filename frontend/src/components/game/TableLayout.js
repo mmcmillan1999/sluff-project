@@ -20,6 +20,7 @@ import { arrivalKey, reconcileArrivals, launchArrival } from './playedCardArriva
 import { getThemePresentation } from '../../config/themePresentation';
 import { useCosmetics } from '../../utils/cosmetics';
 import DecorBoundary from '../DecorBoundary';
+import TrumpMagma from './TrumpMagma';
 
 // Full deck of 36 cards (9 ranks × 4 suits)
 const FULL_DECK = [
@@ -35,6 +36,29 @@ const FULL_DECK = [
 
 // Total captured tricks across all players (used to detect when a trick lands).
 const trickTotal = (captured) => Object.values(captured || {}).reduce((acc, t) => acc + (t?.length || 0), 0);
+
+// Where the card that just broke trump landed, as percent of the table
+// oval, so the Magma effect burns under that card. The breaking card is the
+// last one played: the trick in progress, or — when it completed the trick
+// and the table is already lingering — the last card of that trick.
+const SEAT_SLOT = { self: 'bottom', opponentLeft: 'left', opponentRight: 'right', opponentAcross: 'top' };
+const magmaOriginFor = (state, seatAssignments, tableEl) => {
+    const fallback = { x: 50, y: 45 };
+    const plays = (state?.currentTrickCards?.length ? state.currentTrickCards : state?.lastCompletedTrick?.cards) || [];
+    const last = plays[plays.length - 1];
+    if (!last || !tableEl || typeof document === 'undefined') return fallback;
+    const seat = Object.keys(SEAT_SLOT).find(key => seatAssignments?.[key] === last.playerName);
+    const slot = seat ? tableEl.querySelector('[data-played-card-slot="' + SEAT_SLOT[seat] + '"]') : null;
+    const oval = tableEl.querySelector('.table-oval');
+    if (!slot || !oval) return fallback;
+    const sr = slot.getBoundingClientRect();
+    const o = oval.getBoundingClientRect();
+    if (!o.width || !o.height) return fallback;
+    const x = ((sr.left + sr.width / 2) - o.left) / o.width * 100;
+    const y = ((sr.top + sr.height / 2) - o.top) / o.height * 100;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return fallback;
+    return { x: Math.round(Math.min(92, Math.max(8, x)) * 10) / 10, y: Math.round(Math.min(88, Math.max(12, y)) * 10) / 10 };
+};
 
 const TableLayout = ({
     currentTableState,
@@ -72,6 +96,9 @@ const TableLayout = ({
     const { trumpBrokenFx } = useCosmetics();
     const { width } = useViewport();
     const [previousTrumpBroken, setPreviousTrumpBroken] = useState(false);
+    // The Magma effect burns the felt where the breaking card landed and the
+    // scar stays for the round: { key, origin: {x, y} in percent of the oval }.
+    const [magmaBurn, setMagmaBurn] = useState(null);
     const lastTrickTimerRef = useRef(null);
     const trumpAnnouncementTimerRef = useRef(null);
     // Refs to the played-card "fly" wrappers (one per seat) + the hold-then-fly timer.
@@ -246,6 +273,9 @@ const TableLayout = ({
             // Show announcement + play the trump-broken accent
             setTrumpBrokenAnnouncementVisible(true);
             if (playSound) playSound('trumpBroken');
+            if (trumpBrokenFx === 'magma') {
+                setMagmaBurn({ key: Date.now(), origin: magmaOriginFor(currentTableState, seatAssignments, tableRef.current) });
+            }
 
             // Hide announcement after 2.5 seconds
             trumpAnnouncementTimerRef.current = setTimeout(() => {
@@ -253,6 +283,8 @@ const TableLayout = ({
             }, 2500);
         }
         
+        // A new round puts the felt back: the scar goes with the broken flag.
+        if (!trumpBroken && magmaBurn) setMagmaBurn(null);
         // Update previous state
         setPreviousTrumpBroken(trumpBroken);
     }, [currentTableState, previousTrumpBroken]);
@@ -747,6 +779,12 @@ const TableLayout = ({
     };
 
     const renderTrumpBrokenAnnouncement = () => {
+        // Magma carries its own words (they rise out of the hole).
+        if (trumpBrokenFx === 'magma') {
+            return magmaBurn
+                ? <TrumpMagma key={magmaBurn.key} origin={magmaBurn.origin} reducedMotion={prefersReducedMotion} />
+                : null;
+        }
         if (!trumpBrokenAnnouncementVisible) {
             return null;
         }

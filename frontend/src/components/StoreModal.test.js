@@ -20,9 +20,10 @@ describe('StoreModal', () => {
         expect(within(dialog).getByText('Lightning Strike')).toBeInTheDocument();
         expect(within(dialog).getByText('Shatterglass')).toBeInTheDocument();
         expect(within(dialog).getByText('Fault Line')).toBeInTheDocument();
-        // Four free items; the McMillan deck wears its launch price (still
+        expect(within(dialog).getByText('Magma')).toBeInTheDocument();
+        // Five free items; the McMillan deck wears its launch price (still
         // equippable during alpha).
-        expect(within(dialog).getAllByText('FREE')).toHaveLength(4);
+        expect(within(dialog).getAllByText('FREE')).toHaveLength(5);
         expect(within(dialog).getByText('$4.99')).toBeInTheDocument();
         expect(within(dialog).getByTitle('Free to try during alpha')).toBeInTheDocument();
     });
@@ -31,11 +32,13 @@ describe('StoreModal', () => {
         const user = userEvent.setup();
         render(<StoreModal show onClose={vi.fn()} />);
 
-        // Defaults equipped: classic deck + lightning effect
+        // Defaults equipped: classic deck + the Magma effect
         expect(screen.getAllByRole('button', { name: 'Equipped ✓' })).toHaveLength(2);
+        const magmaItem = screen.getByText('Magma').closest('.store-item');
+        expect(within(magmaItem).getByRole('button', { name: 'Equipped ✓' })).toBeInTheDocument();
 
         const useButtons = screen.getAllByRole('button', { name: 'Use' });
-        expect(useButtons).toHaveLength(3);
+        expect(useButtons).toHaveLength(4);
 
         // Equip the McMillan deck (first non-equipped item is in Card Decks)
         await user.click(useButtons[0]);
