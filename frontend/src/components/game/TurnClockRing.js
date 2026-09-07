@@ -1,7 +1,8 @@
 // The tournament shot clock, drawn as a ring draining around the nameplate
 // of the player on turn (Matt: "a border-changing snake timer around the
-// name"). Gold while the free window runs down; when that is gone the ring
-// refills red and drains again over whatever bank the seat has left.
+// name"). Teal while the free window runs down; when that is gone the ring
+// refills orange and drains again over whatever bank the seat has left.
+// Never a team colour: gold and blue belong to the plaque border.
 //
 // Timing is relative to when this seat's turn was first seen on this
 // client, which is what the server's backstop does too (it arms on first

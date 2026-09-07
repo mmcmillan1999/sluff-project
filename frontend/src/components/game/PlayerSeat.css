@@ -193,33 +193,35 @@
     box-sizing: border-box; /* Include padding in width */
 }
 
-/* Tournament shot clock: a ring the exact size of the plaque, draining
-   clockwise around it. Gold = free time, red = eating the bank. */
+/* Tournament shot clock: a halo just OUTSIDE the plaque, draining
+   clockwise. It must never borrow a team colour (gold = bidder, blue =
+   defender live on the plaque border, which stays visible inside the
+   ring): teal while the free window runs, orange while the bank drains. */
 .turn-clock-ring {
     position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 3;
+    inset: calc(-1 * 7vh * 0.13);
+    width: calc(100% + 7vh * 0.26);
+    height: calc(100% + 7vh * 0.26);
+    z-index: 1;
     pointer-events: none;
     overflow: visible;
 }
 
 .turn-clock-ring rect {
-    stroke: #fbbf24;
-    stroke-width: calc(7vh * 0.09);
+    stroke: #2dd4bf;
+    stroke-width: calc(7vh * 0.065);
     stroke-linecap: butt;
     transition: stroke 0.3s ease;
-    filter: drop-shadow(0 0 0.4vh rgba(251, 191, 36, 0.55));
+    filter: drop-shadow(0 0 0.35vh rgba(0, 0, 0, 0.55));
 }
 
 .turn-clock-ring.is-bank rect {
-    stroke: #ef4444;
-    filter: drop-shadow(0 0 0.5vh rgba(239, 68, 68, 0.6));
+    stroke: #fb923c;
+    filter: drop-shadow(0 0 0.45vh rgba(251, 146, 60, 0.6));
 }
 
 .turn-clock-ring.is-out rect {
-    stroke: #ef4444;
+    stroke: #fb923c;
     opacity: 0.35;
 }
 
