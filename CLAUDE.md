@@ -16,8 +16,10 @@ cd backend && npm test            # game-logic test suite
 Debug overlay in game: `Shift+D`.
 
 ## Deployment (verify before assuming — was down June 2026)
-- **REQUIRED before every push to `main`**: run `cd backend && npm run deploy:check`. Any push
-  redeploys the Render backend. Since Aug 2026 the SIGTERM handler snapshots live human games to
+- **REQUIRED before every push to `main` that touches `backend/`**: run `cd backend && npm run deploy:check`.
+  Render's service root is `backend/`, so a push that changes only `frontend/` (or docs) rebuilds Netlify
+  but does NOT restart the backend (verified Sept 7 2026: two frontend-only commits produced no Render
+  deploy). Any push touching `backend/` redeploys the Render backend. Since Aug 2026 the SIGTERM handler snapshots live human games to
   `live_game_snapshots` and the new instance restores them (boot pass + 10-min sweep, see
   `src/serialization/gameResume.js`) — but resume is best-effort, so the check still applies: it
   exits 1 while a human is mid-game (bot-only games don't block). If humans are playing, wait for
