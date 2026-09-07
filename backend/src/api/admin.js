@@ -23,6 +23,15 @@ const {
 } = require('../services/adminGameRecoveryService');
 
 // This function creates the router and gives it the database pool
+// The identity recorded on an audit row or broadcast: who did it, nothing
+// else. req.user also carries account settings (untimed_bot_games), which
+// have no business in an audit record.
+const auditActor = (user) => ({
+    id: user?.id,
+    username: user?.username,
+    is_admin: user?.is_admin === true,
+});
+
 const createAdminRoutes = (pool, jwt, io = null, options = {}) => {
   const router = express.Router();
   const checkAuth = requireAuth(pool, jwt);
@@ -291,7 +300,7 @@ const createAdminRoutes = (pool, jwt, io = null, options = {}) => {
       const result = await applyAlpha2WalletReset(pool, {
         expectedPreviewHash: req.body?.expectedPreviewHash,
         expectedSeasonId: req.body?.expectedSeasonId,
-        appliedBy: req.user,
+        appliedBy: auditActor(req.user),
       });
       if (!result.alreadyApplied && io && typeof io.emit === 'function') {
         try {
@@ -346,7 +355,7 @@ const createAdminRoutes = (pool, jwt, io = null, options = {}) => {
         gameIds: req.body?.gameIds,
         expectedPreviewHash: req.body?.expectedPreviewHash,
         excludeGameIds,
-        appliedBy: req.user,
+        appliedBy: auditActor(req.user),
       });
 
       if (result.refundedGameCount > 0 && io && typeof io.emit === 'function') {

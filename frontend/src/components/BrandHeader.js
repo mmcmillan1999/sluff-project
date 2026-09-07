@@ -12,10 +12,12 @@
 // structural, not timing-dependent (iOS Chrome flickered on the old
 // animate-then-reset approach even when Safari didn't).
 // When monetization returns, swap this back for AdvertisingHeader.
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { getCurrentSeasonStandings } from '../services/api';
 import { tournamentFaces } from './tournament/tournamentFormat';
 import TournamentStandingsSheet from './tournament/TournamentStandingsSheet';
+import { reportLayoutNow } from '../utils/layoutBeacon';
+import { buzz } from '../utils/haptics';
 import './BrandHeader.css';
 
 const FACE_INTERVAL_MS = 5000;
@@ -94,6 +96,29 @@ const BrandHeader = ({ viewType = 'default', tournament = null, viewerUserId = n
     const [topThree, setTopThree] = useState([]);
     const [turns, setTurns] = useState(0);
     const [showStandings, setShowStandings] = useState(false);
+    // Long-press the cube (1.2 s) to send a layout report by hand: the one
+    // control that is always on screen, even when the rest of the layout is
+    // off and the menu cannot be reached. The cube flashes to say it went.
+    const [reportFlash, setReportFlash] = useState(false);
+    const pressTimerRef = useRef(null);
+    const pressFiredRef = useRef(false);
+    const startPress = () => {
+        pressFiredRef.current = false;
+        if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
+        pressTimerRef.current = setTimeout(() => {
+            pressTimerRef.current = null;
+            pressFiredRef.current = true;
+            reportLayoutNow();
+            try { buzz({ pattern: [30, 40, 30] }); } catch { /* no haptics */ }
+            setReportFlash(true);
+            setTimeout(() => setReportFlash(false), 1400);
+        }, 1200);
+    };
+    const endPress = () => {
+        if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
+        pressTimerRef.current = null;
+    };
+    useEffect(() => () => { if (pressTimerRef.current) clearTimeout(pressTimerRef.current); }, []);
     const inTournament = Boolean(tournament && ['registering', 'running', 'complete'].includes(tournament.status));
 
     useEffect(() => {
@@ -163,8 +188,13 @@ const BrandHeader = ({ viewType = 'default', tournament = null, viewerUserId = n
                 />
             )}
             <div
-                className="brand-cube-viewport"
-                onClick={inTournament ? () => setShowStandings(current => !current) : undefined}
+                className={`brand-cube-viewport${reportFlash ? ' is-report-sent' : ''}`}
+                onPointerDown={startPress}
+                onPointerUp={endPress}
+                onPointerLeave={endPress}
+                onPointerCancel={endPress}
+                onContextMenu={(event) => { if (pressFiredRef.current) event.preventDefault(); }}
+                onClick={inTournament ? (event) => { if (pressFiredRef.current) { event.preventDefault(); return; } setShowStandings(current => !current); } : undefined}
                 role={inTournament ? 'button' : undefined}
                 tabIndex={inTournament ? 0 : undefined}
                 aria-label={inTournament ? 'Tournament standings' : undefined}

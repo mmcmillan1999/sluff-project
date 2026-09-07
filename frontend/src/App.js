@@ -31,6 +31,7 @@ import DecorBoundary from "./components/DecorBoundary.js";
 import { extractInviteTableId } from "./utils/tableInvites.js";
 import { extractInviteTournamentId } from "./utils/tournamentInvites.js";
 import { onViewportSettle, resetStrayScroll, viewportSnapshot } from "./utils/viewportSettle.js";
+import { startLayoutBeacon } from "./utils/layoutBeacon.js";
 import { newBuildAvailable } from "./utils/clientVersion.js";
 import "./App.css";
 import "./components/AdminView.css";
@@ -834,6 +835,11 @@ function App() {
     useEffect(() => {
         if (view !== 'lobby') setDismissedTournamentId(null);
     }, [view]);
+
+    // The layout beacon: when a phone's layout goes wrong the menu may be out
+    // of reach, so the app reports its own viewport geometry (anonymously,
+    // to the crash intake) whenever the viewport settles into a bad shape.
+    useEffect(() => startLayoutBeacon(), []);
 
     // Toggle body class for no-scroll when in game view. While the felt is
     // up, any stray document scroll (iOS toolbar collapse, keyboard close)

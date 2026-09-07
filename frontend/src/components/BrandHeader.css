@@ -168,3 +168,14 @@
     font-size: 2.6vh;
     line-height: 1;
 }
+
+/* A long press on the cube sent a layout report: say so with a pulse. */
+.brand-cube-viewport.is-report-sent {
+    animation: brand-cube-report-sent 1.4s ease-out both;
+}
+
+@keyframes brand-cube-report-sent {
+    0% { filter: brightness(1); }
+    20% { filter: brightness(1.9) drop-shadow(0 0 1.2vh rgba(120, 220, 255, 0.9)); }
+    100% { filter: brightness(1); }
+}

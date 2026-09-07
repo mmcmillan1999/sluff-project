@@ -103,9 +103,13 @@ class AdaptiveInsuranceStrategy {
             const results = await this.pool.query(analysisQuery, [botName]);
             
             for (const row of results.rows) {
-                if (row.bad_outcomes >= 2 || row.avg_outcome < -15) {
+                // Postgres returns AVG()/COUNT() as strings.
+                const avgOutcome = Number(row.avg_outcome);
+                const badOutcomes = Number(row.bad_outcomes);
+                if (!Number.isFinite(avgOutcome)) continue;
+                if (badOutcomes >= 2 || avgOutcome < -15) {
                     // Bot is consistently losing money in this scenario
-                    const adjustmentFactor = Math.min(0.3, Math.abs(row.avg_outcome) / 100);
+                    const adjustmentFactor = Math.min(0.3, Math.abs(avgOutcome) / 100);
                     const trickRange = row.trick_number <= 3 ? 'early' : 
                                       row.trick_number <= 7 ? 'mid' : 'late';
                     
@@ -114,7 +118,7 @@ class AdaptiveInsuranceStrategy {
                         row.is_bidder ? 'bidder' : 'defender',
                         trickRange,
                         adjustmentFactor,
-                        `Poor performance: avg ${row.avg_outcome.toFixed(1)} over ${row.game_count} games`
+                        `Poor performance: avg ${avgOutcome.toFixed(1)} over ${row.game_count} games`
                     );
                     adjustmentsMade = true;
                 }

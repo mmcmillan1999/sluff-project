@@ -99,6 +99,14 @@
     background: rgba(47, 148, 153, 0.65);
 }
 
+/* The Season / Tournaments switch carries a word, not a glyph: size to it. */
+.leaderboard-panel-toggle {
+    width: auto;
+    padding: 0 0.8rem;
+    white-space: nowrap;
+    letter-spacing: 0.04em;
+}
+
 .leaderboard-back-button {
     padding: 0.45rem 0.7rem;
     background: rgba(255, 255, 255, 0.08);
