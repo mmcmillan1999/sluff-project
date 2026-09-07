@@ -836,7 +836,9 @@ class TournamentDirector {
     // a member for the whole event, so the mesh survives every reseat.
     voiceRoomView(tournamentId) {
         const t = this.get(tournamentId);
-        if (!t || !['registering', 'running'].includes(t.status)) return null;
+        // The room stays open through the podium: players keep talking on the
+        // summary until they leave for the lobby.
+        if (!t || !['registering', 'running', 'complete'].includes(t.status)) return null;
         const players = {};
         for (const entry of t.entries.values()) {
             if (entry.isBot || ['withdrawn', 'refunded'].includes(entry.status)) continue;

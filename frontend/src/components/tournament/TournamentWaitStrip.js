@@ -6,7 +6,7 @@ import { currentDrain, tableProgressLabel } from './tournamentFormat';
 import { useCountdown } from './useCountdown';
 import './tournament.css';
 
-const TournamentWaitStrip = ({ tournament, tableId, tableState, isSpectator, viewerName = null, watchingTableId = null, onWatch, onStopWatching }) => {
+const TournamentWaitStrip = ({ tournament, tableId, tableState, isSpectator, viewerName = null, watchingTableId = null, onWatch }) => {
     const nextIn = useCountdown(tournament?.nextRoundInSeconds ?? null);
     if (!tournament || tournament.status !== 'running') return null;
     const tables = tournament.tables || [];
@@ -14,15 +14,10 @@ const TournamentWaitStrip = ({ tournament, tableId, tableState, isSpectator, vie
     const watching = Boolean(watchingTableId) && watchingTableId === tableId;
     const open = tables.filter(table => !table.finished && table.tableId !== tableId);
 
-    if (watching) {
-        const here = mine ? `Table ${mine.tableIndex + 1}` : 'this table';
-        return (
-            <div className="tournament-wait-strip is-watching" role="status" aria-live="polite">
-                <span className="tournament-wait-text">Watching {here} · {mine ? tableProgressLabel(mine) : ''}. Your next round starts when every table is done.</span>
-                {onStopWatching && <button type="button" className="tournament-btn secondary small" onClick={onStopWatching}>Back to my table</button>}
-            </div>
-        );
-    }
+    // Watching another table: nothing on the felt (a strip here covered the
+    // action). The header cube says "Watching Table 2" and its sheet holds
+    // the Watch buttons and the way back.
+    if (watching) return null;
 
     const done = tableState === 'Awaiting Next Round Trigger' || (mine && mine.finished);
     if (!done || isSpectator) return null;

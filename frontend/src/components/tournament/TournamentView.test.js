@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import TournamentView from './TournamentView';
 import TournamentPopup from './TournamentPopup';
 import TournamentLobbySlot from './TournamentLobbySlot';
+import TournamentStandingsSheet from './TournamentStandingsSheet';
 import { validateSettings } from './TournamentCreateSheet';
 import { describeViewer, rankEntries, tournamentFaces, ordinal } from './tournamentFormat';
 import { vi } from 'vitest';
@@ -215,4 +216,37 @@ test('the Share link button copies a link that opens the tournament', async () =
     expect(await screen.findByText(/Link copied/)).toBeInTheDocument();
     expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/tournament/1`);
     delete navigator.clipboard;
+});
+
+test('the header cube sheet offers Watch on the open tables and the way back', () => {
+    const state = running();
+    state.tables[0].finished = true;
+    state.tables[0].phase = 'done';
+    const onWatch = vi.fn();
+    const onStopWatching = vi.fn();
+    const onClose = vi.fn();
+    const { rerender } = render(
+        <TournamentStandingsSheet tournament={state} viewerUserId={12} onClose={onClose} onWatch={onWatch} onStopWatching={onStopWatching} />,
+    );
+    // Bob's table (T1) is done, so T2 is watchable; his own table is not.
+    const watchButtons = screen.getAllByRole('button', { name: 'Watch' });
+    expect(watchButtons).toHaveLength(1);
+    fireEvent.click(watchButtons[0]);
+    expect(onWatch).toHaveBeenCalledWith('tn-1-r3-t2');
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Back to my table' })).not.toBeInTheDocument();
+
+    rerender(
+        <TournamentStandingsSheet tournament={state} viewerUserId={12} onClose={onClose} onWatch={onWatch} onStopWatching={onStopWatching} watchingTableId="tn-1-r3-t2" />,
+    );
+    expect(screen.queryByRole('button', { name: 'Watch' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to my table' }));
+    expect(onStopWatching).toHaveBeenCalledTimes(1);
+    const faces = tournamentFaces(state, 12, { watchingTableId: 'tn-1-r3-t2' });
+    expect(faces.find(face => face.key === 'watching').title).toBe('Watching Table 2 · trick 7 of 11');
+});
+
+test('a player still mid-round at their own table is not offered Watch', () => {
+    render(<TournamentStandingsSheet tournament={running()} viewerUserId={12} onClose={() => {}} onWatch={() => {}} />);
+    expect(screen.queryByRole('button', { name: 'Watch' })).not.toBeInTheDocument();
 });

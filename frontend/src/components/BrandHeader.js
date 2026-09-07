@@ -90,7 +90,7 @@ const FaceContent = ({ face }) => {
     return <BrandFace />;
 };
 
-const BrandHeader = ({ viewType = 'default', tournament = null, viewerUserId = null }) => {
+const BrandHeader = ({ viewType = 'default', tournament = null, viewerUserId = null, watchingTableId = null, onWatchTable = null, onStopWatching = null }) => {
     const [topThree, setTopThree] = useState([]);
     const [turns, setTurns] = useState(0);
     const [showStandings, setShowStandings] = useState(false);
@@ -119,7 +119,7 @@ const BrandHeader = ({ viewType = 'default', tournament = null, viewerUserId = n
 
     const faces = useMemo(() => (
         inTournament
-            ? tournamentFaces(tournament, viewerUserId).map(face => ({ type: 'tournament', ...face }))
+            ? tournamentFaces(tournament, viewerUserId, { watchingTableId }).map(face => ({ type: 'tournament', ...face }))
             : [
                 { type: 'brand' },
                 ...topThree.map((player, index) => ({
@@ -129,7 +129,7 @@ const BrandHeader = ({ viewType = 'default', tournament = null, viewerUserId = n
                     record: recordFor(player),
                 })),
             ]
-    ), [inTournament, topThree, tournament, viewerUserId]);
+    ), [inTournament, topThree, tournament, viewerUserId, watchingTableId]);
 
     const faceCount = faces.length;
 
@@ -156,6 +156,9 @@ const BrandHeader = ({ viewType = 'default', tournament = null, viewerUserId = n
                 <TournamentStandingsSheet
                     tournament={tournament}
                     viewerUserId={viewerUserId}
+                    watchingTableId={watchingTableId}
+                    onWatch={onWatchTable}
+                    onStopWatching={onStopWatching}
                     onClose={() => setShowStandings(false)}
                 />
             )}

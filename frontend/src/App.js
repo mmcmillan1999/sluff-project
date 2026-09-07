@@ -896,7 +896,7 @@ function App() {
             case 'lobby':
                 return <DecorBoundary><LobbyHeader /></DecorBoundary>;
             case 'gameTable':
-                return <DecorBoundary><GameHeader tournament={myTournament} viewerUserId={user.id} /></DecorBoundary>;
+                return <DecorBoundary><GameHeader tournament={myTournament} viewerUserId={user.id} watchingTableId={watchingTableId} onWatchTable={handleWatchTournamentTable} onStopWatching={handleStopWatchingTournamentTable} /></DecorBoundary>;
             case 'tournament':
                 return <DecorBoundary><LobbyHeader /></DecorBoundary>;
             default:
@@ -938,7 +938,7 @@ function App() {
                     once. It renders into a host node the felt and the board
                     adopt in turn (TournamentVoiceDock), so it survives every
                     reseat and the board between rounds. */}
-                {myTournament && myTournament.status === 'running' && tournamentVoiceHost()
+                {myTournament && ['running', 'complete'].includes(myTournament.status) && tournamentVoiceHost()
                     && (myTournament.entries || []).some(entry => entry.userId === user.id && !['withdrawn', 'refunded'].includes(entry.status))
                     && createPortal(
                         <VoiceControls

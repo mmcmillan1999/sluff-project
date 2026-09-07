@@ -121,9 +121,12 @@ export const latestBust = (tournament) => {
 
 // The four faces of the tournament cube (BrandHeader): the round, the
 // leaders, you, and the last player out.
-export const tournamentFaces = (tournament, userId) => {
+export const tournamentFaces = (tournament, userId, { watchingTableId = null } = {}) => {
     if (!tournament) return [];
     const { me, myTable, rank, ranked } = describeViewer(tournament, userId);
+    const watching = watchingTableId
+        ? (tournament.tables || []).find(table => table.tableId === watchingTableId) || null
+        : null;
     const fieldSize = (tournament.entries || []).length;
     const playing = ranked.filter(entry => entry.status === 'playing');
     const leaders = playing.slice(0, 3);
@@ -147,6 +150,13 @@ export const tournamentFaces = (tournament, userId) => {
             ? `Table ${myTable.tableIndex + 1}`
             : (me.status === 'busted' ? `Out in round ${me.bustedRound}` : (me.status === 'finished' ? 'Finished' : 'Reseating'));
         faces.push({ key: 'you', title: `You ${ordinal(rank)} · ${me.stack}`, sub: where });
+    }
+    if (watching) {
+        faces.push({
+            key: 'watching',
+            title: `Watching Table ${watching.tableIndex + 1} · ${tableProgressLabel(watching).toLowerCase()}`,
+            sub: 'Tap for tables and the way back',
+        });
     }
     faces.push({
         key: 'out',

@@ -22,14 +22,46 @@ export const alphaSeasonTwo = Object.freeze({
 });
 
 export const bulletinTickerItems = Object.freeze([
-    'Alpha Season 2 is live — fresh stats and an open leaderboard',
-    'Season 1 Champion: McSaddle',
-    'Every ranked game moves the Season 2 standings',
-    'Season 1 is preserved forever in Season Recaps',
-    'Open the Bulletin for the season kickoff',
+    'Tournaments are here — one round a table, then the leaders share a table',
+    'Chip drain between rounds keeps every tournament moving',
+    'Break trump and the felt burns: the Magma effect is the new house look',
+    'Share a tournament link straight from its page',
+    'Alpha Season 2 is live — Season 1 Champion: McSaddle',
+    'Open the Bulletin for the full story',
 ]);
 
 export const bulletinEntries = Object.freeze([
+    {
+        id: 'tournaments',
+        dateLabel: 'September 2026',
+        status: 'New feature',
+        title: 'Tournaments come to Sluff',
+        summary: 'Any VIP can open a tournament: pick the buy-in, the starting stack, the seats and the venue, '
+            + 'and the room plays one round at every table before the standings reseat everyone, top with top.',
+        highlights: [
+            'Every table plays exactly one round, then the leaders share a table and so do the short stacks — no easy rides.',
+            'Between rounds every stack drops the creator’s chip drain (off, 5, 10 or 20 percent), so the field keeps shrinking.',
+            'A shot clock rings the nameplate of whoever is on the clock: teal while their free time runs, orange when they are eating their bank.',
+            'Once your table is done you can watch any table still playing; the header cube shows every table’s trick and the way back.',
+            'One voice room for the whole event carries from table to table, through the board, and all the way to the podium.',
+            'The tournament page has a Share link — anyone who opens it lands on the registration or the board.',
+            'Prizes pay 50/30/20 (65/35 under six players) and tournament winnings keep their own scoreboard, separate from the season record.',
+        ],
+    },
+    {
+        id: 'table-feel-september',
+        dateLabel: 'September 2026',
+        status: 'Alpha update',
+        title: 'Magma, and a table that keeps up with your phone',
+        summary: 'Breaking trump now burns a hole in the felt, spectators see every trick gather onto its pile, '
+            + 'and the table re-measures itself whenever your phone changes its mind about the screen.',
+        highlights: [
+            'Trump Broken has a new house look, Magma: the trump card cracks the felt, lava wells up, and the charred scar smoulders until the next deal. The banners stay in the store.',
+            'Watching a table now shows the trick sliding onto the winning pile instead of the cards vanishing.',
+            'Rotating the phone, or the browser bar coming and going, no longer leaves plates and cards in the wrong spot.',
+            'In-game feedback now carries a snapshot of your screen geometry, so a layout report from a phone can actually be chased down.',
+        ],
+    },
     {
         id: 'season-2-kickoff',
         dateLabel: 'July 2026',
@@ -45,10 +77,10 @@ export const bulletinEntries = Object.freeze([
     },
     {
         id: 'token-accountability',
-        dateLabel: 'Current build',
-        status: 'In development',
+        dateLabel: 'August 2026',
+        status: 'Alpha update',
         title: 'Every token accounted for',
-        summary: 'The next release makes token movement visible and gives every active seat a real, accountable player record.',
+        summary: 'Token movement is visible, and every active seat has a real, accountable player record.',
         highlights: [
             'A personal Token Ledger shows every buy-in, payout, refund, mercy token, and adjustment.',
             'Historical games with ambiguous recovery data are quarantined instead of guessed at.',

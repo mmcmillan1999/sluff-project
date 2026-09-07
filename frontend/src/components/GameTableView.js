@@ -1475,7 +1475,6 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                     viewerName={selfPlayerName}
                     watchingTableId={watchingTableId}
                     onWatch={onWatchTable}
-                    onStopWatching={onStopWatching}
                 />
             )}
             {!roundPresentationControlsLocked && createPortal(

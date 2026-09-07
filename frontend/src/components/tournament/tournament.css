@@ -473,6 +473,22 @@
   color: #ffe9a8;
 }
 
+.tournament-sheet-tables li.watching {
+  color: #bfe6ff;
+}
+
+.tournament-sheet-table-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tournament-sheet-actions {
+  display: flex;
+  justify-content: center;
+  margin: 0.2rem 0 0.5rem;
+}
+
 @media (max-width: 480px) {
   .tournament-view { padding: 0.8rem 0.7rem calc(3rem + env(safe-area-inset-bottom)); }
   .tournament-panel { padding: 0.7rem 0.75rem; }
