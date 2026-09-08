@@ -1078,9 +1078,13 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
     ]);
 
     useEffect(() => {
-        if (!currentTableState || !selfPlayerName || isSpectator) return;
+        if (!currentTableState || !selfPlayerName) return;
         const { state, trickTurnPlayerName, biddingTurnPlayerName, lastCompletedTrick, currentTrickCards } = currentTableState;
-        if (state === "Playing Phase" && trickTurnPlayerName === selfPlayerName && turnPlayerRef.current !== selfPlayerName) playSound('turnAlert');
+        // The table's own sounds — cards landing, the deal, the bidding —
+        // play for everyone watching. Only the calls to act are personal:
+        // a spectator is never chased.
+        const seated = !isSpectator;
+        if (seated && state === "Playing Phase" && trickTurnPlayerName === selfPlayerName && turnPlayerRef.current !== selfPlayerName) playSound('turnAlert');
         // Don't stamp the ref during Bid Announcement: the leader is assigned
         // then, and stamping would swallow their turn alert when play opens.
         if (state !== "Bid Announcement") turnPlayerRef.current = trickTurnPlayerName;
@@ -1088,12 +1092,12 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         // in for it — a bidding turn would stamp "you" there and then swallow
         // the alert when play opened. Watching trickTurnPlayerName is why the
         // bidding alert had never once fired.
-        if (state === "Bidding Phase" && biddingTurnPlayerName === selfPlayerName && bidTurnPlayerRef.current !== selfPlayerName) playSound('turnAlert');
+        if (seated && state === "Bidding Phase" && biddingTurnPlayerName === selfPlayerName && bidTurnPlayerRef.current !== selfPlayerName) playSound('turnAlert');
         bidTurnPlayerRef.current = state === "Bidding Phase" ? biddingTurnPlayerName : null;
         const newCardCount = currentTrickCards?.length || 0;
         if (newCardCount > 0 && newCardCount !== cardCountRef.current) playSound('cardPlay');
         cardCountRef.current = newCardCount;
-        if (lastCompletedTrick && lastCompletedTrick.winnerName === selfPlayerName && trickWinnerRef.current !== lastCompletedTrick.winnerName) playSound('trickWin');
+        if (seated && lastCompletedTrick && lastCompletedTrick.winnerName === selfPlayerName && trickWinnerRef.current !== lastCompletedTrick.winnerName) playSound('trickWin');
         trickWinnerRef.current = lastCompletedTrick?.winnerName;
         if (state === 'Bidding Phase' && gameStateRef.current === 'Dealing Pending') {
             // One synthesized flick per dealt card at the animation's cadence
