@@ -44,10 +44,14 @@ const { botPlayDelay, isDeliberateBot } = require('../core/botPacing');
         || (typeof error?.code === 'string' && error.code.startsWith('08'))
     );
 
+    // Fast play (a bots-only tournament finish, TournamentDirector.setFastPlay):
+    // every bot wait on the table divides by the engine's divisor. 1 elsewhere.
+    const fastSpeed = engine => (Number(engine?.fastPlayDivisor) > 1 ? Number(engine.fastPlayDivisor) : 1);
+
     const botBidActionDelay = (engine, standardDelay, now = Date.now()) => {
         const readyAt = engine?.botBidReadyAt;
         if (!Number.isFinite(readyAt)) return standardDelay;
-        return Math.max(standardDelay, Math.ceil(readyAt - now));
+        return Math.max(standardDelay, Math.ceil((readyAt - now) / fastSpeed(engine)));
     };
 
     class GameService {
@@ -2049,6 +2053,9 @@ const { botPlayDelay, isDeliberateBot } = require('../core/botPacing');
                             if (followUpEffects && followUpEffects.length > 0) {
                                 await this._executeEffects(tableId, followUpEffects);
                             }
+                            // Fast play never waits for the 1.5 s heartbeat to
+                            // notice a table that just came off a timer.
+                            if (fastSpeed(engine) > 1) this._triggerBots(tableId);
                         }, effect.payload.duration);
                         break;
                     }
@@ -2466,6 +2473,10 @@ const { botPlayDelay, isDeliberateBot } = require('../core/botPacing');
         _triggerBotsInner(tableId) {
             const engine = this.getEngineById(tableId);
             if (!engine || engine.pendingBotAction) return;
+            // Fast play: every bot wait on this table shrinks by the divisor,
+            // never under 50 ms so the effects still land in order.
+            const speed = fastSpeed(engine);
+            const quick = ms => (speed > 1 ? Math.max(50, Math.round(ms / speed)) : ms);
         
             // Helper function to check if game is human vs bot only
             const isHumanVsBotOnly = () => {
@@ -2489,7 +2500,7 @@ const { botPlayDelay, isDeliberateBot } = require('../core/botPacing');
                     // Re-trigger bot check after action completes
                     setTimeout(() => {
                         this._triggerBots(tableId);
-                    }, 100);
+                    }, quick(100));
                 }, delay);
             };
         
@@ -2514,7 +2525,7 @@ const { botPlayDelay, isDeliberateBot } = require('../core/botPacing');
                 // Learner tables run at half speed so new players can read
                 // the felt (and the coach) between plays.
                 const pace = Number(engine.botPaceMultiplier) > 1 ? Number(engine.botPaceMultiplier) : 1;
-                const standardDelay = (isCourtney ? 2000 : 1000) * pace;
+                const standardDelay = quick((isCourtney ? 2000 : 1000) * pace);
                 const presentationReadyAt = Number(engine.roundSummary?.presentationReadyAt);
                 const legacyRoundEndDelay = isCourtney ? 20000 : 14000;
                 // If the presentation already released (acknowledgement quorum
@@ -2560,19 +2571,19 @@ const { botPlayDelay, isDeliberateBot } = require('../core/botPacing');
                     // The revealed widow is on the table for everyone to
                     // study; a bot bidder holds the reveal 3 extra seconds
                     // before returning its discards.
-                    scheduleTurnAction(this.submitFrogDiscards, standardDelay + 3000, botUserId, discards);
+                    scheduleTurnAction(this.submitFrogDiscards, standardDelay + quick(3000), botUserId, discards);
                 } else if (engine.state === 'Playing Phase' && !engine.drawRequest.isActive && !engine.playoutVote?.isActive && engine.trickTurnPlayerId == botUserId) {
                     const legalCount = this._legalBotMoves(engine, bot).length;
                     const card = this._legalBotCard(tableId, engine, bot, bot.playCard());
                     if (card) {
                         // Card cadence resolves per bot (core/botPacing.js):
                         // the fixed 1.2 s beat, or a human-fitted think time.
-                        const playDelay = botPlayDelay(bot.playerName, {
+                        const playDelay = quick(botPlayDelay(bot.playerName, {
                             trickNumber: (engine.tricksPlayedCount || 0) + 1,
                             legalCount,
                             pace,
                             tournament: Boolean(engine.tournament),
-                        });
+                        }));
                         scheduleTurnAction(this.playCard, playDelay, botUserId, card);
                     }
                 }
@@ -2599,7 +2610,7 @@ const { botPlayDelay, isDeliberateBot } = require('../core/botPacing');
                 // Bots never block a wrap: they vote "next round" with the
                 // same human-like pacing the draw vote uses. A human's
                 // "play it out" still resolves the vote instantly.
-                let playoutDelay = 1500;
+                let playoutDelay = quick(1500);
                 for (const botId in engine.bots) {
                     const bot = engine.bots[botId];
                     if (engine.playoutVote.votes[bot.playerName] === null) {
@@ -2610,14 +2621,14 @@ const { botPlayDelay, isDeliberateBot } = require('../core/botPacing');
                                 await this.submitPlayoutVote(tableId, bot.userId, 'wrap');
                             }
                         }, playoutDelay);
-                        playoutDelay += 1200;
+                        playoutDelay += quick(1200);
                     }
                 }
             }
 
             if (engine.state === 'Playing Phase' && !engine.drawRequest.isActive && !engine.playoutVote?.isActive && engine.insurance.isActive && !engine.insurance.dealExecuted) {
                 console.log(`[INSURANCE] Processing insurance for table ${tableId} - ${Object.keys(engine.bots).length} bots`);
-                let insuranceDelay = 500;
+                let insuranceDelay = quick(500);
                 for (const botId in engine.bots) {
                     const bot = engine.bots[botId];
                     setTimeout(async () => {
@@ -2651,7 +2662,7 @@ const { botPlayDelay, isDeliberateBot } = require('../core/botPacing');
                             }
                         }
                     }, insuranceDelay);
-                    insuranceDelay += 750;
+                    insuranceDelay += quick(750);
                 }
             }
         }

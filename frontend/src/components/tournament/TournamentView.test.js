@@ -100,6 +100,36 @@ test('while running, a player sees their table, the standings and a confirmed Qu
     expect(onQuit).toHaveBeenCalledTimes(1);
 });
 
+test('the host can switch fast play on and off once only house players are left', () => {
+    const onFastPlay = vi.fn();
+    const botsOnly = () => ({
+        ...running(),
+        botsOnly: true,
+        fastPlay: false,
+        playersLeft: 4,
+        entries: [
+            entry(11, 'Matt', { status: 'busted', stack: -5, bustedRound: 3 }),
+            entry(12, 'Bob', { status: 'playing', stack: 140 }),
+            entry(13, 'Cara', { status: 'playing', stack: 95 }),
+            entry(14, 'Dee', { status: 'playing', stack: 60 }),
+            entry(15, 'Eli', { status: 'playing', stack: 40 }),
+        ],
+    });
+    const { rerender } = render(<TournamentView tournament={botsOnly()} user={{ id: 11, username: 'Matt' }} onFastPlay={onFastPlay} onBack={() => {}} onWatch={() => {}} />);
+    expect(screen.getByText('Only house players are left')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Fast play' }));
+    expect(onFastPlay).toHaveBeenCalledWith(true);
+    rerender(<TournamentView tournament={{ ...botsOnly(), fastPlay: true }} user={{ id: 11, username: 'Matt' }} onFastPlay={onFastPlay} onBack={() => {}} onWatch={() => {}} />);
+    expect(screen.getByText(/Fast play is on/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Normal speed' }));
+    expect(onFastPlay).toHaveBeenCalledWith(false);
+    // Not the host: no switch. A human still in: no switch either.
+    rerender(<TournamentView tournament={botsOnly()} user={{ id: 12, username: 'Bob' }} onFastPlay={onFastPlay} onBack={() => {}} onWatch={() => {}} />);
+    expect(screen.queryByRole('button', { name: 'Fast play' })).not.toBeInTheDocument();
+    rerender(<TournamentView tournament={{ ...botsOnly(), botsOnly: false }} user={{ id: 11, username: 'Matt' }} onFastPlay={onFastPlay} onBack={() => {}} onWatch={() => {}} />);
+    expect(screen.queryByRole('button', { name: 'Fast play' })).not.toBeInTheDocument();
+});
+
 test('a busted player can watch a live table', () => {
     const onWatch = vi.fn();
     render(<TournamentView tournament={running()} user={{ id: 16, username: 'Flo' }} onWatch={onWatch} onBack={() => {}} />);

@@ -71,6 +71,7 @@ const TournamentView = ({
     onCancel,
     onQuit,
     onWatch,
+    onFastPlay,
     onBack,
 }) => {
     const [confirming, setConfirming] = useState(null);
@@ -231,6 +232,26 @@ const TournamentView = ({
                             </section>
                         );
                     })()}
+                    {isCreator && tournament.botsOnly && onFastPlay && (
+                        <section className="tournament-panel tournament-you tournament-fast-play">
+                            <h2>Only house players are left</h2>
+                            <p>
+                                {tournament.fastPlay
+                                    ? 'Fast play is on: the rest of the event runs at ten times speed.'
+                                    : 'As the host you can run the rest of the event at ten times speed.'}
+                            </p>
+                            <div className="tournament-actions">
+                                <button
+                                    type="button"
+                                    className={`tournament-btn${tournament.fastPlay ? ' secondary' : ''}`}
+                                    onClick={() => onFastPlay(!tournament.fastPlay)}
+                                    disabled={busy}
+                                >
+                                    {tournament.fastPlay ? 'Normal speed' : 'Fast play'}
+                                </button>
+                            </div>
+                        </section>
+                    )}
                     <section className="tournament-panel tournament-you">
                         <h2>You</h2>
                         {!me && <p>You are watching. {tournament.playersLeft} players are still in.</p>}

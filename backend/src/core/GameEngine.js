@@ -78,6 +78,9 @@ class GameEngine {
         // is seated, and names the seats that get coach suggestions.
         this.botPaceMultiplier = 1;
         this.trickLingerMs = 2200;
+        // Fast play (a bots-only tournament finish): every wait this engine
+        // owns divides by this, and the bot scheduler reads it too.
+        this.fastPlayDivisor = 1;
         this.learnerUserIds = [];
         this.internalTimers = {};
         this.bots = {};
@@ -890,10 +893,10 @@ class GameEngine {
 
     startRoundPresentationWindow(lockDurationMs, now = Date.now()) {
         if (!this.roundSummary || !Number.isFinite(lockDurationMs) || lockDurationMs < 0) return null;
-        const presentationReadyAt = now + lockDurationMs;
+        const presentationReadyAt = now + this._scaledMs(lockDurationMs);
         this.roundPresentationAcknowledgements.clear();
         this.roundSummary.presentationReadyAt = presentationReadyAt;
-        this.roundSummary.presentationForceReadyAt = presentationReadyAt + ROUND_PRESENTATION_ACK_GRACE_MS;
+        this.roundSummary.presentationForceReadyAt = presentationReadyAt + this._scaledMs(ROUND_PRESENTATION_ACK_GRACE_MS);
         this.roundSummary.allConnectedHumansPresented = false;
         return presentationReadyAt;
     }
@@ -1405,6 +1408,24 @@ class GameEngine {
     // (trump, trick leader, insurance), but play is held while clients run the
     // bid-winner VS splash. Returns a START_TIMER effect the caller must include
     // in its returned effects; the timer flips the state to "Playing Phase".
+    // Fast play: a tournament whose remaining seats are all house players
+    // can run at a multiple of normal speed (TournamentDirector.setFastPlay).
+    // The divisor shortens every wait this engine owns — the bid fanfare,
+    // the trick linger, the recap lock — and GameService's bot beats.
+    // Tournament tables only, so resetting the linger to its default is safe.
+    setFastPlay(divisor) {
+        const next = Number(divisor) > 1 ? Number(divisor) : 1;
+        const changed = this.fastPlayDivisor !== next;
+        this.fastPlayDivisor = next;
+        this.trickLingerMs = this._scaledMs(2200);
+        return changed;
+    }
+
+    _scaledMs(ms) {
+        if (!(this.fastPlayDivisor > 1)) return ms;
+        return Math.max(50, Math.round(ms / this.fastPlayDivisor));
+    }
+
     _transitionToPlayingPhase() {
         this.state = "Bid Announcement";
         this.tricksPlayedCount = 0;
@@ -1437,7 +1458,7 @@ class GameEngine {
         // plus a 1.3s scheduling/network margin. Guarded so a reset/forfeit during the window
         // doesn't get yanked back into play.
         return { type: 'START_TIMER', payload: {
-            duration: 6000,
+            duration: this._scaledMs(6000),
             onTimeout: (engineRef) => {
                 if (engineRef.state !== "Bid Announcement") return [];
                 engineRef.state = "Playing Phase";

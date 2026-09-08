@@ -7,7 +7,7 @@
 const assert = require('node:assert/strict');
 
 const GameService = require('../src/services/GameService');
-const { TournamentDirector, TournamentError, TOURNAMENT_VENUE, REGISTRATION_TTL_MS } = require('../src/tournament/TournamentDirector');
+const { TournamentDirector, TournamentError, TOURNAMENT_VENUE, REGISTRATION_TTL_MS, FAST_PLAY_DIVISOR } = require('../src/tournament/TournamentDirector');
 const { createMemoryStore } = require('../src/tournament/tournamentStore');
 const { tableSizes, seatRound } = require('../src/tournament/seating');
 const { prizeSplitCents, rankFinishers, allocatePrizeCents } = require('../src/tournament/prizes');
@@ -629,6 +629,82 @@ async function runTournamentTests() {
         assert.equal(entry.bustedRound, 1);
         pass('Quitting mid-tournament is a bust at the current place.');
         if (live.status === 'running') await director.voidTournament(t.id, 'done');
+    }
+
+    // ----------------------------------------------------------- fast play
+    // Once only house players are left, the creator can run the rest of the
+    // event at ten times speed: the room's waits shrink, every table's bot
+    // beat shrinks, the step already on the clock is re-timed, and the
+    // setting rides the deploy snapshot. A human still in keeps normal speed.
+    {
+        const balances = { 901: 1000, 902: 1000, 903: 1000, 904: 1000, 905: 1000 };
+        const harness = buildHarness({ balances, presentationHoldMs: 18_000, boardDelayMs: 8_000 });
+        const { director, gameService, queue } = harness;
+        const delays = [];
+        director.schedule = (fn, ms) => { delays.push(ms); queue.push(fn); return queue.length; };
+        const matt = { id: 11, username: 'Matt', is_vip: true };
+        const t = await director.create(matt, { buyInTokens: 1, startingStack: 60, maxSeats: 6, startRule: 'creator' });
+        await director.register(t.id, matt);
+        for (let i = 0; i < 5; i += 1) await director.findPlayer(t.id, 11);
+        await director.start(t.id, 11);
+        const live = director.get(t.id);
+        assert.equal(director.publicState(live, 11).botsOnly, false, 'Matt is still in');
+        assert.equal(director.publicState(live, 11).fastPlay, false);
+        assert.equal(delays.at(-1), 2500, 'the opening deal waits the normal deal delay');
+        assert.throws(() => director.setFastPlay(t.id, 11, true), err => err.code === 'HUMANS_STILL_PLAYING');
+
+        await director.quit(t.id, 11);
+        assert.equal(director.publicState(live, 11).botsOnly, true, 'a quitter is out: only house players remain');
+        assert.throws(() => director.setFastPlay(t.id, 901, true), err => err.code === 'CREATOR_ONLY');
+
+        await harness.drainQueue(); // the deals land at normal speed
+        for (const tableId of [...live.tables.keys()]) await playTable(harness, tableId);
+        assert.ok([...live.tables.values()].every(table => table.result), 'every table finished the round');
+        assert.equal(delays.at(-1), 18_000, 'the recap hold is scheduled at normal speed');
+
+        const on = director.setFastPlay(t.id, 11, true);
+        assert.equal(on.fastPlay, true);
+        assert.equal(delays.at(-1), 1_800, 'the hold already on the clock is re-timed from what is left of it');
+        for (const table of live.tables.values()) {
+            const engine = gameService.getEngineById(table.tableId);
+            assert.equal(engine.fastPlayDivisor, FAST_PLAY_DIVISOR);
+            assert.equal(engine.trickLingerMs, 220, 'the trick linger shrinks with the table');
+            assert.equal(engine._scaledMs(6000), 600, 'so does the bid fanfare');
+        }
+        await harness.drainQueue(); // the hold, the board, the next round's deals
+        assert.ok(delays.includes(800), 'the board between rounds runs at ten times speed');
+        assert.equal(live.round, 2);
+        assert.equal(delays.at(-1), 250, 'the next deal falls due at ten times speed');
+        for (const table of live.tables.values()) {
+            const engine = gameService.getEngineById(table.tableId);
+            assert.equal(engine.fastPlayDivisor, FAST_PLAY_DIVISOR, 'new tables open at the tournament speed');
+        }
+
+        // The setting rides the deploy snapshot.
+        await director.snapshotForShutdown();
+        const saved = harness.store.state.snapshots.get(t.id).snapshot;
+        assert.equal(saved.tournament.fastPlay, true);
+        const second = buildHarness({ balances, presentationHoldMs: 18_000, boardDelayMs: 8_000 });
+        second.director.store = harness.store;
+        const restored = await second.director.restore();
+        assert.equal(restored.restored, 1);
+        const back = second.director.get(t.id);
+        assert.equal(back.fastPlay, true, 'fast play survives a deploy');
+        for (const table of back.tables.values()) {
+            const engine = second.gameService.getEngineById(table.tableId);
+            assert.equal(engine.fastPlayDivisor, FAST_PLAY_DIVISOR, 'restored tables come back at speed');
+        }
+
+        const off = director.setFastPlay(t.id, 11, false);
+        assert.equal(off.fastPlay, false);
+        for (const table of live.tables.values()) {
+            const engine = gameService.getEngineById(table.tableId);
+            assert.equal(engine.fastPlayDivisor, 1);
+            assert.equal(engine.trickLingerMs, 2200, 'normal speed restores the linger');
+        }
+        pass('Fast play: creator-only, bots-only, ten times speed everywhere, re-times the pending step, survives a deploy, and switches off again.');
+        await director.voidTournament(t.id, 'done');
+        if (back.status === 'running') await second.director.voidTournament(t.id, 'done');
     }
 
     console.log('Tournament director tests passed.');

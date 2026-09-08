@@ -1029,6 +1029,7 @@ function App() {
                                     onStart={tournamentActionFor('tournamentStart')}
                                     onCancel={tournamentActionFor('tournamentCancel')}
                                     onQuit={tournamentActionFor('tournamentQuit')}
+                                    onFastPlay={(enabled) => myTournament && tournamentEmit('tournamentFastPlay', { tournamentId: myTournament.id, enabled })}
                                     onWatch={handleWatchTournamentTable}
                                     onBack={handleTournamentBack}
                                 />

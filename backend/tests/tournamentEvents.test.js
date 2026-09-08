@@ -47,7 +47,7 @@ function createDirectorStub() {
         tournamentOf: userId => (inTournament.has(Number(userId)) ? { id: 1, status: 'registering' } : null),
         publicState: (t, viewerUserId) => ({ id: t.id, viewer: { userId: viewerUserId } }),
     };
-    for (const method of ['create', 'register', 'withdraw', 'findPlayer', 'start', 'cancel', 'quit']) {
+    for (const method of ['create', 'register', 'withdraw', 'findPlayer', 'start', 'cancel', 'quit', 'setFastPlay']) {
         stub[method] = async (...args) => {
             calls.push([method, ...args]);
             if (stub.failNext) {
@@ -182,7 +182,13 @@ async function runTournamentEventTests() {
             const call = director.calls.at(-1);
             assert.deepEqual(call, [method, 3, 7], `${event} reaches director.${method}(3, 7)`);
         }
-        pass('Leave, find player, start, cancel and quit each reach the director with the tournament and the user.');
+        await anna.trigger('tournamentFastPlay', { tournamentId: 3, enabled: true });
+        assert.deepEqual(director.calls.at(-1), ['setFastPlay', 3, 7, true], 'fast play on reaches the director');
+        await anna.trigger('tournamentFastPlay', { tournamentId: 3, enabled: false });
+        assert.deepEqual(director.calls.at(-1), ['setFastPlay', 3, 7, false], 'and off again');
+        await anna.trigger('tournamentFastPlay', { tournamentId: 3 });
+        assert.deepEqual(director.calls.at(-1), ['setFastPlay', 3, 7, true], 'omitting enabled means on');
+        pass('Leave, find player, start, cancel, quit and fast play each reach the director with the tournament and the user.');
 
         director.failNext = new TournamentError('CREATOR_ONLY', 'Only the creator can do that.');
         await anna.trigger('tournamentStart', { tournamentId: 3 });

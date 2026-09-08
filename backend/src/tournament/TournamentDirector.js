@@ -42,6 +42,10 @@ const DEFAULT_BOARD_DELAY_MS = tournamentClock.TOURNAMENT_CLOCK.boardDelayMs;
 // voided and refunded once this much time has passed (Render boots the
 // replacement before the old instance's SIGTERM, so snapshots land late).
 const RESUME_GRACE_MS = 10 * 60 * 1000;
+// Fast play: once only house players are left, the creator can run the rest
+// of the event at this multiple — every wait in the round loop (deal, recap
+// hold, board) and every bot beat on its tables is divided by it.
+const FAST_PLAY_DIVISOR = 10;
 const SNAPSHOT_VERSION = 1;
 const TOURNAMENT_VENUE = 'tournament-stage';
 const MAX_NAME_LENGTH = 60;
@@ -212,6 +216,10 @@ class TournamentDirector {
             // The drop everyone just took between rounds (by name), so the
             // board can show it while the room reseats.
             lastDrain: t.lastDrain,
+            // Fast play: on when the creator has sped up a bots-only finish;
+            // offered (botsOnly) once no human is still in.
+            fastPlay: t.fastPlay === true,
+            botsOnly: this._botsOnly(t),
             // Between rounds: how long until the next one opens, so the
             // board can count down instead of leaving the room guessing.
             nextRoundInSeconds: t.nextRoundAt ? Math.max(0, Math.ceil((t.nextRoundAt - this.now()) / 1000)) : null,
@@ -360,6 +368,27 @@ class TournamentDirector {
         const t = this._registering(tournamentId);
         if (requesterId !== null) this._creatorOnly(t, requesterId);
         await this._refundAndClose(t, 'cancelled', reason);
+        return this.publicState(t, requesterId);
+    }
+
+    // Fast play: the creator, once only house players are left, runs the rest
+    // of the event at FAST_PLAY_DIVISOR× — the room's waits and every bot's
+    // beat at its tables. Off again the same way. While a human is still in,
+    // the event stays at normal speed.
+    setFastPlay(tournamentId, requesterId, enabled = true) {
+        const t = this.get(tournamentId);
+        if (!t || t.status !== 'running') throw new TournamentError('NOT_RUNNING', 'That tournament is not running.');
+        this._creatorOnly(t, requesterId);
+        const on = enabled !== false;
+        if (on && !this._botsOnly(t)) {
+            throw new TournamentError('HUMANS_STILL_PLAYING', 'Fast play is for when only house players are left.');
+        }
+        if (t.fastPlay !== on) {
+            t.fastPlay = on;
+            this._applyFastPlay(t);
+            this.log.log(`[TOURNAMENT] #${t.id} fast play ${on ? `on (${FAST_PLAY_DIVISOR}×)` : 'off'}.`);
+            this._emit(t);
+        }
         return this.publicState(t, requesterId);
     }
 
@@ -536,6 +565,7 @@ class TournamentDirector {
                 maxSeats: t.maxSeats, startRule: t.startRule, startsAt: t.startsAt, createdAt: t.createdAt,
                 startedAt: t.startedAt, round: t.round, roundCompleteAt: t.roundCompleteAt || null,
                 drainPercent: t.drainPercent || 0,
+                fastPlay: t.fastPlay === true,
             },
             entries: [...t.entries.values()].map(entry => ({
                 userId: entry.userId, username: entry.username, isBot: entry.isBot, status: entry.status,
@@ -593,6 +623,7 @@ class TournamentDirector {
         t.status = 'running';
         t.startedAt = meta.startedAt;
         t.round = Number(meta.round) || 0;
+        t.fastPlay = meta.fastPlay === true;
         for (const saved of snapshot.entries || []) {
             const entry = this._newEntry({ userId: saved.userId, username: saved.username, isBot: saved.isBot, stack: saved.stack });
             Object.assign(entry, {
@@ -607,8 +638,9 @@ class TournamentDirector {
         if (snapshot.phase !== 'round' || !Array.isArray(snapshot.tables) || snapshot.tables.length === 0) {
             // Between rounds: the room was on the board. Reseat after the
             // usual board delay.
-            t.nextRoundAt = this.now() + this.boardDelayMs;
-            this._schedule(t, () => this._startRound(t), this.boardDelayMs);
+            const boardDelay = this._delay(t, this.boardDelayMs);
+            t.nextRoundAt = this.now() + boardDelay;
+            this._schedule(t, () => this._startRound(t), boardDelay);
             this._emit(t);
             return;
         }
@@ -636,8 +668,9 @@ class TournamentDirector {
                     // all-pass redeal) is dealt after the usual delay so the
                     // returning clients see it fly.
                     if (engine.state === 'Dealing Pending') {
-                        engine.tournamentDealDueAt = this.now() + this.dealDelayMs;
+                        engine.tournamentDealDueAt = this.now() + this._delay(t, this.dealDelayMs);
                     }
+                    engine.setFastPlay(this._speed(t));
                     this.gameService._rebindSocketsForEngine?.(engine);
                     this.gameService.emitGameState(table.tableId);
                 }
@@ -646,7 +679,7 @@ class TournamentDirector {
         }
         if ([...t.tables.values()].every(table => table.result)) {
             t.roundCompleteAt = meta.roundCompleteAt || this.now();
-            this._schedule(t, () => this._finishRound(t), this.presentationHoldMs);
+            this._schedule(t, () => this._finishRound(t), this._delay(t, this.presentationHoldMs));
         }
         this._emit(t);
     }
@@ -735,13 +768,14 @@ class TournamentDirector {
                 dealerUserId: table.dealerUserId,
                 playerMode: table.playerMode,
             });
+            engine.setFastPlay(this._speed(t));
             if (table.playerMode === 3) t.entries.get(table.dealerUserId).deals += 1;
             for (const id of table.sitOutUserIds) t.entries.get(id).sitOuts += 1;
             for (const entry of [...seats, ...spectators]) this._joinRoom(entry.socketId, t, tableId);
             t.tables.set(tableId, { ...table, tableId, result: null });
             // The table opens on every screen first; the cards fly after the
             // deal delay, so the clients see Dealing Pending and animate.
-            engine.tournamentDealDueAt = this.now() + this.dealDelayMs;
+            engine.tournamentDealDueAt = this.now() + this._delay(t, this.dealDelayMs);
             this.gameService.emitGameState(tableId);
             this._scheduleDeal(t, tableId);
         }
@@ -753,7 +787,7 @@ class TournamentDirector {
     _scheduleDeal(t, tableId) {
         this.schedule(() => this._dealIfPending(t, tableId).catch(error => {
             this.log.error(`[TOURNAMENT] #${t.id} deal failed at ${tableId}:`, error);
-        }), this.dealDelayMs);
+        }), this._delay(t, this.dealDelayMs));
     }
 
     async _dealIfPending(t, tableId) {
@@ -772,7 +806,7 @@ class TournamentDirector {
             const engine = this.gameService.getEngineById(tableId);
             if (!engine || engine.state !== 'Dealing Pending') continue;
             if (!Number.isFinite(engine.tournamentDealDueAt)) {
-                engine.tournamentDealDueAt = now + this.dealDelayMs;
+                engine.tournamentDealDueAt = now + this._delay(t, this.dealDelayMs);
                 continue;
             }
             if (now >= engine.tournamentDealDueAt) await this._dealIfPending(t, tableId);
@@ -875,7 +909,7 @@ class TournamentDirector {
             // and tick() releases it early once every table's ceremony is
             // acknowledged.
             t.roundCompleteAt = this.now();
-            this._schedule(t, () => this._finishRound(t), this.presentationHoldMs);
+            this._schedule(t, () => this._finishRound(t), this._delay(t, this.presentationHoldMs));
         }
     }
 
@@ -994,7 +1028,7 @@ class TournamentDirector {
             await this._finish(t);
             return;
         }
-        const delay = keepSeated ? this.singleTableDelayMs : this.boardDelayMs;
+        const delay = this._delay(t, keepSeated ? this.singleTableDelayMs : this.boardDelayMs);
         t.nextRoundAt = this.now() + delay;
         this._emit(t);
         this._schedule(t, () => this._startRound(t), delay);
@@ -1150,6 +1184,8 @@ class TournamentDirector {
             closeReason: null,
             round: 0,
             roundCompleteAt: null,
+            fastPlay: false,
+            pendingStep: null,
             reuseTableId: null,
             heldTable: null,
             nextRoundAt: null,
@@ -1206,6 +1242,42 @@ class TournamentDirector {
         return [...t.entries.values()].filter(entry => entry.status === 'playing');
     }
 
+    // Nobody but house players still in. A quitter is out for good even
+    // though the house plays their seat to the end of the round.
+    _botsOnly(t) {
+        const stillIn = this._alive(t).filter(entry => entry.quit !== true);
+        return stillIn.length > 0 && stillIn.every(entry => entry.isBot);
+    }
+
+    _speed(t) {
+        return t.fastPlay === true ? FAST_PLAY_DIVISOR : 1;
+    }
+
+    // A wait in the round loop at the tournament's current speed.
+    _delay(t, ms) {
+        return Math.max(0, Math.ceil(ms / this._speed(t)));
+    }
+
+    // Every live table takes the new speed, a deal still pending falls due
+    // sooner, and the step already on the clock (the recap hold, the board)
+    // is re-timed from what is left of it.
+    _applyFastPlay(t) {
+        const now = this.now();
+        const speed = this._speed(t);
+        for (const table of t.tables.values()) {
+            const engine = this.gameService.getEngineById(table.tableId);
+            if (!engine) continue;
+            engine.setFastPlay(speed);
+            if (engine.state === 'Dealing Pending' && Number.isFinite(engine.tournamentDealDueAt) && speed > 1) {
+                engine.tournamentDealDueAt = now + Math.ceil(Math.max(0, engine.tournamentDealDueAt - now) / speed);
+            }
+        }
+        if (t.pendingTimer && t.pendingStep) {
+            const remaining = Math.max(0, t.pendingStep.dueAt - now);
+            this._schedule(t, t.pendingStep.fn, speed > 1 ? Math.ceil(remaining / speed) : remaining);
+        }
+    }
+
     _releaseLeases(t) {
         for (const entry of t.entries.values()) {
             if (entry.isBot) t.lease.release(entry.userId);
@@ -1214,8 +1286,10 @@ class TournamentDirector {
 
     _schedule(t, fn, delayMs) {
         if (t.pendingTimer) this.cancelSchedule(t.pendingTimer);
+        t.pendingStep = { fn, dueAt: this.now() + delayMs };
         t.pendingTimer = this.schedule(() => {
             t.pendingTimer = null;
+            t.pendingStep = null;
             // Returned so a test scheduler can await the step; setTimeout
             // ignores it.
             return Promise.resolve().then(fn).catch(error => {
@@ -1269,6 +1343,7 @@ module.exports = {
     REGISTRATION_TTL_MS,
     MIN_START_LEAD_MS,
     RESUME_GRACE_MS,
+    FAST_PLAY_DIVISOR,
     SNAPSHOT_VERSION,
     DRAIN_PERCENTS,
     DEFAULT_DRAIN_PERCENT,

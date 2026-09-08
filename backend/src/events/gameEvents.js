@@ -641,6 +641,10 @@ const registerGameHandlers = (io, gameService, options = {}) => {
         socket.on('tournamentQuit', payload => tournamentAction('tournamentQuit', payload, director => (
             director.quit(tournamentIdFrom(payload), socket.user.id)
         )));
+        // Fast play: the creator speeds up a bots-only finish (or slows it back).
+        socket.on('tournamentFastPlay', payload => tournamentAction('tournamentFastPlay', payload, director => (
+            director.setFastPlay(tournamentIdFrom(payload), socket.user.id, payload.enabled !== false)
+        )));
         // Watching another table while yours is done for the round.
         socket.on('tournamentWatch', payload => tournamentAction('tournamentWatch', payload, director => {
             const tableId = typeof payload.tableId === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(payload.tableId) ? payload.tableId : null;
