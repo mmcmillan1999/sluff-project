@@ -15,6 +15,7 @@
     } = require('../core/constants');
     const { BRAINS } = require('../core/bot-brains');
     const { getLegalMoves } = require('../core/legalMoves');
+const { botPlayDelay } = require('../core/botPacing');
     const AdaptiveInsuranceStrategy = require('../core/bot-strategies/AdaptiveInsuranceStrategy');
     const MarketInsuranceStrategy = require('../core/bot-strategies/MarketInsuranceStrategy');
     const { serializeEngineForResume, restoreEngineFromResume } = require('../serialization/gameResume');
@@ -2443,15 +2444,19 @@
         // retried forever with the same answer: playHandler refuses silently and
         // the AFK backstop skips bot seats, so the humans at the table are stuck.
         // Substitute a legal card and shout about it.
-        _legalBotCard(tableId, engine, bot, card) {
+        _legalBotMoves(engine, bot) {
             const hand = engine.hands?.[bot.playerName] || [];
-            const legal = getLegalMoves(
+            return getLegalMoves(
                 hand,
                 (engine.currentTrickCards?.length ?? 0) === 0,
                 engine.leadSuitCurrentTrick,
                 engine.trumpSuit,
                 engine.trumpBroken,
             );
+        }
+
+        _legalBotCard(tableId, engine, bot, card) {
+            const legal = this._legalBotMoves(engine, bot);
             if (card && legal.includes(card)) return card;
             if (legal.length === 0) return null;
             console.error(`[BOT] ${bot.playerName} chose an illegal card (${card}) on ${tableId}; playing ${legal[0]} instead.`);
@@ -2508,7 +2513,6 @@
                 // the felt (and the coach) between plays.
                 const pace = Number(engine.botPaceMultiplier) > 1 ? Number(engine.botPaceMultiplier) : 1;
                 const standardDelay = (isCourtney ? 2000 : 1000) * pace;
-                const playDelay = (isCourtney ? 2400 : 1200) * pace;
                 const presentationReadyAt = Number(engine.roundSummary?.presentationReadyAt);
                 const legacyRoundEndDelay = isCourtney ? 20000 : 14000;
                 // If the presentation already released (acknowledgement quorum
@@ -2556,8 +2560,17 @@
                     // before returning its discards.
                     scheduleTurnAction(this.submitFrogDiscards, standardDelay + 3000, botUserId, discards);
                 } else if (engine.state === 'Playing Phase' && !engine.drawRequest.isActive && !engine.playoutVote?.isActive && engine.trickTurnPlayerId == botUserId) {
+                    const legalCount = this._legalBotMoves(engine, bot).length;
                     const card = this._legalBotCard(tableId, engine, bot, bot.playCard());
                     if (card) {
+                        // Card cadence resolves per bot (core/botPacing.js):
+                        // the fixed 1.2 s beat, or a human-fitted think time.
+                        const playDelay = botPlayDelay(bot.playerName, {
+                            trickNumber: (engine.tricksPlayedCount || 0) + 1,
+                            legalCount,
+                            pace,
+                            tournament: Boolean(engine.tournament),
+                        });
                         scheduleTurnAction(this.playCard, playDelay, botUserId, card);
                     }
                 }

@@ -1,6 +1,7 @@
 const assert = require('assert');
 const {
     BOT_NAMES,
+    BOT_RENAMES,
     BOT_SEED_ADVISORY_LOCK_ID,
     BOT_STARTING_TOKENS,
     botEmail,
@@ -10,11 +11,30 @@ const {
 } = require('../src/data/botAccounts');
 const { CURRENT_USER_QUERY } = require('../src/middleware/requireAuth');
 
-function makeBotAccountPool({ conflictingUsername = null, conflictingEmail = null } = {}) {
+function makeBotAccountPool({ conflictingUsername = null, conflictingEmail = null, retiredBots = [] } = {}) {
     const users = new Map();
     const transactions = new Map();
     const calls = [];
     let nextId = 100;
+
+    // Retired bot accounts already on the books: seeded stake plus winnings.
+    for (const username of retiredBots) {
+        const id = nextId++;
+        users.set(username, {
+            id,
+            username,
+            email: botEmail(username),
+            password_hash: '$server-only$legacy',
+            is_bot: true,
+            previous_usernames: [],
+        });
+        transactions.set(botStartingBalanceKey(username), {
+            userId: id, amount: BOT_STARTING_TOKENS, description: 'New bot starting balance', idempotencyKey: botStartingBalanceKey(username),
+        });
+        transactions.set(`winnings:${username}`, {
+            userId: id, amount: 100, description: 'winnings', idempotencyKey: `winnings:${username}`,
+        });
+    }
 
     if (conflictingUsername) {
         users.set(conflictingUsername, {
@@ -68,6 +88,32 @@ function makeBotAccountPool({ conflictingUsername = null, conflictingEmail = nul
                 };
                 users.set(username, user);
                 return { rows: [{ id: user.id }], rowCount: 1 };
+            }
+            if (text.startsWith('SELECT id, is_bot, COALESCE(previous_usernames')) {
+                const user = users.get(params[0]);
+                return {
+                    rows: user ? [{ id: user.id, is_bot: user.is_bot, previous_usernames: user.previous_usernames || [] }] : [],
+                    rowCount: user ? 1 : 0,
+                };
+            }
+            if (text.startsWith('UPDATE users') && text.includes('SET username = $1')) {
+                const [newName, history, id] = params;
+                const user = [...users.values()].find(candidate => candidate.id === id);
+                assert.ok(user?.is_bot, 'only a retired bot account may be renamed');
+                users.delete(user.username);
+                Object.assign(user, { username: newName, previous_usernames: history });
+                users.set(newName, user);
+                return { rows: [], rowCount: 1 };
+            }
+            if (text.startsWith('UPDATE transactions SET idempotency_key')) {
+                const [newKey, oldKey] = params;
+                const transaction = transactions.get(oldKey);
+                if (transaction) {
+                    transactions.delete(oldKey);
+                    transaction.idempotencyKey = newKey;
+                    transactions.set(newKey, transaction);
+                }
+                return { rows: [], rowCount: transaction ? 1 : 0 };
             }
             if (text.startsWith('UPDATE users')) {
                 const [email, passwordHash, id] = params;
@@ -213,6 +259,42 @@ async function runBotAccountTests() {
     assert.ok(emailConflict.calls.some(({ text }) => text === 'ROLLBACK'));
     assert.ok(!emailConflict.calls.some(({ text }) => text === 'COMMIT'));
     assert.strictEqual(emailConflict.users.size, 1, 'email conflicts never create or convert an account');
+
+    // Roster replacement (Sept 7 2026): a retired account is renamed in place
+    // at boot — same id, tokens and history, the old name kept in
+    // previous_usernames, no second starting stake — and it is idempotent.
+    assert.deepStrictEqual(BOT_RENAMES, { 'Grandpa George': 'Lucky Lou', 'Courtney M.': 'Mabel Moon' });
+    for (const newName of Object.keys(BOT_RENAMES)) {
+        assert.ok(BOT_NAMES.includes(newName), `${newName} is on the canonical roster`);
+        assert.ok(!BOT_NAMES.includes(BOT_RENAMES[newName]), `${BOT_RENAMES[newName]} is off it`);
+    }
+    const inherited = makeBotAccountPool({ retiredBots: Object.values(BOT_RENAMES) });
+    const luckyId = inherited.users.get('Lucky Lou').id;
+    const mabelId = inherited.users.get('Mabel Moon').id;
+    const inheritedProfiles = await ensureBotAccounts(inherited.pool);
+    assert.strictEqual(inherited.users.size, BOT_NAMES.length, 'renamed accounts are reused, never duplicated');
+    assert.ok(!inherited.users.has('Lucky Lou') && !inherited.users.has('Mabel Moon'));
+    const george = inherited.users.get('Grandpa George');
+    const courtneyM = inherited.users.get('Courtney M.');
+    assert.strictEqual(george.id, luckyId);
+    assert.strictEqual(courtneyM.id, mabelId);
+    assert.deepStrictEqual(george.previous_usernames, ['Lucky Lou']);
+    assert.deepStrictEqual(courtneyM.previous_usernames, ['Mabel Moon']);
+    assert.strictEqual(george.email, botEmail('Grandpa George'), 'the reserved email follows the new name');
+    assert.deepStrictEqual(
+        inheritedProfiles.map(({ username }) => username),
+        BOT_NAMES,
+        'the renamed roster still loads in canonical order',
+    );
+    const georgeProfile = inheritedProfiles.find(profile => profile.username === 'Grandpa George');
+    assert.strictEqual(georgeProfile.id, luckyId);
+    assert.strictEqual(georgeProfile.tokens, BOT_STARTING_TOKENS + 100, 'winnings carry over and no second stake is granted');
+    assert.strictEqual(inherited.transactions.size, BOT_NAMES.length + 2, 'one stake per bot plus the two inherited winnings rows');
+    assert.ok(inherited.transactions.has(botStartingBalanceKey('Grandpa George')), 'the stake marker moved to the new name');
+    assert.ok(!inherited.transactions.has(botStartingBalanceKey('Lucky Lou')));
+    const restartProfiles = await ensureBotAccounts(inherited.pool);
+    assert.deepStrictEqual(restartProfiles, inheritedProfiles, 'a restart after the rename is a no-op');
+    assert.strictEqual(inherited.transactions.size, BOT_NAMES.length + 2);
 
     console.log('Persistent bot-account tests passed.');
 }

@@ -1,5 +1,8 @@
 const crypto = require('crypto');
+const { nextUsernameHistory } = require('./accountIdentity');
 
+// The canonical roster, in canonical order — positions are stable across
+// renames so loadBotAccounts' order check keeps holding.
 const BOT_NAMES = Object.freeze([
     'Mike Knight',
     'Grandma Joe',
@@ -9,10 +12,10 @@ const BOT_NAMES = Object.freeze([
     'Cliff',
     'Ace McGraw',
     'Ruby Rook',
-    'Lucky Lou',
+    'Grandpa George',
     'Dolly Deal',
     'Jack Highwater',
-    'Mabel Moon',
+    'Courtney M.',
     'Buck Wilder',
     'Frankie Four',
     'Doc Shuffle',
@@ -22,6 +25,16 @@ const BOT_NAMES = Object.freeze([
     'Benny Bidwell',
     'Rosie Rounds',
 ]);
+
+// Roster replacements (new name -> the retired account it inherits). At
+// boot, a missing new name whose former account still exists is RENAMED in
+// place — tokens, game history, and leaderboard record carry over, and the
+// former name lands in previous_usernames for gameVoid matching. Sept 7 2026:
+// the two raven seats took over Lucky Lou and Mabel Moon (Matt's call).
+const BOT_RENAMES = Object.freeze({
+    'Grandpa George': 'Lucky Lou',
+    'Courtney M.': 'Mabel Moon',
+});
 
 const BOT_STARTING_TOKENS = 8;
 const BOT_SEED_ADVISORY_LOCK_ID = 739126441;
@@ -107,6 +120,35 @@ async function loadBotBalances(queryable, botIds) {
         .filter(([id, tokens]) => requestedIds.has(id) && Number.isFinite(tokens)));
 }
 
+// Move a retired bot account under its replacement name. Returns the row in
+// the shape the seed loop expects ({ id, is_bot }), or undefined when the
+// former account is not there to inherit (a fresh database simply seeds the
+// new name). The starting-balance ledger marker follows the account so the
+// seed below does not grant a second stake.
+async function renameRetiredBot(client, formerName, newName) {
+    const formerResult = await client.query(
+        `SELECT id, is_bot, COALESCE(previous_usernames, ARRAY[]::text[]) AS previous_usernames
+         FROM users WHERE username = $1 FOR UPDATE`,
+        [formerName],
+    );
+    const former = formerResult.rows[0];
+    if (!former || former.is_bot !== true) return undefined;
+
+    const history = nextUsernameHistory(former.previous_usernames, formerName, newName);
+    await client.query(
+        `UPDATE users
+         SET username = $1, username_changed_at = NOW(), previous_usernames = $2::text[]
+         WHERE id = $3 AND is_bot = TRUE`,
+        [newName, history, former.id],
+    );
+    await client.query(
+        'UPDATE transactions SET idempotency_key = $1 WHERE idempotency_key = $2',
+        [botStartingBalanceKey(newName), botStartingBalanceKey(formerName)],
+    );
+    console.log(`[BOTS] Renamed retired bot "${formerName}" (id ${former.id}) to "${newName}".`);
+    return { id: former.id, is_bot: true };
+}
+
 async function ensureBotAccounts(pool) {
     if (!pool || typeof pool.connect !== 'function') {
         throw new TypeError('A database pool with connect() is required.');
@@ -133,7 +175,11 @@ async function ensureBotAccounts(pool) {
                 'SELECT id, is_bot FROM users WHERE username = $1 FOR UPDATE',
                 [username],
             );
-            const existing = existingResult.rows[0];
+            let existing = existingResult.rows[0];
+
+            if (!existing && BOT_RENAMES[username]) {
+                existing = await renameRetiredBot(client, BOT_RENAMES[username], username);
+            }
 
             if (existing && existing.is_bot !== true) {
                 const error = new Error(
@@ -247,6 +293,7 @@ async function ensureBotAccounts(pool) {
 
 module.exports = {
     BOT_NAMES,
+    BOT_RENAMES,
     BOT_SEED_ADVISORY_LOCK_ID,
     BOT_STARTING_TOKENS,
     botEmail,

@@ -44,8 +44,9 @@ const SEAT_POOL = {
     flytrap: ['Mike Knight', 'Dolly Deal', 'Rosie Rounds'],
     coyote: ['Coyote A', 'Coyote B', 'Coyote C'],
     sphinx: ['Sphinx A', 'Sphinx B', 'Sphinx C'],
+    raven: ['Raven A', 'Raven B', 'Raven C'],
 };
-for (const brain of ['classic', 'coyote', 'sphinx']) {
+for (const brain of ['classic', 'coyote', 'sphinx', 'raven']) {
     SEAT_POOL[brain].forEach(name => registerBrainProfile(name, brain));
 }
 const seats = (...brains) => brains.map((brain, i) => SEAT_POOL[brain][i % 3]);
@@ -224,6 +225,18 @@ if (require.main === module) {
         ['sphinx vs counting vs flytrap', seats('sphinx', 'counting', 'flytrap')],
         ['sphinx vs coyote vs classic', seats('sphinx', 'coyote', 'classic')],
         ['sphinx vs coyote vs flytrap', seats('sphinx', 'coyote', 'flytrap')],
+        // raven audition (Sept 2026): one seat against the field, then head-to-head
+        // with the reigning sim champion.
+        ['1 raven vs 2 classic', seats('raven', 'classic', 'classic')],
+        ['raven vs counting vs flytrap', seats('raven', 'counting', 'flytrap')],
+        ['raven vs sphinx vs coyote', seats('raven', 'sphinx', 'coyote')],
+        ['raven vs sphinx vs flytrap', seats('raven', 'sphinx', 'flytrap')],
+        ['1 raven vs 2 sphinx', seats('raven', 'sphinx', 'sphinx')],
+        ['2 raven vs 1 sphinx', seats('raven', 'raven', 'sphinx')],
+        // Defense isolation pair: same two partners, swap only the third seat,
+        // and compare the set rate when coyote (or counting) bids.
+        ['raven vs counting vs coyote', seats('raven', 'counting', 'coyote')],
+        ['sphinx vs counting vs coyote', seats('sphinx', 'counting', 'coyote')],
     ];
     for (const [label, seatNames] of matchups) {
         if (filter && !label.toLowerCase().includes(filter)) continue;
