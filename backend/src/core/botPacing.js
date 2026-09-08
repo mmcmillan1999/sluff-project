@@ -3,8 +3,11 @@
 // How long a bot "thinks" before its card lands. Two profiles, resolved per
 // bot name exactly like the brains are:
 //
-//   fixed — the historical cadence: 1.2 s per card (Courtney Sr. 2.4 s),
-//           scaled by the table's pace multiplier on learner tables.
+//   fixed — the historical cadence: 1.2 s per card, scaled by the table's
+//           pace multiplier on learner tables. One seat is deliberately
+//           slower (2.4 s, and slower bids and round-end triggers in
+//           GameService): the persona that was Courtney Sr. and is now
+//           Stephen Richins.
 //   human — a think time drawn from a log-normal fitted, trick by trick, to
 //           MrNoobCrusher's server-measured play timings (play_timings,
 //           Aug 5 – Sept 7 2026: 2,028 card plays, the slow tail past 12 s
@@ -40,7 +43,11 @@ const HUMAN_TOURNAMENT_MAX_MS = 8_000;
 const FORCED_PLAY_FACTOR = 0.7;
 
 const FIXED_PLAY_MS = 1_200;
-const FIXED_PLAY_MS_COURTNEY = 2_400;
+const FIXED_PLAY_MS_DELIBERATE = 2_400;
+
+// The one bot that takes its time everywhere (cards, bids, round-end).
+const DELIBERATE_BOT = 'Stephen Richins';
+const isDeliberateBot = (botName) => botName === DELIBERATE_BOT;
 
 // Bots not listed here keep the fixed cadence.
 const PACING_PROFILES = Object.freeze({
@@ -50,7 +57,7 @@ const PACING_PROFILES = Object.freeze({
 
 const pacingProfileFor = (botName) => PACING_PROFILES[botName] || 'fixed';
 
-const fixedPlayMs = (botName) => (botName === 'Courtney Sr.' ? FIXED_PLAY_MS_COURTNEY : FIXED_PLAY_MS);
+const fixedPlayMs = (botName) => (isDeliberateBot(botName) ? FIXED_PLAY_MS_DELIBERATE : FIXED_PLAY_MS);
 
 // Standard normal via Box–Muller.
 const gaussian = (rng) => {
@@ -106,7 +113,9 @@ module.exports = {
     HUMAN_TOURNAMENT_MAX_MS,
     FORCED_PLAY_FACTOR,
     FIXED_PLAY_MS,
-    FIXED_PLAY_MS_COURTNEY,
+    FIXED_PLAY_MS_DELIBERATE,
+    DELIBERATE_BOT,
+    isDeliberateBot,
     pacingProfileFor,
     fixedPlayMs,
     sampleHumanThinkMs,

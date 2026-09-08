@@ -107,8 +107,9 @@ function testUsernameValidation() {
     assert.ok(validateUsername('Ok_Name-9').ok);
 
     // A validator that refuses names the product itself ships is the
-    // validator's bug. The app has a bot called "Courtney Sr." and a player
-    // with 148 games called "Courtney Jr.", and the first draft rejected both.
+    // validator's bug. The app shipped a bot called "Courtney Sr." (Stephen
+    // Richins since Sept 2026) and a player with 148 games called
+    // "Courtney Jr.", and the first draft rejected both.
     assert.ok(validateUsername('Courtney Sr.').ok, 'abbreviating period');
     assert.ok(validateUsername('Courtney Jr.').ok);
     assert.ok(validateUsername("O'Brien").ok, 'apostrophe in a surname');

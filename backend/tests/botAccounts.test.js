@@ -263,7 +263,7 @@ async function runBotAccountTests() {
     // Roster replacement (Sept 7 2026): a retired account is renamed in place
     // at boot — same id, tokens and history, the old name kept in
     // previous_usernames, no second starting stake — and it is idempotent.
-    assert.deepStrictEqual(BOT_RENAMES, { 'Grandpa George': 'Lucky Lou', 'Courtney M.': 'Mabel Moon' });
+    assert.deepStrictEqual(BOT_RENAMES, { 'Grandpa George': 'Lucky Lou', 'Courtney M.': 'Mabel Moon', 'Stephen Richins': 'Courtney Sr.' });
     for (const newName of Object.keys(BOT_RENAMES)) {
         assert.ok(BOT_NAMES.includes(newName), `${newName} is on the canonical roster`);
         assert.ok(!BOT_NAMES.includes(BOT_RENAMES[newName]), `${BOT_RENAMES[newName]} is off it`);
@@ -271,13 +271,16 @@ async function runBotAccountTests() {
     const inherited = makeBotAccountPool({ retiredBots: Object.values(BOT_RENAMES) });
     const luckyId = inherited.users.get('Lucky Lou').id;
     const mabelId = inherited.users.get('Mabel Moon').id;
+    const courtneySrId = inherited.users.get('Courtney Sr.').id;
     const inheritedProfiles = await ensureBotAccounts(inherited.pool);
     assert.strictEqual(inherited.users.size, BOT_NAMES.length, 'renamed accounts are reused, never duplicated');
-    assert.ok(!inherited.users.has('Lucky Lou') && !inherited.users.has('Mabel Moon'));
+    assert.ok(!inherited.users.has('Lucky Lou') && !inherited.users.has('Mabel Moon') && !inherited.users.has('Courtney Sr.'));
     const george = inherited.users.get('Grandpa George');
     const courtneyM = inherited.users.get('Courtney M.');
     assert.strictEqual(george.id, luckyId);
     assert.strictEqual(courtneyM.id, mabelId);
+    assert.strictEqual(inherited.users.get('Stephen Richins').id, courtneySrId);
+    assert.deepStrictEqual(inherited.users.get('Stephen Richins').previous_usernames, ['Courtney Sr.']);
     assert.deepStrictEqual(george.previous_usernames, ['Lucky Lou']);
     assert.deepStrictEqual(courtneyM.previous_usernames, ['Mabel Moon']);
     assert.strictEqual(george.email, botEmail('Grandpa George'), 'the reserved email follows the new name');
@@ -289,12 +292,12 @@ async function runBotAccountTests() {
     const georgeProfile = inheritedProfiles.find(profile => profile.username === 'Grandpa George');
     assert.strictEqual(georgeProfile.id, luckyId);
     assert.strictEqual(georgeProfile.tokens, BOT_STARTING_TOKENS + 100, 'winnings carry over and no second stake is granted');
-    assert.strictEqual(inherited.transactions.size, BOT_NAMES.length + 2, 'one stake per bot plus the two inherited winnings rows');
+    assert.strictEqual(inherited.transactions.size, BOT_NAMES.length + 3, 'one stake per bot plus the three inherited winnings rows');
     assert.ok(inherited.transactions.has(botStartingBalanceKey('Grandpa George')), 'the stake marker moved to the new name');
     assert.ok(!inherited.transactions.has(botStartingBalanceKey('Lucky Lou')));
     const restartProfiles = await ensureBotAccounts(inherited.pool);
     assert.deepStrictEqual(restartProfiles, inheritedProfiles, 'a restart after the rename is a no-op');
-    assert.strictEqual(inherited.transactions.size, BOT_NAMES.length + 2);
+    assert.strictEqual(inherited.transactions.size, BOT_NAMES.length + 3);
 
     console.log('Persistent bot-account tests passed.');
 }

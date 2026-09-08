@@ -25,7 +25,8 @@ async function runBotPacingTests() {
     {
         assert.strictEqual(pacing.pacingProfileFor('Grandpa George'), 'human');
         assert.strictEqual(pacing.pacingProfileFor('Courtney M.'), 'human');
-        assert.strictEqual(pacing.pacingProfileFor('Courtney Sr.'), 'fixed');
+        assert.strictEqual(pacing.pacingProfileFor('Stephen Richins'), 'fixed');
+        assert.strictEqual(pacing.DELIBERATE_BOT, 'Stephen Richins');
         assert.strictEqual(pacing.pacingProfileFor('Kimba'), 'fixed');
         assert.strictEqual(pacing.pacingProfileFor('Nobody'), 'fixed');
         pass('Only the two raven seats carry the human profile.');
@@ -35,10 +36,11 @@ async function runBotPacingTests() {
     {
         assert.strictEqual(pacing.botPlayDelay('Kimba', { pace: 1 }), 1200);
         assert.strictEqual(pacing.botPlayDelay('Kimba', { pace: 3 }), 3600);
-        assert.strictEqual(pacing.botPlayDelay('Courtney Sr.', { pace: 1 }), 2400);
-        assert.strictEqual(pacing.botPlayDelay('Courtney Sr.', { pace: 3 }), 7200);
+        assert.strictEqual(pacing.botPlayDelay('Stephen Richins', { pace: 1 }), 2400);
+        assert.strictEqual(pacing.botPlayDelay('Stephen Richins', { pace: 3 }), 7200);
+        assert.strictEqual(pacing.botPlayDelay('Courtney Sr.', { pace: 1 }), 1200, 'the retired name carries no persona');
         assert.strictEqual(pacing.botPlayDelay('Kimba', { pace: 0.5 }), 1200, 'pace below 1 never speeds a bot up');
-        pass('Fixed profile: 1.2 s (Courtney Sr. 2.4 s), times the learner pace.');
+        pass('Fixed profile: 1.2 s (Stephen Richins 2.4 s), times the learner pace.');
     }
 
     // 3) Human profile reproduces the fitted sample: overall median near

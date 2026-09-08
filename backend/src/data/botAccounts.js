@@ -8,7 +8,7 @@ const BOT_NAMES = Object.freeze([
     'Grandma Joe',
     'Grampa Blane',
     'Kimba',
-    'Courtney Sr.',
+    'Stephen Richins',
     'Cliff',
     'Ace McGraw',
     'Ruby Rook',
@@ -30,10 +30,12 @@ const BOT_NAMES = Object.freeze([
 // boot, a missing new name whose former account still exists is RENAMED in
 // place — tokens, game history, and leaderboard record carry over, and the
 // former name lands in previous_usernames for gameVoid matching. Sept 7 2026:
-// the two raven seats took over Lucky Lou and Mabel Moon (Matt's call).
+// the two raven seats took over Lucky Lou and Mabel Moon, and Courtney Sr.
+// became Stephen Richins (Matt's calls).
 const BOT_RENAMES = Object.freeze({
     'Grandpa George': 'Lucky Lou',
     'Courtney M.': 'Mabel Moon',
+    'Stephen Richins': 'Courtney Sr.',
 });
 
 const BOT_STARTING_TOKENS = 8;

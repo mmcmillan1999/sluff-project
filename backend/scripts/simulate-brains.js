@@ -40,7 +40,7 @@ const MAX_ROUNDS_PER_GAME = 300;
 // names registered here — same mechanism the sphinx/coyote auditions used.
 const SEAT_POOL = {
     classic: ['Classic A', 'Classic B', 'Classic C'],
-    counting: ['Kimba', 'Grampa Blane', 'Courtney Sr.'],
+    counting: ['Kimba', 'Grampa Blane', 'Stephen Richins'],
     flytrap: ['Mike Knight', 'Dolly Deal', 'Rosie Rounds'],
     coyote: ['Coyote A', 'Coyote B', 'Coyote C'],
     sphinx: ['Sphinx A', 'Sphinx B', 'Sphinx C'],

@@ -15,7 +15,7 @@
     } = require('../core/constants');
     const { BRAINS } = require('../core/bot-brains');
     const { getLegalMoves } = require('../core/legalMoves');
-const { botPlayDelay } = require('../core/botPacing');
+const { botPlayDelay, isDeliberateBot } = require('../core/botPacing');
     const AdaptiveInsuranceStrategy = require('../core/bot-strategies/AdaptiveInsuranceStrategy');
     const MarketInsuranceStrategy = require('../core/bot-strategies/MarketInsuranceStrategy');
     const { serializeEngineForResume, restoreEngineFromResume } = require('../serialization/gameResume');
@@ -2508,7 +2508,9 @@ const { botPlayDelay } = require('../core/botPacing');
         
                 const bot = engine.bots[botId];
                 const botUserId = bot.userId;
-                const isCourtney = bot.playerName === "Courtney Sr.";
+                // The deliberate persona (core/botPacing.js) bids and
+                // deals slower too, not just its card plays.
+                const isCourtney = isDeliberateBot(bot.playerName);
                 // Learner tables run at half speed so new players can read
                 // the felt (and the coach) between plays.
                 const pace = Number(engine.botPaceMultiplier) > 1 ? Number(engine.botPaceMultiplier) : 1;

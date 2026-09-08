@@ -47,7 +47,7 @@ const DEFAULT_BRAIN = 'counting';
 const BRAIN_PROFILES = {
     // counting
     'Grampa Blane': 'counting',
-    'Courtney Sr.': 'counting',
+    'Stephen Richins': 'counting', // was Courtney Sr. until Sept 7 2026
     'Kimba': 'counting',
     'Ace McGraw': 'counting',
     'Grandma Joe': 'counting',
