@@ -568,6 +568,21 @@ export const sendLobbyChatMessage = async (message) => {
 
 // --- Quick Tips Service Calls ---
 
+// Public (no session): what a shared tournament link is about, for the
+// landing page's invite card. Null when the event is gone or the backend is
+// unreachable — the page then falls back to the generic invite copy.
+export const getTournamentPreview = async (tournamentId) => {
+    const id = Number(tournamentId);
+    if (!Number.isSafeInteger(id) || id < 1) return null;
+    try {
+        const response = await fetch(`${SERVER_URL}/api/tournaments/${id}/preview`);
+        if (!response.ok) return null;
+        return await response.json();
+    } catch {
+        return null;
+    }
+};
+
 export const getSeenTips = async () => {
     const response = await configuredFetch('/api/tips/seen', 'GET');
     const data = await response.json();

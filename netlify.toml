@@ -2,6 +2,9 @@
   base = "frontend"
   command = "npm run build"
   publish = "build"
+  # Link previews for /tournament/* and /join/* (share-preview.js declares
+  # its own paths). Relative to the base directory.
+  edge_functions = "netlify/edge-functions"
 
 [build.environment]
   NODE_VERSION = "22"

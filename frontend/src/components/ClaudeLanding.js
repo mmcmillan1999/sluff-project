@@ -1,6 +1,6 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import LandingCardPhysics from '../utils/LandingCardPhysics.js';
-import { trackEvent } from '../services/api.js';
+import { getTournamentPreview, trackEvent } from '../services/api.js';
 import './ClaudeLanding.css';
 
 const VENUES = [
@@ -91,11 +91,47 @@ const HAND_CARDS = [
     { rank: 'Q', suit: '♣', red: false },
 ];
 
+const formatTokens = (value) => {
+    const n = Number(value) || 0;
+    return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0$/, '');
+};
+
+// What a shared tournament link is about, in one line under its name.
+const describePreview = (preview) => {
+    if (!preview) return '';
+    const stakes = `${formatTokens(preview.buyInTokens)} token buy-in · ${preview.startingStack} chips`;
+    if (preview.status === 'registering') {
+        const start = preview.startRule === 'when_full'
+            ? 'starts when every seat is taken'
+            : (preview.startRule === 'at_time' && preview.startsAt
+                ? `starts ${new Date(preview.startsAt).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`
+                : `starts when ${preview.creatorName || 'the host'} says go`);
+        return `${preview.creatorName ? `${preview.creatorName} is hosting · ` : ''}${stakes} · ${preview.seatsTaken} of ${preview.maxSeats} seats taken · ${start}.`;
+    }
+    if (preview.status === 'running') return `Under way · round ${preview.round} · ${preview.playersLeft} still in · ${stakes}.`;
+    if (preview.status === 'complete') return `Finished after ${preview.round} rounds · ${stakes}.`;
+    return `${stakes}.`;
+};
+
 const ClaudeLanding = ({ inviteTableId, inviteTournamentId = null, onRegister, onLogin, onNavigate }) => {
     const invitedToTournament = !inviteTableId && Boolean(inviteTournamentId);
     const invited = Boolean(inviteTableId) || invitedToTournament;
+    // The event behind a tournament link, read without a session so the
+    // invite card can name it. Null until it arrives (or if it is gone).
+    const [preview, setPreview] = useState(null);
+    useEffect(() => {
+        if (!invitedToTournament) return undefined;
+        let cancelled = false;
+        getTournamentPreview(inviteTournamentId).then((result) => {
+            if (!cancelled && result && result.name) setPreview(result);
+        });
+        return () => { cancelled = true; };
+    }, [invitedToTournament, inviteTournamentId]);
+    const inviteName = preview?.name ? preview.name : null;
     const primaryCta = invited
-        ? (invitedToTournament ? 'Join your friend’s tournament' : 'Join your friend’s table')
+        ? (invitedToTournament
+            ? (inviteName ? `Join ${inviteName}` : 'Join your friend’s tournament')
+            : 'Join your friend’s table')
         : 'Play free now';
     const heroHandRef = useRef(null);
 
@@ -130,48 +166,54 @@ const ClaudeLanding = ({ inviteTableId, inviteTournamentId = null, onRegister, o
             </header>
 
             <main id="cl-main">
-                <section className="cl-hero" aria-labelledby="cl-hero-title">
+                <section className="cl-hero cl-hero-mark" aria-labelledby="cl-hero-title">
                     <div className="cl-hero-inner">
-                        <div className="cl-hero-copy">
-                            {invited ? (
-                                <p className="cl-invite-banner" role="status">
-                                    <strong>You’re invited.</strong>{' '}
+                        {invited && (
+                            <div className="cl-invite-card" role="status">
+                                <p className="cl-invite-eyebrow">You’re invited</p>
+                                <h2 className="cl-invite-title">
                                     {invitedToTournament
-                                        ? 'A friend wants you in their Sluff tournament — create a free account and register.'
+                                        ? (inviteName || 'A Sluff tournament')
+                                        : 'A seat at a Sluff table'}
+                                </h2>
+                                <p className="cl-invite-meta">
+                                    {invitedToTournament
+                                        ? (preview
+                                            ? describePreview(preview)
+                                            : 'A friend wants you in their Sluff tournament — create a free account and register.')
                                         : 'A friend saved you a seat at their Sluff table — create a free account and jump in.'}
                                 </p>
-                            ) : (
-                                <p className="cl-eyebrow">Free to play · Alpha Season 2 is live</p>
-                            )}
-                            <h1 id="cl-hero-title" className="cl-hero-title">
-                                The card game you don’t play.
-                                <span className="cl-hero-title-accent"> You throw it.</span>
-                            </h1>
-                            <p className="cl-hero-sub">
-                                Sluff is a fast four-player game of bidding, trump, and table talk
-                                — passed down through a Utah family for generations, now live
-                                online with real card-flinging physics.
-                            </p>
-                            <div className="cl-cta-row">
-                                <button type="button" className="cl-btn cl-btn-primary" onClick={handleRegisterCta}>
-                                    {primaryCta}
-                                </button>
-                                <button type="button" className="cl-btn cl-btn-secondary" onClick={onLogin}>
-                                    I have an account
-                                </button>
                             </div>
-                            <ul className="cl-trust-row" aria-label="Why it costs you nothing to try">
-                                <li>No download</li>
-                                <li>Free tokens to start</li>
-                                <li>A game in under a minute</li>
-                            </ul>
+                        )}
+
+                        <div className="cl-mark">
+                            <h1 id="cl-hero-title" className="cl-mark-title">
+                                <img className="cl-mark-logo" src="/SluffLogo.png" alt="Sluff" />
+                            </h1>
+                            <p className="cl-mark-line">
+                                The card game you <em>throw</em>.
+                            </p>
+                            <p className="cl-mark-sub">
+                                A fast game of bidding, trump and table talk, passed down through a
+                                Utah family for generations — now live on your phone.
+                            </p>
                         </div>
 
+                        <div className="cl-cta-row">
+                            <button type="button" className="cl-btn cl-btn-primary" onClick={handleRegisterCta}>
+                                {primaryCta}
+                            </button>
+                            <button type="button" className="cl-btn cl-btn-secondary" onClick={onLogin}>
+                                I have an account
+                            </button>
+                        </div>
+                        <ul className="cl-trust-row" aria-label="Why it costs you nothing to try">
+                            <li>No download</li>
+                            <li>Free tokens to start</li>
+                            <li>A game in under a minute</li>
+                        </ul>
+
                         <div className="cl-hero-visual" aria-hidden="true">
-                            <div className="cl-flying-card">
-                                <span className="cl-card-corner cl-card-red">J<em>♥</em></span>
-                                <span className="cl-card-pip cl-card-red">♥</span>
-                            </div>
                             <div className="cl-hero-hand" ref={heroHandRef}>
                                 {HAND_CARDS.map((card, index) => (
                                     <div key={card.rank + card.suit} className="cl-hand-slot">
@@ -188,6 +230,8 @@ const ClaudeLanding = ({ inviteTableId, inviteTournamentId = null, onRegister, o
                             </div>
                             <p className="cl-hand-hint">Go on — grab a card and throw it.</p>
                         </div>
+
+                        <p className="cl-tagline-footnote">Pick your card. <em>Send it.</em></p>
                     </div>
                 </section>
 

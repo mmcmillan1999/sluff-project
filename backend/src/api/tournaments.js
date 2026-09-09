@@ -59,6 +59,32 @@ const SEASON_BY_KEY_QUERY = `
     LIMIT 1
 `;
 
+// Public, unauthenticated: what a shared link needs to preview an event —
+// name, host, stakes, seats and where it stands. No player names beyond the
+// host, no house-player marker (nothing here says who is a bot).
+const PREVIEW_QUERY = `
+    SELECT
+        t.tournament_id,
+        t.name,
+        t.venue,
+        t.status,
+        t.buy_in_cents,
+        t.starting_stack,
+        t.max_seats,
+        t.start_rule,
+        t.starts_at,
+        t.current_round,
+        t.ended_at,
+        u.username AS creator_name,
+        (SELECT COUNT(*)::integer FROM tournament_entries e
+          WHERE e.tournament_id = t.tournament_id AND e.status <> 'withdrawn') AS seats_taken,
+        (SELECT COUNT(*)::integer FROM tournament_entries e
+          WHERE e.tournament_id = t.tournament_id AND e.status = 'playing') AS players_left
+    FROM tournaments t
+    JOIN users u ON u.id = t.creator_user_id
+    WHERE t.tournament_id = $1
+`;
+
 const MAX_RECENT = 50;
 const DEFAULT_RECENT = 10;
 
@@ -113,6 +139,25 @@ function publicTournament(row) {
             username: entry.username,
             prizeTokens: tokens(entry.prizeCents),
         })),
+    };
+}
+
+function publicPreview(row) {
+    return {
+        id: Number(row.tournament_id),
+        name: row.name,
+        venue: row.venue,
+        status: row.status,
+        buyInTokens: tokens(row.buy_in_cents),
+        startingStack: Number(row.starting_stack),
+        maxSeats: Number(row.max_seats),
+        seatsTaken: Number(row.seats_taken) || 0,
+        playersLeft: Number(row.players_left) || 0,
+        startRule: row.start_rule,
+        startsAt: row.starts_at ? new Date(row.starts_at).toISOString() : null,
+        round: Number(row.current_round) || 0,
+        endedAt: row.ended_at ? new Date(row.ended_at).toISOString() : null,
+        creatorName: row.creator_name,
     };
 }
 
@@ -177,9 +222,29 @@ module.exports = function createTournamentRoutes(pool, jwt) {
         }
     });
 
+    // Link previews (netlify/edge-functions/share-preview.js) and the landing
+    // page's invite card read this without a session, so a friend who has
+    // never signed in still sees which event they were invited to.
+    router.get('/:id/preview', async (req, res) => {
+        const id = Number(req.params.id);
+        if (!Number.isSafeInteger(id) || id < 1) {
+            return res.status(400).json({ message: 'Tournament id must be a positive integer.' });
+        }
+        res.set('Cache-Control', 'public, max-age=30');
+        try {
+            const { rows } = await pool.query(PREVIEW_QUERY, [id]);
+            if (!rows || rows.length === 0) return res.status(404).json({ message: 'Tournament not found.' });
+            return res.json(publicPreview(rows[0]));
+        } catch (error) {
+            return failure(res, error, 'Unable to load the tournament preview.');
+        }
+    });
+
     return router;
 };
 
+module.exports.PREVIEW_QUERY = PREVIEW_QUERY;
+module.exports.publicPreview = publicPreview;
 module.exports.SCOREBOARD_QUERY = SCOREBOARD_QUERY;
 module.exports.RECENT_TOURNAMENTS_QUERY = RECENT_TOURNAMENTS_QUERY;
 module.exports.SEASON_BY_KEY_QUERY = SEASON_BY_KEY_QUERY;

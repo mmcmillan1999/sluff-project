@@ -77,7 +77,9 @@ describe('App Component and Game Flow', () => {
     test('renders the public Sluff front door on initial load without a token', () => {
         Storage.prototype.getItem.mockReturnValueOnce(null);
         render(<App />);
-        expect(screen.getByRole('heading', { name: /the card game you don’t play\. you throw it\./i })).toBeInTheDocument();
+        // The front door leads with the SLUFF wordmark (Sept 2026); the tagline is a footnote.
+        expect(screen.getByRole('heading', { level: 1, name: 'Sluff' })).toBeInTheDocument();
+        expect(screen.getByText(/Pick your card\./)).toHaveClass('cl-tagline-footnote');
         expect(screen.getAllByRole('button', { name: /play free now/i })).toHaveLength(2);
     });
     

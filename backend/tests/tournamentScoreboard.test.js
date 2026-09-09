@@ -62,6 +62,16 @@ function makePool() {
                     }],
                 };
             }
+            if (text === createTournamentRoutes.PREVIEW_QUERY) {
+                if (params[0] !== 17) return { rows: [] };
+                return {
+                    rows: [{
+                        tournament_id: 17, name: 'Labor Day', venue: 'tournament-stage', status: 'registering',
+                        buy_in_cents: 100, starting_stack: 120, max_seats: 15, start_rule: 'creator', starts_at: null,
+                        current_round: 0, ended_at: null, creator_name: 'Matt', seats_taken: 9, players_left: 0,
+                    }],
+                };
+            }
             throw new Error(`Unexpected query: ${text}`);
         },
     };
@@ -138,6 +148,20 @@ async function runTournamentScoreboardTests() {
 
         assert.deepEqual(createTournamentRoutes.rankRows([]), []);
         pass('An empty season is an empty board, not an error.');
+
+        const preview = await getJson(`${base}/17/preview`);
+        assert.equal(preview.response.status, 200, 'the preview needs no session');
+        assert.equal(preview.response.headers.get('cache-control'), 'public, max-age=30');
+        assert.deepEqual(preview.body, {
+            id: 17, name: 'Labor Day', venue: 'tournament-stage', status: 'registering', buyInTokens: '1.00',
+            startingStack: 120, maxSeats: 15, seatsTaken: 9, playersLeft: 0, startRule: 'creator', startsAt: null,
+            round: 0, endedAt: null, creatorName: 'Matt',
+        });
+        const unknown = await getJson(`${base}/18/preview`);
+        assert.equal(unknown.response.status, 404);
+        const badId = await getJson(`${base}/abc/preview`);
+        assert.equal(badId.response.status, 400);
+        pass('A shared link can preview the event without signing in: name, host, stakes, seats; unknown ids are 404.');
     } finally {
         await close(server);
         process.env.JWT_SECRET = originalSecret;

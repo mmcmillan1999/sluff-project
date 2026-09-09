@@ -893,3 +893,160 @@
     text-decoration: underline;
     text-underline-offset: 3px;
 }
+
+/* ---------- The mark: SLUFF is the headline ---------- */
+
+.claude-landing .cl-hero-mark {
+    background:
+        radial-gradient(ellipse at 50% 18%, rgba(227, 169, 61, 0.14), transparent 46%),
+        linear-gradient(180deg, rgba(8, 24, 16, 0.9) 0%,
+            rgba(11, 31, 21, 0.8) 50%, rgba(8, 24, 16, 0.97) 100%),
+        url('/assets/themes/academy-green-felt.webp') center / cover no-repeat,
+        var(--cl-night);
+    padding: 28px 20px 40px;
+}
+
+.claude-landing .cl-hero-mark .cl-hero-inner {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 22px;
+}
+
+.claude-landing .cl-mark {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.claude-landing .cl-mark-title {
+    margin: 0;
+    line-height: 0;
+}
+
+.claude-landing .cl-mark-logo {
+    width: min(88vw, 620px);
+    height: auto;
+    filter:
+        drop-shadow(0 22px 44px rgba(0, 0, 0, 0.6))
+        drop-shadow(0 0 34px rgba(227, 169, 61, 0.14));
+    animation: cl-mark-rise 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.claude-landing .cl-mark-line {
+    margin-top: 6px;
+    font-family: Georgia, 'Times New Roman', 'Palatino Linotype', serif;
+    font-size: clamp(1.35rem, 2.4vw + 0.7rem, 2.3rem);
+    color: var(--cl-cream);
+    letter-spacing: 0.005em;
+    animation: cl-mark-rise 0.9s 0.15s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.claude-landing .cl-mark-line em {
+    font-style: italic;
+    color: var(--cl-gold);
+}
+
+.claude-landing .cl-mark-sub {
+    margin-top: 12px;
+    max-width: 36em;
+    font-size: clamp(0.98rem, 0.5vw + 0.85rem, 1.12rem);
+    color: var(--cl-mist);
+    animation: cl-mark-rise 0.9s 0.25s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.claude-landing .cl-hero-mark .cl-cta-row {
+    margin-top: 4px;
+    justify-content: center;
+}
+
+.claude-landing .cl-hero-mark .cl-trust-row {
+    margin-top: 0;
+    justify-content: center;
+}
+
+.claude-landing .cl-hero-mark .cl-hero-visual {
+    margin-top: 12px;
+    min-height: 150px;
+    width: 100%;
+}
+
+.claude-landing .cl-tagline-footnote {
+    margin-top: 30px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(246, 239, 224, 0.14);
+    width: min(100%, 320px);
+    font-size: 0.82rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: rgba(246, 239, 224, 0.5);
+}
+
+.claude-landing .cl-tagline-footnote em {
+    font-style: italic;
+    text-transform: none;
+    letter-spacing: 0.02em;
+    color: var(--cl-gold);
+}
+
+/* The invite card: a shared link lands on the event it points at. */
+.claude-landing .cl-invite-card {
+    width: min(100%, 640px);
+    margin: 0 auto;
+    padding: 16px 20px 18px;
+    border-radius: 16px;
+    text-align: left;
+    background:
+        linear-gradient(160deg, rgba(227, 169, 61, 0.2), rgba(227, 169, 61, 0.06)),
+        rgba(8, 24, 16, 0.55);
+    border: 1px solid rgba(227, 169, 61, 0.65);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), inset 0 1px rgba(255, 255, 255, 0.08);
+    animation: cl-mark-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.claude-landing .cl-invite-eyebrow {
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--cl-gold);
+}
+
+.claude-landing .cl-invite-title {
+    margin-top: 4px;
+    font-size: clamp(1.35rem, 2vw + 0.8rem, 1.9rem);
+    color: var(--cl-cream);
+    text-wrap: balance;
+}
+
+.claude-landing .cl-invite-meta {
+    margin-top: 6px;
+    font-size: 0.95rem;
+    color: var(--cl-mist);
+}
+
+@keyframes cl-mark-rise {
+    from {
+        opacity: 0;
+        translate: 0 18px;
+    }
+
+    to {
+        opacity: 1;
+        translate: 0 0;
+    }
+}
+
+@media (max-width: 600px) {
+    .claude-landing .cl-hero-mark { padding: 18px 16px 32px; }
+    .claude-landing .cl-mark-logo { width: 92vw; }
+    .claude-landing .cl-invite-card { padding: 14px 16px 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .claude-landing .cl-mark-logo,
+    .claude-landing .cl-mark-line,
+    .claude-landing .cl-mark-sub,
+    .claude-landing .cl-invite-card { animation: none; }
+}

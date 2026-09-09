@@ -41,6 +41,7 @@ import GameHeader from './components/GameHeader.js';
 import GameTableView from './components/GameTableView.js';
 import LobbyView from './components/LobbyView.js';
 import TournamentView from './components/tournament/TournamentView';
+import './components/ClaudeLanding.css';
 import OrientationScrim from './components/OrientationScrim.js';
 import SluffIdent from './components/SluffIdent.js';
 import { setCosmetic } from './utils/cosmetics.js';
@@ -568,7 +569,51 @@ if (tourneyMode) {
     );
 }
 
-if (!identMode && !lobbyMode && !tourneyMode) {
+// --- Share-card renders: /harness.html?mode=og&variant=home|tournament|table ---
+// A 1200×630 Open Graph card at the top-left of the page, captured to
+// public/sluff-*-preview-*.png. SLUFF is the headline; the tagline is the
+// footnote. (Chrome screenshot → Pillow crop; see the session notes.)
+const ogMode = params.get('mode') === 'og';
+if (ogMode) {
+    const variant = params.get('variant') || 'home';
+    const ribbon = { tournament: 'You’re invited · Tournament', table: 'A seat is saved for you' }[variant] || null;
+    const line = { tournament: 'Come play in a Sluff tournament.', table: 'Come take your seat at the table.' }[variant]
+        || 'The card game you throw.';
+    Object.assign(document.body.style, { margin: '0', background: '#0b1f15' });
+    ReactDOM.createRoot(document.getElementById('root')).render(
+        <div className="claude-landing" style={{ width: 1200, height: 630, position: 'relative', overflow: 'hidden', background: 'var(--cl-night)' }}>
+            <div style={{
+                position: 'absolute', inset: 0,
+                background: 'radial-gradient(ellipse at 50% 30%, rgba(227,169,61,0.16), transparent 48%), linear-gradient(180deg, rgba(8,24,16,0.88) 0%, rgba(11,31,21,0.78) 50%, rgba(6,18,12,0.97) 100%), url(/assets/themes/academy-green-felt.webp) center / cover no-repeat',
+            }} />
+            {ribbon && (
+                <div style={{
+                    position: 'absolute', top: 44, left: 0, right: 0, textAlign: 'center',
+                    fontFamily: "'Oswald', 'Segoe UI', sans-serif", fontWeight: 600, fontSize: 30, letterSpacing: '0.24em',
+                    textTransform: 'uppercase', color: '#e3a93d',
+                }}>{ribbon}</div>
+            )}
+            <img src="/SluffLogo.png" alt="Sluff" style={{
+                position: 'absolute', left: '50%', top: ribbon ? 84 : 52, transform: 'translateX(-50%)', width: ribbon ? 600 : 640,
+                filter: 'drop-shadow(0 24px 44px rgba(0,0,0,0.6)) drop-shadow(0 0 40px rgba(227,169,61,0.16))',
+            }} />
+            <div style={{
+                position: 'absolute', left: 0, right: 0, top: ribbon ? 496 : 492, textAlign: 'center',
+                fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 42, color: '#f6efe0', letterSpacing: '0.005em',
+            }}>{line}</div>
+            <div style={{
+                position: 'absolute', left: 64, bottom: 34, fontFamily: "Georgia, serif", fontStyle: 'italic', fontSize: 22,
+                color: 'rgba(246,239,224,0.6)',
+            }}>Pick your card. <span style={{ color: '#e3a93d' }}>Send it.</span></div>
+            <div style={{
+                position: 'absolute', right: 64, bottom: 34, fontFamily: "'Oswald', 'Segoe UI', sans-serif", fontSize: 22,
+                letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(246,239,224,0.7)',
+            }}>playsluff.com · free to play</div>
+        </div>
+    );
+}
+
+if (!identMode && !lobbyMode && !tourneyMode && !ogMode) {
 document.body.classList.add('game-active');
 
 ReactDOM.createRoot(document.getElementById('root')).render(<HarnessApp />);
