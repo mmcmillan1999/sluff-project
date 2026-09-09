@@ -2,7 +2,7 @@
 // while it runs, the podium when it is over. One component, three states,
 // so the player always lands on the same place from the ribbon, the popup
 // and the table.
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { currentDrain, describeViewer, drainLabel, formatTokens, ordinal, startLabel, statusLabel, tableProgressLabel, MIN_SEATS } from './tournamentFormat';
 import { TournamentVoiceSlot } from './TournamentVoiceDock';
 import { useCountdown } from './useCountdown';
@@ -22,34 +22,114 @@ const Facts = ({ tournament }) => (
     </ul>
 );
 
-const Standings = ({ ranked, myUserId, finished }) => (
-    <table className="tournament-standings">
-        <thead>
-            <tr>
-                <th className="num">#</th>
-                <th>Player</th>
-                <th className="num">Stack</th>
-                <th>{finished ? 'Prize' : 'Status'}</th>
-            </tr>
-        </thead>
-        <tbody>
-            {ranked.map(entry => (
-                <tr key={entry.userId} className={[entry.userId === myUserId ? 'me' : '', entry.status === 'busted' ? 'out' : ''].join(' ').trim()}>
-                    <td className="num">{entry.rank}</td>
-                    <td>{entry.username}</td>
-                    <td className="num">{entry.stack}</td>
-                    <td>
-                        {finished
-                            ? (entry.prizeTokens > 0 ? <span className="tournament-chip gold">{formatTokens(entry.prizeTokens)} tokens</span> : '—')
-                            : (entry.status === 'busted'
-                                ? <span className="tournament-chip out">Out · round {entry.bustedRound}</span>
-                                : (entry.status === 'playing' ? <span className="tournament-chip">Playing</span> : <span className="tournament-chip">Registered</span>))}
-                    </td>
+// Standings as a leaderboard: a stack bar against the leader, the top three
+// picked out, and — while the board shows the chip drain — each drop beside
+// the stack it came off.
+const Standings = ({ ranked, myUserId, finished, drain = null }) => {
+    const leader = Math.max(1, ...ranked.filter(entry => entry.status !== 'busted').map(entry => Math.max(0, Number(entry.stack) || 0)));
+    return (
+        <table className="tournament-standings">
+            <thead>
+                <tr>
+                    <th className="num">#</th>
+                    <th>Player</th>
+                    <th className="bar-col" aria-hidden="true" />
+                    <th className="num">Stack</th>
+                    <th>{finished ? 'Prize' : 'Status'}</th>
                 </tr>
-            ))}
-        </tbody>
-    </table>
-);
+            </thead>
+            <tbody>
+                {ranked.map(entry => {
+                    const out = entry.status === 'busted';
+                    const pct = out ? 0 : Math.round(100 * Math.max(0, Number(entry.stack) || 0) / leader);
+                    const drop = Number(drain?.drops?.[entry.username]) || 0;
+                    const classes = [
+                        entry.userId === myUserId ? 'me' : '',
+                        out ? 'out' : '',
+                        !out && entry.rank <= 3 ? `top top-${entry.rank}` : '',
+                    ].join(' ').trim();
+                    return (
+                        <tr key={entry.userId} className={classes}>
+                            <td className="num rank">{entry.rank}</td>
+                            <td className="name">{entry.username}</td>
+                            <td className="bar-col" aria-hidden="true"><span className="tournament-bar" style={{ width: `${pct}%` }} /></td>
+                            <td className="num stack">
+                                {drop > 0 && <span className="drop">−{drop}</span>}
+                                {entry.stack}
+                            </td>
+                            <td>
+                                {finished
+                                    ? (entry.prizeTokens > 0 ? <span className="tournament-chip gold">{formatTokens(entry.prizeTokens)} tokens</span> : '—')
+                                    : (out
+                                        ? <span className="tournament-chip out">Out · round {entry.bustedRound}</span>
+                                        : (entry.status === 'playing' ? <span className="tournament-chip">Playing</span> : <span className="tournament-chip">Registered</span>))}
+                            </td>
+                        </tr>
+                    );
+                })}
+            </tbody>
+        </table>
+    );
+};
+
+// The ring at the head of the board: a countdown draining to the next round,
+// or the room's progress through the round while tables are still playing.
+const RING_RADIUS = 44;
+const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
+const Ring = ({ value, caption, fraction, live = false, label }) => {
+    const clamped = Math.max(0, Math.min(1, Number.isFinite(fraction) ? fraction : 0));
+    return (
+        <div className={`tournament-ring${live ? ' live' : ''}`} role="img" aria-label={label}>
+            <svg viewBox="0 0 100 100" aria-hidden="true">
+                <circle className="track" cx="50" cy="50" r={RING_RADIUS} />
+                <circle
+                    className="arc"
+                    cx="50"
+                    cy="50"
+                    r={RING_RADIUS}
+                    style={{ strokeDasharray: RING_LENGTH, strokeDashoffset: RING_LENGTH * (1 - clamped) }}
+                />
+            </svg>
+            <div className="tournament-ring-value">
+                <span>{value}</span>
+                {caption && <small>{caption}</small>}
+            </div>
+        </div>
+    );
+};
+
+// One table of the round as a small felt in the venue's own surface: who is
+// seated, how far through the hand it is, and Watch when the viewer is free.
+const FeltCard = ({ table, mine, canWatch, onWatch }) => {
+    const total = table.tricksTotal || 11;
+    const done = Boolean(table.finished) || table.phase === 'done';
+    const trick = Math.min(total, Number(table.trick) || 0);
+    const pct = done ? 100 : ((table.phase === 'dealing' || table.phase === 'bidding') ? 4 : Math.round(100 * trick / total));
+    const sitOuts = table.sitOuts || [];
+    return (
+        <div className={`tournament-felt${mine ? ' mine' : ''}${done ? ' done' : ' live'}`}>
+            <div className="tournament-felt-head">
+                <span>Table {table.tableIndex + 1}</span>
+                <span className="tournament-felt-state">{done ? 'Done' : tableProgressLabel(table)}</span>
+            </div>
+            <div className="tournament-felt-oval">
+                <ul>
+                    {table.seats.map(name => (
+                        <li key={name} className={sitOuts.includes(name) ? 'sit-out' : ''}>
+                            {name}{sitOuts.includes(name) ? ' · sits out' : ''}
+                        </li>
+                    ))}
+                </ul>
+            </div>
+            <div className="tournament-felt-progress" aria-hidden="true"><span style={{ width: `${pct}%` }} /></div>
+            {canWatch && !done && onWatch && (
+                <div className="tournament-actions center">
+                    <button type="button" className="tournament-btn secondary small" onClick={() => onWatch(table.tableId)}>Watch</button>
+                </div>
+            )}
+        </div>
+    );
+};
 
 const ConfirmRow = ({ prompt, confirmLabel, onConfirm, onCancel, busy }) => (
     <div className="tournament-actions">
@@ -76,6 +156,12 @@ const TournamentView = ({
 }) => {
     const [confirming, setConfirming] = useState(null);
     const nextIn = useCountdown(tournament?.nextRoundInSeconds ?? null);
+    // The countdown ring drains from wherever the count began this time.
+    const countdownFromRef = useRef(null);
+    useEffect(() => {
+        if (!Number.isFinite(nextIn) || nextIn <= 0) { countdownFromRef.current = null; return; }
+        if (countdownFromRef.current === null || nextIn > countdownFromRef.current) countdownFromRef.current = nextIn;
+    }, [nextIn]);
     // "Link copied" after a share that had no share sheet; clears itself.
     const [shareNotice, setShareNotice] = useState('');
     useEffect(() => {
@@ -184,129 +270,121 @@ const TournamentView = ({
                 </>
             )}
 
-            {running && (
-                <>
-                    {(() => {
-                        const open = tournament.tables.filter(table => !table.finished);
-                        const mineDone = myTable ? Boolean(myTable.finished) : true;
-                        if (!me || me.status !== 'playing') return null;
-                        if (open.length === 0) {
-                            const drain = currentDrain(tournament);
-                            const drops = drain
-                                ? ranked.filter(entry => entry.status === 'playing' && drain.drops[entry.username] > 0)
-                                : [];
-                            return (
-                                <section className="tournament-panel tournament-wait" aria-live="polite">
-                                    <h2>{Number.isFinite(nextIn) && nextIn > 0 ? `Next round in ${nextIn} s` : 'Reseating…'}</h2>
-                                    {drain && drops.length > 0 ? (
-                                        <>
-                                            <p className="tournament-drain-title">Chip drain · everyone drops {drain.percent}%</p>
-                                            <ul className="tournament-drain-list">
-                                                {drops.map(entry => (
-                                                    <li key={entry.userId} className={entry.userId === me?.userId ? 'mine' : undefined}>
-                                                        <span>{entry.username}</span>
-                                                        <span className="drop">−{drain.drops[entry.username]}</span>
-                                                        <span className="after">{entry.stack}</span>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        </>
-                                    ) : (
-                                        <p>Top with top: the leaders share a table, and so do the short stacks.</p>
+            {running && (() => {
+                const open = tournament.tables.filter(table => !table.finished);
+                const seated = me?.status === 'playing';
+                const mineDone = myTable ? Boolean(myTable.finished) : true;
+                const betweenRounds = open.length === 0;
+                const drain = betweenRounds ? currentDrain(tournament) : null;
+                const canWatch = Boolean(onWatch) && (!seated || mineDone);
+                const openLabel = open.length === 1 ? 'one table' : `${open.length} tables`;
+                const tricksDone = open.reduce((sum, table) => sum + (table.finished ? (table.tricksTotal || 11) : Math.min(table.tricksTotal || 11, Number(table.trick) || 0)), 0);
+                const tricksTotal = Math.max(1, tournament.tables.reduce((sum, table) => sum + (table.tricksTotal || 11), 0));
+                const roundFraction = (tricksDone + (tournament.tables.length - open.length) * 11) / tricksTotal;
+
+                let title;
+                let sub;
+                let ring;
+                if (betweenRounds) {
+                    const counting = Number.isFinite(nextIn) && nextIn > 0;
+                    title = counting ? `Next round in ${nextIn} s` : 'Reseating…';
+                    sub = drain
+                        ? `Chip drain · everyone drops ${drain.percent}%`
+                        : 'Top with top: the leaders share a table, and so do the short stacks.';
+                    const from = countdownFromRef.current || nextIn || 1;
+                    ring = <Ring value={counting ? nextIn : '…'} caption={counting ? 'seconds' : 'reseating'} fraction={counting ? nextIn / from : 0} label={title} />;
+                } else if (seated && !mineDone) {
+                    title = `Round ${tournament.round} in play`;
+                    sub = `${open.length === 1 ? 'One table is' : `${open.length} tables are`} still playing.`;
+                    ring = <Ring value={open.length} caption={open.length === 1 ? 'table live' : 'tables live'} fraction={roundFraction} live label={title} />;
+                } else {
+                    title = `Waiting on ${openLabel}`;
+                    const progress = open.map(table => `Table ${table.tableIndex + 1} · ${tableProgressLabel(table)}`).join('   ·   ');
+                    sub = seated ? `Your round is done. ${progress}` : progress;
+                    ring = <Ring value={open.length} caption={open.length === 1 ? 'table live' : 'tables live'} fraction={roundFraction} live label={title} />;
+                }
+
+                return (
+                    <>
+                        <section className="tournament-hero" aria-live="polite">
+                            {ring}
+                            <div className="tournament-hero-text">
+                                <h2>{title}</h2>
+                                <p className="tournament-hero-sub">{sub}</p>
+                                <div className="tournament-hero-you">
+                                    {!me && <p>You are watching. {tournament.playersLeft} players are still in.</p>}
+                                    {seated && myTable && (
+                                        <p>You are at <strong>Table {myTable.tableIndex + 1}</strong> with {myTable.seats.filter(name => name !== me.username).join(' and ')}{myTable.sitOuts?.length ? `; ${myTable.sitOuts.join(' and ')} sit${myTable.sitOuts.length === 1 ? 's' : ''} this one out` : ''}.</p>
                                     )}
-                                </section>
-                            );
-                        }
-                        if (!mineDone) return null;
-                        return (
-                            <section className="tournament-panel tournament-wait" aria-live="polite">
-                                <h2>Your round is done · waiting on {open.length === 1 ? 'one table' : `${open.length} tables`}</h2>
-                                <ul className="tournament-wait-list">
-                                    {open.map(table => (
-                                        <li key={table.tableId}>
-                                            <strong>Table {table.tableIndex + 1}</strong> · {tableProgressLabel(table)}
-                                            {onWatch && <button type="button" className="tournament-btn secondary small" onClick={() => onWatch(table.tableId)}>Watch</button>}
-                                        </li>
-                                    ))}
-                                </ul>
-                            </section>
-                        );
-                    })()}
-                    {isCreator && tournament.botsOnly && onFastPlay && (
-                        <section className="tournament-panel tournament-you tournament-fast-play">
-                            <h2>Only house players are left</h2>
-                            <p>
-                                {tournament.fastPlay
-                                    ? 'Fast play is on: the rest of the event runs at ten times speed.'
-                                    : 'As the host you can run the rest of the event at ten times speed.'}
-                            </p>
-                            <div className="tournament-actions">
-                                <button
-                                    type="button"
-                                    className={`tournament-btn${tournament.fastPlay ? ' secondary' : ''}`}
-                                    onClick={() => onFastPlay(!tournament.fastPlay)}
-                                    disabled={busy}
-                                >
-                                    {tournament.fastPlay ? 'Normal speed' : 'Fast play'}
-                                </button>
+                                    {seated && !myTable && <p>The round is over. The room is being reseated; your next table is moments away.</p>}
+                                    {me?.status === 'busted' && <p>You went out in round {me.bustedRound}. You can watch the rest from here.</p>}
+                                    {me && <p>Stack <strong>{me.stack}</strong> · {ordinal(me.rank)} of {tournament.playersLeft} left.</p>}
+                                </div>
                             </div>
                         </section>
-                    )}
-                    <section className="tournament-panel tournament-you">
-                        <h2>You</h2>
-                        {!me && <p>You are watching. {tournament.playersLeft} players are still in.</p>}
-                        {me?.status === 'playing' && myTable && (
-                            <p>You are at <strong>Table {myTable.tableIndex + 1}</strong> with {myTable.seats.filter(name => name !== me.username).join(' and ')}{myTable.sitOuts?.length ? `; ${myTable.sitOuts.join(' and ')} sit${myTable.sitOuts.length === 1 ? 's' : ''} this one out` : ''}.</p>
-                        )}
-                        {me?.status === 'playing' && !myTable && <p>The round is over. The room is being reseated; your next table is moments away.</p>}
-                        {me?.status === 'busted' && <p>You went out in round {me.bustedRound}. You can watch the rest from here.</p>}
-                        {me && <p>Stack <strong>{me.stack}</strong> · {ordinal(me.rank)} of {tournament.playersLeft} left.</p>}
-                        {confirming !== 'quit' && (
-                            <div className="tournament-actions">
-                                <button type="button" className="tournament-btn secondary" onClick={handleShare} aria-label="Share link to this tournament">Share link</button>
-                                {me?.status === 'playing' && (
-                                    <button type="button" className="tournament-btn danger" onClick={() => setConfirming('quit')} disabled={busy}>Quit tournament</button>
-                                )}
-                            </div>
-                        )}
-                        {confirming === 'quit' && (
-                            <ConfirmRow prompt="Quitting counts as a bust at your current place. No refund." confirmLabel="Quit" busy={busy} onCancel={() => setConfirming(null)} onConfirm={() => { setConfirming(null); onQuit(); }} />
-                        )}
-                    </section>
 
-                    <section className="tournament-panel">
-                        <h2>Tables · round {tournament.round}</h2>
-                        {tournament.tables.length === 0
-                            ? <p>Reseating…</p>
-                            : (
-                                <div className="tournament-tables">
-                                    {tournament.tables.map(table => (
-                                        <div key={table.tableId} className={`tournament-table${table.tableId === myTable?.tableId ? ' mine' : ''}`}>
-                                            <div className="t"><span>Table {table.tableIndex + 1}</span><span>{tableProgressLabel(table)}</span></div>
-                                            <ul>
-                                                {table.seats.map(name => (
-                                                    <li key={name} className={(table.sitOuts || []).includes(name) ? 'sit-out' : ''}>
-                                                        {name}{(table.sitOuts || []).includes(name) ? ' · sits out' : ''}
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                            {onWatch && (!me || me.status !== 'playing') && !table.finished && (
-                                                <div className="tournament-actions">
-                                                    <button type="button" className="tournament-btn secondary" onClick={() => onWatch(table.tableId)}>Watch</button>
-                                                </div>
-                                            )}
+                        {isCreator && tournament.botsOnly && onFastPlay && (
+                            <section className="tournament-panel tournament-you tournament-fast-play">
+                                <h2>Only house players are left</h2>
+                                <p>
+                                    {tournament.fastPlay
+                                        ? 'Fast play is on: the rest of the event runs at ten times speed.'
+                                        : 'As the host you can run the rest of the event at ten times speed.'}
+                                </p>
+                                <div className="tournament-actions">
+                                    <button
+                                        type="button"
+                                        className={`tournament-btn${tournament.fastPlay ? ' secondary' : ''}`}
+                                        onClick={() => onFastPlay(!tournament.fastPlay)}
+                                        disabled={busy}
+                                    >
+                                        {tournament.fastPlay ? 'Normal speed' : 'Fast play'}
+                                    </button>
+                                </div>
+                            </section>
+                        )}
+
+                        <div className="tournament-board">
+                            <section className="tournament-panel tournament-room">
+                                <h2>Tables · round {tournament.round}</h2>
+                                {tournament.tables.length === 0
+                                    ? <p className="tournament-room-empty">Reseating…</p>
+                                    : (
+                                        <div className="tournament-felts">
+                                            {tournament.tables.map(table => (
+                                                <FeltCard
+                                                    key={table.tableId}
+                                                    table={table}
+                                                    mine={table.tableId === myTable?.tableId}
+                                                    canWatch={canWatch}
+                                                    onWatch={onWatch}
+                                                />
+                                            ))}
                                         </div>
-                                    ))}
+                                    )}
+                            </section>
+                            <section className="tournament-panel">
+                                <h2>Standings</h2>
+                                <Standings ranked={ranked} myUserId={user?.id} finished={false} drain={drain} />
+                            </section>
+                        </div>
+
+                        <section className="tournament-panel tournament-foot">
+                            {confirming !== 'quit' && (
+                                <div className="tournament-actions">
+                                    <button type="button" className="tournament-btn secondary" onClick={handleShare} aria-label="Share link to this tournament">Share link</button>
+                                    {seated && (
+                                        <button type="button" className="tournament-btn danger" onClick={() => setConfirming('quit')} disabled={busy}>Quit tournament</button>
+                                    )}
                                 </div>
                             )}
-                    </section>
-
-                    <section className="tournament-panel">
-                        <h2>Standings</h2>
-                        <Standings ranked={ranked} myUserId={user?.id} finished={false} />
-                    </section>
-                </>
-            )}
+                            {confirming === 'quit' && (
+                                <ConfirmRow prompt="Quitting counts as a bust at your current place. No refund." confirmLabel="Quit" busy={busy} onCancel={() => setConfirming(null)} onConfirm={() => { setConfirming(null); onQuit(); }} />
+                            )}
+                        </section>
+                    </>
+                );
+            })()}
 
             {finished && (
                 <>

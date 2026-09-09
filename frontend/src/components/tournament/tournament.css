@@ -578,6 +578,7 @@
 
 .tournament-chip {
   display: inline-block;
+  white-space: nowrap;
   padding: 0.05rem 0.5rem;
   border-radius: 999px;
   font-family: 'Oswald', sans-serif;
@@ -730,4 +731,309 @@
 /* ---------- the shot clock on the felt ---------- */
 @media (prefers-reduced-motion: reduce) {
   .tournament-clock-pill.on-the-clock { animation: none; }
+}
+
+/* ---------- the reseat board while a tournament runs ---------- */
+
+.tournament-hero {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 1rem 1.1rem;
+  align-items: center;
+  padding: 1rem 1.1rem;
+  margin: 0 0 0.9rem;
+  border-radius: 1rem;
+  border: 1px solid var(--venue-accent-soft, rgba(242, 193, 78, 0.35));
+  background:
+    var(--venue-atmosphere, linear-gradient(135deg, #1a2330, #1f1f1f));
+  background-size: cover;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.06), 0 1rem 2.5rem rgba(0, 0, 0, 0.45);
+  color: var(--venue-text, #f5efdf);
+}
+
+.tournament-hero::after {
+  content: '';
+  position: absolute;
+  inset: auto -20% -60% -20%;
+  height: 80%;
+  background: radial-gradient(ellipse at 50% 100%, var(--venue-accent-faint, rgba(242, 193, 78, 0.12)), transparent 70%);
+  pointer-events: none;
+}
+
+.tournament-hero-text { position: relative; min-width: 0; }
+
+.tournament-hero h2 {
+  margin: 0 0 0.25rem;
+  font-family: 'Oswald', sans-serif;
+  font-weight: 600;
+  font-size: clamp(1.15rem, 3vh, 1.6rem);
+  line-height: 1.1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fff;
+  text-wrap: balance;
+}
+
+.tournament-hero-sub {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--venue-muted, rgba(255, 255, 255, 0.7));
+}
+
+.tournament-hero-you {
+  margin-top: 0.55rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.9rem;
+}
+
+.tournament-hero-you p { margin: 0 0 0.2rem; }
+.tournament-hero-you strong { color: #ffe9a8; }
+
+.tournament-ring {
+  position: relative;
+  width: clamp(5.4rem, 16vw, 6.8rem);
+  aspect-ratio: 1;
+  flex: 0 0 auto;
+}
+
+.tournament-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.tournament-ring .track {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.12);
+  stroke-width: 7;
+}
+
+.tournament-ring .arc {
+  fill: none;
+  stroke: var(--venue-accent, #f2c14e);
+  stroke-width: 7;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.9s linear;
+  filter: drop-shadow(0 0 0.35rem var(--venue-accent-soft, rgba(242, 193, 78, 0.35)));
+}
+
+.tournament-ring.live .arc {
+  stroke: #7fd4ff;
+  animation: tournament-live-glow 2.4s ease-in-out infinite;
+}
+
+.tournament-ring-value {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  font-family: 'Oswald', sans-serif;
+  font-weight: 600;
+  font-size: clamp(1.6rem, 5vw, 2.2rem);
+  line-height: 1;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.tournament-ring-value small {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.55rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--venue-muted, rgba(255, 255, 255, 0.65));
+}
+
+@keyframes tournament-live-glow {
+  0%, 100% { filter: drop-shadow(0 0 0.2rem rgba(127, 212, 255, 0.4)); }
+  50% { filter: drop-shadow(0 0 0.7rem rgba(127, 212, 255, 0.9)); }
+}
+
+.tournament-board {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.9rem;
+  margin-bottom: 0.9rem;
+}
+
+.tournament-board > .tournament-panel { margin: 0; }
+
+/* Two columns once the board itself is wide enough — a container query, so
+   the layout follows the space it is given rather than the window. */
+.tournament-view { container-type: inline-size; }
+
+@container (min-width: 50rem) {
+  .tournament-board {
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.tournament-room-empty {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.tournament-felts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr));
+  gap: 0.7rem;
+}
+
+.tournament-felt {
+  position: relative;
+  padding: 0.6rem 0.7rem 0.7rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.tournament-felt.live {
+  border-color: rgba(127, 212, 255, 0.45);
+  animation: tournament-felt-pulse 3s ease-in-out infinite;
+}
+
+.tournament-felt.mine {
+  border-color: var(--venue-accent, #f2c14e);
+  box-shadow: 0 0 0 1px var(--venue-accent-soft, rgba(242, 193, 78, 0.35));
+}
+
+.tournament-felt.done { opacity: 0.82; }
+
+@keyframes tournament-felt-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(127, 212, 255, 0.12); }
+  50% { box-shadow: 0 0 0 1px rgba(127, 212, 255, 0.35), 0 0 1.2rem rgba(127, 212, 255, 0.25); }
+}
+
+.tournament-felt-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
+  font-family: 'Oswald', sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--venue-accent, #f2c14e);
+}
+
+.tournament-felt-state { color: #bfe6ff; }
+.tournament-felt.done .tournament-felt-state { color: rgba(255, 255, 255, 0.55); }
+
+.tournament-felt-oval {
+  position: relative;
+  padding: 0.85rem 1.1rem;
+  border-radius: 50% / 45%;
+  background: var(--venue-table-surface, radial-gradient(ellipse at 50% 35%, #15673a 0%, #0f4d2a 55%, #0a3a1f 100%));
+  background-size: cover;
+  background-position: center;
+  box-shadow:
+    inset 0 0 0 0.3rem var(--venue-rim, #3a3a3a),
+    inset 0 0 1.4rem rgba(0, 0, 0, 0.55),
+    0 0.5rem 1rem rgba(0, 0, 0, 0.4);
+  text-align: center;
+}
+
+.tournament-felt-oval ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.15rem;
+  font-size: 0.92rem;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
+}
+
+.tournament-felt-oval li {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tournament-felt-oval li.sit-out {
+  color: rgba(255, 255, 255, 0.6);
+  font-style: italic;
+  font-size: 0.85rem;
+}
+
+.tournament-felt-progress {
+  margin-top: 0.55rem;
+  height: 0.32rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.tournament-felt-progress span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #7fd4ff, var(--venue-accent, #f2c14e));
+  transition: width 0.6s ease;
+}
+
+.tournament-felt.done .tournament-felt-progress span { background: rgba(255, 255, 255, 0.35); }
+
+.tournament-actions.center {
+  justify-content: center;
+  margin-top: 0.55rem;
+}
+
+.tournament-foot {
+  padding-top: 0.6rem;
+  padding-bottom: 0.6rem;
+}
+
+.tournament-foot .tournament-actions { margin-top: 0; }
+
+/* leaderboard bars */
+.tournament-standings .bar-col {
+  width: 26%;
+  padding-left: 0;
+  padding-right: 0.2rem;
+}
+
+.tournament-bar {
+  display: block;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--venue-accent-soft, rgba(242, 193, 78, 0.35)), var(--venue-accent, #f2c14e));
+  transition: width 0.8s ease;
+}
+
+.tournament-standings tr.out .tournament-bar { display: none; }
+
+.tournament-standings td.rank {
+  font-family: 'Oswald', sans-serif;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.tournament-standings tr.top-1 td.rank { color: #ffd76a; }
+.tournament-standings tr.top-2 td.rank { color: #d9dde6; }
+.tournament-standings tr.top-3 td.rank { color: #d7a377; }
+.tournament-standings tr.top td.name { font-weight: 600; }
+
+.tournament-standings td.stack .drop {
+  color: #ff8a7a;
+  margin-right: 0.45rem;
+  animation: tournament-drop-in 0.6s ease-out both;
+}
+
+@media (max-width: 480px) {
+  .tournament-standings .bar-col { width: 18%; }
+  .tournament-hero { padding: 0.85rem 0.9rem; gap: 0.8rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tournament-ring.live .arc,
+  .tournament-felt.live { animation: none; }
+  .tournament-ring .arc,
+  .tournament-bar,
+  .tournament-felt-progress span { transition: none; }
+  .tournament-standings td.stack .drop { animation: none; }
 }

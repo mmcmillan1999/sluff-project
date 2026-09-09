@@ -40,6 +40,7 @@ import './styles/venueThemes.css';
 import GameHeader from './components/GameHeader.js';
 import GameTableView from './components/GameTableView.js';
 import LobbyView from './components/LobbyView.js';
+import TournamentView from './components/tournament/TournamentView';
 import OrientationScrim from './components/OrientationScrim.js';
 import SluffIdent from './components/SluffIdent.js';
 import { setCosmetic } from './utils/cosmetics.js';
@@ -477,7 +478,97 @@ if (lobbyMode) {
     );
 }
 
-if (!identMode && !lobbyMode) {
+// --- Tournament board preview: /harness.html?mode=tourney[&phase=wait|board|host] ---
+// The reseat board between rounds with several tables: `wait` = your table
+// is done and two are still playing, `board` = every table is done and the
+// room is on the countdown with the chip drain, `host` = the busted creator
+// watching a bots-only finish (the Fast play switch). ?me=<userId> to sit in
+// another seat (11 Matt/host, 12 Bob, 16 Flo busted).
+const tourneyMode = params.get('mode') === 'tourney';
+if (tourneyMode) {
+    const phase = params.get('phase') || 'wait';
+    const meId = Number(params.get('me')) || (phase === 'host' ? 11 : 12);
+    const entry = (userId, username, stack, extra = {}) => ({
+        userId, username, status: 'playing', stack, sitOuts: 0, place: null, prizeTokens: 0, bustedRound: null, ...extra,
+    });
+    const entries = [
+        entry(11, 'Matt', 262, phase === 'host' ? { status: 'busted', stack: -8, bustedRound: 4 } : {}),
+        entry(12, 'Bob', 188),
+        entry(13, 'Cara', 151),
+        entry(14, 'Grandpa George', 139),
+        entry(15, 'Vera Hearts', 96),
+        entry(16, 'Flo', -14, { status: 'busted', bustedRound: 2 }),
+        entry(17, 'Otis Draw', 74),
+        entry(18, 'Stephen Richins', 61),
+        entry(19, 'Kimba', 47),
+        entry(20, 'Dolly Deal', 62),
+        entry(21, 'Doc Shuffle', -3, { status: 'busted', bustedRound: 4 }),
+        entry(22, 'Ruby Rook', 40),
+    ];
+    const table = (tableIndex, seats, finished, trick, extra = {}) => ({
+        tableId: `tn-1-r5-t${tableIndex + 1}`, tableIndex, playerMode: 3, seats, dealer: seats[0], sitOuts: [],
+        finished, phase: finished ? 'done' : 'playing', trick, tricksTotal: 11, ...extra,
+    });
+    const allDone = phase !== 'wait';
+    const tables = [
+        table(0, ['Matt', 'Bob', 'Cara'], true, 11),
+        table(1, ['Grandpa George', 'Vera Hearts', 'Otis Draw'], allDone, allDone ? 11 : 6),
+        table(2, ['Stephen Richins', 'Kimba', 'Dolly Deal', 'Ruby Rook'], allDone, allDone ? 11 : 2, { playerMode: 4, sitOuts: ['Ruby Rook'] }),
+    ];
+    const drops = Object.fromEntries(entries.filter(e => e.status === 'playing').map(e => [e.username, Math.ceil(e.stack / 9)]));
+    const tournament = {
+        id: 1,
+        name: 'Labor Day',
+        venue: 'tournament-stage',
+        buyInTokens: 1,
+        startingStack: 120,
+        maxSeats: 12,
+        startRule: 'creator',
+        startsAt: null,
+        status: 'running',
+        round: 5,
+        drainPercent: 10,
+        lastDrain: allDone ? { round: 5, percent: 10, drops } : null,
+        nextRoundInSeconds: allDone ? 7 : null,
+        creatorUserId: 11,
+        creatorName: 'Matt',
+        seatsTaken: 12,
+        playersLeft: entries.filter(e => e.status === 'playing').length,
+        entries,
+        tables,
+        closeReason: null,
+        fastPlay: false,
+        botsOnly: phase === 'host',
+        viewer: { entered: true, status: 'playing', isCreator: meId === 11, tableId: null, watchingTableId: null },
+    };
+    const me = entries.find(e => e.userId === meId);
+    document.body.style.background = '#111214';
+    // &phone=1 frames the board at phone-portrait width inside a wide window.
+    if (params.get('phone')) {
+        const root = document.getElementById('root');
+        Object.assign(root.style, {
+            width: '430px', height: '900px', margin: '16px auto', overflow: 'auto',
+            border: '1px solid #444', borderRadius: '24px', background: '#111214',
+        });
+    }
+    ReactDOM.createRoot(document.getElementById('root')).render(
+        <TournamentView
+            tournament={tournament}
+            user={{ id: meId, username: me?.username || 'You' }}
+            onJoin={noop}
+            onLeave={noop}
+            onFindPlayer={noop}
+            onStart={noop}
+            onCancel={noop}
+            onQuit={noop}
+            onWatch={(tableId) => console.log('[harness] watch', tableId)}
+            onFastPlay={(enabled) => console.log('[harness] fastPlay', enabled)}
+            onBack={noop}
+        />
+    );
+}
+
+if (!identMode && !lobbyMode && !tourneyMode) {
 document.body.classList.add('game-active');
 
 ReactDOM.createRoot(document.getElementById('root')).render(<HarnessApp />);
