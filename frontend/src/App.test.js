@@ -88,6 +88,29 @@ describe('App Component and Game Flow', () => {
         expect(await screen.findByText('Quick Play')).toBeInTheDocument();
     });
 
+    test('clears the previous table when a session ends and another account signs in', async () => {
+        render(<App />);
+        await act(async () => {
+            socketEventHandlers.joinedTable({ gameState: getMockGameState() });
+        });
+        expect(document.querySelector('.app-view-gameTable')).toBeInTheDocument();
+
+        window.history.replaceState({}, '', '/login');
+        Storage.prototype.getItem.mockReturnValue(null);
+        act(() => socketEventHandlers.accountDeleted());
+
+        const nextUser = { id: 84, username: 'Next Player', tokens: 8, tutorial_version: 1 };
+        const nextToken = `header.${btoa(JSON.stringify(nextUser))}.signature`;
+        api.login.mockResolvedValue({ token: nextToken, user: nextUser });
+        fireEvent.change(screen.getByPlaceholderText('Email'), { target: { value: 'next@example.com' } });
+        fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'test-password' } });
+        fireEvent.submit(screen.getByRole('button', { name: 'Login', exact: true }).closest('form'));
+
+        expect(await screen.findByText('Quick Play')).toBeInTheDocument();
+        expect(document.querySelector('.app-view-gameTable')).not.toBeInTheDocument();
+        expect(mockSocket.disconnect).toHaveBeenCalled();
+    });
+
     test('keeps Quick Play copy to the table name, token cost, and action', async () => {
         render(<App />);
 

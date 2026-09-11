@@ -346,8 +346,9 @@ export const useSounds = ({ musicActive = false } = {}) => {
         // Must be called from a user gesture (browsers gate audio on interaction).
         const ctx = ensureContext();
         if (!ctx) return;
-        if (isResumable(ctx)) ctx.resume().catch(() => {});
-        if (enabledRef.current) return;
+        const needsResume = isResumable(ctx);
+        if (needsResume) ctx.resume().catch(() => {});
+        if (enabledRef.current && !needsResume) return;
 
         // iOS needs a real (silent) buffer started inside the gesture to unlock
         // the audio session; resume() alone is insufficient on older versions.
@@ -356,6 +357,7 @@ export const useSounds = ({ musicActive = false } = {}) => {
             const source = ctx.createBufferSource();
             source.buffer = silent;
             source.connect(ctx.destination);
+            source.onended = () => source.disconnect();
             source.start(0);
         } catch { /* unlock is best-effort */ }
         enabledRef.current = true;
@@ -441,12 +443,16 @@ export const useSounds = ({ musicActive = false } = {}) => {
     useEffect(() => {
         const unlock = () => enableSound();
         window.addEventListener('pointerdown', unlock);
+        window.addEventListener('pointerup', unlock, { passive: true });
         window.addEventListener('keydown', unlock);
         window.addEventListener('touchstart', unlock);
+        window.addEventListener('touchend', unlock, { passive: true });
         return () => {
             window.removeEventListener('pointerdown', unlock);
+            window.removeEventListener('pointerup', unlock);
             window.removeEventListener('keydown', unlock);
             window.removeEventListener('touchstart', unlock);
+            window.removeEventListener('touchend', unlock);
         };
     }, [enableSound]);
 

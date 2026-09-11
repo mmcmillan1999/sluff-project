@@ -164,11 +164,30 @@ function App() {
         localStorage.removeItem("sluff_token");
         setToken(null);
         setUser(null);
+        setView('lobby');
+        setCurrentTableState(null);
+        setLobbyThemes([]);
+        setMyTournament(null);
+        setTournamentLobby({ open: null, running: [] });
+        setDismissedTournamentId(null);
+        setWatchingTableId(null);
+        setShowTournamentCreate(false);
+        setTournamentBusy(false);
+        setTournamentError('');
+        setShowAccountSettings(false);
+        setShowFeedbackModal(false);
+        setFeedbackGameContext(null);
+        setShowMercyWindow(false);
+        setShowHowToPlay(false);
+        setErrorMessage('');
+        pendingTournamentCreateRef.current = false;
+        awaitingReseatRef.current = false;
+        tableRef.current = null;
+        myTournamentRef.current = null;
+        watchingTableIdRef.current = null;
         setSocketSessionReady(false);
         setInviteJoinInFlight(false);
-        if (socket.connected) {
-            socket.disconnect();
-        }
+        socket.disconnect();
     }, []);
 
     // The API already swapped the stored JWT for one carrying the new name.

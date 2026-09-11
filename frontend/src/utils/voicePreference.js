@@ -14,10 +14,12 @@ import { useEffect, useState } from 'react';
 
 const STORAGE_KEY = 'sluff_voice_enabled';
 const CHANGE_EVENT = 'sluff:voice-preference-changed';
+let unsavedPreference = null;
 
 export const DEFAULT_VOICE_ENABLED = false;
 
 export const getVoiceEnabled = () => {
+    if (unsavedPreference !== null) return unsavedPreference;
     let stored = null;
     try {
         stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY));
@@ -32,8 +34,10 @@ export const setVoiceEnabled = (value) => {
     const enabled = value === true;
     try {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(enabled));
+        unsavedPreference = null;
     } catch {
         // Storage may be denied; the in-session event still applies the change.
+        unsavedPreference = enabled;
     }
     window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: enabled }));
     return enabled;

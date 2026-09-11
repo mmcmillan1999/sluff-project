@@ -421,9 +421,41 @@ describe('useSounds iOS interruption recovery', () => {
         ctx.state = 'interrupted';
         act(() => window.dispatchEvent(new Event('pointerdown')));
         expect(ctx.resume).toHaveBeenCalledTimes(2);
-        // The iOS silent-buffer unlock runs once, not per gesture — a
-        // persistent listener must not mean per-tap Web Audio churn.
-        expect(silentSources()).toBe(1);
+        expect(silentSources()).toBe(2);
+        act(() => window.dispatchEvent(new Event('pointerdown')));
+        expect(silentSources()).toBe(2);
+    });
+
+    test.each(['touchend', 'pointerup'])('unlocks audio on %s after an earlier gesture was rejected', async (eventName) => {
+        let playbackAllowed = false;
+        class GestureGatedAudioContext extends MockAudioContext {
+            constructor() {
+                super();
+                this.resume.mockImplementation(() => {
+                    if (!playbackAllowed) return Promise.reject(new Error('User activation required'));
+                    this.state = 'running';
+                    return Promise.resolve();
+                });
+            }
+        }
+        vi.stubGlobal('AudioContext', GestureGatedAudioContext);
+        const { unmount } = renderHook(() => useSounds());
+
+        await act(async () => window.dispatchEvent(new Event('pointerdown')));
+        const ctx = contexts[0];
+        expect(ctx.state).toBe('suspended');
+        const initialSources = ctx.sources.filter(source => source.buffer?.silent).length;
+
+        playbackAllowed = true;
+        await act(async () => window.dispatchEvent(new Event(eventName)));
+        expect(ctx.state).toBe('running');
+        expect(ctx.sources.filter(source => source.buffer?.silent)).toHaveLength(initialSources + 1);
+
+        act(() => window.dispatchEvent(new Event(eventName)));
+        expect(ctx.sources.filter(source => source.buffer?.silent)).toHaveLength(initialSources + 1);
+        unmount();
+        act(() => window.dispatchEvent(new Event(eventName)));
+        expect(contexts).toHaveLength(1);
     });
 
     test('returning to the foreground revives an interrupted context', () => {

@@ -2,6 +2,7 @@ import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import VoiceControls from './VoiceControls';
+import { setVoiceEnabled } from '../../utils/voicePreference';
 
 const voiceHarness = vi.hoisted(() => {
     const behavior = {
@@ -443,6 +444,40 @@ describe('VoiceControls opt-in gate', () => {
         expect(voice.join).toHaveBeenCalledTimes(1);
         await waitFor(() => expect(voice.setMicrophoneMuted).toHaveBeenCalledWith(false));
         expect(JSON.parse(window.localStorage.getItem('sluff_voice_enabled'))).toBe(true);
+    });
+
+    test.each([false, true])('applies voice changes when storage writes fail (initially enabled: %s)', async (initiallyEnabled) => {
+        window.localStorage.setItem('sluff_voice_enabled', JSON.stringify(initiallyEnabled));
+        const storageWrite = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+            throw new Error('Storage unavailable');
+        });
+        let mounted = renderVoice();
+        try {
+            if (initiallyEnabled) {
+                await screen.findByRole('button', { name: 'Mute microphone' });
+                fireEvent.click(screen.getByRole('button', { name: /open voice settings/i }));
+                fireEvent.click(screen.getByRole('button', { name: /turn off voice chat/i }));
+                expect(await screen.findByRole('button', { name: /turn on voice/i })).toBeInTheDocument();
+                expect(voiceHarness.instances[0].leave).toHaveBeenCalled();
+            } else {
+                fireEvent.click(screen.getByRole('button', { name: /turn on voice/i }));
+                expect(await screen.findByRole('button', { name: 'Mute microphone' })).toBeInTheDocument();
+            }
+
+            mounted.unmount();
+            mounted = renderVoice({ tableId: 'table-two' });
+            if (initiallyEnabled) {
+                expect(screen.getByRole('button', { name: /turn on voice/i })).toBeInTheDocument();
+                expect(voiceHarness.instances).toHaveLength(1);
+            } else {
+                expect(await screen.findByRole('button', { name: 'Mute microphone' })).toBeInTheDocument();
+                expect(voiceHarness.instances).toHaveLength(2);
+            }
+        } finally {
+            mounted.unmount();
+            storageWrite.mockRestore();
+            setVoiceEnabled(false);
+        }
     });
 
     test('a stored opt-in joins straight away without asking again', async () => {
