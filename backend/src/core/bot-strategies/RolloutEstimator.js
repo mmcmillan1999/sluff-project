@@ -57,11 +57,29 @@ function weightedPick(pool, count, weightFn, rng) {
 // with hearts, a Solo bidder with their chosen trump. Weight the bidder's
 // unseen cards accordingly, fading as actual play supersedes the prior.
 function bidWeightFn(view) {
-    const trumpBias = { Frog: 1.5, Solo: 2.5, 'Heart Solo': 3.5 }[view.bidType] || 0;
+    // A caller may scale the prior (view.bidBiasScale, default 1) — the
+    // raven brain's tuning runs use it; the insurance market leaves it alone.
+    const scale = Number.isFinite(view.bidBiasScale) ? view.bidBiasScale : 1;
+    const trumpBias = ({ Frog: 1.5, Solo: 2.5, 'Heart Solo': 3.5 }[view.bidType] || 0) * scale;
     const fade = Math.max(0, 11 - view.tricksPlayed) / 11;
     return card => 1
         + (getSuit(card) === view.trumpSuit ? trumpBias * fade : 0)
-        + (pointValue(card) >= 10 ? 0.8 * fade : 0);
+        + (pointValue(card) >= 10 ? 0.8 * scale * fade : 0);
+}
+
+// Multiply a zone's weight by the floor penalty for cards beneath the seat's
+// inferred floor in their suit (PublicRoundView.floors). Off unless the view
+// asks for it (view.floorPenalty < 1): the insurance market samples as before.
+function withFloors(view, name, weight) {
+    const penalty = Number(view.floorPenalty);
+    const seatFloors = view.floors?.[name];
+    if (!(penalty >= 0 && penalty < 1) || !seatFloors || Object.keys(seatFloors).length === 0) return weight;
+    const base = weight || (() => 1);
+    return card => {
+        const floor = seatFloors[getSuit(card)];
+        const below = floor !== undefined && rankValue(card) < floor;
+        return base(card) * (below ? penalty : 1);
+    };
 }
 
 // Deal `pool` into player hand zones respecting known suit voids, with
@@ -151,10 +169,10 @@ function sampleWorld(view, rng) {
                 name: view.bidderName,
                 size: bidderHandCap - bidderHand.length,
                 voids: bidderVoids,
-                weight: bidWeightFn(view),
+                weight: withFloors(view, view.bidderName, bidWeightFn(view)),
             },
             ...others.filter(name => name !== view.bidderName)
-                .map(name => ({ name, size: handSize(name), voids: view.voids[name] })),
+                .map(name => ({ name, size: handSize(name), voids: view.voids[name], weight: withFloors(view, name, null) })),
         ];
         const { assigned } = dealHands(rest, zones, rng);
         hands[view.bidderName] = [...bidderHand, ...assigned[view.bidderName]];
@@ -168,7 +186,7 @@ function sampleWorld(view, rng) {
             size: handSize(name),
             voids: view.voids[name],
             // Condition the bidder's unseen cards on the announced bid.
-            weight: !view.botIsBidder && name === view.bidderName ? bidWeightFn(view) : null,
+            weight: withFloors(view, name, !view.botIsBidder && name === view.bidderName ? bidWeightFn(view) : null),
         }));
         const { assigned, leftover } = dealHands(pool, zones, rng);
         others.forEach(name => { hands[name] = assigned[name]; });

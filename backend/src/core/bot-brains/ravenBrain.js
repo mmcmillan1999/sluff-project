@@ -10,6 +10,10 @@
 //      insurance market uses (PublicRoundView: own hand, every card played
 //      with seat attribution, the voids the follow/trump rules have proven,
 //      the revealed Frog widow). It never reads another hand or the widow.
+//      Two things it reads into the sample that the market does not: a
+//      stronger prior that the bidder holds trump and points, and the soft
+//      inference that a seat which followed low under an opponent's winner
+//      holds nothing lower in that suit (the "floors").
 //   2. In each world it evaluates every genuinely distinct legal card: the
 //      early tricks are rolled forward with a fast full-information policy,
 //      and the last EXACT_TRICKS tricks are solved EXACTLY — alpha-beta over
@@ -63,6 +67,22 @@ const DEFAULTS = {
     // game ends either way — so a seat near zero plays for the make (or the
     // set) rather than for expected points. 'payoff': raw round payoff.
     utility: process.env.RAVEN_UTILITY || 'clip',
+    // How the other seats are modelled inside the exact solve. 'minimax':
+    // they play the double-dummy best line (classic PIMC). 'policy': they
+    // play the rollout policy's pick — the way a heuristic seat really does.
+    opponentModel: process.env.RAVEN_OPPONENT_MODEL || 'minimax',
+    partnerModel: process.env.RAVEN_PARTNER_MODEL || 'minimax',
+    // Strength of the prior that loads the bidder's unseen hand with trump
+    // and points when sampling worlds (1 = the insurance market's prior).
+    // Doubled Sept 10 2026: on the paired harness it takes ~0.2 pts/round
+    // off a strong bidder and costs nothing against a weak one.
+    bidBiasScale: envNumber('RAVEN_BID_BIAS', 2),
+    // Weight (0..1) for cards beneath a seat's inferred floor — a seat that
+    // followed low under an opponent's winner probably holds nothing lower
+    // (PublicRoundView.floors). 1 = no inference. Sept 10 2026: 0.15 is
+    // worth ~+0.5 pts/round bidding and ~0.2 defending against the
+    // heuristic brains, and neutral against a searching bidder.
+    floorPenalty: envNumber('RAVEN_FLOOR_PENALTY', 0.15),
 };
 const config = { ...DEFAULTS };
 
@@ -145,6 +165,21 @@ const buildState = (view, world) => {
     });
 };
 
+// Which seats the solver treats as policy players rather than searchers,
+// per the configured models. Null when everyone searches (pure PIMC).
+const fixedSeatsFor = (view, me) => {
+    const bidder = view.activeNames.indexOf(view.bidderName);
+    const fixed = [false, false, false];
+    let any = false;
+    for (let seat = 0; seat < 3; seat += 1) {
+        if (seat === me) continue;
+        const isPartner = !view.botIsBidder && seat !== bidder;
+        const model = isPartner ? config.partnerModel : config.opponentModel;
+        if (model === 'policy') { fixed[seat] = true; any = true; }
+    }
+    return any ? fixed : null;
+};
+
 // Score every candidate across sampled worlds; returns { card, payoff } per
 // candidate plus the number of worlds actually used.
 const searchCandidates = (view, candidates, rng, now = Date.now) => {
@@ -156,10 +191,14 @@ const searchCandidates = (view, candidates, rng, now = Date.now) => {
     const totals = new Array(candidates.length).fill(0);
     const started = now();
     let used = 0;
+    const samplingView = (config.bidBiasScale === 1 && config.floorPenalty >= 1)
+        ? view
+        : { ...view, bidBiasScale: config.bidBiasScale, floorPenalty: config.floorPenalty };
     for (let w = 0; w < config.worlds; w += 1) {
         if (used >= config.minWorlds && now() - started > config.timeBudgetMs) break;
-        const world = sampleWorld(view, rng);
+        const world = sampleWorld(samplingView, rng);
         const st = buildState(view, world);
+        st.fixedSeats = fixedSeatsFor(view, me);
         const tt = new Map(); // shared by every candidate in this world
         for (let i = 0; i < candidates.length; i += 1) {
             const idx = search.cardIdx(candidates[i]);

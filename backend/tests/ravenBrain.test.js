@@ -314,7 +314,53 @@ async function runRavenBrainTests() {
             pass(`Plays ${rounds} full rounds against itself with no illegal card (bids seen: ${[...bidTypes].join(', ')}).`);
         }
 
-        // 8) sampleWorld stays the only source of hidden cards: every world the
+        // 8) Played-low inference (seat order Bidder, Ally, Me; hearts trump).
+        //    Trick 1: Bidder led AC, Ally followed 8C under it (losing to an
+        //    opponent → Ally's clubs floor is the 8), I followed 9C.
+        //    Trick 2: Bidder led 9S, Ally took it with AS, I schmeared KS onto
+        //    my partner's ace (partner winning → no floor for me).
+        //    Trick 3: Ally led QS, I followed JS under my partner, the Bidder
+        //    followed 7S under a defender (→ Bidder's spades floor is the 7).
+        //    A world sampled with the penalty on almost never puts a lower
+        //    club in Ally's hand or the 6S in the Bidder's.
+        {
+            const engine = makeEngine({
+                myHand: ['AD', 'KD', '10D', 'QD', '6H', '7H', 'JH', 'QH'],
+                capturedTricks: {
+                    Bidder: [{ trickNumber: 1, cards: ['AC', '8C', '9C'], winnerName: 'Bidder' }],
+                    Ally: [
+                        { trickNumber: 2, cards: ['9S', 'AS', 'KS'], winnerName: 'Ally' },
+                        { trickNumber: 3, cards: ['QS', 'JS', '7S'], winnerName: 'Ally' },
+                    ],
+                },
+                tricksPlayedCount: 3,
+                trickLeaderName: 'Ally',
+            });
+            const view = buildPublicView(engine, ME);
+            assert.strictEqual(view.floors.Ally.C, 2, 'Ally showed the 8 under an opponent: nothing lower in clubs');
+            assert.strictEqual(view.floors.Bidder.S, 1, 'Bidder showed the 7 under a defender: nothing lower in spades');
+            assert.strictEqual(view.floors[ME].S, undefined, 'a schmear on the partner’s winner says nothing');
+            assert.strictEqual(view.floors.Bidder.C, undefined, 'the leader is never inferred');
+
+            const { sampleWorld } = require('../src/core/bot-strategies/RolloutEstimator');
+            const count = (penalty) => {
+                const rng = makeRng(99);
+                let below = 0;
+                for (let i = 0; i < 400; i += 1) {
+                    const world = sampleWorld({ ...view, floorPenalty: penalty }, rng);
+                    if (world.hands.Ally.some(c => ['6C', '7C'].includes(c))) below += 1;
+                    if (world.hands.Bidder.includes('6S')) below += 1;
+                }
+                return below;
+            };
+            const off = count(1);
+            const on = count(0.15);
+            assert.ok(off > 150, `without the inference the low cards land there often (${off})`);
+            assert.ok(on < off / 3, `with it they rarely do (${on} vs ${off})`);
+            pass('Floors: a low follow under an opponent rules out lower cards; the sampler honours it softly.');
+        }
+
+        // 9) sampleWorld stays the only source of hidden cards: every world the
         //    brain builds states from is a full 36-card partition.
         {
             const engine = makeEngine({ myHand: ['AD', 'KD', '6C', '7C', '8C', 'AS', 'KS', 'QS', 'JS', '9S', '10H'] });

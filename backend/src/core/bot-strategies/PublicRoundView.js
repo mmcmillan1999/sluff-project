@@ -11,7 +11,7 @@
 // (engine.widow / engine.originalDealtWidow), or another player's Frog
 // discards. tests/marketInsurance.test.js enforces this with a trapped engine.
 
-const { getSuit, getRank } = require('../logic');
+const { getSuit, getRank, determineTrickWinner } = require('../logic');
 const { SUITS, RANKS_ORDER } = require('../constants');
 
 const ALL_SUITS = Object.keys(SUITS);
@@ -56,15 +56,35 @@ function buildPublicView(engine, botName) {
     const voids = {};
     activeNames.forEach(name => { voids[name] = new Set(); });
     const playedSet = new Set();
+    // Soft inference: a seat that follows suit (trump included) UNDER an
+    // opponent's winning card almost always sheds its lowest card of that
+    // suit, so it very likely holds nothing lower. floors[name][suit] = the
+    // highest such rank index seen. A sampler may down-weight (never forbid)
+    // cards beneath it. Leads and schmears onto a partner's winner say
+    // nothing.
+    const floors = {};
+    activeNames.forEach(name => { floors[name] = {}; });
 
     let brokenDuringReplay = false;
     let leaderName = bidderName;
     const noteVoid = (name, suit) => { if (voids[name]) voids[name].add(suit); };
+    let trickSoFar = [];
 
     const replayPlay = (playerName, card, positionInTrick, leadSuit) => {
         playedSet.add(card);
         if (playedBy[playerName]) playedBy[playerName].push(card);
         const suit = getSuit(card);
+        if (positionInTrick === 0) trickSoFar = [];
+        if (positionInTrick > 0 && suit === leadSuit && trickSoFar.length > 0) {
+            const winner = determineTrickWinner(trickSoFar, leadSuit, trumpSuit);
+            const winnerIsOpponent = winner && ((playerName === bidderName) !== (winner.playerName === bidderName));
+            const rank = RANKS_ORDER.indexOf(getRank(card));
+            const beatsWinner = winner && getSuit(winner.card) === leadSuit && rank > RANKS_ORDER.indexOf(getRank(winner.card));
+            if (winnerIsOpponent && !beatsWinner && floors[playerName]) {
+                floors[playerName][suit] = Math.max(floors[playerName][suit] ?? -1, rank);
+            }
+        }
+        trickSoFar.push({ playerName, card });
         if (positionInTrick === 0) {
             // Leading trump before trump is broken is only legal with an
             // all-trump hand, so it reveals voids in every other suit.
@@ -139,6 +159,7 @@ function buildPublicView(engine, botName) {
         playedBy,
         playedSet,
         voids,
+        floors,
         bidderCardPoints: engine.bidderCardPoints || 0,
         defenderCardPoints: engine.defenderCardPoints || 0,
         tricksPlayed: engine.tricksPlayedCount || 0,

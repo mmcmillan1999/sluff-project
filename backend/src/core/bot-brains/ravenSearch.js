@@ -414,7 +414,12 @@ function solve(st, alpha, beta) {
 
     const p = seatToAct(st);
     const isMax = p === st.bidder;
-    const moves = orderedMoves(st, p);
+    // A seat marked fixed does not search: it plays the rollout policy's
+    // pick, the way a heuristic partner or opponent actually would, instead
+    // of the double-dummy best line.
+    const moves = st.fixedSeats && st.fixedSeats[p]
+        ? [policyPick(st, p, legalCardsPruned(st, p, false))]
+        : orderedMoves(st, p);
     let best = isMax ? -Infinity : Infinity;
     for (const c of moves) {
         const s = (c / 9) | 0;
