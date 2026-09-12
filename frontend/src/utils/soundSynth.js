@@ -308,3 +308,72 @@ export const wheelSettle = (ctx, destination, { when = 0 } = {}) => {
         });
     } catch { /* audio is garnish */ }
 };
+
+/**
+ * The call to the felt: a bugle "first call" — the racetrack's call to the
+ * post — for the moment a tournament starts. Two detuned saws through a
+ * lowpass for the brass edge, a soft octave under for the weight, notes
+ * held then released rather than plucked. Same family as the Midnight
+ * Special horn, a very different mood. Liam's welcome follows it.
+ */
+export const CALL_TO_THE_POST = Object.freeze([
+    // [hz, start s, length s]
+    [392.00, 0.00, 0.16], // G4
+    [523.25, 0.18, 0.16], // C5
+    [659.25, 0.36, 0.16], // E5
+    [783.99, 0.54, 0.42], // G5
+    [659.25, 1.00, 0.16], // E5
+    [783.99, 1.18, 0.42], // G5
+    [659.25, 1.64, 0.16], // E5
+    [523.25, 1.82, 0.16], // C5
+    [392.00, 2.00, 0.16], // G4
+    [523.25, 2.18, 0.90], // C5, held
+]);
+export const CALL_TO_THE_POST_SECONDS = 3.2;
+
+const heldEnvelope = (ctx, t, peak, attack, hold, release) => {
+    const env = ctx.createGain();
+    const top = Math.max(0.0002, peak);
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(top, t + attack);
+    env.gain.setValueAtTime(top, t + attack + hold);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + attack + hold + release);
+    return env;
+};
+
+export const callToThePost = (ctx, destination, { when = 0 } = {}) => {
+    try {
+        const t0 = Math.max(when, ctx.currentTime);
+        for (const [freq, start, length] of CALL_TO_THE_POST) {
+            const at = t0 + start;
+            const hold = Math.max(0.02, length - 0.03);
+            for (const [detune, peak] of [[0, 0.15], [7, 0.09]]) {
+                const osc = ctx.createOscillator();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(freq, at);
+                if (osc.detune) osc.detune.setValueAtTime(detune, at);
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(2400, at);
+                filter.Q.setValueAtTime(0.8, at);
+                const env = heldEnvelope(ctx, at, peak, 0.03, hold, 0.08);
+                osc.connect(filter);
+                filter.connect(env);
+                env.connect(destination);
+                osc.start(at);
+                osc.stop(at + length + 0.15);
+                osc.onended = () => { try { env.disconnect(); } catch { /* best effort */ } };
+            }
+            const sub = ctx.createOscillator();
+            sub.type = 'triangle';
+            sub.frequency.setValueAtTime(freq / 2, at);
+            const subEnv = heldEnvelope(ctx, at, 0.08, 0.03, hold, 0.08);
+            sub.connect(subEnv);
+            subEnv.connect(destination);
+            sub.start(at);
+            sub.stop(at + length + 0.15);
+            sub.onended = () => { try { subEnv.disconnect(); } catch { /* best effort */ } };
+        }
+    } catch { /* audio is garnish */ }
+    return CALL_TO_THE_POST_SECONDS;
+};

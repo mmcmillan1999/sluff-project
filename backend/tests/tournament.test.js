@@ -38,7 +38,7 @@ const BOT_ACCOUNTS = [
 for (const bot of BOT_ACCOUNTS) registerBrainProfile(bot.username, bot.brain);
 const botProfiles = BOT_ACCOUNTS.map(({ id, username }) => ({ id, username, tokens: 100 }));
 
-function buildHarness({ balances = {}, now = 1_800_000_000_000, boardDelayMs = 0, presentationHoldMs = 0 } = {}) {
+function buildHarness({ balances = {}, now = 1_800_000_000_000, boardDelayMs = 0, presentationHoldMs = 0, welcomeHoldMs = 0, speakWelcome = null, welcomeSynthTimeoutMs = 10_000 } = {}) {
     const timers = [];
     const gameService = createGameServiceWithoutHeartbeat(GameService, mockIo, mockPool, { botAccounts: botProfiles });
     gameService.timerOverride = (cb, duration) => { timers.push({ cb, duration }); };
@@ -55,6 +55,9 @@ function buildHarness({ balances = {}, now = 1_800_000_000_000, boardDelayMs = 0
         random: () => 0,
         presentationHoldMs,
         boardDelayMs,
+        welcomeHoldMs,
+        speakWelcome,
+        welcomeSynthTimeoutMs,
     });
     gameService.attachTournamentDirector(director);
     const drainQueue = async () => { while (queue.length) await queue.shift()(); };
@@ -705,6 +708,107 @@ async function runTournamentTests() {
         pass('Fast play: creator-only, bots-only, ten times speed everywhere, re-times the pending step, survives a deploy, and switches off again.');
         await director.voidTournament(t.id, 'done');
         if (back.status === 'running') await second.director.voidTournament(t.id, 'done');
+    }
+
+    // ---------------------------------------------------------- the welcome
+    // Round one holds for the call to the felt: the favorites come from the
+    // record, Liam's script is handed to the voice without blocking the
+    // start, the line is served to entrants once it exists, and the cards
+    // fly when the hold ends. Later rounds open on the ordinary delay.
+    {
+        const balances = { 901: 1000, 902: 1000, 903: 1000, 904: 1000, 905: 1000 };
+        const spoken = [];
+        let resolveAudio = null;
+        const speakWelcome = script => { spoken.push(script); return new Promise(resolve => { resolveAudio = resolve; }); };
+        const harness = buildHarness({ balances, welcomeHoldMs: 18_000, speakWelcome });
+        const { director, gameService, store, clock } = harness;
+        const delays = [];
+        director.schedule = (fn, ms) => { delays.push(ms); harness.queue.push(fn); return harness.queue.length; };
+        // 902 has placed in its only event, 903 in one of two, 901 never.
+        store.state.results.push(
+            { tournamentId: 90, seasonId: 1, fieldSize: 6, buyInCents: 100, userId: 902, place: 1, prizeCents: 300, stack: 200, bustedRound: null },
+            { tournamentId: 90, seasonId: 1, fieldSize: 6, buyInCents: 100, userId: 903, place: 3, prizeCents: 100, stack: 60, bustedRound: null },
+            { tournamentId: 90, seasonId: 1, fieldSize: 6, buyInCents: 100, userId: 901, place: 5, prizeCents: 0, stack: -10, bustedRound: 2 },
+            { tournamentId: 91, seasonId: 1, fieldSize: 6, buyInCents: 100, userId: 903, place: 4, prizeCents: 0, stack: 0, bustedRound: 3 },
+        );
+        const matt = { id: 11, username: 'Matt', is_vip: true };
+        const t = await director.create(matt, { buyInTokens: 1, startingStack: 120, maxSeats: 6, startRule: 'creator' });
+        await director.register(t.id, matt);
+        for (let i = 0; i < 5; i += 1) await director.findPlayer(t.id, 11);
+        await director.start(t.id, 11);
+        const live = director.get(t.id);
+        const opening = director.publicState(live, 11);
+        assert.deepEqual(opening.favorites, ['Tourney Flytrap A', 'Tourney Sphinx A'], 'favorites by podium rate; a player who never placed is not one');
+        assert.equal(spoken.length, 1, 'Liam gets one script, at the start');
+        assert.match(spoken[0], /^Welcome to Sluff Tournament number \d+\.\.\. Matt's Tournament\. Tonight at the tables: Matt, Tourney Counting A, Tourney Flytrap A, Tourney Sphinx A, Tourney Coyote A, and Tourney Counting B\. Tonight's favorites\.\.\. Tourney Flytrap A and Tourney Sphinx A\. Six players\. One champion\. Take your seats\.$/);
+        assert.equal(opening.welcome.dealInSeconds, 18, 'the felt shows the hold');
+        assert.equal(opening.welcome.audio, false, 'the line is still being made');
+        const engines = [...live.tables.keys()].map(tableId => gameService.getEngineById(tableId));
+        assert.equal(engines.length, 2);
+        for (const engine of engines) {
+            assert.equal(engine.state, 'Dealing Pending');
+            assert.equal(engine.tournamentDealDueAt, clock.now + 18_000, 'round one holds for the welcome');
+        }
+        clock.now += 2_500;
+        await director.tick();
+        assert.equal(engines[0].state, 'Dealing Pending', 'the ordinary deal delay does not deal round one');
+        assert.equal(director.welcomeAudioFor(t.id, 11), null, 'no line to serve yet');
+
+        resolveAudio(Buffer.from('LIAM'));
+        await new Promise(resolve => setImmediate(resolve));
+        const ready = director.publicState(live, 11);
+        assert.equal(ready.welcome.audio, true, 'the clients are told the line is ready');
+        assert.equal(ready.welcome.dealInSeconds, 16);
+        assert.equal(director.welcomeAudioFor(t.id, 11).toString(), 'LIAM', 'an entrant can fetch the line');
+        assert.equal(director.welcomeAudioFor(t.id, 999), null, 'a stranger cannot');
+
+        clock.now += 15_500;
+        await director.tick();
+        for (const engine of engines) assert.equal(engine.state, 'Bidding Phase', 'the cards fly when the hold ends');
+        const dealt = director.publicState(live, 11);
+        assert.equal(dealt.welcome, null, 'the welcome is over once the cards fly');
+        assert.deepEqual(dealt.favorites, ['Tourney Flytrap A', 'Tourney Sphinx A'], 'the favorites stay on the board');
+        assert.equal(director.welcomeAudioFor(t.id, 11).toString(), 'LIAM', 'a late arrival in round one still gets the line');
+
+        await director.snapshotForShutdown();
+        const saved = harness.store.state.snapshots.get(t.id).snapshot;
+        assert.deepEqual(saved.tournament.favorites, ['Tourney Flytrap A', 'Tourney Sphinx A'], 'the favorites ride the deploy snapshot');
+
+        assert.deepEqual(delays.filter(ms => ms === 18_000).length, 2, 'both round-one tables were scheduled to deal after the hold');
+        await playRound(harness, live); // round one plays out; the board (no delay here) seats and deals round two
+        assert.equal(live.round, 2);
+        assert.equal(director.welcomeAudioFor(t.id, 11), null, 'the line is not kept past the opening');
+        assert.equal(delays.at(-1), 2_500, 'later rounds open on the ordinary delay');
+        assert.equal(delays.filter(ms => ms === 18_000).length, 2, 'the hold belongs to round one alone');
+        pass('Round one holds for the welcome: favorites from the record, Liam’s line served to entrants, cards fly when the hold ends.');
+
+        const second = buildHarness({ balances });
+        second.director.store = harness.store;
+        await second.director.restore();
+        const back = second.director.get(t.id);
+        assert.deepEqual(second.director.publicState(back, 11).favorites, ['Tourney Flytrap A', 'Tourney Sphinx A'], 'favorites survive a restart');
+        assert.equal(second.director.publicState(back, 11).welcome, null, 'the hold does not');
+        await director.voidTournament(t.id, 'done');
+        if (back.status === 'running') await second.director.voidTournament(t.id, 'done');
+    }
+    {
+        // A voice that never answers: the felt opens with the fanfare alone.
+        const balances = { 901: 1000, 902: 1000 };
+        const harness = buildHarness({ balances, welcomeHoldMs: 18_000, speakWelcome: () => new Promise(() => {}), welcomeSynthTimeoutMs: 5_000 });
+        const { director } = harness;
+        const matt = { id: 11, username: 'Matt', is_vip: true };
+        const t = await director.create(matt, { buyInTokens: 1, startingStack: 120, maxSeats: 3, startRule: 'creator' });
+        await director.register(t.id, matt);
+        for (let i = 0; i < 2; i += 1) await director.findPlayer(t.id, 11);
+        await director.start(t.id, 11);
+        const live = director.get(t.id);
+        assert.equal(live.welcome.audioState, 'pending');
+        await harness.drainQueue(); // the synth timeout fires (and the deal lands)
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(live.welcome.audioState, 'failed');
+        assert.equal(director.welcomeAudioFor(t.id, 11), null);
+        pass('A voice that never answers leaves the fanfare to open the felt on its own.');
+        await director.voidTournament(t.id, 'done');
     }
 
     console.log('Tournament director tests passed.');

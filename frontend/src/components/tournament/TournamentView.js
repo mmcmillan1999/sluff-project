@@ -25,7 +25,7 @@ const Facts = ({ tournament }) => (
 // Standings as a leaderboard: a stack bar against the leader, the top three
 // picked out, and — while the board shows the chip drain — each drop beside
 // the stack it came off.
-const Standings = ({ ranked, myUserId, finished, drain = null }) => {
+const Standings = ({ ranked, myUserId, finished, drain = null, favorites = [] }) => {
     const leader = Math.max(1, ...ranked.filter(entry => entry.status !== 'busted').map(entry => Math.max(0, Number(entry.stack) || 0)));
     return (
         <table className="tournament-standings">
@@ -51,7 +51,10 @@ const Standings = ({ ranked, myUserId, finished, drain = null }) => {
                     return (
                         <tr key={entry.userId} className={classes}>
                             <td className="num rank">{entry.rank}</td>
-                            <td className="name">{entry.username}</td>
+                            <td className="name">
+                                {favorites.includes(entry.username) && <span className="tournament-favorite-star" title="Tonight's favorite">★ </span>}
+                                {entry.username}
+                            </td>
                             <td className="bar-col" aria-hidden="true"><span className="tournament-bar" style={{ width: `${pct}%` }} /></td>
                             <td className="num stack">
                                 {drop > 0 && <span className="drop">−{drop}</span>}
@@ -365,7 +368,7 @@ const TournamentView = ({
                             </section>
                             <section className="tournament-panel">
                                 <h2>Standings</h2>
-                                <Standings ranked={ranked} myUserId={user?.id} finished={false} drain={drain} />
+                                <Standings ranked={ranked} myUserId={user?.id} finished={false} drain={drain} favorites={tournament.favorites || []} />
                             </section>
                         </div>
 
@@ -407,7 +410,7 @@ const TournamentView = ({
                     {tournament.status === 'complete' && (
                         <section className="tournament-panel">
                             <h2>Final standings · {tournament.round} rounds</h2>
-                            <Standings ranked={ranked} myUserId={user?.id} finished />
+                            <Standings ranked={ranked} myUserId={user?.id} finished favorites={tournament.favorites || []} />
                         </section>
                     )}
                 </>

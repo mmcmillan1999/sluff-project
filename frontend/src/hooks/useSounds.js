@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { isAudioSessionClaimedByVoice } from '../utils/VoiceChat';
-import { cardSnap, midnightSpecialScore, scheduleDealSounds, wheelClick, wheelSettle } from '../utils/soundSynth';
+import { cardSnap, midnightSpecialScore, scheduleDealSounds, wheelClick, wheelSettle, callToThePost, CALL_TO_THE_POST_SECONDS } from '../utils/soundSynth';
 import { haptic, hapticDealRun, hapticWheelTick } from '../utils/haptics';
 
 // Short effects and the music bed share one unlocked Web Audio context so they
@@ -633,6 +633,54 @@ export const useSounds = ({ musicActive = false } = {}) => {
         shout.start(ctx.currentTime + 1.2);
     }, [synthContext, playSound]);
 
+    // The call to the felt: the bugle the moment a tournament's first round
+    // opens, then Liam's welcome for THIS tournament over the hold once the
+    // server has it. The card on the felt calls this on arrival and again
+    // when the tournament state says the line is ready; the bugle plays
+    // once per tournament and the line once, and a 204 (not made yet) is
+    // simply tried again on the next call. A muted or locked context skips
+    // the lot — the card still shows.
+    const welcomeRef = useRef({ key: null, bugleAt: null, played: false, fetching: false });
+    const playTournamentWelcome = useCallback(async (key, fetchLine) => {
+        if (key == null) return;
+        if (welcomeRef.current.key !== key) {
+            welcomeRef.current = { key, bugleAt: null, played: false, fetching: false };
+        }
+        const welcome = welcomeRef.current;
+        const ctx = synthContext();
+        if (!ctx) return;
+        if (welcome.bugleAt === null) {
+            welcome.bugleAt = ctx.currentTime;
+            callToThePost(ctx, gainRef.current);
+            haptic('podiumWin');
+        }
+        if (welcome.played || welcome.fetching || typeof fetchLine !== 'function') return;
+        welcome.fetching = true;
+        try {
+            const bytes = await fetchLine();
+            if (!bytes || welcomeRef.current !== welcome) return;
+            const buffer = await new Promise((resolve, reject) => {
+                // Callback form for Safari's older decodeAudioData.
+                ctx.decodeAudioData(bytes, resolve, reject);
+            });
+            if (welcomeRef.current !== welcome || welcome.played) return;
+            const live = synthContext();
+            if (!live) return;
+            welcome.played = true;
+            const shout = live.createBufferSource();
+            shout.buffer = buffer;
+            // The voice sits above the bed, like the podium proclamation.
+            const boost = live.createGain();
+            boost.gain.value = 1.8;
+            shout.connect(boost);
+            boost.connect(gainRef.current);
+            shout.onended = () => { try { boost.disconnect(); } catch { /* best effort */ } };
+            shout.start(Math.max(live.currentTime + 0.05, welcome.bugleAt + CALL_TO_THE_POST_SECONDS + 0.4));
+        } catch { /* the bugle stands on its own */ } finally {
+            welcome.fetching = false;
+        }
+    }, [synthContext]);
+
     // The Midnight Special — the full production: Matt's song clip from
     // the first frame, with the synthesized horn and chug bedded over it,
     // all on the shared clock the animation reads.
@@ -662,6 +710,7 @@ export const useSounds = ({ musicActive = false } = {}) => {
         playMidnightSpecial,
         prefetchChampionLine,
         playChampionSting,
+        playTournamentWelcome,
         enableSound,
         soundSettings: {
             muted,

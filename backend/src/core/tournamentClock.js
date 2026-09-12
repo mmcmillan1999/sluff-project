@@ -46,6 +46,10 @@ const TOURNAMENT_CLOCK = Object.freeze({
     // The round opens on screen before the cards fly, so every client sees
     // the deal animation rather than landing on a dealt table.
     dealDelayMs: 2_500,
+    // The call to the felt: round one holds this long before its deal so
+    // the room can hear the welcome (a fanfare, then Liam reading the event,
+    // the roster and tonight's favorites) before a card moves.
+    welcomeHoldMs: 18_000,
     // One table left: the room stays seated and the next round follows the
     // recap after this, with no trip to the board.
     singleTableDelayMs: 4_000,

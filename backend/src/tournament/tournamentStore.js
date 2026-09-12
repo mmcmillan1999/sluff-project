@@ -146,6 +146,20 @@ function createMemoryStore({ seasonId = 1, balances = {} } = {}) {
             return new Map(botIds.map(id => [Number(id), balanceOf(id)]));
         },
 
+        // userId -> { played, podiums } across every finished tournament.
+        async loadTournamentRecords(userIds) {
+            const wanted = new Set(userIds.map(Number));
+            const records = new Map();
+            for (const result of state.results) {
+                if (!wanted.has(Number(result.userId))) continue;
+                const record = records.get(Number(result.userId)) || { played: 0, podiums: 0 };
+                record.played += 1;
+                if (result.place <= 3) record.podiums += 1;
+                records.set(Number(result.userId), record);
+            }
+            return records;
+        },
+
         async loadRegistering() {
             return [...state.tournaments.values()]
                 .filter(row => row.status === 'registering')
@@ -383,6 +397,22 @@ function createPgStore(pool) {
         async loadBotBalances(botIds) {
             const balances = await loadBotBalances(pool, botIds);
             return new Map([...balances].map(([id, value]) => [id, toCents(value)]));
+        },
+
+        // userId -> { played, podiums } across every finished tournament.
+        async loadTournamentRecords(userIds) {
+            const ids = userIds.map(Number).filter(Number.isInteger);
+            if (ids.length === 0) return new Map();
+            const { rows } = await pool.query(
+                `SELECT user_id,
+                        COUNT(*)::int AS played,
+                        COUNT(*) FILTER (WHERE place <= 3)::int AS podiums
+                 FROM tournament_results
+                 WHERE user_id = ANY($1::int[])
+                 GROUP BY user_id`,
+                [ids],
+            );
+            return new Map(rows.map(row => [Number(row.user_id), { played: Number(row.played), podiums: Number(row.podiums) }]));
         },
 
         async loadRegistering() {

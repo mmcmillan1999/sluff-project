@@ -1037,3 +1037,84 @@
   .tournament-felt-progress span { transition: none; }
   .tournament-standings td.stack .drop { animation: none; }
 }
+
+/* The call to the felt: round one's welcome, centered on the felt while the
+   first deal holds. Y in dvh (the visible viewport), vh as the fallback. */
+.tournament-welcome-card {
+  position: absolute;
+  top: 42vh;
+  top: 42dvh;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 40;
+  width: min(86vw, 60vh);
+  padding: 2vh 3vw;
+  border-radius: 1.6vh;
+  border: 1px solid rgba(255, 214, 120, 0.6);
+  background: rgba(14, 20, 24, 0.92);
+  color: #f6efd8;
+  font-family: 'Oswald', sans-serif;
+  text-align: center;
+  box-shadow: 0 0.8vh 2.4vh rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  animation: tournament-welcome-in 600ms ease-out both;
+}
+
+.tournament-welcome-eyebrow {
+  margin: 0;
+  font-size: clamp(0.7rem, 1.5vh, 0.9rem);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #ffd678;
+}
+
+.tournament-welcome-name {
+  margin: 0.4vh 0 0;
+  font-size: clamp(1.1rem, 3vh, 1.8rem);
+  font-weight: 600;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.tournament-welcome-field {
+  margin: 0.6vh 0 0;
+  font-size: clamp(0.8rem, 1.8vh, 1rem);
+  opacity: 0.85;
+}
+
+.tournament-welcome-favorites {
+  margin: 1.2vh 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4vh 1.4vw;
+  font-size: clamp(0.8rem, 1.8vh, 1rem);
+}
+
+.tournament-welcome-label {
+  width: 100%;
+  font-size: clamp(0.65rem, 1.4vh, 0.85rem);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #ffd678;
+}
+
+.tournament-welcome-favorite { white-space: nowrap; }
+
+.tournament-welcome-countdown {
+  margin: 1.4vh 0 0;
+  font-size: clamp(0.85rem, 2vh, 1.1rem);
+  font-variant-numeric: tabular-nums;
+  color: #9fe3d2;
+}
+
+.tournament-favorite-star { color: #ffd678; }
+
+@keyframes tournament-welcome-in {
+  from { opacity: 0; transform: translate(-50%, -46%); }
+  to { opacity: 1; transform: translate(-50%, -50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tournament-welcome-card { animation: none; }
+}

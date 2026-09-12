@@ -42,24 +42,31 @@ function spokenChampionName(raw) {
 
 const nameKey = (raw) => String(raw || '').trim().toLocaleLowerCase().slice(0, 80);
 
-async function generateLine(spoken, fetchImpl) {
+// The announcer bark, same settings as the podium_win shout takes.
+const ANNOUNCER_SETTINGS = Object.freeze({ stability: 0.3, similarity_boost: 0.8, style: 0.85, use_speaker_boost: true });
+
+/**
+ * Liam saying `text`: an mp3 Buffer, or null when there is no API key.
+ * Throws on a failed or implausible response. Callers own the text — every
+ * player-controlled fragment must go through spokenChampionName first.
+ */
+async function synthesizeLine(text, { fetchImpl, voiceSettings = ANNOUNCER_SETTINGS } = {}) {
     const key = process.env.ELEVENLABS_API_KEY;
     if (!key) return null;
     const doFetch = fetchImpl || fetch;
     const res = await doFetch(`https://api.elevenlabs.io/v1/text-to-speech/${LIAM}`, {
         method: 'POST',
         headers: { 'xi-api-key': key, 'Content-Type': 'application/json', accept: 'audio/mpeg' },
-        body: JSON.stringify({
-            text: `All hail your champion... ${spoken}!`,
-            model_id: MODEL,
-            // The announcer bark, same settings as the podium_win shout takes.
-            voice_settings: { stability: 0.3, similarity_boost: 0.8, style: 0.85, use_speaker_boost: true },
-        }),
+        body: JSON.stringify({ text, model_id: MODEL, voice_settings: voiceSettings }),
     });
     if (!res.ok) throw new Error(`tts HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
     const audio = Buffer.from(await res.arrayBuffer());
     if (audio.length < 1000) throw new Error(`suspiciously small tts response (${audio.length} bytes)`);
     return audio;
+}
+
+async function generateLine(spoken, fetchImpl) {
+    return synthesizeLine(`All hail your champion... ${spoken}!`, { fetchImpl });
 }
 
 /**
@@ -97,4 +104,4 @@ async function getChampionLine(pool, playerName, { fetchImpl } = {}) {
     }
 }
 
-module.exports = { getChampionLine, spokenChampionName };
+module.exports = { getChampionLine, spokenChampionName, synthesizeLine };

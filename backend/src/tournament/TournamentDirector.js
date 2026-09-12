@@ -22,6 +22,7 @@ const { seatRound, tableSizes } = require('./seating');
 const { rankFinishers, allocatePrizeCents } = require('./prizes');
 const { ROUND_PRESENTATION_LOCK_MS, THEMES } = require('../core/constants');
 const tournamentClock = require('../core/tournamentClock');
+const { pickFavorites, buildWelcomeScript } = require('./tournamentWelcome');
 
 const TRICKS_PER_ROUND = 11;
 const BIDDING_STATES = new Set([
@@ -81,6 +82,12 @@ class TournamentDirector {
         boardDelayMs = DEFAULT_BOARD_DELAY_MS,
         dealDelayMs = tournamentClock.TOURNAMENT_CLOCK.dealDelayMs,
         singleTableDelayMs = tournamentClock.TOURNAMENT_CLOCK.singleTableDelayMs,
+        // The call to the felt: round one holds this long before its deal,
+        // and speakWelcome(script) — when wired — turns Liam's line into an
+        // mp3 for the clients to play over it (see tournamentWelcome.js).
+        welcomeHoldMs = tournamentClock.TOURNAMENT_CLOCK.welcomeHoldMs,
+        speakWelcome = null,
+        welcomeSynthTimeoutMs = 10_000,
         allowNegativeHumans = true,
         venues = [...THEMES.map(theme => theme.id), TOURNAMENT_VENUE],
         log = console,
@@ -98,6 +105,9 @@ class TournamentDirector {
         this.boardDelayMs = boardDelayMs;
         this.dealDelayMs = dealDelayMs;
         this.singleTableDelayMs = singleTableDelayMs;
+        this.welcomeHoldMs = welcomeHoldMs;
+        this.speakWelcome = typeof speakWelcome === 'function' ? speakWelcome : null;
+        this.welcomeSynthTimeoutMs = welcomeSynthTimeoutMs;
         this.allowNegativeHumans = allowNegativeHumans;
         this.venues = venues;
         this.log = log;
@@ -223,6 +233,12 @@ class TournamentDirector {
             // Between rounds: how long until the next one opens, so the
             // board can count down instead of leaving the room guessing.
             nextRoundInSeconds: t.nextRoundAt ? Math.max(0, Math.ceil((t.nextRoundAt - this.now()) / 1000)) : null,
+            // Tonight's favorites (by tournament record), for the board and
+            // the welcome; and, while round one waits on its first deal,
+            // the welcome itself: how long until the cards fly, and whether
+            // Liam's line is ready to fetch.
+            favorites: t.welcome ? [...t.welcome.favorites] : [],
+            welcome: this._welcomeState(t),
             creatorUserId: t.creatorUserId,
             creatorName: t.creatorName,
             seatsTaken: this._seatCount(t),
@@ -566,6 +582,7 @@ class TournamentDirector {
                 startedAt: t.startedAt, round: t.round, roundCompleteAt: t.roundCompleteAt || null,
                 drainPercent: t.drainPercent || 0,
                 fastPlay: t.fastPlay === true,
+                favorites: t.welcome ? [...t.welcome.favorites] : [],
             },
             entries: [...t.entries.values()].map(entry => ({
                 userId: entry.userId, username: entry.username, isBot: entry.isBot, status: entry.status,
@@ -624,6 +641,10 @@ class TournamentDirector {
         t.startedAt = meta.startedAt;
         t.round = Number(meta.round) || 0;
         t.fastPlay = meta.fastPlay === true;
+        // The favorites outlive a restart; the welcome's hold and audio do not.
+        t.welcome = Array.isArray(meta.favorites) && meta.favorites.length > 0
+            ? { favorites: [...meta.favorites], script: null, audio: null, audioState: 'none', dealAt: null }
+            : null;
         for (const saved of snapshot.entries || []) {
             const entry = this._newEntry({ userId: saved.userId, username: saved.username, isBot: saved.isBot, stack: saved.stack });
             Object.assign(entry, {
@@ -709,6 +730,7 @@ class TournamentDirector {
         }
         await this.store.updateStatus(t.id, 'running', { startedAt: new Date(t.startedAt) });
         this.log.log(`[TOURNAMENT] #${t.id} "${t.name}" started (${how}) with ${this._alive(t).length} players.`);
+        await this._prepareWelcome(t);
         await this._startRound(t);
     }
 
@@ -732,6 +754,9 @@ class TournamentDirector {
         t.reuseTableId = null;
         t.heldTable = null;
         t.tables = new Map();
+        // Round one holds for the welcome before its deal; every later round
+        // opens on the ordinary deal delay.
+        const openDelayMs = t.round === 1 && t.welcome ? Math.max(this.dealDelayMs, this.welcomeHoldMs) : this.dealDelayMs;
         for (const table of plan) {
             const tableId = reuseTableId || `tn-${t.id}-r${t.round}-t${table.index + 1}`;
             const seats = table.seats.map(id => t.entries.get(id));
@@ -775,19 +800,20 @@ class TournamentDirector {
             t.tables.set(tableId, { ...table, tableId, result: null });
             // The table opens on every screen first; the cards fly after the
             // deal delay, so the clients see Dealing Pending and animate.
-            engine.tournamentDealDueAt = this.now() + this._delay(t, this.dealDelayMs);
+            engine.tournamentDealDueAt = this.now() + this._delay(t, openDelayMs);
             this.gameService.emitGameState(tableId);
-            this._scheduleDeal(t, tableId);
+            this._scheduleDeal(t, tableId, openDelayMs);
         }
+        if (t.welcome && t.round === 1) t.welcome.dealAt = this.now() + this._delay(t, openDelayMs);
         t.lastProgressSignature = null;
         await this.store.updateStatus(t.id, 'running', { currentRound: t.round });
         this._emit(t);
     }
 
-    _scheduleDeal(t, tableId) {
+    _scheduleDeal(t, tableId, delayMs = this.dealDelayMs) {
         this.schedule(() => this._dealIfPending(t, tableId).catch(error => {
             this.log.error(`[TOURNAMENT] #${t.id} deal failed at ${tableId}:`, error);
-        }), this._delay(t, this.dealDelayMs));
+        }), this._delay(t, delayMs));
     }
 
     async _dealIfPending(t, tableId) {
@@ -954,6 +980,11 @@ class TournamentDirector {
         t.pendingTimer = null;
         t.roundCompleteAt = null;
         this._unwatchAll(t);
+        // The welcome belongs to the opening; its audio is not kept past it.
+        if (t.welcome && t.round === 1) {
+            t.welcome.audio = null;
+            if (t.welcome.audioState === 'ready') t.welcome.audioState = 'spent';
+        }
         // Player names are the engine's keys; the tournament's own roster is
         // the authority for turning them back into ids (a table restored
         // after a deploy may have no engine at all).
@@ -1173,6 +1204,73 @@ class TournamentDirector {
         this._emit(t);
     }
 
+    // ---------------------------------------------------------- the welcome
+
+    // The call to the felt. Runs once, as the tournament starts: the field
+    // in reading order (host first, then as they registered), each player's
+    // tournament record for the favorites, and Liam's line. The audio is
+    // generated in the background — the start never waits on the TTS; the
+    // line lands when it lands and the clients play it if the felt is still
+    // waiting on its first deal.
+    async _prepareWelcome(t) {
+        const field = this._alive(t);
+        const ordered = [
+            ...field.filter(entry => entry.userId === t.creatorUserId),
+            ...field.filter(entry => entry.userId !== t.creatorUserId),
+        ];
+        let records = new Map();
+        try {
+            records = await this.store.loadTournamentRecords(ordered.map(entry => entry.userId));
+        } catch (error) {
+            this.log.error(`[TOURNAMENT] #${t.id} could not load records for the favorites:`, error.message);
+        }
+        const favorites = pickFavorites(ordered, records);
+        const script = buildWelcomeScript({ id: t.id, name: t.name, entries: ordered, favorites });
+        const welcome = { favorites, script, audio: null, audioState: this.speakWelcome ? 'pending' : 'none', dealAt: null };
+        t.welcome = welcome;
+        if (!this.speakWelcome) return;
+        const timeout = new Promise(resolve => {
+            this.schedule(() => resolve(null), this.welcomeSynthTimeoutMs);
+        });
+        Promise.race([Promise.resolve().then(() => this.speakWelcome(script)), timeout])
+            .then(audio => {
+                if (t.welcome !== welcome) return;
+                if (audio) {
+                    welcome.audio = audio;
+                    welcome.audioState = 'ready';
+                    this._emit(t);
+                } else {
+                    welcome.audioState = 'failed';
+                    this.log.log(`[TOURNAMENT] #${t.id} welcome line unavailable; the felt opens with the fanfare alone.`);
+                }
+            })
+            .catch(error => {
+                if (t.welcome === welcome) welcome.audioState = 'failed';
+                this.log.error(`[TOURNAMENT] #${t.id} welcome line failed:`, error.message);
+            });
+    }
+
+    // Player-facing: only while round one is still waiting on its first deal.
+    _welcomeState(t) {
+        if (!t.welcome || t.round !== 1 || !t.welcome.dealAt) return null;
+        const now = this.now();
+        if (now >= t.welcome.dealAt) return null;
+        return {
+            dealInSeconds: Math.max(0, Math.ceil((t.welcome.dealAt - now) / 1000)),
+            audio: t.welcome.audioState === 'ready',
+        };
+    }
+
+    // Liam's line for an entrant of the tournament; null for anyone else,
+    // and once the opening has passed.
+    welcomeAudioFor(tournamentId, userId) {
+        const t = this.get(tournamentId);
+        if (!t || !t.welcome || !t.welcome.audio) return null;
+        const entry = t.entries.get(Number(userId));
+        if (!entry || ['withdrawn', 'refunded'].includes(entry.status)) return null;
+        return t.welcome.audio;
+    }
+
     // ------------------------------------------------------------- helpers
 
     _newTournament(fields) {
@@ -1192,6 +1290,7 @@ class TournamentDirector {
             lastProgressSignature: null,
             drainPercent: Number(fields.drainPercent) || 0,
             lastDrain: null,
+            welcome: null,
             entries: new Map(),
             tables: new Map(),
             lease: this.gameService.createBotSeatLease(`tn-${fields.id}`),

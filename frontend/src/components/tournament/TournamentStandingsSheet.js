@@ -56,7 +56,10 @@ const TournamentStandingsSheet = ({ tournament, viewerUserId, onClose, watchingT
                         return (
                             <tr key={entry.userId} className={[entry.userId === Number(viewerUserId) ? 'me' : '', entry.status === 'busted' ? 'out' : ''].join(' ').trim()}>
                                 <td className="num">{ordinal(entry.rank)}</td>
-                                <td>{entry.username}</td>
+                                <td>
+                                    {(tournament.favorites || []).includes(entry.username) && <span className="tournament-favorite-star" title="Tonight's favorite">★ </span>}
+                                    {entry.username}
+                                </td>
                                 <td className="num">{entry.stack}</td>
                                 <td>{entry.status === 'busted' ? `out · r${entry.bustedRound}` : (table ? `T${table.tableIndex + 1}${table.tableId === myTable?.tableId ? ' · you' : ''}` : '')}</td>
                             </tr>

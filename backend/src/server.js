@@ -12,6 +12,7 @@ const bcrypt = require('bcrypt');
 const GameService = require('./services/GameService');
 const { TournamentDirector } = require('./tournament/TournamentDirector');
 const { createPgStore: createTournamentStore } = require('./tournament/tournamentStore');
+const { synthesizeLine } = require('./services/championLine');
 const registerGameHandlers = require('./events/gameEvents');
 const createAuthRoutes = require('./api/auth');
 const createLeaderboardRoutes = require('./api/leaderboard');
@@ -189,7 +190,14 @@ async function initializeApplication() {
     const gameService = new GameService(io, pool, { botAccounts });
     // Tournaments: the director owns registration, the round loop and the
     // podium; the service owns the tables (src/tournament/).
-    const tournamentDirector = new TournamentDirector({ gameService, store: createTournamentStore(pool), io });
+    const tournamentDirector = new TournamentDirector({
+        gameService,
+        store: createTournamentStore(pool),
+        io,
+        // The call to the felt: Liam reads the event, the roster and the
+        // favorites (tournament/tournamentWelcome.js) over round one's hold.
+        speakWelcome: script => synthesizeLine(script),
+    });
     gameService.attachTournamentDirector(tournamentDirector);
     const recoveryTiming = recoveryTimingFromEnvironment();
     recoveryMonitor = createAbandonedGameRecoveryMonitor({

@@ -57,6 +57,25 @@ const createSoundsRoutes = (pool, jwt, gameService) => {
         }
     });
 
+    // GET /api/sounds/tournament-welcome/:tournamentId — Liam's call to the
+    // felt for a tournament the caller is entered in, while its first round
+    // waits on the deal. 204 whenever there is no line (not an entrant,
+    // TTS unavailable, opening over) — the client plays the fanfare alone.
+    router.get('/tournament-welcome/:tournamentId', checkAuth, async (req, res) => {
+        try {
+            const director = gameService.tournamentDirector;
+            const audio = director?.welcomeAudioFor?.(req.params.tournamentId, req.user.id) || null;
+            if (!audio) return res.status(204).end();
+            res.set('Content-Type', 'audio/mpeg');
+            // The line is one tournament's; the next event has another.
+            res.set('Cache-Control', 'private, no-store');
+            return res.send(audio);
+        } catch (error) {
+            console.error('Error serving tournament welcome:', error);
+            return res.status(500).json({ message: 'Unable to load the tournament welcome.' });
+        }
+    });
+
     return router;
 };
 

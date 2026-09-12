@@ -625,6 +625,24 @@ export const fetchChampionLine = async (tableId, gameKey = '') => {
     }
 };
 
+/**
+ * The call to the felt: Liam's welcome line for a tournament the caller is
+ * entered in, while its first round waits on the deal. null (204) until the
+ * server has the line — the caller asks again when the tournament state
+ * says it is ready. Never cached: one event, one line.
+ */
+export const fetchTournamentWelcome = async (tournamentId) => {
+    try {
+        const response = await configuredFetch(
+            `/api/sounds/tournament-welcome/${encodeURIComponent(tournamentId)}`, 'GET',
+        );
+        if (response.status !== 200) return null;
+        return await response.arrayBuffer();
+    } catch {
+        return null;
+    }
+};
+
 // --- Feedback Service Calls ---
 
 export const submitFeedback = async (feedbackData) => {

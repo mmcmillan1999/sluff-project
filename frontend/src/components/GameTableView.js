@@ -58,6 +58,7 @@ import { CARD_PLAY_STYLES, useCardPlayStyle, setCardPlayStyle } from '../utils/p
 import VoiceControls from './game/VoiceControls';
 import { TournamentVoiceSlot } from './tournament/TournamentVoiceDock';
 import TournamentWaitStrip from './tournament/TournamentWaitStrip';
+import TournamentWelcomeCard from './tournament/TournamentWelcomeCard';
 
 // Admin-only dev overlay (~900 lines): fetched on first Shift+D instead of
 // shipping in every player's main chunk.
@@ -101,7 +102,7 @@ const stableScoreMapSignature = (scoreMap) => JSON.stringify(
 );
 
 
-const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, handleShowHowToPlay, emitEvent, playSound, playDealSounds, playMidnightSpecial, prefetchChampionLine, playChampionSting, socket, handleOpenFeedbackModal, soundSettings, tutorialState, onTutorialAction, onShowTokenLedger, tournament = null, watchingTableId = null, onWatchTable = null, onStopWatching = null }) => {
+const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, handleShowHowToPlay, emitEvent, playSound, playDealSounds, playMidnightSpecial, prefetchChampionLine, playChampionSting, playTournamentWelcome = null, socket, handleOpenFeedbackModal, soundSettings, tutorialState, onTutorialAction, onShowTokenLedger, tournament = null, watchingTableId = null, onWatchTable = null, onStopWatching = null }) => {
     const themePresentation = getThemePresentation(currentTableState?.theme);
     const [seatAssignments, setSeatAssignments] = useState({ self: null, opponentLeft: null, opponentRight: null });
     const [showRoundSummaryModal, setShowRoundSummaryModal] = useState(false);
@@ -1498,6 +1499,13 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                     viewerName={selfPlayerName}
                     watchingTableId={watchingTableId}
                     onWatch={onWatchTable}
+                />
+            )}
+            {currentTableState?.tournament && tournament && tournament.id === currentTableState.tournament.tournamentId && (
+                <TournamentWelcomeCard
+                    tournament={tournament}
+                    tableState={currentTableState.state}
+                    playWelcome={playTournamentWelcome}
                 />
             )}
             {!roundPresentationControlsLocked && createPortal(
