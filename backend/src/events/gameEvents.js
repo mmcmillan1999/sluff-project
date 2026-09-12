@@ -1214,7 +1214,7 @@ const registerGameHandlers = (io, gameService, options = {}) => {
             }
         });
 
-        socket.on("disconnect", async () => {
+        socket.on("disconnect", async (reason) => {
             socketIdentityRefreshStopped = true;
             cancelInterval(socketIdentityRefreshTimer);
             const socketUserKey = String(socket.user.id);
@@ -1238,7 +1238,12 @@ const registerGameHandlers = (io, gameService, options = {}) => {
                 if (fallbackSocketId) latestSocketIdByUser.set(socketUserKey, fallbackSocketId);
                 else latestSocketIdByUser.delete(socketUserKey);
             }
-            console.log(`Socket disconnected: ${socket.user.username} (ID: ${socket.user.id}, Socket: ${socket.id})`);
+            // The reason tells a network drop ("transport close", "ping
+            // timeout") from the client cycling its own socket ("client
+            // namespace disconnect"); a promoted fallback means this account
+            // still has another connection open — a second tab or device.
+            console.log(`Socket disconnected: ${socket.user.username} (ID: ${socket.user.id}, Socket: ${socket.id}, reason: ${reason})`
+                + (promotedFallbackSocket ? ` — another connection remains (${promotedFallbackSocket.id})` : ''));
             for (const [voiceTableId, voiceRoom] of voiceRooms) {
                 const voiceMember = voiceRoom.get(socket.user.id);
                 if (voiceMember && voiceMember.socketId === socket.id) {
