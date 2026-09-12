@@ -166,6 +166,11 @@ function recoveryTimingFromEnvironment() {
 }
 
 async function initializeApplication() {
+    // Every login and socket handshake signs or verifies with this; without
+    // it the process would boot green and 500 on the first sign-in.
+    if (!process.env.JWT_SECRET) {
+        throw new Error('JWT_SECRET is not set; every login and socket auth would fail.');
+    }
     pool = new Pool({
         connectionString: process.env.POSTGRES_CONNECT_STRING,
         ssl: { rejectUnauthorized: false },
