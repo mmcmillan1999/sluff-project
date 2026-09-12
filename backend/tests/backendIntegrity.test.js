@@ -103,6 +103,56 @@ function testInsuranceOvershootIsZeroSum() {
     assert.equal(Object.values(round.pointChanges).reduce((sum, value) => sum + value, 0), 0);
 }
 
+function testInsuranceIsReadOnlyForObservers() {
+    // Everyone at the table can follow the negotiation (the serializer leaves
+    // `insurance` intact for spectators); only the bidder and the two
+    // defenders may move it. Observers, late arrivals and seats outside the
+    // deal are refused before any value is parsed.
+    const engine = makeEngine();
+    engine.state = 'Playing Phase';
+    engine.bidWinnerInfo = { userId: 1, playerName: 'Alice', bid: 'Solo' };
+    engine.insurance = {
+        isActive: true,
+        bidMultiplier: 1,
+        bidderPlayerName: 'Alice',
+        bidderRequirement: 50,
+        defenderOffers: { Bob: 0, Cara: 0 },
+        dealExecuted: false,
+        executedDetails: null,
+    };
+    // A late arrival at a started table is seated as a spectator — the same
+    // shape a tournament watcher takes (TournamentDirector.watchTable).
+    engine.joinTable({ id: 99, username: 'Watcher' }, 'socket-99');
+    assert.equal(engine.players[99].isSpectator, true, 'a late arrival spectates');
+    // A seated fourth player outside the active trio (the sitting-out dealer).
+    engine.players[4] = {
+        userId: 4, playerName: 'Drew', socketId: 'socket-4', tokens: '40.00',
+        isSpectator: false, disconnected: false,
+    };
+
+    const before = JSON.stringify(engine.insurance);
+    const attempts = [
+        [99, 'bidderRequirement', 0, 'a spectator cannot move the ask'],
+        [99, 'defenderOffer', 60, 'a spectator cannot post an offer'],
+        [4, 'bidderRequirement', 0, 'a seat outside the deal cannot move the ask'],
+        [4, 'defenderOffer', 60, 'a seat outside the deal cannot post an offer'],
+        [42, 'defenderOffer', 60, 'a user who is not at the table is refused'],
+        [2, 'bidderRequirement', 0, 'a defender cannot move the ask'],
+        [1, 'defenderOffer', 60, 'the bidder cannot post an offer'],
+    ];
+    for (const [userId, settingType, value, message] of attempts) {
+        const result = engine.updateInsuranceSetting(userId, settingType, value);
+        assert.equal(result.effects.length, 0, message);
+    }
+    assert.equal(JSON.stringify(engine.insurance), before, 'no refused attempt moved the negotiation');
+    assert.equal(engine.insurance.dealExecuted, false, 'no refused attempt locked a deal');
+
+    // The parties still can: the same offers from the right seats lock it.
+    engine.updateInsuranceSetting(2, 'defenderOffer', 30);
+    engine.updateInsuranceSetting(3, 'defenderOffer', 20);
+    assert.equal(engine.insurance.dealExecuted, true, 'the defenders meeting the ask still locks the deal');
+}
+
 function testDrawVotePausesPlayAndGuardsTransitions() {
     const engine = makeEngine();
     engine.state = 'Playing Phase';
@@ -884,6 +934,7 @@ async function runBackendIntegrityTests() {
     testPlayAndFrogGuards();
     testBidAnnouncementTimerLifecycle();
     testInsuranceOvershootIsZeroSum();
+    testInsuranceIsReadOnlyForObservers();
     testDrawVotePausesPlayAndGuardsTransitions();
     testSocketActionGuard();
     testPersonalizedServiceDelivery();

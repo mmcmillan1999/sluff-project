@@ -185,6 +185,34 @@ function runGameStateSerializerTests() {
     }
 
     {
+        // Observers follow the insurance negotiation: the ask and every offer
+        // are already public to each seat, and a locked deal settles the round
+        // in the open. Hands stay hidden regardless.
+        const insurance = {
+            isActive: true,
+            bidMultiplier: 2,
+            bidderPlayerName: 'Alice',
+            bidderRequirement: 40,
+            defenderOffers: { Bob: 10, Cara: 30 },
+            dealExecuted: true,
+            executedDetails: {
+                agreement: {
+                    bidderPlayerName: 'Alice',
+                    bidderRequirement: 40,
+                    bidderSettlement: 40,
+                    defenderOffers: { Bob: 10, Cara: 30 },
+                },
+            },
+        };
+        const rawState = makeState({ insurance });
+        const spectator = serializeGameState(makeGame(rawState), { userId: 99 });
+        assert.deepEqual(spectator.insurance, insurance, 'a spectator sees the whole insurance negotiation');
+        assert.deepEqual(spectator.hands, {}, 'the negotiation does not bring hands with it');
+        spectator.insurance.defenderOffers.Bob = 60;
+        assert.equal(rawState.insurance.defenderOffers.Bob, 10, 'the spectator copy is detached from the engine');
+    }
+
+    {
         assert.throws(
             () => serializeGameState({}, { userId: 1 }),
             /requires a game state provider/,
