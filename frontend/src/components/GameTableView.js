@@ -1644,6 +1644,7 @@ const GameTableView = ({ ringCardHold = false, user, playerId, currentTableState
                 show={showInsurancePrompt}
                 insuranceState={currentTableState.insurance}
                 selfPlayerName={selfPlayerName}
+                isSpectator={Boolean(isSpectator)}
                 emitEvent={emitEvent}
                 onClose={() => setShowInsurancePrompt(false)}
                 onInsuranceInteract={() => setInsuranceTouched(true)}

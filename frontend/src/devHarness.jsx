@@ -11,6 +11,9 @@
 // add &hold=1 to freeze the finished logo for screenshots);
 // ?frogwidow=1 to preview the Frog widow exchange table art (combine with
 // ?role=defender to see the "X is choosing…" status line);
+// ?role=watcher to watch from the rail as a spectator (Brandi bids, Elena
+// and Marcus defend): no hand, and the footer carries the read-only
+// insurance board every observer sees;
 // ?prompt=bid|status|trump|frogup|allpass|qp3|seek|fill|private|draw to
 // force each table popup (combine ?mode=4&prompt=qp3 for the 4-seat start).
 // ?turn=1 to make it your turn with a live hand — playCard really moves the
@@ -97,7 +100,11 @@ if (identMode) {
     ReactDOM.createRoot(document.getElementById('root')).render(<IdentHarness />);
 }
 
-const playerMode = params.get('mode') === '4' ? 4 : 3;
+// ?role=watcher — You are a spectator at a three-seat table (Brandi bids,
+// Elena and Marcus defend): the seats and the insurance board render the
+// way a spectator or tournament watcher sees them.
+const selfIsWatcher = params.get('role') === 'watcher';
+const playerMode = params.get('mode') === '4' && !selfIsWatcher ? 4 : 3;
 // ?fx=<id> equips a trump-broken effect before mount so the three can be
 // compared back-to-back with ?broken=1. Unknown ids are ignored.
 if (params.get('fx')) {
@@ -117,19 +124,21 @@ if (params.get('playstyle')) {
 const volley = params.get('volley') === '1';
 const interactiveTurn = params.get('turn') === '1' || Boolean(params.get('playstyle')) || volley;
 // ?role=defender — Brandi holds the bid and You defend.
-const selfIsBidder = params.get('role') !== 'defender';
+const selfIsBidder = !selfIsWatcher && params.get('role') !== 'defender';
 // ?insurance=unset — everyone still at the server's round defaults
 // (ask 120xM, offers -60xM), which arms the attention pulse.
 const insuranceUnset = params.get('insurance') === 'unset';
 const bidderName = selfIsBidder ? 'You' : 'Brandi';
-const defenderNames = selfIsBidder ? ['Brandi', 'Elena'] : ['You', 'Elena'];
+const defenderNames = selfIsWatcher
+    ? ['Elena', 'Marcus']
+    : (selfIsBidder ? ['Brandi', 'Elena'] : ['You', 'Elena']);
 
 const players = {
-    101: { userId: 101, playerName: 'You', isSpectator: false, disconnected: false, isBot: false },
+    101: { userId: 101, playerName: 'You', isSpectator: selfIsWatcher, disconnected: false, isBot: false },
     102: { userId: 102, playerName: 'Brandi', isSpectator: false, disconnected: false, isBot: false },
     103: { userId: 103, playerName: 'Elena', isSpectator: false, disconnected: false, isBot: false },
 };
-if (playerMode === 4) {
+if (playerMode === 4 || selfIsWatcher) {
     players[104] = { userId: 104, playerName: 'Marcus', isSpectator: false, disconnected: false, isBot: false };
 }
 
@@ -142,14 +151,22 @@ const tableState = {
     gameStarted: true,
     playerMode,
     players,
-    seatingOrder: playerMode === 4 ? ['You', 'Brandi', 'Marcus', 'Elena'] : ['You', 'Brandi', 'Elena'],
-    playerOrderActive: ['You', 'Brandi', 'Elena'],
+    seatingOrder: selfIsWatcher
+        ? ['Brandi', 'Elena', 'Marcus']
+        : (playerMode === 4 ? ['You', 'Brandi', 'Marcus', 'Elena'] : ['You', 'Brandi', 'Elena']),
+    playerOrderActive: selfIsWatcher ? ['Brandi', 'Elena', 'Marcus'] : ['You', 'Brandi', 'Elena'],
     // In defender mode Brandi is dealer AND bidder: both corner pucks plus
     // her 267 two-column bank on one rotated seat — the worst-case collision.
-    dealer: playerMode === 4 ? 104 : (selfIsBidder ? 103 : 102),
+    dealer: playerMode === 4 || selfIsWatcher ? 104 : (selfIsBidder ? 103 : 102),
     // Brandi's 267 exercises the max six-pile bank; Elena's 44 the two-pile one.
-    scores: { You: 108, Brandi: 267, Elena: 44, ...(playerMode === 4 ? { Marcus: 90 } : {}) },
-    hands: { You: ['AC', 'KC', 'QC', 'JC', '10C', '9C', '8S', '7S', 'AD', 'KD', 'QD'] },
+    scores: {
+        ...(selfIsWatcher ? {} : { You: 108 }),
+        Brandi: 267,
+        Elena: 44,
+        ...(playerMode === 4 || selfIsWatcher ? { Marcus: 90 } : {}),
+    },
+    // A spectator is dealt nothing (the server never sends them a hand).
+    hands: selfIsWatcher ? {} : { You: ['AC', 'KC', 'QC', 'JC', '10C', '9C', '8S', '7S', 'AD', 'KD', 'QD'] },
     widow: ['6D', '7D', '8D'],
     widowCount: 3,
     originalDealtWidow: ['6D', '7D', '8D'],
@@ -164,7 +181,7 @@ const tableState = {
         { playerName: 'Elena', card: '9H' },
     ],
     capturedTricks: {
-        You: [[{ card: 'AH' }, { card: '6H' }, { card: '7H' }]],
+        [selfIsWatcher ? 'Marcus' : 'You']: [[{ card: 'AH' }, { card: '6H' }, { card: '7H' }]],
         Brandi: [[{ card: '10H' }, { card: 'JH' }, { card: 'QH' }], [{ card: '8H' }, { card: '8D' }, { card: '9D' }]],
     },
     currentHighestBidDetails: { userId: selfIsBidder ? 101 : 102, playerName: bidderName, bid: 'Solo' },
@@ -336,7 +353,7 @@ if (params.get('frogwidow') === '1') {
     tableState.state = 'Frog Widow Exchange';
     tableState.revealedWidowForFrog = ['6D', '7D', '8D'];
     tableState.currentTrickCards = [];
-    tableState.hands.You = [...tableState.hands.You, '6D', '7D', '8D'];
+    tableState.hands.You = [...(tableState.hands.You || []), '6D', '7D', '8D'];
 }
 
 const noop = () => {};

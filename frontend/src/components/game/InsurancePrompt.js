@@ -30,14 +30,16 @@ const BouncingValue = ({ value, className = '', format = String }) => {
     );
 };
 
-const InsurancePrompt = ({ show, insuranceState, selfPlayerName, emitEvent, onClose, onInsuranceInteract }) => {
+const InsurancePrompt = ({ show, insuranceState, selfPlayerName, isSpectator, emitEvent, onClose, onInsuranceInteract }) => {
     const [value, setValue] = useState(0);
     const [isInitialized, setIsInitialized] = useState(false);
 
     const { bidMultiplier, bidderPlayerName, bidderRequirement, defenderOffers, dealExecuted } = insuranceState || {};
     const multiplier = bidMultiplier || 1;
-    const isBidder = selfPlayerName === bidderPlayerName;
-    const isDefender = Boolean(defenderOffers
+    // Observers (spectators, tournament watchers) get the live board only:
+    // a spectator is never a party to the deal, whatever their name matches.
+    const isBidder = !isSpectator && selfPlayerName === bidderPlayerName;
+    const isDefender = !isSpectator && Boolean(defenderOffers
         && Object.prototype.hasOwnProperty.call(defenderOffers, selfPlayerName));
     const isParticipant = isBidder || isDefender;
 
@@ -143,7 +145,7 @@ const InsurancePrompt = ({ show, insuranceState, selfPlayerName, emitEvent, onCl
     const needsFirstSave = isParticipant && !dealExecuted && savedValue === config.untouchedValue;
 
     const offerSummary = offerEntries
-        .map(([name, offer]) => `${name === selfPlayerName ? 'You' : name} ${signed(Number(offer) || 0)}`)
+        .map(([name, offer]) => `${isDefender && name === selfPlayerName ? 'You' : name} ${signed(Number(offer) || 0)}`)
         .join(' · ');
 
     return (
@@ -195,7 +197,7 @@ const InsurancePrompt = ({ show, insuranceState, selfPlayerName, emitEvent, onCl
                     </div>
                 ) : !isParticipant ? (
                     <p className="insurance-observer-note">
-                        You&rsquo;re not part of this round&rsquo;s insurance — the three active players negotiate it.
+                        You&rsquo;re watching this round&rsquo;s insurance — only the bidder and the two defenders can change it.
                     </p>
                 ) : (
                     <>

@@ -312,6 +312,26 @@
     }
 }
 
+/* --- Observer board: spectators, tournament watchers and the sitting-out
+   dealer see the ask and every offer (named) beside the gap, no steppers.
+   Neutral values — there is no "you" to colour points towards. --- */
+.value-display.observer-value {
+    color: #f1f5f9;
+}
+
+.insurance-value-name {
+    color: #94a3b8;
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(0.5rem, 0.9vh, 0.62rem);
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    max-width: 8vh;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* Preserve the compact footer in short landscape viewports. */
 
 @media (max-height: 500px) {
@@ -343,6 +363,16 @@
 
     .gap-value {
         padding-right: 4px;
+    }
+
+    /* Four named tiles (gap, ask, two offers) in the players' footprint. */
+    .insurance-controls-container.is-observer {
+        gap: 3px;
+    }
+
+    .insurance-value-name {
+        max-width: 40px;
+        font-size: 0.55rem;
     }
 
     .insurance-controls-container .adjust-button {

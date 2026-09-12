@@ -152,3 +152,63 @@ describe('InsurancePrompt saving and attention', () => {
         expect(screen.queryByRole('slider')).not.toBeInTheDocument();
     });
 });
+
+describe('InsurancePrompt for an observer', () => {
+    test('a spectator gets the live board and the watching note, never the editor', async () => {
+        const emitEvent = vi.fn();
+        render(
+            <InsurancePrompt
+                show
+                insuranceState={baseState}
+                selfPlayerName="Watcher"
+                isSpectator
+                emitEvent={emitEvent}
+                onClose={vi.fn()}
+            />
+        );
+
+        expect(await screen.findByText('Ask')).toBeInTheDocument();
+        expect(screen.getByText('Alice')).toBeInTheDocument();
+        expect(screen.getByText('Bob -10 · Cara +5')).toBeInTheDocument();
+        expect(screen.getByText('25')).toBeInTheDocument();
+        expect(screen.getByText(/only the bidder and the two defenders can change it/)).toBeInTheDocument();
+        expect(screen.queryByRole('slider')).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /^Save/ })).not.toBeInTheDocument();
+        expect(emitEvent).not.toHaveBeenCalled();
+    });
+
+    test('a spectator who shares a defender\'s name is still only watching', async () => {
+        render(
+            <InsurancePrompt
+                show
+                insuranceState={baseState}
+                selfPlayerName="Bob"
+                isSpectator
+                emitEvent={vi.fn()}
+                onClose={vi.fn()}
+            />
+        );
+
+        expect(await screen.findByText(/only the bidder and the two defenders can change it/)).toBeInTheDocument();
+        expect(screen.getByText('Bob -10 · Cara +5')).toBeInTheDocument();
+        expect(screen.queryByRole('slider')).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Save Offer' })).not.toBeInTheDocument();
+    });
+
+    test('the locked deal reads the same for a spectator', async () => {
+        render(
+            <InsurancePrompt
+                show
+                insuranceState={{ ...baseState, defenderOffers: { Bob: 0, Cara: 20 }, dealExecuted: true }}
+                selfPlayerName="Watcher"
+                isSpectator
+                emitEvent={vi.fn()}
+                onClose={vi.fn()}
+            />
+        );
+
+        expect(await screen.findByText('DEAL LOCKED')).toBeInTheDocument();
+        expect(screen.getByText('Bob 0 · Cara +20')).toBeInTheDocument();
+        expect(screen.queryByRole('slider')).not.toBeInTheDocument();
+    });
+});

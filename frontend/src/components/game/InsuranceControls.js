@@ -4,15 +4,24 @@ import './InsuranceControls.css'; // Import the new CSS file
 /**
  * Compact insurance negotiation panel for the active three-player round.
  * Four-player games use the same trio while the dealer sits out.
+ *
+ * Everyone at the table can follow the negotiation; only the bidder and
+ * the two defenders can move it. Observers — spectators, tournament
+ * watchers, the sitting-out dealer — get a read-only board in the same
+ * footprint (gap, the bidder's ask, every defender's offer) with the
+ * steppers left out. The server refuses insurance changes from anyone who
+ * is not a party to the deal regardless (GameEngine.updateInsuranceSetting).
  */
 const InsuranceControls = ({ insuranceState, selfPlayerName, isSpectator, emitEvent, onOpenPrompt, insuranceTouched, onInsuranceInteract }) => {
-    const isActive = !!(insuranceState && insuranceState.isActive && !isSpectator);
+    const isActive = !!(insuranceState && insuranceState.isActive);
 
     const { bidderPlayerName, bidderRequirement, defenderOffers, dealExecuted, bidMultiplier } = insuranceState || {};
     const multiplier = bidMultiplier || 1;
-    const isBidder = selfPlayerName === bidderPlayerName;
+    // A spectator is never a party to the deal, whatever their name matches.
+    const isBidder = !isSpectator && selfPlayerName === bidderPlayerName;
     const myOffer = defenderOffers ? defenderOffers[selfPlayerName] : undefined;
-    const isDefender = myOffer !== undefined;
+    const isDefender = !isSpectator && myOffer !== undefined;
+    const isParticipant = isBidder || isDefender;
 
     const handleAdjustInsurance = (amount) => {
         if (dealExecuted) return; // Don't allow changes after a deal is made
@@ -38,7 +47,9 @@ const InsuranceControls = ({ insuranceState, selfPlayerName, isSpectator, emitEv
         }
     };
 
-    const sumOfOffers = Object.values(defenderOffers || {}).reduce((sum, offer) => sum + (Number(offer) || 0), 0);
+    const offerEntries = Object.entries(defenderOffers || {});
+    const sumOfOffers = offerEntries.reduce((sum, [, offer]) => sum + (Number(offer) || 0), 0);
+    const askValue = Number(bidderRequirement) || 0;
     const gapToDeal = (bidderRequirement ?? 0) - sumOfOffers;
     const playerValue = isBidder ? bidderRequirement : myOffer;
 
@@ -53,6 +64,7 @@ const InsuranceControls = ({ insuranceState, selfPlayerName, isSpectator, emitEv
 
     // When the gap moves while our own insurance didn't, another player changed
     // theirs — bounce the GAP number and float the delta so the eye catches it.
+    // An observer has no value of their own, so every move bounces for them.
     const [gapFx, setGapFx] = useState(null); // { key, delta }
     const prevGapRef = useRef(null);
     useEffect(() => {
@@ -104,9 +116,15 @@ const InsuranceControls = ({ insuranceState, selfPlayerName, isSpectator, emitEv
         decreaseButtonClasses.push('adjust-green');
     }
 
+    const containerClasses = [
+        'insurance-controls-container',
+        isActive ? '' : 'is-inactive',
+        needsAttention ? 'needs-attention' : '',
+        isActive && !isParticipant ? 'is-observer' : '',
+    ].join(' ').trim();
 
     return (
-        <div className={['insurance-controls-container', isActive ? '' : 'is-inactive', needsAttention ? 'needs-attention' : ''].join(' ').trim()}>
+        <div className={containerClasses}>
             {isActive ? (
                 dealExecuted ? (
                     <div className="deal-made-text">DEAL LOCKED</div>
@@ -125,7 +143,7 @@ const InsuranceControls = ({ insuranceState, selfPlayerName, isSpectator, emitEv
                                 </span>
                             )}
                         </div>
-                        {(isBidder || isDefender) && (
+                        {isParticipant ? (
                             <>
                                 <div className={playerValueClasses.join(' ')} title={`${isBidder ? 'Your Ask' : 'Your Offer'}${needsAttention ? ' — not set yet' : ''} (tap for details)`} onClick={onOpenPrompt} onKeyDown={openDetailsOnKey} role="button" tabIndex={0} aria-label={`${isBidder ? 'Your insurance ask' : 'Your insurance offer'}: ${playerValue}.${needsAttention ? ' Not set yet.' : ''} Open details`}>
                                     <span className="insurance-value-label">{isBidder ? 'ASK' : 'OFFER'}</span>
@@ -133,6 +151,24 @@ const InsuranceControls = ({ insuranceState, selfPlayerName, isSpectator, emitEv
                                 </div>
                                 <button onClick={() => handleAdjustInsurance(-1)} className={decreaseButtonClasses.join(' ')} title="Decrease" aria-label={`Decrease ${isBidder ? 'insurance ask' : 'insurance offer'}`}>-</button>
                                 <button onClick={() => handleAdjustInsurance(1)} className={increaseButtonClasses.join(' ')} title="Increase" aria-label={`Increase ${isBidder ? 'insurance ask' : 'insurance offer'}`}>+</button>
+                            </>
+                        ) : (
+                            // Read-only board for anyone who is not a party to
+                            // the deal: the ask and every offer, named. Each
+                            // tile opens the full (read-only) details panel.
+                            <>
+                                <div className="value-display observer-value" title={`${bidderPlayerName}'s ask (tap for details)`} onClick={onOpenPrompt} onKeyDown={openDetailsOnKey} role="button" tabIndex={0} aria-label={`Insurance ask from ${bidderPlayerName}: ${askValue}. Open details`}>
+                                    <span className="insurance-value-label">ASK</span>
+                                    <span>{askValue}</span>
+                                    <span className="insurance-value-name">{bidderPlayerName}</span>
+                                </div>
+                                {offerEntries.map(([name, offer]) => (
+                                    <div key={name} className="value-display observer-value" title={`${name}'s offer (tap for details)`} onClick={onOpenPrompt} onKeyDown={openDetailsOnKey} role="button" tabIndex={0} aria-label={`Insurance offer from ${name}: ${Number(offer) || 0}. Open details`}>
+                                        <span className="insurance-value-label">OFFER</span>
+                                        <span>{Number(offer) || 0}</span>
+                                        <span className="insurance-value-name">{name}</span>
+                                    </div>
+                                ))}
                             </>
                         )}
                     </>
