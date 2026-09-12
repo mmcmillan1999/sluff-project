@@ -93,8 +93,7 @@ async function testGameOverPayouts() {
     await gameService.handleGameOver(payload3H_Tie1st);
     verifyQueries("3 Humans (Tie for 1st)", { transactions: 2, stats: 3 });
     
-    // --- THIS IS THE FAILING TEST ---
-    // Re-enabled to prove the logic is missing for bot games.
+    // Regression guard: bot games settle too (this once failed for real).
     
     // --- SCENARIO: 2 HUMANS, 1 BOT ---
     mockPool.reset();
