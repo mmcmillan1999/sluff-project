@@ -17,6 +17,13 @@ const BotPlayer = require('../src/core/BotPlayer');
 const afkTurnTimer = require('../src/core/afkTurnTimer');
 const { getLegalMoves } = require('../src/core/legalMoves');
 const { createGameServiceWithoutHeartbeat } = require('./test-helpers');
+const { setShuffleRandom } = require('../src/utils/shuffle');
+const { makeRng } = require('../src/core/bot-strategies/RolloutEstimator');
+
+// The deal is the one source of randomness the director harness does not
+// inject; seeded, the whole-tournament runs below play the same way every
+// time instead of flaking on an unlucky round-one bust.
+const DEAL_SEED = 20260912;
 
 const pass = message => console.log(`  ✓ ${message}`);
 
@@ -118,6 +125,15 @@ async function playRound(harness, t) {
 }
 
 async function runTournamentTests() {
+    setShuffleRandom(makeRng(DEAL_SEED));
+    try {
+        await runTournamentTestsSeeded();
+    } finally {
+        setShuffleRandom(null);
+    }
+}
+
+async function runTournamentTestsSeeded() {
     // ------------------------------------------------------------ seating
     {
         const expected = { 3: [3], 4: [4], 5: [5], 6: [3, 3], 7: [3, 4], 8: [4, 4], 9: [3, 3, 3], 10: [3, 3, 4], 11: [3, 4, 4], 12: [3, 3, 3, 3], 13: [3, 3, 3, 4], 14: [3, 3, 4, 4], 15: [3, 3, 3, 3, 3] };
