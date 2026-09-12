@@ -119,8 +119,38 @@ async function runBotAuthenticationTests() {
         });
         assert.equal(resend.status, 200);
 
+        // A login typed with a stray space around the address still looks the
+        // account up by the trimmed address registration stored.
+        const beforeTrimmedLogin = queries.length;
+        await fetch(url('/login'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: '  someone@example.com ', password: 'anything' }),
+        });
+        const lookup = queries.slice(beforeTrimmedLogin).find(q => /FROM\s+users/i.test(q.text));
+        assert.ok(lookup, 'login looked the account up');
+        assert.equal(lookup.params[0], 'someone@example.com', 'the address is trimmed before the lookup');
+
+        // Registration rejects bad input before it opens a transaction, so a
+        // 400 never hands a pooled client back mid-transaction.
+        for (const body of [
+            { username: 'ab', email: 'a@b.co', password: 'longenough', acceptedTerms: true },
+            { username: 'Valid Name', email: 'not-an-address', password: 'longenough', acceptedTerms: true },
+            { username: 'Valid Name', email: 'a@b.co', password: 'short', acceptedTerms: true },
+            { username: 'Valid Name', email: 'a@b.co', password: 'longenough' },
+        ]) {
+            const beforeRegister = queries.length;
+            const response = await fetch(url('/register'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            assert.equal(response.status, 400, `rejected: ${JSON.stringify(body)}`);
+            assert.ok(!queries.slice(beforeRegister).some(q => q.text.trim() === 'BEGIN'), 'no transaction is opened for rejected input');
+        }
+
         const credentialLookups = queries.filter(({ text }) => /SELECT[\s\S]*FROM\s+users/i.test(text));
-        assert.equal(credentialLookups.length, 5);
+        assert.equal(credentialLookups.length, 6);
         for (const { text } of credentialLookups) {
             assert.match(text, /COALESCE\(is_bot, FALSE\)\s*=\s*FALSE/i);
         }

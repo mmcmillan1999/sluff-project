@@ -6,6 +6,7 @@ const suites = [
     { name: 'persistent bot accounts', file: './botAccounts.test.js' },
     { name: 'funded bot accounting', file: './fundedBots.test.js' },
     { name: 'bot credential isolation', file: './botAuthentication.test.js' },
+    { name: 'account hygiene', file: './accountHygiene.test.js' },
     { name: 'game logic', file: './gameLogic.unit.test.js' },
     { name: 'legal moves', file: './legalMoves.test.js' },
     { name: 'mercy tokens', file: './mercyToken.test.js', exportName: 'runMercyTokenTests' },

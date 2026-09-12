@@ -22,6 +22,7 @@ const {
     nextChangeAllowedAt,
     renameUser,
     validateUsername,
+    normalizeEmail,
 } = require('../data/accountIdentity');
 const {
     AccountDeletionError,
@@ -156,10 +157,8 @@ module.exports = function(pool, bcrypt, jwt, io, gameService) {
         let newUserId = null;
         let committed = false;
         try {
-            await client.query('BEGIN');
-
-            const { username, email, password, acceptedTerms } = req.body;
-            if (!username || !email || !password) {
+            const { username, email: rawEmail, password, acceptedTerms } = req.body;
+            if (!username || !rawEmail || !password) {
                 return res.status(400).json({ message: "Username, email, and password are required." });
             }
             if (typeof password !== 'string' || password.length < MIN_PASSWORD_LENGTH) {
@@ -174,6 +173,14 @@ module.exports = function(pool, bcrypt, jwt, io, gameService) {
             if (!usernameCheck.ok) {
                 return res.status(400).json({ message: usernameCheck.message });
             }
+            const emailCheck = normalizeEmail(rawEmail);
+            if (!emailCheck.ok) {
+                return res.status(400).json({ message: emailCheck.message });
+            }
+            const email = emailCheck.value;
+            // Only now, with every input accepted: an early return above must
+            // never hand a client back to the pool with a transaction open.
+            await client.query('BEGIN');
             const hashedPassword = await bcrypt.hash(password, 10);
 
             const insertUserQuery = 'INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id';
@@ -265,10 +272,13 @@ module.exports = function(pool, bcrypt, jwt, io, gameService) {
 
     router.post('/login', loginLimiter, async (req, res) => {
         try {
-            const { email, password } = req.body;
-            if (!email || !password) {
+            const { email: rawEmail, password } = req.body;
+            if (!rawEmail || !password) {
                 return res.status(400).json({ message: "Email and password are required." });
             }
+            // Registration trims the address; a login typed with a stray
+            // space must still find the account.
+            const email = typeof rawEmail === 'string' ? rawEmail.trim() : rawEmail;
 
             const userQuery = `
                 SELECT id, username, password_hash, is_admin, is_verified, is_vip,

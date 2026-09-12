@@ -228,7 +228,23 @@ async function renameUser(pool, userId, requestedName, { now = new Date() } = {}
     }
 }
 
+// Login matches the address exactly (WHERE email = $1), so registration must
+// store what the player will type back: trimmed, no stray whitespace, shaped
+// like an address. Case is left alone — matching is case-sensitive today and
+// existing rows were stored as typed.
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_EMAIL_LENGTH = 254;
+
+function normalizeEmail(raw) {
+    const value = typeof raw === 'string' ? raw.trim() : '';
+    if (value.length === 0 || value.length > MAX_EMAIL_LENGTH || !EMAIL_SHAPE.test(value)) {
+        return { ok: false, message: 'Enter a valid email address.' };
+    }
+    return { ok: true, value };
+}
+
 module.exports = {
+    normalizeEmail,
     AccountIdentityError,
     RENAME_COOLDOWN_DAYS,
     RENAME_COOLDOWN_MS,
