@@ -89,5 +89,6 @@ function runDepartedSeatScoreTests() {
 module.exports = runDepartedSeatScoreTests;
 
 if (require.main === module) {
-    runDepartedSeatScoreTests().catch(error => { console.error(error); process.exitCode = 1; });
+    // Promise-wrapped: the runner may be synchronous.
+    Promise.resolve().then(runDepartedSeatScoreTests).catch(error => { console.error(error); process.exitCode = 1; });
 }

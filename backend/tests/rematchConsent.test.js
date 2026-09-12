@@ -138,5 +138,6 @@ function runRematchConsentTests() {
 module.exports = runRematchConsentTests;
 
 if (require.main === module) {
-    runRematchConsentTests().catch(error => { console.error(error); process.exitCode = 1; });
+    // Promise-wrapped: the runner may be synchronous.
+    Promise.resolve().then(runRematchConsentTests).catch(error => { console.error(error); process.exitCode = 1; });
 }

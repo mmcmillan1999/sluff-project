@@ -285,5 +285,6 @@ async function runExhibitionPreemptionTests() {
 module.exports = runExhibitionPreemptionTests;
 
 if (require.main === module) {
-    runExhibitionPreemptionTests().catch(error => { console.error(error); process.exitCode = 1; });
+    // Promise-wrapped: the runner may be synchronous.
+    Promise.resolve().then(runExhibitionPreemptionTests).catch(error => { console.error(error); process.exitCode = 1; });
 }

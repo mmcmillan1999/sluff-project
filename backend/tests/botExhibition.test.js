@@ -299,5 +299,6 @@ async function runBotExhibitionTests() {
 module.exports = runBotExhibitionTests;
 
 if (require.main === module) {
-    runBotExhibitionTests().catch(error => { console.error(error); process.exitCode = 1; });
+    // Promise-wrapped: the runner may be synchronous.
+    Promise.resolve().then(runBotExhibitionTests).catch(error => { console.error(error); process.exitCode = 1; });
 }
