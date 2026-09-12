@@ -212,13 +212,14 @@
    dock them just below the side chip banks. 41dvh here + the 7.5dvh header
    puts the shell top at ~48.5dvh; the narrowed widths keep its upper
    corners inside the plates' inner gutter. The compact status pills stay
-   in the top corridor, clear of everything. */
+   in the top corridor, clear of everything. (39dvh, not 41: at 41 the bid
+   keys' foot sat a hair under the top of the hand on Matt's phone.) */
 @media (max-aspect-ratio: 4/5) {
     .action-prompt.action-prompt--choice,
     .action-prompt.action-prompt--card,
     .action-prompt.action-prompt--pregame {
-        top: 41vh;
-        top: 41dvh;
+        top: 39vh;
+        top: 39dvh;
     }
 }
 
