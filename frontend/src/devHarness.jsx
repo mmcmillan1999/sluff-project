@@ -449,16 +449,37 @@ const HarnessApp = () => {
 // --- Lobby preview: /harness.html?mode=lobby ---
 const lobbyMode = params.get('mode') === 'lobby';
 if (lobbyMode) {
+    // ?tables=0 for empty venues; by default every venue has a few private
+    // tables in different states. ?tourney=open|running|none for the slot.
+    const seat = (userId, playerName) => ({ userId, playerName, isSpectator: false, isBot: false });
+    const cannedTables = (venue, label) => (params.get('tables') === '0' ? [] : [
+        { tableId: venue + '-1', tableName: label + ' 1', playerMode: 4, state: 'Waiting for Players', players: [seat(201, 'Mcsaddle')] },
+        { tableId: venue + '-2', tableName: label + ' 2', playerMode: 4, state: 'Playing Phase', players: [seat(202, 'jazzachy'), seat(203, 'CJ'), seat(204, 'Zacattack')] },
+        { tableId: venue + '-3', tableName: label + ' 3', playerMode: 4, state: 'Waiting for Players', players: [] },
+        { tableId: venue + '-4', tableName: label + ' 4', playerMode: 3, state: 'Ready to Start', players: [seat(205, 'Devondampier'), seat(206, 'Kimba'), seat(207, 'Flo')] },
+        { tableId: venue + '-5', tableName: label + ' 5', playerMode: 4, state: 'Waiting for Players', players: [] },
+    ]);
     const lobbyThemes = [
-        { id: 'miss-pauls-academy', name: 'Academy', cost: 0.1, tables: [] },
-        { id: 'fort-creek', name: 'Fort Creek', cost: 1, tables: [] },
-        { id: 'shirecliff-road', name: 'Shirecliff', cost: 5, tables: [] },
-        { id: 'dans-deck', name: 'Eaglewood', cost: 20, tables: [] },
+        { id: 'miss-pauls-academy', name: 'Academy', cost: 0.1, tables: cannedTables('academy', 'Academy') },
+        { id: 'fort-creek', name: 'Fort Creek', cost: 1, tables: cannedTables('fort-creek', 'Fort Creek') },
+        { id: 'shirecliff-road', name: 'Shirecliff', cost: 5, tables: cannedTables('shirecliff', 'Shirecliff') },
+        { id: 'dans-deck', name: 'Eaglewood', cost: 20, tables: cannedTables('eaglewood', 'Eaglewood') },
     ];
+    const tourney = params.get('tourney') || 'open';
+    const tournamentLobby = tourney === 'open'
+        ? { open: { id: 32, name: "Mcsaddle's Tournament", status: 'registering', seatsTaken: 5, maxSeats: 9, buyInTokens: 25, startRule: 'creator', startsAt: null, creatorUserId: 201, creatorName: 'Mcsaddle', entries: [] }, running: [] }
+        : tourney === 'running'
+            ? { open: null, running: [{ id: 31, name: "Mcsaddle's Tournament", status: 'running', round: 6, playersLeft: 5 }] }
+            : { open: null, running: [] };
     ReactDOM.createRoot(document.getElementById('root')).render(
+        <div style={{ height: '100dvh' }}>
         <LobbyView
             user={{ id: 101, username: 'You', tokens: '12.00', wins: 4, losses: 2, washes: 1, is_admin: false }}
             lobbyThemes={lobbyThemes}
+            tournamentLobby={tournamentLobby}
+            myTournament={null}
+            handleOpenTournament={noop}
+            handleCreateTournament={noop}
             serverVersion="harness"
             handleJoinTable={noop}
             handleQuickPlay={(themeId) => console.log('[harness] quickPlay', themeId)}
@@ -476,6 +497,7 @@ if (lobbyMode) {
             socket={fakeSocket}
             soundSettings={soundSettings}
         />
+        </div>
     );
 }
 

@@ -52,7 +52,10 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, wheelAudio, handleJoinTab
     // Get viewport information for responsive behavior
     const viewport = useViewport();
     const isMobile = viewport.width < 768;
-    const isDesktop = viewport.width >= 1024;
+    // Laptops and desktops (landscape, 1024 CSS px and up): Play | Tables |
+    // Chat in three columns with the private tables always open — see the
+    // wide layout in LobbyView.css. Portrait tablets keep the phone flow.
+    const isWide = viewport.width >= 1024 && viewport.orientation === 'landscape';
 
     useEffect(() => {
         getLobbyChatHistory(50)
@@ -121,6 +124,7 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, wheelAudio, handleJoinTab
     }, [lobbyThemes, activeTab]);
 
     const activeTheme = lobbyThemes.find(theme => theme.id === activeTab);
+    const tablesOpen = isWide || !tablesCollapsed;
     const hasTutorialTraining = Number(user?.tutorial_version) >= TUTORIAL_VERSION;
 
     const resetTutorialTraining = async () => {
@@ -206,49 +210,6 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, wheelAudio, handleJoinTab
         </div>
     ));
 
-    // Desktop sidebar component
-    const renderDesktopSidebar = () => {
-        if (!isDesktop || !user) return null;
-        
-        const { gamesPlayed, gamesWon, winRate, coinBalance } = deriveLobbyPlayerStats(user);
-        
-        return (
-            <div className="desktop-sidebar">
-                <div className="sidebar-section">
-                    <h3>Career Stats</h3>
-                    <div className="user-stats-card">
-                        <div className="stat-row">
-                            <span className="stat-label">Games Played:</span>
-                            <span className="stat-value">{gamesPlayed}</span>
-                        </div>
-                        <div className="stat-row">
-                            <span className="stat-label">Games Won:</span>
-                            <span className="stat-value">{gamesWon}</span>
-                        </div>
-                        <div className="stat-row">
-                            <span className="stat-label">Win Rate:</span>
-                            <span className="stat-value">{winRate}%</span>
-                        </div>
-                        <div className="stat-row">
-                            <span className="stat-label">Coin Balance:</span>
-                            <span className="stat-value">{coinBalance.toFixed(2)}</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div className="sidebar-section">
-                    <h3>Quick Actions</h3>
-                    <div className="quick-actions">
-                        {renderLobbyActions({ buttonClass: 'quick-action-btn', closeMenu: false })}
-                        {tutorialResetError && !showMenu && (
-                            <p className="tutorial-reset-error" role="alert">{tutorialResetError}</p>
-                        )}
-                    </div>
-                </div>
-            </div>
-        );
-    };
-    
     const renderLobbyMenu = () => (
         <div className="lobby-menu-popup venue-menu" role="group" aria-label="Player menu">
             <div className="lobby-menu-audio">
@@ -321,8 +282,22 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, wheelAudio, handleJoinTab
             <BulletinTicker onOpen={handleShowBulletin} />
 
             <main className="lobby-main">
-                {/* Desktop sidebar - only shown on desktop */}
-                {renderDesktopSidebar()}
+                {/* ============ PLAY — quick play and the tournament slot; on wide
+                    screens the first column, with a line of career stats ============ */}
+                <div className="lobby-play-column">
+                {isWide && (() => {
+                    const { gamesPlayed, gamesWon, winRate } = deriveLobbyPlayerStats(user);
+                    return (
+                        <div className="lobby-player-card" aria-label="Career stats">
+                            <span className="lobby-player-name">{user.username}</span>
+                            <span className="lobby-player-stats">
+                                <span><strong>{gamesPlayed}</strong> played</span>
+                                <span><strong>{gamesWon}</strong> won</span>
+                                <span><strong>{winRate}%</strong> win rate</span>
+                            </span>
+                        </div>
+                    );
+                })()}
 
                 {/* ============ QUICK PLAY — the primary way in ============ */}
                 <div className="quickplay-section">
@@ -354,26 +329,36 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, wheelAudio, handleJoinTab
                     onOpen={handleOpenTournament}
                     onCreate={handleCreateTournament}
                 />
+                </div>
 
-                {/* ============ PRIVATE TABLES — play with friends ============ */}
+                {/* ============ PRIVATE TABLES — play with friends. Collapsed by
+                    default on a phone (Quick Play is the primary path); always
+                    open in their own column on a laptop. ============ */}
                 <div
                     className="tables-section"
-                    data-theme={!tablesCollapsed ? activeTheme?.id : undefined}
+                    data-theme={tablesOpen ? activeTheme?.id : undefined}
                 >
-                    <div
-                        className="tables-toggle"
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => setTablesCollapsed(v => !v)}
-                        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setTablesCollapsed(v => !v)}
-                        aria-expanded={!tablesCollapsed}
-                        aria-controls="tables-grid"
-                    >
-                        <span className="toggle-title">Private Tables</span>
-                        <span className="toggle-subtitle">pick a table & invite friends</span>
-                        <span className="toggle-caret">{tablesCollapsed ? '►' : '▼'}</span>
-                    </div>
-                    {!tablesCollapsed && (
+                    {isWide ? (
+                        <div className="tables-toggle is-static">
+                            <span className="toggle-title">Private Tables</span>
+                            <span className="toggle-subtitle">pick a table & invite friends</span>
+                        </div>
+                    ) : (
+                        <div
+                            className="tables-toggle"
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => setTablesCollapsed(v => !v)}
+                            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setTablesCollapsed(v => !v)}
+                            aria-expanded={!tablesCollapsed}
+                            aria-controls="tables-grid"
+                        >
+                            <span className="toggle-title">Private Tables</span>
+                            <span className="toggle-subtitle">pick a table & invite friends</span>
+                            <span className="toggle-caret">{tablesCollapsed ? '►' : '▼'}</span>
+                        </div>
+                    )}
+                    {tablesOpen && (
                         <>
                             <nav className="lobby-nav">
                                 {lobbyThemes && lobbyThemes.map(theme => (
