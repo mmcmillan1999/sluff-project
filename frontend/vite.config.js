@@ -91,6 +91,19 @@ export default defineConfig({
     },
     build: {
         outDir: 'build',
+        rollupOptions: {
+            // react, react-dom and the socket client change only on a
+            // dependency bump, so a vendor chunk keeps its hash across app
+            // deploys and returning players skip re-downloading it.
+            output: {
+                manualChunks(id) {
+                    if (/node_modules[\/](react|react-dom|scheduler|socket.io-client|engine.io-client)[\/]/.test(id)) return 'vendor';
+                    return undefined;
+                },
+            },
+        },
+        // The game table loads as one unit on purpose; ~500 kB is expected.
+        chunkSizeWarningLimit: 650,
     },
     test: {
         globals: true,
