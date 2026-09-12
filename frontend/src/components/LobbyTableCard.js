@@ -4,8 +4,10 @@ import { getThemePresentation } from '../config/themePresentation';
 
 const LobbyTableCard = ({ table, themeId, canAfford, buyIn, onJoin, onJoinAsSpectator, user }) => {
     const players = Array.isArray(table.players) ? table.players : Object.values(table.players || {});
+    // Spectators hold no seat: they count for nothing here.
+    const seated = players.filter(p => !p.isSpectator);
     const state = table.state || '';
-    const isFull = (table.playerCount ?? players.filter(p => !p.isSpectator).length) >= (table.playerMode || 4);
+    const isFull = (table.playerCount ?? seated.length) >= (table.playerMode || 4);
     const isPlaying = Boolean(state) && !['Waiting for Players', 'Ready to Start'].includes(state);
     
     const isMyGame = players.some(p => String(p.userId) === String(user.id));
@@ -55,8 +57,8 @@ const LobbyTableCard = ({ table, themeId, canAfford, buyIn, onJoin, onJoinAsSpec
             <div className="table-card-body">
                 <div className="player-list">
                     <span className="player-names">
-                        {players.length > 0
-                            ? players.filter(p => !p.isSpectator).map(p => p.playerName).join(', ')
+                        {seated.length > 0
+                            ? seated.map(p => p.playerName).join(', ')
                             : <em className="open-seats">Open Seats</em>
                         }
                     </span>
