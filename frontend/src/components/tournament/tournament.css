@@ -1118,3 +1118,71 @@
 @media (prefers-reduced-motion: reduce) {
   .tournament-welcome-card { animation: none; }
 }
+
+/* The ring card: a boxing round card walked across the felt in the beat
+   before a tournament round's deal. Sized to the shorter axis so it reads
+   on a phone and a laptop alike; Y in dvh with vh as the fallback. */
+.ring-card {
+  position: absolute;
+  top: 46vh;
+  top: 46dvh;
+  left: 50%;
+  width: min(52vw, 34vh);
+  transform: translate(-50%, -50%);
+  z-index: 45;
+  pointer-events: none;
+  filter: drop-shadow(0 1.2vh 1.6vh rgba(0, 0, 0, 0.5));
+  animation: ring-card-walk 2.4s cubic-bezier(0.22, 0.8, 0.24, 1) both;
+}
+
+.ring-card-art {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.ring-card-word {
+  font-family: 'Oswald', sans-serif;
+  font-weight: 700;
+  font-size: 46px;
+  letter-spacing: 6px;
+  fill: #c8102e;
+}
+
+.ring-card-number {
+  font-family: 'Oswald', sans-serif;
+  font-weight: 700;
+  font-size: 150px;
+  letter-spacing: -2px;
+  fill: #151515;
+}
+
+/* In from the right, a small bob as it is carried, out to the left. */
+@keyframes ring-card-walk {
+  0%   { transform: translate(60vw, -50%) rotate(7deg); opacity: 0; }
+  16%  { transform: translate(-50%, -50%) rotate(-2deg); opacity: 1; }
+  34%  { transform: translate(-50%, -52%) rotate(1.5deg); }
+  52%  { transform: translate(-50%, -50%) rotate(-1.5deg); }
+  70%  { transform: translate(-50%, -52%) rotate(1.5deg); }
+  82%  { transform: translate(-50%, -50%) rotate(-1deg); opacity: 1; }
+  100% { transform: translate(-70vw, -50%) rotate(-9deg); opacity: 0; }
+}
+
+/* A preview holds the card mid-walk. */
+.ring-card.is-held {
+  animation-play-state: paused;
+  animation-delay: -1.2s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ring-card {
+    animation: ring-card-fade 2.4s ease both;
+  }
+  @keyframes ring-card-fade {
+    0% { opacity: 0; }
+    15% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+}

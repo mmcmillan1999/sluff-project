@@ -22,7 +22,7 @@ const { seatRound, tableSizes } = require('./seating');
 const { rankFinishers, allocatePrizeCents } = require('./prizes');
 const { ROUND_PRESENTATION_LOCK_MS, THEMES } = require('../core/constants');
 const tournamentClock = require('../core/tournamentClock');
-const { pickFavorites, buildWelcomeScript } = require('./tournamentWelcome');
+const { pickFavorites, buildWelcomeScript, buildRoundCall } = require('./tournamentWelcome');
 
 const TRICKS_PER_ROUND = 11;
 const BIDDING_STATES = new Set([
@@ -88,6 +88,10 @@ class TournamentDirector {
         welcomeHoldMs = tournamentClock.TOURNAMENT_CLOCK.welcomeHoldMs,
         speakWelcome = null,
         welcomeSynthTimeoutMs = 10_000,
+        // Rounds two onward hold this long for the ring card and Liam's
+        // round call — only when speakRoundCall(text) is wired.
+        speakRoundCall = null,
+        roundCallHoldMs = tournamentClock.TOURNAMENT_CLOCK.roundCallHoldMs,
         allowNegativeHumans = true,
         venues = [...THEMES.map(theme => theme.id), TOURNAMENT_VENUE],
         log = console,
@@ -108,6 +112,8 @@ class TournamentDirector {
         this.welcomeHoldMs = welcomeHoldMs;
         this.speakWelcome = typeof speakWelcome === 'function' ? speakWelcome : null;
         this.welcomeSynthTimeoutMs = welcomeSynthTimeoutMs;
+        this.speakRoundCall = typeof speakRoundCall === 'function' ? speakRoundCall : null;
+        this.roundCallHoldMs = roundCallHoldMs;
         this.allowNegativeHumans = allowNegativeHumans;
         this.venues = venues;
         this.log = log;
@@ -239,6 +245,9 @@ class TournamentDirector {
             // Liam's line is ready to fetch.
             favorites: t.welcome ? [...t.welcome.favorites] : [],
             welcome: this._welcomeState(t),
+            // Rounds two onward, while the tables wait on the deal: the
+            // round call (how long, and whether Liam's line is ready).
+            roundCall: this._roundCallState(t),
             creatorUserId: t.creatorUserId,
             creatorName: t.creatorName,
             seatsTaken: this._seatCount(t),
@@ -756,7 +765,10 @@ class TournamentDirector {
         t.tables = new Map();
         // Round one holds for the welcome before its deal; every later round
         // opens on the ordinary deal delay.
-        const openDelayMs = t.round === 1 && t.welcome ? Math.max(this.dealDelayMs, this.welcomeHoldMs) : this.dealDelayMs;
+        const roundCall = t.round >= 2 ? this._prepareRoundCall(t) : null;
+        const openDelayMs = t.round === 1 && t.welcome
+            ? Math.max(this.dealDelayMs, this.welcomeHoldMs)
+            : (roundCall ? Math.max(this.dealDelayMs, this.roundCallHoldMs) : this.dealDelayMs);
         for (const table of plan) {
             const tableId = reuseTableId || `tn-${t.id}-r${t.round}-t${table.index + 1}`;
             const seats = table.seats.map(id => t.entries.get(id));
@@ -805,6 +817,7 @@ class TournamentDirector {
             this._scheduleDeal(t, tableId, openDelayMs);
         }
         if (t.welcome && t.round === 1) t.welcome.dealAt = this.now() + this._delay(t, openDelayMs);
+        if (roundCall) roundCall.dealAt = this.now() + this._delay(t, openDelayMs);
         t.lastProgressSignature = null;
         await this.store.updateStatus(t.id, 'running', { currentRound: t.round });
         this._emit(t);
@@ -985,6 +998,8 @@ class TournamentDirector {
             t.welcome.audio = null;
             if (t.welcome.audioState === 'ready') t.welcome.audioState = 'spent';
         }
+        // The round call belongs to the round that just ended.
+        t.roundCall = null;
         // Player names are the engine's keys; the tournament's own roster is
         // the authority for turning them back into ids (a table restored
         // after a deploy may have no engine at all).
@@ -1266,9 +1281,65 @@ class TournamentDirector {
     welcomeAudioFor(tournamentId, userId) {
         const t = this.get(tournamentId);
         if (!t || !t.welcome || !t.welcome.audio) return null;
+        return this._entrantAudio(t, userId, t.welcome.audio);
+    }
+
+    // The round call, rounds two onward: Liam names the round and how many
+    // players still hold chips, over the ring card, while the deal holds.
+    // Lines repeat across events (a few hundred possible sentences), so the
+    // voice service caches them by text — a cached line is ready before the
+    // felt opens; a fresh one lands a few seconds in. Never blocks the round.
+    _prepareRoundCall(t) {
+        if (!this.speakRoundCall) return null;
+        const playersLeft = this._alive(t).length;
+        const text = buildRoundCall({ round: t.round, playersLeft });
+        const roundCall = { round: t.round, playersLeft, text, audio: null, audioState: 'pending', dealAt: null };
+        t.roundCall = roundCall;
+        const timeout = new Promise(resolve => {
+            this.schedule(() => resolve(null), this.welcomeSynthTimeoutMs);
+        });
+        Promise.race([Promise.resolve().then(() => this.speakRoundCall(text)), timeout])
+            .then(audio => {
+                if (t.roundCall !== roundCall) return;
+                if (audio) {
+                    roundCall.audio = audio;
+                    roundCall.audioState = 'ready';
+                    this._emit(t);
+                } else {
+                    roundCall.audioState = 'failed';
+                }
+            })
+            .catch(error => {
+                if (t.roundCall === roundCall) roundCall.audioState = 'failed';
+                this.log.error(`[TOURNAMENT] #${t.id} round ${t.round} call failed:`, error.message);
+            });
+        return roundCall;
+    }
+
+    // Player-facing: only while the round's tables are waiting on the deal.
+    _roundCallState(t) {
+        const call = t.roundCall;
+        if (!call || call.round !== t.round || !call.dealAt) return null;
+        const now = this.now();
+        if (now >= call.dealAt) return null;
+        return {
+            round: call.round,
+            playersLeft: call.playersLeft,
+            dealInSeconds: Math.max(0, Math.ceil((call.dealAt - now) / 1000)),
+            audio: call.audioState === 'ready',
+        };
+    }
+
+    roundCallAudioFor(tournamentId, userId) {
+        const t = this.get(tournamentId);
+        if (!t || !t.roundCall || !t.roundCall.audio) return null;
+        return this._entrantAudio(t, userId, t.roundCall.audio);
+    }
+
+    _entrantAudio(t, userId, audio) {
         const entry = t.entries.get(Number(userId));
         if (!entry || ['withdrawn', 'refunded'].includes(entry.status)) return null;
-        return t.welcome.audio;
+        return audio;
     }
 
     // ------------------------------------------------------------- helpers
@@ -1291,6 +1362,7 @@ class TournamentDirector {
             drainPercent: Number(fields.drainPercent) || 0,
             lastDrain: null,
             welcome: null,
+            roundCall: null,
             entries: new Map(),
             tables: new Map(),
             lease: this.gameService.createBotSeatLease(`tn-${fields.id}`),

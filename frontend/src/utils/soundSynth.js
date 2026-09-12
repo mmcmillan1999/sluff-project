@@ -377,3 +377,34 @@ export const callToThePost = (ctx, destination, { when = 0 } = {}) => {
     } catch { /* audio is garnish */ }
     return CALL_TO_THE_POST_SECONDS;
 };
+
+/**
+ * The ring bell: ding ding, right before a tournament round's cards fly.
+ * Each strike is a short clang (a bandpassed noise tick) over a set of
+ * inharmonic partials that ring down like a real ring bell; the second
+ * strike lands a third of a second after the first.
+ */
+export const BOXING_BELL_SECONDS = 1.6;
+export const boxingBell = (ctx, destination, { when = 0 } = {}) => {
+    try {
+        const t0 = Math.max(when, ctx.currentTime);
+        const partials = [[1, 1], [1.53, 0.55], [2.41, 0.4], [3.22, 0.28], [4.15, 0.16]];
+        const strike = (at, base, peak) => {
+            for (const [ratio, weight] of partials) {
+                const osc = ctx.createOscillator();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(base * ratio, at);
+                const env = envelope(ctx, at, peak * weight, 0.004, 0.75 + 0.35 * weight);
+                osc.connect(env);
+                env.connect(destination);
+                osc.start(at);
+                osc.stop(at + 1.3);
+                osc.onended = () => { try { env.disconnect(); } catch { /* best effort */ } };
+            }
+            noiseHit(ctx, destination, { t: at, frequency: 3400, q: 1.4, peak: 0.12, attack: 0.002, decay: 0.03 });
+        };
+        strike(t0, 1180, 0.22);
+        strike(t0 + 0.32, 1180, 0.2);
+    } catch { /* audio is garnish */ }
+    return BOXING_BELL_SECONDS;
+};

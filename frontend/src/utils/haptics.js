@@ -34,6 +34,8 @@ const CUES = {
     dealStruck: [24, 55, 24],
     // Podium stings: the champion's flourish and the loser's single thud.
     podiumWin: [30, 55, 30, 55, 70],
+    // The ring bell: two strikes.
+    roundBell: [40, 240, 40],
     podiumLoss: [60],
     // The Midnight Special: two horn blasts, then the drive wheels take
     // over — a chug rhythm riding out as the train rolls on.
@@ -49,6 +51,7 @@ const NATIVE_STYLES = {
     trumpBroken: { kind: 'impact', style: 'HEAVY' },
     dealStruck: { kind: 'impact', style: 'MEDIUM', repeat: 2, gapMs: 60 },
     podiumWin: { kind: 'notification', type: 'SUCCESS' },
+    roundBell: { kind: 'impact', style: 'MEDIUM', repeat: 2, gapMs: 280 },
     podiumLoss: { kind: 'notification', type: 'WARNING' },
     midnightSpecial: { kind: 'impact', style: 'HEAVY', repeat: 3, gapMs: 160 },
 };

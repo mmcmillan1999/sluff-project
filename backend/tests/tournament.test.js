@@ -38,7 +38,7 @@ const BOT_ACCOUNTS = [
 for (const bot of BOT_ACCOUNTS) registerBrainProfile(bot.username, bot.brain);
 const botProfiles = BOT_ACCOUNTS.map(({ id, username }) => ({ id, username, tokens: 100 }));
 
-function buildHarness({ balances = {}, now = 1_800_000_000_000, boardDelayMs = 0, presentationHoldMs = 0, welcomeHoldMs = 0, speakWelcome = null, welcomeSynthTimeoutMs = 10_000 } = {}) {
+function buildHarness({ balances = {}, now = 1_800_000_000_000, boardDelayMs = 0, presentationHoldMs = 0, welcomeHoldMs = 0, speakWelcome = null, welcomeSynthTimeoutMs = 10_000, speakRoundCall = null } = {}) {
     const timers = [];
     const gameService = createGameServiceWithoutHeartbeat(GameService, mockIo, mockPool, { botAccounts: botProfiles });
     gameService.timerOverride = (cb, duration) => { timers.push({ cb, duration }); };
@@ -58,6 +58,7 @@ function buildHarness({ balances = {}, now = 1_800_000_000_000, boardDelayMs = 0
         welcomeHoldMs,
         speakWelcome,
         welcomeSynthTimeoutMs,
+        speakRoundCall,
     });
     gameService.attachTournamentDirector(director);
     const drainQueue = async () => { while (queue.length) await queue.shift()(); };
@@ -790,6 +791,51 @@ async function runTournamentTests() {
         assert.equal(second.director.publicState(back, 11).welcome, null, 'the hold does not');
         await director.voidTournament(t.id, 'done');
         if (back.status === 'running') await second.director.voidTournament(t.id, 'done');
+    }
+    {
+        // The round call: from round two the tables hold for the ring card
+        // and Liam's line, the state says how long and whether the line is
+        // ready, entrants can fetch it, and the deal clears it. A cached
+        // line (the common case) is ready at once.
+        const balances = { 901: 1000, 902: 1000, 903: 1000, 904: 1000, 905: 1000 };
+        const spoken = [];
+        const speakRoundCall = text => { spoken.push(text); return Promise.resolve(Buffer.from(`LINE:${text}`)); };
+        const harness = buildHarness({ balances, speakRoundCall });
+        const { director, gameService, clock } = harness;
+        const matt = { id: 11, username: 'Matt', is_vip: true };
+        const t = await director.create(matt, { buyInTokens: 1, startingStack: 120, maxSeats: 6, startRule: 'creator' });
+        await director.register(t.id, matt);
+        for (let i = 0; i < 5; i += 1) await director.findPlayer(t.id, 11);
+        await director.start(t.id, 11);
+        const live = director.get(t.id);
+        assert.equal(director.publicState(live, 11).roundCall, null, 'round one has the welcome, not a round call');
+        assert.equal(spoken.length, 0);
+        // Play round one out, then step the queue only until round two has
+        // opened: its held deals stay queued so the hold can be inspected.
+        for (const tableId of [...live.tables.keys()]) await playTable(harness, tableId);
+        while (live.round < 2 && harness.queue.length) await harness.queue.shift()();
+        assert.equal(live.round, 2);
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(spoken.length, 1);
+        assert.match(spoken[0], /^It's round two, ladies and gentlemen, and there are (six|five|four|three) players remaining with chips\.$/);
+        const state = director.publicState(live, 11);
+        assert.equal(state.roundCall.round, 2);
+        assert.equal(state.roundCall.playersLeft, director.publicState(live, 11).playersLeft);
+        assert.equal(state.roundCall.dealInSeconds, 8, 'the hold is 7.5 s');
+        assert.equal(state.roundCall.audio, true, 'a cached line is ready at once');
+        assert.equal(director.roundCallAudioFor(t.id, 11).toString(), `LINE:${spoken[0]}`);
+        assert.equal(director.roundCallAudioFor(t.id, 999), null);
+        for (const tableId of live.tables.keys()) {
+            const engine = gameService.getEngineById(tableId);
+            assert.equal(engine.state, 'Dealing Pending');
+            assert.equal(engine.tournamentDealDueAt, clock.now + 7_500, 'round two holds for the call');
+        }
+        clock.now += 7_500;
+        await director.tick();
+        for (const tableId of live.tables.keys()) assert.equal(gameService.getEngineById(tableId).state, 'Bidding Phase');
+        assert.equal(director.publicState(live, 11).roundCall, null, 'the call is over once the cards fly');
+        pass('From round two the tables hold for the ring card and Liam’s round call, then deal.');
+        await director.voidTournament(t.id, 'done');
     }
     {
         // A voice that never answers: the felt opens with the fanfare alone.

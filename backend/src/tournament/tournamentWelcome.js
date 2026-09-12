@@ -19,11 +19,30 @@ const MAX_NAMED = 9;
 const NAMED_WHEN_MORE = 8;
 const MAX_TITLE_LENGTH = 60;
 
-const NUMBER_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen'];
+const ONES = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+const TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+
+// Numbers read as words, so the voice never spells them out.
+function numberWord(n) {
+    const value = Number(n);
+    if (!Number.isInteger(value) || value < 0 || value > 99) return String(n);
+    if (value < 20) return ONES[value];
+    return TENS[Math.floor(value / 10)] + (value % 10 ? `-${ONES[value % 10]}` : '');
+}
 
 function countWord(n) {
-    const word = NUMBER_WORDS[n] || String(n);
+    const word = numberWord(n);
     return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+/**
+ * The round call, rounds two onward. The bell says "ding ding"; Liam says
+ * the rest, over the ring card, while the deal holds.
+ */
+function buildRoundCall({ round, playersLeft }) {
+    const left = Number(playersLeft);
+    const remaining = left === 1 ? 'is one player' : `are ${numberWord(left)} players`;
+    return `It's round ${numberWord(round)}, ladies and gentlemen, and there ${remaining} remaining with chips.`;
 }
 
 // The event's name, reduced like a player name but a little longer and
@@ -94,4 +113,4 @@ function buildWelcomeScript({ id, name, entries, favorites = [] }) {
     return parts.join(' ');
 }
 
-module.exports = { pickFavorites, buildWelcomeScript, spokenTitle, listWithAnd, FAVORITES_COUNT, MAX_NAMED, NAMED_WHEN_MORE };
+module.exports = { pickFavorites, buildWelcomeScript, buildRoundCall, numberWord, spokenTitle, listWithAnd, FAVORITES_COUNT, MAX_NAMED, NAMED_WHEN_MORE };

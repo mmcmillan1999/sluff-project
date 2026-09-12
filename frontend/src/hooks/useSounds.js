@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { isAudioSessionClaimedByVoice } from '../utils/VoiceChat';
-import { cardSnap, midnightSpecialScore, scheduleDealSounds, wheelClick, wheelSettle, callToThePost, CALL_TO_THE_POST_SECONDS } from '../utils/soundSynth';
+import { cardSnap, midnightSpecialScore, scheduleDealSounds, wheelClick, wheelSettle, callToThePost, CALL_TO_THE_POST_SECONDS, boxingBell } from '../utils/soundSynth';
 import { haptic, hapticDealRun, hapticWheelTick } from '../utils/haptics';
 
 // Short effects and the music bed share one unlocked Web Audio context so they
@@ -633,40 +633,40 @@ export const useSounds = ({ musicActive = false } = {}) => {
         shout.start(ctx.currentTime + 1.2);
     }, [synthContext, playSound]);
 
-    // The call to the felt: the bugle the moment a tournament's first round
-    // opens, then Liam's welcome for THIS tournament over the hold once the
-    // server has it. The card on the felt calls this on arrival and again
-    // when the tournament state says the line is ready; the bugle plays
-    // once per tournament and the line once, and a 204 (not made yet) is
-    // simply tried again on the next call. A muted or locked context skips
-    // the lot — the card still shows.
-    const welcomeRef = useRef({ key: null, bugleAt: null, played: false, fetching: false });
-    const playTournamentWelcome = useCallback(async (key, fetchLine) => {
+    // An announcer moment: an opener (the bugle, the bell) the first time a
+    // key is seen, then Liam's line for that key once the server has it. The
+    // felt calls this on arrival and again when the tournament state says the
+    // line is ready; the opener plays once per key and the line once, and a
+    // 204 (not made yet) is simply tried again on the next call. A muted or
+    // locked context skips the lot — the card on the felt still shows.
+    const announcerRef = useRef(new Map());
+    const playAnnouncement = useCallback(async (kind, key, fetchLine, opener, lineDelaySeconds) => {
         if (key == null) return;
-        if (welcomeRef.current.key !== key) {
-            welcomeRef.current = { key, bugleAt: null, played: false, fetching: false };
+        const ledger = announcerRef.current;
+        let moment = ledger.get(kind);
+        if (!moment || moment.key !== key) {
+            moment = { key, openedAt: null, played: false, fetching: false };
+            ledger.set(kind, moment);
         }
-        const welcome = welcomeRef.current;
         const ctx = synthContext();
         if (!ctx) return;
-        if (welcome.bugleAt === null) {
-            welcome.bugleAt = ctx.currentTime;
-            callToThePost(ctx, gainRef.current);
-            haptic('podiumWin');
+        if (moment.openedAt === null) {
+            moment.openedAt = ctx.currentTime;
+            opener(ctx);
         }
-        if (welcome.played || welcome.fetching || typeof fetchLine !== 'function') return;
-        welcome.fetching = true;
+        if (moment.played || moment.fetching || typeof fetchLine !== 'function') return;
+        moment.fetching = true;
         try {
             const bytes = await fetchLine();
-            if (!bytes || welcomeRef.current !== welcome) return;
+            if (!bytes || ledger.get(kind) !== moment) return;
             const buffer = await new Promise((resolve, reject) => {
                 // Callback form for Safari's older decodeAudioData.
                 ctx.decodeAudioData(bytes, resolve, reject);
             });
-            if (welcomeRef.current !== welcome || welcome.played) return;
+            if (ledger.get(kind) !== moment || moment.played) return;
             const live = synthContext();
             if (!live) return;
-            welcome.played = true;
+            moment.played = true;
             const shout = live.createBufferSource();
             shout.buffer = buffer;
             // The voice sits above the bed, like the podium proclamation.
@@ -675,10 +675,34 @@ export const useSounds = ({ musicActive = false } = {}) => {
             shout.connect(boost);
             boost.connect(gainRef.current);
             shout.onended = () => { try { boost.disconnect(); } catch { /* best effort */ } };
-            shout.start(Math.max(live.currentTime + 0.05, welcome.bugleAt + CALL_TO_THE_POST_SECONDS + 0.4));
-        } catch { /* the bugle stands on its own */ } finally {
-            welcome.fetching = false;
+            shout.start(Math.max(live.currentTime + 0.05, moment.openedAt + lineDelaySeconds));
+        } catch { /* the opener stands on its own */ } finally {
+            moment.fetching = false;
         }
+    }, [synthContext]);
+
+    // The call to the felt: the bugle the moment a tournament's first round
+    // opens, then Liam's welcome for THIS tournament over the hold.
+    const playTournamentWelcome = useCallback((key, fetchLine) => playAnnouncement(
+        'welcome', key, fetchLine,
+        ctx => { callToThePost(ctx, gainRef.current); haptic('podiumWin'); },
+        CALL_TO_THE_POST_SECONDS + 0.4,
+    ), [playAnnouncement]);
+
+    // The round call: ding ding as the ring card walks on, then Liam naming
+    // the round and the players still holding chips.
+    const playRoundCall = useCallback((key, fetchLine) => playAnnouncement(
+        'round', key, fetchLine,
+        ctx => { boxingBell(ctx, gainRef.current); haptic('roundBell'); },
+        0.9,
+    ), [playAnnouncement]);
+
+    // The ring bell alone: the card with no line to follow it.
+    const playRoundBell = useCallback(() => {
+        const ctx = synthContext();
+        if (!ctx) return;
+        boxingBell(ctx, gainRef.current);
+        haptic('roundBell');
     }, [synthContext]);
 
     // The Midnight Special — the full production: Matt's song clip from
@@ -711,6 +735,8 @@ export const useSounds = ({ musicActive = false } = {}) => {
         prefetchChampionLine,
         playChampionSting,
         playTournamentWelcome,
+        playRoundBell,
+        playRoundCall,
         enableSound,
         soundSettings: {
             muted,

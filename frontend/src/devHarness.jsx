@@ -213,6 +213,16 @@ const VOLLEY_POOL = {
 
 // ?prompt=<state> — force each ActionControls popup (and the draw vote
 // modal) so their size, position, and key-cap buttons can be screenshotted.
+// ?ringcard=N — the table opens a tournament round N in Dealing Pending so
+// the ring card walks on (add &hold=1 to freeze it mid-walk for a capture).
+const ringCardRound = Number(params.get('ringcard')) || 0;
+const ringCardHold = ringCardRound > 0 && params.get('hold') === '1';
+if (ringCardRound > 0) {
+    tableState.state = 'Dealing Pending';
+    tableState.dealer = 102;
+    tableState.tournament = { tournamentId: 1, name: 'Harness Open', roundNumber: ringCardRound, tableIndex: 0, drainPercent: 0 };
+}
+
 const promptMode = params.get('prompt');
 if (promptMode) {
     tableState.currentTrickCards = [];
@@ -436,6 +446,12 @@ const HarnessApp = () => {
                     errorMessage=""
                     emitEvent={emitEvent}
                     playSound={(name) => console.log('[harness] playSound', name)}
+                    playRoundBell={() => console.log('[harness] ding ding')}
+                    playRoundCall={(key) => console.log('[harness] ding ding + round call', key)}
+                    tournament={ringCardRound > 0 && params.get('players')
+                        ? { id: 1, status: 'running', roundCall: { round: ringCardRound, playersLeft: Number(params.get('players')), dealInSeconds: 8, audio: false } }
+                        : undefined}
+                    ringCardHold={ringCardHold}
                     socket={fakeSocket}
                     handleOpenFeedbackModal={noop}
                     soundSettings={soundSettings}

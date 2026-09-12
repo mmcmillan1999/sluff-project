@@ -643,6 +643,22 @@ export const fetchTournamentWelcome = async (tournamentId) => {
     }
 };
 
+/**
+ * The round call: Liam naming the round and the players left, for the
+ * round the caller's tournament is opening. null (204) until it exists.
+ */
+export const fetchTournamentRoundCall = async (tournamentId) => {
+    try {
+        const response = await configuredFetch(
+            `/api/sounds/tournament-round-call/${encodeURIComponent(tournamentId)}`, 'GET',
+        );
+        if (response.status !== 200) return null;
+        return await response.arrayBuffer();
+    } catch {
+        return null;
+    }
+};
+
 // --- Feedback Service Calls ---
 
 export const submitFeedback = async (feedbackData) => {

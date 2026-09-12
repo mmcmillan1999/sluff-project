@@ -6,6 +6,7 @@
 // in round one never brings the card back.
 import React, { useEffect } from 'react';
 import { useCountdown } from './useCountdown';
+import { ROUND_ONE_LEAD_S } from './TournamentRoundCard';
 import { fetchTournamentWelcome } from '../../services/api';
 import './tournament.css';
 
@@ -26,6 +27,8 @@ const TournamentWelcomeCard = ({ tournament, tableState, playWelcome = null, fet
     }, [active, lineReady, playWelcome, fetchLine, tournamentId]);
 
     if (!active) return null;
+    // The ring card takes the felt for the last seconds of the hold.
+    if (Number.isFinite(dealIn) && dealIn <= ROUND_ONE_LEAD_S) return null;
     const players = (tournament.entries || []).filter(entry => !OUT.has(entry.status)).length;
     const tables = (tournament.tables || []).length;
     const favorites = Array.isArray(tournament.favorites) ? tournament.favorites : [];

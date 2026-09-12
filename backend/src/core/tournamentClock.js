@@ -50,6 +50,9 @@ const TOURNAMENT_CLOCK = Object.freeze({
     // the room can hear the welcome (a fanfare, then Liam reading the event,
     // the roster and tonight's favorites) before a card moves.
     welcomeHoldMs: 18_000,
+    // Rounds two onward: the ring card and Liam's round call ("It's round
+    // seven, ladies and gentlemen...") before the deal, when a voice is wired.
+    roundCallHoldMs: 7_500,
     // One table left: the room stays seated and the next round follows the
     // recap after this, with no trip to the board.
     singleTableDelayMs: 4_000,

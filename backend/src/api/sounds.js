@@ -76,6 +76,23 @@ const createSoundsRoutes = (pool, jwt, gameService) => {
         }
     });
 
+    // GET /api/sounds/tournament-round-call/:tournamentId — Liam's round
+    // call for the round the caller's tournament is opening. 204 whenever
+    // there is no line (not an entrant, not made yet, round under way).
+    router.get('/tournament-round-call/:tournamentId', checkAuth, async (req, res) => {
+        try {
+            const director = gameService.tournamentDirector;
+            const audio = director?.roundCallAudioFor?.(req.params.tournamentId, req.user.id) || null;
+            if (!audio) return res.status(204).end();
+            res.set('Content-Type', 'audio/mpeg');
+            res.set('Cache-Control', 'private, no-store');
+            return res.send(audio);
+        } catch (error) {
+            console.error('Error serving tournament round call:', error);
+            return res.status(500).json({ message: 'Unable to load the round call.' });
+        }
+    });
+
     return router;
 };
 

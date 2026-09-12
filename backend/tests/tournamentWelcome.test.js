@@ -8,7 +8,8 @@
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const express = require('express');
-const { pickFavorites, buildWelcomeScript, spokenTitle, listWithAnd } = require('../src/tournament/tournamentWelcome');
+const { pickFavorites, buildWelcomeScript, buildRoundCall, numberWord, spokenTitle, listWithAnd } = require('../src/tournament/tournamentWelcome');
+const { getAnnouncerLine, textKey } = require('../src/services/announcerLines');
 const { createMemoryStore } = require('../src/tournament/tournamentStore');
 const createSoundsRoutes = require('../src/api/sounds');
 
@@ -74,6 +75,55 @@ async function runTournamentWelcomeTests() {
         pass('Player names and the event name are reduced to speakable text before they reach the voice.');
     }
 
+    // --- The round call ---
+    {
+        assert.equal(buildRoundCall({ round: 7, playersLeft: 13 }), "It's round seven, ladies and gentlemen, and there are thirteen players remaining with chips.");
+        assert.equal(buildRoundCall({ round: 21, playersLeft: 3 }), "It's round twenty-one, ladies and gentlemen, and there are three players remaining with chips.");
+        assert.equal(buildRoundCall({ round: 2, playersLeft: 1 }), "It's round two, ladies and gentlemen, and there is one player remaining with chips.");
+        assert.equal(numberWord(0), 'zero');
+        assert.equal(numberWord(40), 'forty');
+        assert.equal(numberWord(99), 'ninety-nine');
+        assert.equal(numberWord(100), '100', 'past ninety-nine the digits stand');
+        assert.equal(buildWelcomeScript({ id: 1, name: 'x', entries: field(new Array(12).fill('p').map((p, i) => p + i)), favorites: [] }).endsWith('Twelve players. One champion. Take your seats.'), true);
+        pass('The round call names the round and the players left, in words.');
+    }
+    {
+        const calls = { selects: 0, inserts: 0 };
+        const store = new Map();
+        const pool = {
+            async query(sql, params) {
+                if (/^SELECT/i.test(sql.trim())) {
+                    calls.selects += 1;
+                    return { rows: store.has(params[0]) ? [{ audio: store.get(params[0]) }] : [] };
+                }
+                calls.inserts += 1;
+                store.set(params[0], params[2]);
+                return { rows: [] };
+            },
+        };
+        const originalKey = process.env.ELEVENLABS_API_KEY;
+        process.env.ELEVENLABS_API_KEY = 'test-key';
+        try {
+            let synthesized = 0;
+            const fetchImpl = async () => { synthesized += 1; return { ok: true, arrayBuffer: async () => Buffer.alloc(2048, 7) }; };
+            const text = buildRoundCall({ round: 7, playersLeft: 13 });
+            const first = await getAnnouncerLine(pool, text, { fetchImpl });
+            assert.equal(first.length, 2048);
+            assert.equal(synthesized, 1);
+            assert.equal(calls.inserts, 1);
+            const again = await getAnnouncerLine(pool, text, { fetchImpl });
+            assert.equal(again.length, 2048);
+            assert.equal(synthesized, 1, 'the same sentence is never synthesized twice');
+            assert.notEqual(textKey(text), textKey(buildRoundCall({ round: 7, playersLeft: 12 })));
+            assert.equal(await getAnnouncerLine(pool, '', { fetchImpl }), null);
+            const failing = async () => ({ ok: false, status: 500, text: async () => 'boom' });
+            assert.equal(await getAnnouncerLine(pool, 'Another line.', { fetchImpl: failing }), null, 'a failed synthesis is null, not a throw');
+            pass('Announcer lines are cached by their text: one synthesis per sentence, ever.');
+        } finally {
+            process.env.ELEVENLABS_API_KEY = originalKey;
+        }
+    }
+
     // --- The favorites ---
     {
         const entries = field(['A', 'B', 'C', 'D', 'E']);
@@ -110,10 +160,12 @@ async function runTournamentWelcomeTests() {
     // --- The route ---
     {
         const audioByViewer = {};
+        const roundCallByViewer = {};
         const gameService = {
             getEngineById: () => null,
             tournamentDirector: {
                 welcomeAudioFor: (tournamentId, userId) => (String(tournamentId) === '31' ? audioByViewer[userId] || null : null),
+                roundCallAudioFor: (tournamentId, userId) => (String(tournamentId) === '31' ? roundCallByViewer[userId] || null : null),
             },
         };
         const pool = {
@@ -150,6 +202,16 @@ async function runTournamentWelcomeTests() {
             assert.equal((await get('30')).status, 204, 'another event has no line for this caller');
             assert.equal((await get('31', 'bad-token')).status, 403, 'signed-in players only');
             pass('The route serves an entrant their event’s line, marked no-store, and nothing to anyone else.');
+
+            const callBase = `http://127.0.0.1:${server.address().port}/api/sounds/tournament-round-call`;
+            const getCall = (path) => fetch(`${callBase}/${path}`, { headers: { Authorization: 'Bearer valid-token' } });
+            assert.equal((await getCall('31')).status, 204, 'no round call yet');
+            roundCallByViewer[42] = Buffer.from('ROUND-SEVEN');
+            const call = await getCall('31');
+            assert.equal(call.status, 200);
+            assert.equal(call.headers.get('cache-control'), 'private, no-store');
+            assert.equal(Buffer.from(await call.arrayBuffer()).toString(), 'ROUND-SEVEN');
+            pass('The round call route serves the current round’s line the same way.');
         } finally {
             await close(server);
             process.env.JWT_SECRET = originalSecret;

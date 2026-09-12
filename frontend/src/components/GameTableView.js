@@ -59,6 +59,7 @@ import VoiceControls from './game/VoiceControls';
 import { TournamentVoiceSlot } from './tournament/TournamentVoiceDock';
 import TournamentWaitStrip from './tournament/TournamentWaitStrip';
 import TournamentWelcomeCard from './tournament/TournamentWelcomeCard';
+import TournamentRoundCard from './tournament/TournamentRoundCard';
 
 // Admin-only dev overlay (~900 lines): fetched on first Shift+D instead of
 // shipping in every player's main chunk.
@@ -102,7 +103,7 @@ const stableScoreMapSignature = (scoreMap) => JSON.stringify(
 );
 
 
-const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, handleLogout, handleShowHowToPlay, emitEvent, playSound, playDealSounds, playMidnightSpecial, prefetchChampionLine, playChampionSting, playTournamentWelcome = null, socket, handleOpenFeedbackModal, soundSettings, tutorialState, onTutorialAction, onShowTokenLedger, tournament = null, watchingTableId = null, onWatchTable = null, onStopWatching = null }) => {
+const GameTableView = ({ ringCardHold = false, user, playerId, currentTableState, handleLeaveTable, handleLogout, handleShowHowToPlay, emitEvent, playSound, playDealSounds, playMidnightSpecial, prefetchChampionLine, playChampionSting, playTournamentWelcome = null, playRoundBell = null, playRoundCall = null, socket, handleOpenFeedbackModal, soundSettings, tutorialState, onTutorialAction, onShowTokenLedger, tournament = null, watchingTableId = null, onWatchTable = null, onStopWatching = null }) => {
     const themePresentation = getThemePresentation(currentTableState?.theme);
     const [seatAssignments, setSeatAssignments] = useState({ self: null, opponentLeft: null, opponentRight: null });
     const [showRoundSummaryModal, setShowRoundSummaryModal] = useState(false);
@@ -1506,6 +1507,17 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
                     tournament={tournament}
                     tableState={currentTableState.state}
                     playWelcome={playTournamentWelcome}
+                />
+            )}
+            {currentTableState?.tournament && (
+                <TournamentRoundCard
+                    tableTournament={currentTableState.tournament}
+                    tableState={currentTableState.state}
+                    welcome={tournament && tournament.id === currentTableState.tournament.tournamentId ? tournament.welcome : null}
+                    roundCall={tournament && tournament.id === currentTableState.tournament.tournamentId ? tournament.roundCall : null}
+                    playRoundBell={playRoundBell}
+                    playRoundCall={playRoundCall}
+                    hold={ringCardHold}
                 />
             )}
             {!roundPresentationControlsLocked && createPortal(

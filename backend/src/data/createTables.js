@@ -1000,6 +1000,17 @@ const createDbTablesOnce = async (pool) => {
             );
         `);
 
+        // Liam's stock lines (the tournament round call), keyed by the text
+        // itself: a few hundred possible sentences, each synthesized once.
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS announcer_lines (
+                text_key VARCHAR(40) PRIMARY KEY,
+                text TEXT NOT NULL,
+                audio BYTEA NOT NULL,
+                created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
         // This must remain the final statement before COMMIT. clock_timestamp()
         // grants legacy/null rows a full grace window from migration completion,
         // while the predicate preserves every non-null heartbeat across deploys.

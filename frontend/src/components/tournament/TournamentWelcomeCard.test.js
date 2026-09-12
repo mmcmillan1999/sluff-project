@@ -57,6 +57,11 @@ describe('TournamentWelcomeCard', () => {
         expect(playWelcome).not.toHaveBeenCalled();
     });
 
+    test('steps aside for the ring card in the last seconds of the hold', () => {
+        const { container } = render(<TournamentWelcomeCard tournament={running({ dealInSeconds: 3, audio: true })} tableState="Dealing Pending" />);
+        expect(container.querySelector('.tournament-welcome-card')).toBeNull();
+    });
+
     test('a field with no favorites gets no favorites line', () => {
         render(<TournamentWelcomeCard tournament={{ ...running({ dealInSeconds: 9, audio: false }), favorites: [] }} tableState="Dealing Pending" />);
         expect(screen.queryByText(/Tonight's favorite/)).toBeNull();

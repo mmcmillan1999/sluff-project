@@ -13,6 +13,7 @@ const GameService = require('./services/GameService');
 const { TournamentDirector } = require('./tournament/TournamentDirector');
 const { createPgStore: createTournamentStore } = require('./tournament/tournamentStore');
 const { synthesizeLine } = require('./services/championLine');
+const { getAnnouncerLine } = require('./services/announcerLines');
 const registerGameHandlers = require('./events/gameEvents');
 const createAuthRoutes = require('./api/auth');
 const createLeaderboardRoutes = require('./api/leaderboard');
@@ -197,6 +198,8 @@ async function initializeApplication() {
         // The call to the felt: Liam reads the event, the roster and the
         // favorites (tournament/tournamentWelcome.js) over round one's hold.
         speakWelcome: script => synthesizeLine(script),
+        // The round call, rounds two onward — cached by text in announcer_lines.
+        speakRoundCall: text => getAnnouncerLine(pool, text),
     });
     gameService.attachTournamentDirector(tournamentDirector);
     const recoveryTiming = recoveryTimingFromEnvironment();
