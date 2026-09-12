@@ -1,7 +1,7 @@
 // The ring card. A tournament round opens on the felt in Dealing Pending a
-// beat before the cards fly; in that beat a boxing round card walks across
-// the table — ding ding, ROUND N held up on a placard, gone as the deal
-// starts. From round two the server holds the deal a few seconds longer and
+// beat before the cards fly; in that beat the ring girl walks the round
+// card across the table — ding ding, ROUND N held overhead, gone as the
+// deal starts. From round two the server holds the deal a few seconds longer and
 // Liam calls the round over the card ("It's round seven, ladies and
 // gentlemen, and there are thirteen players remaining with chips"); the
 // card stays up for the whole call. One card per round: an all-pass redeal
@@ -81,18 +81,39 @@ const TournamentRoundCard = ({
             aria-live="polite"
             aria-label={`Round ${round}`}
         >
-            <svg className="ring-card-art" viewBox="0 0 320 440" aria-hidden="true">
-                {/* The arm and the glove, from below the felt's edge. */}
-                <rect x="138" y="352" width="44" height="100" rx="18" fill="#e9b892" />
-                <rect x="126" y="338" width="68" height="26" rx="9" fill="#f6f2e8" stroke="#1a1a1a" strokeWidth="4" />
-                <ellipse cx="160" cy="312" rx="56" ry="44" fill="#c8102e" stroke="#1a1a1a" strokeWidth="5" />
-                <ellipse cx="207" cy="292" rx="19" ry="24" fill="#c8102e" stroke="#1a1a1a" strokeWidth="5" />
-                <ellipse cx="141" cy="298" rx="16" ry="10" fill="#ff5d70" opacity="0.75" />
+            <svg className="ring-card-art" viewBox="0 0 320 620" aria-hidden="true">
+                {/* The ring girl: hair behind the head first, then the legs
+                    (two strides the stylesheet swaps as she walks), the
+                    dress, the head, the arms up to the card, the placard,
+                    and last her hands over its edge. */}
+                <path d="M116 322 C108 268 212 268 204 322 C208 356 198 396 186 408 L134 408 C122 396 112 356 116 322 Z" fill="#2a1a12" />
+                <g className="ring-girl-stride ring-girl-stride--a">
+                    <path d="M150 500 L140 588" stroke="#e8b48a" strokeWidth="22" strokeLinecap="round" />
+                    <path d="M172 500 L188 584" stroke="#d99f74" strokeWidth="22" strokeLinecap="round" />
+                    <path d="M124 594 L154 592 L150 606 L132 608 Z" fill="#c8102e" stroke="#1a1a1a" strokeWidth="3" strokeLinejoin="round" />
+                    <path d="M176 588 L206 586 L204 600 L184 602 Z" fill="#c8102e" stroke="#1a1a1a" strokeWidth="3" strokeLinejoin="round" />
+                </g>
+                <g className="ring-girl-stride ring-girl-stride--b">
+                    <path d="M150 500 L134 584" stroke="#d99f74" strokeWidth="22" strokeLinecap="round" />
+                    <path d="M172 500 L180 588" stroke="#e8b48a" strokeWidth="22" strokeLinecap="round" />
+                    <path d="M118 588 L148 586 L146 600 L126 602 Z" fill="#c8102e" stroke="#1a1a1a" strokeWidth="3" strokeLinejoin="round" />
+                    <path d="M166 594 L196 592 L194 606 L174 608 Z" fill="#c8102e" stroke="#1a1a1a" strokeWidth="3" strokeLinejoin="round" />
+                </g>
+                <path d="M126 374 Q160 394 194 374 L198 404 Q186 430 182 436 L196 464 L208 506 L112 506 L124 464 L138 436 Q134 430 122 404 Z" fill="#c8102e" stroke="#1a1a1a" strokeWidth="4" strokeLinejoin="round" />
+                <path d="M152 384 Q142 440 130 500" stroke="#ff5d70" strokeWidth="6" strokeLinecap="round" opacity="0.55" fill="none" />
+                <rect x="150" y="350" width="20" height="28" rx="8" fill="#e8b48a" />
+                <circle cx="160" cy="330" r="27" fill="#e8b48a" stroke="#1a1a1a" strokeWidth="4" />
+                <path d="M132 322 C136 290 186 286 192 318 C176 306 148 306 132 322 Z" fill="#2a1a12" />
+                <path d="M150 343 Q160 351 170 343" stroke="#c8102e" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+                <path d="M138 380 L104 324 L70 294" stroke="#e8b48a" strokeWidth="16" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                <path d="M182 380 L216 324 L250 294" stroke="#e8b48a" strokeWidth="16" strokeLinecap="round" strokeLinejoin="round" fill="none" />
                 {/* The placard. */}
                 <rect x="40" y="26" width="240" height="266" rx="10" fill="#fbf7ea" stroke="#1a1a1a" strokeWidth="6" />
                 <rect x="56" y="42" width="208" height="234" rx="5" fill="none" stroke="#c8102e" strokeWidth="4" />
                 <text x="160" y="112" textAnchor="middle" className="ring-card-word">ROUND</text>
                 <text x="160" y="248" textAnchor="middle" className="ring-card-number">{round}</text>
+                <circle cx="68" cy="291" r="10" fill="#e8b48a" stroke="#1a1a1a" strokeWidth="3" />
+                <circle cx="252" cy="291" r="10" fill="#e8b48a" stroke="#1a1a1a" strokeWidth="3" />
             </svg>
         </div>
     );

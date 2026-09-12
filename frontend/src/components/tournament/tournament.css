@@ -1127,9 +1127,13 @@
   top: 46vh;
   top: 46dvh;
   left: 50%;
-  width: min(52vw, 34vh);
+  /* The figure is nearly twice as tall as it is wide (320 × 620). */
+  width: min(40vw, 26vh);
   transform: translate(-50%, -50%);
-  z-index: 45;
+  /* In front of the hand (1000) and the flying deal (130): she walks in
+     front of the table. Only up in the beat before the deal, so no modal
+     ever has to share the felt with her. */
+  z-index: 1010;
   pointer-events: none;
   filter: drop-shadow(0 1.2vh 1.6vh rgba(0, 0, 0, 0.5));
   animation: ring-card-walk 2.4s cubic-bezier(0.22, 0.8, 0.24, 1) both;
@@ -1169,6 +1173,14 @@
   100% { transform: translate(-70vw, -50%) rotate(-9deg); opacity: 0; }
 }
 
+/* Two strides, swapped as she walks. */
+.ring-girl-stride--a { animation: ring-girl-step 0.56s steps(1, end) infinite; }
+.ring-girl-stride--b { animation: ring-girl-step 0.56s steps(1, end) infinite; animation-delay: -0.28s; }
+@keyframes ring-girl-step {
+  0%, 49.9% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
 /* A preview holds the card mid-walk. */
 .ring-card.is-held {
   animation-play-state: paused;
@@ -1176,6 +1188,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .ring-girl-stride--a,
+  .ring-girl-stride--b {
+    animation: none;
+  }
+  .ring-girl-stride--b { opacity: 0; }
   .ring-card {
     animation: ring-card-fade 2.4s ease both;
   }
