@@ -29,6 +29,10 @@ vi.mock('./game/InsurancePrompt', () => ({ default: () => null }));
 vi.mock('./game/BidWinnerSplash', () => ({ default: () => null }));
 vi.mock('./game/IosPwaPrompt', () => ({ default: () => null }));
 vi.mock('./game/VoiceControls', () => ({ default: () => null }));
+// Both resolve a promise on mount and set state after the synchronous
+// render returns — the source of the act() warnings this file printed.
+vi.mock('./game/TipsBeacon', () => ({ default: () => null }));
+vi.mock('./game/coach/LearnerCoach', () => ({ default: () => null }));
 
 const socket = { id: 'watch-socket', on: vi.fn(), off: vi.fn() };
 

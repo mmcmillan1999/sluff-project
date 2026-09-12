@@ -82,6 +82,10 @@ vi.mock('./game/VoiceControls', () => ({
         </div>
     )
 }));
+// Both set state after mount from a resolved promise; mocked so the
+// run stays free of act() warnings (same as spectatorSounds).
+vi.mock('./game/TipsBeacon', () => ({ default: () => null }));
+vi.mock('./game/coach/LearnerCoach', () => ({ default: () => null }));
 
 const socket = {
     id: 'socket-1',

@@ -118,6 +118,10 @@ vi.mock('./game/InsurancePrompt', () => ({ default: () => null }));
 vi.mock('./game/BidWinnerSplash', () => ({ default: () => null }));
 vi.mock('./game/IosPwaPrompt', () => ({ default: () => null }));
 vi.mock('./game/VoiceControls', () => ({ default: () => null }));
+// Both set state after mount from a resolved promise; mocked so the
+// run stays free of act() warnings (same as spectatorSounds).
+vi.mock('./game/TipsBeacon', () => ({ default: () => null }));
+vi.mock('./game/coach/LearnerCoach', () => ({ default: () => null }));
 
 const socket = {
     id: 'deal-socket',
