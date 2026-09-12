@@ -359,6 +359,7 @@ function registerShutdownNotice(context = null) {
             // a surviving tick would claim this instance's own snapshot,
             // fail the restore against the still-live engine, and destroy
             // the row the successor needs.
+            context?.gameService?.stopHeartbeat?.();
             context?.stopResumeSweep?.();
             context?.botExhibition?.stop?.();
             context?.recoveryMonitor?.stop?.();

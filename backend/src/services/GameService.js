@@ -89,7 +89,9 @@ const { botPlayDelay, isDeliberateBot } = require('../core/botPacing');
 
             // --- THE NEW GAME LOOP HEARTBEAT ---
             // This runs every 1.5 seconds to check if any bots need to act.
-            setInterval(() => {
+            // Kept so the SIGTERM path can stop it before the live games are
+            // snapshotted; unref'd so it never holds a process open on its own.
+            this._heartbeat = setInterval(() => {
                 for (const tableId in this.engines) {
                     const engine = this.engines[tableId];
                     if (engine.gameStarted) {
@@ -108,6 +110,7 @@ const { botPlayDelay, isDeliberateBot } = require('../core/botPacing');
                         .catch(error => console.error('[TOURNAMENT] Tick failed:', error.message));
                 }
             }, 1500);
+            this._heartbeat.unref?.();
         }
 
         _initializeEngines() {
@@ -188,6 +191,13 @@ const { botPlayDelay, isDeliberateBot } = require('../core/botPacing');
         // service owns the tables. Each tournament table is an ordinary engine
         // registered here for the lifetime of one round, so the bot heartbeat,
         // the AFK backstop and socket routing all work on it unchanged.
+
+        // Stops the game loop. SIGTERM calls this before snapshotting so no
+        // bot plays a card between a table's snapshot and the process exit.
+        stopHeartbeat() {
+            if (this._heartbeat) clearInterval(this._heartbeat);
+            this._heartbeat = null;
+        }
 
         attachTournamentDirector(director) {
             this.tournamentDirector = director || null;
@@ -2049,13 +2059,20 @@ const { botPlayDelay, isDeliberateBot } = require('../core/botPacing');
                     case 'START_TIMER': {
                         const timerFn = this.timerOverride || setTimeout;
                         timerFn(async () => {
-                            const followUpEffects = effect.payload.onTimeout(engine);
-                            if (followUpEffects && followUpEffects.length > 0) {
-                                await this._executeEffects(tableId, followUpEffects);
+                            // Unhandled here means an unhandled rejection,
+                            // which on Node 20+ exits the process and every
+                            // live table with it (see scheduleTurnAction).
+                            try {
+                                const followUpEffects = effect.payload.onTimeout(engine);
+                                if (followUpEffects && followUpEffects.length > 0) {
+                                    await this._executeEffects(tableId, followUpEffects);
+                                }
+                                // Fast play never waits for the 1.5 s heartbeat to
+                                // notice a table that just came off a timer.
+                                if (fastSpeed(engine) > 1) this._triggerBots(tableId);
+                            } catch (error) {
+                                console.error(`[TIMER] Follow-up failed on ${tableId}:`, error);
                             }
-                            // Fast play never waits for the 1.5 s heartbeat to
-                            // notice a table that just came off a timer.
-                            if (fastSpeed(engine) > 1) this._triggerBots(tableId);
                         }, effect.payload.duration);
                         break;
                     }
@@ -2202,22 +2219,27 @@ const { botPlayDelay, isDeliberateBot } = require('../core/botPacing');
                         if (engine.internalTimers.forfeit) break;
                         const { targetPlayerName } = effect.payload;
                         engine.internalTimers.forfeit = setInterval(async () => {
-                            const currentEngine = this.getEngineById(tableId);
-                            const target = Object.values(currentEngine?.players || {})
-                                .find(player => player.playerName === targetPlayerName);
-                            if (!currentEngine || !target?.disconnected || currentEngine.forfeiture.targetPlayerName !== targetPlayerName) {
-                                currentEngine?._clearForfeitTimer();
-                                if (currentEngine) this.emitGameState(tableId);
-                                return;
-                            }
+                            try {
+                                const currentEngine = this.getEngineById(tableId);
+                                const target = Object.values(currentEngine?.players || {})
+                                    .find(player => player.playerName === targetPlayerName);
+                                if (!currentEngine || !target?.disconnected || currentEngine.forfeiture.targetPlayerName !== targetPlayerName) {
+                                    currentEngine?._clearForfeitTimer();
+                                    if (currentEngine) this.emitGameState(tableId);
+                                    return;
+                                }
 
-                            currentEngine.forfeiture.timeLeft -= 1;
-                            if (currentEngine.forfeiture.timeLeft <= 0) {
-                                currentEngine._clearForfeitTimer();
-                                const followUp = currentEngine._resolveForfeit(targetPlayerName, 'disconnect timeout');
-                                await this._executeEffects(tableId, followUp);
-                            } else {
-                                this.emitGameState(tableId);
+                                currentEngine.forfeiture.timeLeft -= 1;
+                                if (currentEngine.forfeiture.timeLeft <= 0) {
+                                    currentEngine._clearForfeitTimer();
+                                    const followUp = currentEngine._resolveForfeit(targetPlayerName, 'disconnect timeout');
+                                    await this._executeEffects(tableId, followUp);
+                                } else {
+                                    this.emitGameState(tableId);
+                                }
+                            } catch (error) {
+                                // A ticking interval must never reject unhandled.
+                                console.error(`[TIMER] Forfeit tick failed on ${tableId}:`, error);
                             }
                         }, 1000);
                         break;
