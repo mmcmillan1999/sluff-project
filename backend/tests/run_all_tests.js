@@ -11,6 +11,7 @@ const suites = [
     { name: 'mercy tokens', file: './mercyToken.test.js', exportName: 'runMercyTokenTests' },
     { name: 'table integration', file: './Table.integration.test.js' },
     { name: 'rematch consent', file: './rematchConsent.test.js' },
+    { name: 'departed seat scores', file: './departedSeatScores.test.js' },
     { name: 'playout vote', file: './playoutVote.test.js' },
     { name: 'bot exhibition', file: './botExhibition.test.js' },
     { name: 'payouts', file: './payouts.test.js' },

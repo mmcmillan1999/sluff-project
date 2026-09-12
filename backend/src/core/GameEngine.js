@@ -610,13 +610,23 @@ class GameEngine {
             this.disconnectPlayer(userId);
         }
         else if (safeLeaveStates.includes(this.state) || playerInfo.isSpectator) {
-            delete this.players[userId];
-            if (playerInfo.isBot) {
-                delete this.bots[userId];
-                this._releasePersistentBotSeat(playerInfo);
-            }
-            this.playerOrder.remove(userId);
+            this._removeUnstartedSeat(userId);
         }
+    }
+
+    // Drop a seat that never made it into a game. The score entry goes with
+    // it: scores are keyed by name, and a name left behind here would still
+    // sit at 120 on the podium of a game its owner never played.
+    _removeUnstartedSeat(userId) {
+        const player = this.players[userId];
+        if (!player) return;
+        delete this.players[userId];
+        if (player.isBot) {
+            delete this.bots[userId];
+            this._releasePersistentBotSeat(player);
+        }
+        this.playerOrder.remove(userId);
+        delete this.scores[player.playerName];
     }
     
     disconnectPlayer(userId) {
@@ -628,12 +638,7 @@ class GameEngine {
             player.disconnected = true;
             player.socketId = null;
         } else if (!this.gameStarted || player.isSpectator) {
-            delete this.players[userId];
-            if (player.isBot) {
-                delete this.bots[userId];
-                this._releasePersistentBotSeat(player);
-            }
-            this.playerOrder.remove(userId);
+            this._removeUnstartedSeat(userId);
         } else {
             console.log(`[${this.tableId}] Player ${player.playerName} has disconnected.`);
             player.disconnected = true;
@@ -791,8 +796,7 @@ class GameEngine {
                         // bots, and any fallback marker as one operation.
                         this.removeBotPlayer(userId);
                     } else {
-                        delete this.players[userId];
-                        this.playerOrder.remove(userId);
+                        this._removeUnstartedSeat(userId);
                     }
                 }
                 // A failed fallback start must not strand a bot in the reserved
