@@ -43,7 +43,13 @@ const createSoundsRoutes = (pool, jwt, gameService) => {
             const audio = await getChampionLine(pool, winners[0][0]);
             if (!audio) return res.status(204).end();
             res.set('Content-Type', 'audio/mpeg');
-            res.set('Cache-Control', 'private, max-age=3600');
+            // Never cacheable: the URL names the TABLE, and the next game at
+            // that table has a different champion. A one-hour max-age here
+            // once had McSaddle's browser replay "All hail your champion,
+            // Grampa Blane" on McSaddle's own win (Sept 10 2026). The client
+            // keeps the decoded line in memory for the podium; the per-name
+            // audio cache is champion_lines in the database.
+            res.set('Cache-Control', 'private, no-store');
             return res.send(audio);
         } catch (error) {
             console.error('Error serving champion line:', error);

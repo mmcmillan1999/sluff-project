@@ -609,10 +609,14 @@ export const markTipSeen = async (tipId) => {
  * personalized line applies (shared win, forfeit, TTS unavailable) — the
  * caller falls back to the generic sting on null.
  */
-export const fetchChampionLine = async (tableId) => {
+// gameKey rides along as a query string the server ignores: it makes the URL
+// unique per game, so no HTTP cache (the browser's, a proxy's) can hand back
+// the previous game's champion at the same table.
+export const fetchChampionLine = async (tableId, gameKey = '') => {
     try {
+        const suffix = gameKey ? `?game=${encodeURIComponent(gameKey)}` : '';
         const response = await configuredFetch(
-            `/api/sounds/champion-line/${encodeURIComponent(tableId)}`, 'GET',
+            `/api/sounds/champion-line/${encodeURIComponent(tableId)}${suffix}`, 'GET',
         );
         if (response.status !== 200) return null;
         return await response.arrayBuffer();

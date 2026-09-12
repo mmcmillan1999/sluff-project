@@ -813,7 +813,7 @@ const GameTableView = ({ user, playerId, currentTableState, handleLeaveTable, ha
         if (currentTableState.roundSummary.forfeit) return;
         const tableId = currentTableState.tableId;
         const gameKey = `${tableId}:${currentTableState.roundSummary.presentationReadyAt ?? 'legacy'}`;
-        prefetchChampionLine?.(gameKey, () => fetchChampionLine(tableId));
+        prefetchChampionLine?.(gameKey, () => fetchChampionLine(tableId, gameKey));
     }, [
         currentTableState?.roundSummary?.isGameOver,
         currentTableState?.roundSummary?.forfeit,
