@@ -135,7 +135,10 @@ async function main() {
             console.log('');
         }
 
-        process.exit(humanGames.length > 0 || humanTournaments.length > 0 ? 1 : 0);
+        // Set the code and let the process drain: process.exit() here skipped
+        // the pool.end() below and could cut the report's last lines when
+        // stdout is a pipe (npm run deploy:check, or piped into jq).
+        process.exitCode = humanGames.length > 0 || humanTournaments.length > 0 ? 1 : 0;
     } finally {
         await pool.end();
     }
