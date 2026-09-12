@@ -28,7 +28,7 @@ const TournamentWaitStrip = ({ tournament, tableId, tableState, isSpectator, vie
             <div className="tournament-wait-strip" role="status" aria-live="polite">
                 <span className="tournament-wait-text">
                     {drain ? `Chip drain −${drain.percent}%${myDrop ? ` · you drop ${myDrop}` : ''}.` : 'Every table is done.'}
-                    {Number.isFinite(nextIn) && nextIn > 0 ? ` Next round in ${nextIn} s.` : ' Reseating…'}
+                    <span aria-hidden="true">{Number.isFinite(nextIn) && nextIn > 0 ? ` Next round in ${nextIn} s.` : ' Reseating…'}</span>
                 </span>
             </div>
         );

@@ -45,7 +45,7 @@ const TournamentWelcomeCard = ({ tournament, tableState, playWelcome = null, fet
                     {favorites.map(name => <span key={name} className="tournament-welcome-favorite">★ {name}</span>)}
                 </p>
             )}
-            <p className="tournament-welcome-countdown">
+            <p className="tournament-welcome-countdown" aria-hidden="true">
                 {Number.isFinite(dealIn) && dealIn > 0 ? `Cards fly in ${dealIn} s` : 'Cards fly…'}
             </p>
         </div>

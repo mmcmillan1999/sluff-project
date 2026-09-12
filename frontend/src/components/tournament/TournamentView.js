@@ -309,11 +309,13 @@ const TournamentView = ({
 
                 return (
                     <>
-                        <section className="tournament-hero" aria-live="polite">
+                        <section className="tournament-hero">
                             {ring}
                             <div className="tournament-hero-text">
                                 <h2>{title}</h2>
-                                <p className="tournament-hero-sub">{sub}</p>
+                                {/* The sentence changes when the phase does; the
+                                    ticking title above it is left to the eye. */}
+                                <p className="tournament-hero-sub" role="status">{sub}</p>
                                 <div className="tournament-hero-you">
                                     {!me && <p>You are watching. {tournament.playersLeft} players are still in.</p>}
                                     {seated && myTable && (

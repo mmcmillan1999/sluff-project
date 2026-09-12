@@ -47,7 +47,7 @@ const PlayoutVoteModal = ({ show, currentTableState, selfPlayerName, onVote }) =
                         {' '}Waiting for the table… ({votedCount}/{voteEntries.length})
                     </p>
                 )}
-                <p className="playout-vote-timer" aria-live="polite">
+                <p className="playout-vote-timer" aria-hidden="true">
                     {Number.isFinite(playoutVote.timer) ? `${playoutVote.timer}s` : ''}
                 </p>
                 <p className="playout-vote-hint">
