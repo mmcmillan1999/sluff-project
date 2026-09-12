@@ -3,7 +3,7 @@
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useModalFocus } from '../../hooks/useModalFocus';
-import { formatTokens, startLabel } from './tournamentFormat';
+import { startLabel, tokensLabel } from './tournamentFormat';
 import { getThemePresentation } from '../../config/themePresentation';
 import './tournament.css';
 
@@ -36,7 +36,7 @@ const TournamentPopup = ({ tournament, onJoin, onDismiss, busy = false }) => {
                 <p className="tournament-kicker">Tournament open</p>
                 <h2 id="tournament-popup-title">{tournament.name}</h2>
                 <ul className="tournament-facts">
-                    <li><span className="k">Buy-in</span><span className="v">{formatTokens(tournament.buyInTokens)} tokens</span></li>
+                    <li><span className="k">Buy-in</span><span className="v">{tokensLabel(tournament.buyInTokens)}</span></li>
                     <li><span className="k">Starting stack</span><span className="v">{tournament.startingStack}</span></li>
                     <li><span className="k">Seats</span><span className="v">{tournament.seatsTaken} of {tournament.maxSeats}</span></li>
                     <li><span className="k">Venue</span><span className="v">{getThemePresentation(tournament.venue).name}</span></li>
@@ -45,7 +45,7 @@ const TournamentPopup = ({ tournament, onJoin, onDismiss, busy = false }) => {
                 <div className="tournament-actions">
                     <button type="button" className="tournament-btn secondary" onClick={onDismiss} disabled={busy}>Not now</button>
                     <button type="button" className="tournament-btn tournament-popup-join" onClick={onJoin} disabled={busy || full}>
-                        {full ? 'Full' : `Join · ${formatTokens(tournament.buyInTokens)} tokens`}
+                        {full ? 'Full' : `Join · ${tokensLabel(tournament.buyInTokens)}`}
                     </button>
                 </div>
             </section>

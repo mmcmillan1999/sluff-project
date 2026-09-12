@@ -58,7 +58,7 @@ test('a non-entrant sees the facts and a Join button while registration is open'
     expect(screen.getByRole('heading', { name: "Matt's Tournament" })).toBeInTheDocument();
     expect(screen.getByText('2 of 9')).toBeInTheDocument();
     expect(screen.getByText('Starts when Matt says go')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Join · 1 tokens' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Join · 1 token' }));
     expect(onJoin).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('button', { name: 'Find player' })).not.toBeInTheDocument();
     expect(screen.queryByText(/bot|house player/i)).not.toBeInTheDocument();
@@ -163,7 +163,7 @@ test('the popup offers Join and Not now', () => {
     expect(screen.getByRole('dialog', { name: "Matt's Tournament" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
     expect(onDismiss).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByRole('button', { name: 'Join · 1 tokens' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Join · 1 token' }));
     expect(onJoin).toHaveBeenCalledTimes(1);
 });
 

@@ -2,7 +2,7 @@
 // button when nothing is open, the way back to an open registration once
 // the popup has been dismissed, or a pointer at a tournament in progress.
 import React from 'react';
-import { formatTokens, startLabel } from './tournamentFormat';
+import { tokensLabel, startLabel } from './tournamentFormat';
 import './tournament.css';
 
 const TournamentLobbySlot = ({ user, tournamentLobby, myTournament, onOpen, onCreate }) => {
@@ -39,7 +39,7 @@ const TournamentLobbySlot = ({ user, tournamentLobby, myTournament, onOpen, onCr
                 <div className="tournament-ribbon">
                     <div className="tournament-ribbon-text">
                         <span className="tournament-ribbon-title">Tournament open · {open.seatsTaken} of {open.maxSeats} seats</span>
-                        <span className="tournament-ribbon-sub">{open.name} · {formatTokens(open.buyInTokens)} tokens · {startLabel(open)}</span>
+                        <span className="tournament-ribbon-sub">{open.name} · {tokensLabel(open.buyInTokens)} · {startLabel(open)}</span>
                     </div>
                     <button type="button" className="tournament-btn" onClick={onOpen}>View</button>
                 </div>

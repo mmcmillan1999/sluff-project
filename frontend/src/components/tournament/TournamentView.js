@@ -3,7 +3,7 @@
 // so the player always lands on the same place from the ribbon, the popup
 // and the table.
 import React, { useEffect, useRef, useState } from 'react';
-import { currentDrain, describeViewer, drainLabel, formatTokens, ordinal, startLabel, statusLabel, tableProgressLabel, MIN_SEATS } from './tournamentFormat';
+import { currentDrain, describeViewer, drainLabel, ordinal, startLabel, statusLabel, tableProgressLabel, MIN_SEATS, tokensLabel } from './tournamentFormat';
 import { TournamentVoiceSlot } from './TournamentVoiceDock';
 import { useCountdown } from './useCountdown';
 import { getTournamentInviteUrl, shareTournamentInvite } from '../../utils/tournamentInvites';
@@ -12,7 +12,7 @@ import './tournament.css';
 
 const Facts = ({ tournament }) => (
     <ul className="tournament-facts">
-        <li><span className="k">Buy-in</span><span className="v">{formatTokens(tournament.buyInTokens)} tokens</span></li>
+        <li><span className="k">Buy-in</span><span className="v">{tokensLabel(tournament.buyInTokens)}</span></li>
         <li><span className="k">Starting stack</span><span className="v">{tournament.startingStack}</span></li>
         <li><span className="k">Seats</span><span className="v">{tournament.seatsTaken} of {tournament.maxSeats}</span></li>
         <li><span className="k">Venue</span><span className="v">{getThemePresentation(tournament.venue).name}</span></li>
@@ -62,7 +62,7 @@ const Standings = ({ ranked, myUserId, finished, drain = null, favorites = [] })
                             </td>
                             <td>
                                 {finished
-                                    ? (entry.prizeTokens > 0 ? <span className="tournament-chip gold">{formatTokens(entry.prizeTokens)} tokens</span> : '—')
+                                    ? (entry.prizeTokens > 0 ? <span className="tournament-chip gold">{tokensLabel(entry.prizeTokens)}</span> : '—')
                                     : (out
                                         ? <span className="tournament-chip out">Out · round {entry.bustedRound}</span>
                                         : (entry.status === 'playing' ? <span className="tournament-chip">Playing</span> : <span className="tournament-chip">Registered</span>))}
@@ -225,7 +225,7 @@ const TournamentView = ({
                         <div className="tournament-actions">
                             {!entered && (
                                 <button type="button" className="tournament-btn" onClick={onJoin} disabled={busy || tournament.seatsTaken >= tournament.maxSeats}>
-                                    {tournament.seatsTaken >= tournament.maxSeats ? 'Full' : `Join · ${formatTokens(tournament.buyInTokens)} tokens`}
+                                    {tournament.seatsTaken >= tournament.maxSeats ? 'Full' : `Join · ${tokensLabel(tournament.buyInTokens)}`}
                                 </button>
                             )}
                             {entered && !isCreator && confirming !== 'leave' && (
@@ -397,7 +397,7 @@ const TournamentView = ({
                                 <div key={entry.userId} className={`tournament-podium-place${entry.place === 1 ? ' first' : ''}`}>
                                     <div className="place">{ordinal(entry.place)}</div>
                                     <div className="name">{entry.username}</div>
-                                    <div className="prize">{entry.prizeTokens > 0 ? `${formatTokens(entry.prizeTokens)} tokens` : ''}</div>
+                                    <div className="prize">{entry.prizeTokens > 0 ? tokensLabel(entry.prizeTokens) : ''}</div>
                                 </div>
                             ))}
                         </div>

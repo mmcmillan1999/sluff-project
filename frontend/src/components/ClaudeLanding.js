@@ -93,7 +93,7 @@ const HAND_CARDS = [
 
 const formatTokens = (value) => {
     const n = Number(value) || 0;
-    return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0$/, '');
+    return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
 };
 
 // What a shared tournament link is about, in one line under its name.

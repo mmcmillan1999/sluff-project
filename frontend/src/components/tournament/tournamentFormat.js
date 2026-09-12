@@ -57,8 +57,11 @@ export const ordinal = (place) => {
 
 export const formatTokens = (value) => {
     const n = Number(value) || 0;
-    return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0$/, '');
+    return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
 };
+
+// "1 token", "25 tokens", "2.5 tokens".
+export const tokensLabel = (value) => `${formatTokens(value)} token${Number(value) === 1 ? '' : 's'}`;
 
 export const startLabel = (tournament) => {
     if (!tournament) return '';
