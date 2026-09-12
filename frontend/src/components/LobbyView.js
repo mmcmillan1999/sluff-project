@@ -48,6 +48,10 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, wheelAudio, handleJoinTab
     const [tutorialResetError, setTutorialResetError] = useState('');
     const menuContainerRef = useRef(null);
     const menuButtonRef = useRef(null);
+    // The "seating you" safety timer: on the happy path the lobby unmounts
+    // before it fires, so it is held here and cleared on the way out.
+    const quickPlayResetRef = useRef(null);
+    useEffect(() => () => clearTimeout(quickPlayResetRef.current), []);
     
     // Get viewport information for responsive behavior
     const viewport = useViewport();
@@ -315,7 +319,8 @@ const LobbyView = ({ user, lobbyThemes, serverVersion, wheelAudio, handleJoinTab
                                 setQuickPlayPending(themeId);
                                 handleQuickPlay(themeId);
                                 // Safety: clear if the server didn't seat us
-                                setTimeout(() => setQuickPlayPending(null), 4000);
+                                clearTimeout(quickPlayResetRef.current);
+                                quickPlayResetRef.current = setTimeout(() => setQuickPlayPending(null), 4000);
                             }}
                         />
                     </DecorBoundary>
