@@ -60,6 +60,14 @@
   white-space: nowrap;
 }
 
+/* Keyboard focus is visible on every tournament control. */
+.tournament-btn:focus-visible,
+.tournament-segment:focus-visible,
+.tournament-venue:focus-visible {
+  outline: 3px solid #f7e1a0;
+  outline-offset: 3px;
+}
+
 .tournament-btn:disabled {
   opacity: 0.45;
   cursor: default;
