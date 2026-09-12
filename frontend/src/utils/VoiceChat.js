@@ -1,10 +1,10 @@
 // frontend/src/utils/VoiceChat.js
-// Always-on voice chat for a Sluff table.
+// Opt-in voice chat for a Sluff table or tournament.
 //
 // Architecture: WebRTC peer-to-peer mesh (each participant connects directly
-// to every other participant — at most 3 peers, well within mesh limits).
+// to every other participant, including across tournament tables).
 // Audio never touches the game server; Socket.IO only relays the WebRTC
-// handshake (offers/answers/ICE) between players seated at the same table.
+// handshake (offers/answers/ICE) between members of the same voice room.
 //
 // Players join the voice room with the table. One microphone stream is kept
 // for the table session and muted by toggling MediaStreamTrack.enabled. This
@@ -18,6 +18,9 @@
 // NAT traversal: STUN by default (free). For the small share of networks
 // that need a relay, provide TURN credentials via VITE_TURN_URL /
 // VITE_TURN_USERNAME / VITE_TURN_CREDENTIAL.
+
+import VoiceConnectionMonitor from './VoiceConnectionMonitor';
+import { capVoiceSenderBitrate, withVoiceAudioProfile } from './voiceAudioProfile';
 
 const buildIceServers = () => {
     const servers = [
@@ -39,6 +42,7 @@ const MIC_CONSTRAINTS = {
         echoCancellation: true,
         noiseSuppression: true,
         autoGainControl: true,
+        channelCount: { ideal: 1 },
     },
     video: false,
 };
@@ -144,7 +148,7 @@ const acquireMic = () => {
 };
 
 class VoiceChat {
-    constructor(socket, tableId, { onPeersChanged, onSpeakingChanged, onError } = {}) {
+    constructor(socket, tableId, { onPeersChanged, onSpeakingChanged, onConnectionQuality, onError } = {}) {
         this.socket = socket;
         this.tableId = tableId;
         this.onPeersChanged = onPeersChanged || (() => {});
@@ -160,6 +164,11 @@ class VoiceChat {
         this.joined = false;
         this.lifecycleToken = 0;
         this.boundHandlers = null;
+        this.lastBroadcastMicrophoneState = null;
+        this.connectionMonitor = new VoiceConnectionMonitor({
+            getPeers: () => this.peers.values(),
+            onChange: onConnectionQuality || (() => {}),
+        });
     }
 
     async join() {
@@ -192,6 +201,8 @@ class VoiceChat {
 
         this._bindSocket();
         this.joined = true;
+        this.lastBroadcastMicrophoneState = null;
+        this.connectionMonitor.start();
         console.log(`[voice] joining voice room for table ${this.tableId}`
             + ' (a voiceRoster log must follow; if it never does, the server rejected the join)');
         // Socket.IO buffers emits while disconnected. Let the connect handler
@@ -206,6 +217,7 @@ class VoiceChat {
         this.lifecycleToken += 1;
         this.micRequestToken += 1;
         this.micRequest = null;
+        this.connectionMonitor.stop();
         if (this.boundHandlers) {
             for (const [event, handler] of Object.entries(this.boundHandlers)) {
                 this.socket.off(event, handler);
@@ -320,10 +332,13 @@ class VoiceChat {
     }
 
     _broadcastMicrophoneState() {
-        if (!this.joined) return;
+        if (!this.joined || this.socket.connected === false) return;
+        const speaking = !this.microphoneMuted && Boolean(this.micStream);
+        if (speaking === this.lastBroadcastMicrophoneState) return;
+        this.lastBroadcastMicrophoneState = speaking;
         this.socket.emit('voiceSpeaking', {
             tableId: this.tableId,
-            speaking: !this.microphoneMuted && Boolean(this.micStream),
+            speaking,
         });
     }
 
@@ -359,18 +374,22 @@ class VoiceChat {
 
     _resumeAudio() {
         if (!this.audioContext) return;
-        const state = this.audioContext.state;
+        const context = this.audioContext;
+        const state = context.state;
         // 'interrupted' is iOS WebKit's session-taken state; resume() from it
         // behaves like resume() from 'suspended' (queued if the interruption
         // is still in progress).
-        const resume = (state === 'suspended' || state === 'interrupted')
-            ? this.audioContext.resume()
-            : Promise.resolve();
-        Promise.resolve(resume).catch(() => {}).finally(() => {
+        const recovering = state === 'suspended' || state === 'interrupted';
+        const playPausedAudio = () => {
+            if (this.audioContext !== context) return;
             for (const peer of this.peers.values()) {
-                peer.audioEl?.play?.().catch(() => {});
+                if (peer.audioEl && (recovering || peer.audioEl.paused)) {
+                    peer.audioEl.play().catch(() => {});
+                }
             }
-        });
+        };
+        if (recovering) context.resume().catch(() => {}).finally(playPausedAudio);
+        else playPausedAudio();
     }
 
     // --- per-peer output controls -------------------------------------------
@@ -414,6 +433,9 @@ class VoiceChat {
                     this._teardownPeer(userId, { silent: true });
                 }
                 this._emitPeers();
+                this.lastBroadcastMicrophoneState = null;
+                this.connectionMonitor.stop();
+                this.connectionMonitor.start();
                 this.socket.emit('voiceJoin', { tableId: this.tableId });
             },
             voiceRoster: ({ tableId, peers }) => {
@@ -424,6 +446,9 @@ class VoiceChat {
                     this._createPeer(Number(peer.userId), peer.playerName, true);
                 }
                 this._emitPeers();
+                // The roster acknowledges server membership. An earlier mic
+                // change can race its async join checks and be dropped.
+                this.lastBroadcastMicrophoneState = null;
                 this._broadcastMicrophoneState();
             },
             voicePeerJoined: ({ tableId, userId, playerName }) => {
@@ -457,7 +482,8 @@ class VoiceChat {
             voiceSpeaking: ({ tableId, userId, speaking }) => {
                 if (tableId && tableId !== this.tableId) return;
                 const peer = this.peers.get(Number(userId));
-                if (peer) peer.speaking = Boolean(speaking);
+                if (!peer || peer.speaking === Boolean(speaking)) return;
+                peer.speaking = Boolean(speaking);
                 this.onSpeakingChanged(Number(userId), Boolean(speaking));
                 this._emitPeers();
             },
@@ -469,7 +495,32 @@ class VoiceChat {
     }
 
     _signal(targetUserId, data) {
+        if (!this.joined || !this.peers.has(targetUserId)) return;
         this.socket.emit('voiceSignal', { tableId: this.tableId, targetUserId, data });
+    }
+
+    async _setLocalAudioDescription(peer, description) {
+        if (this.peers.get(peer.userId) !== peer) return false;
+        const profiled = withVoiceAudioProfile(description);
+        try {
+            await peer.pc.setLocalDescription(profiled);
+        } catch (error) {
+            // A browser that rejects optional codec preferences must still be
+            // able to join. Never weaken transport or authorization checks.
+            if (profiled.sdp === description.sdp || this.peers.get(peer.userId) !== peer) throw error;
+            console.warn('[voice] speech profile unavailable; using browser audio defaults', error);
+            await peer.pc.setLocalDescription(description);
+        }
+        if (this.peers.get(peer.userId) !== peer) return false;
+        this._capSenderBitrate(peer);
+        return true;
+    }
+
+    _capSenderBitrate(peer) {
+        if (peer.pc.signalingState !== 'stable') return;
+        capVoiceSenderBitrate(peer.audioSender).catch(error => {
+            console.warn('[voice] sender bitrate cap unavailable:', error);
+        });
     }
 
     _createPeer(userId, playerName, initiator) {
@@ -570,7 +621,7 @@ class VoiceChat {
         if (initiator) {
             pc.onnegotiationneeded = async () => {
                 try {
-                    await pc.setLocalDescription(await pc.createOffer());
+                    if (!await this._setLocalAudioDescription(peer, await pc.createOffer())) return;
                     console.log(`[voice] peer ${userId}: sending offer`);
                     this._signal(userId, { sdp: pc.localDescription });
                 } catch (error) {
@@ -624,6 +675,7 @@ class VoiceChat {
         if (data?.sdp) {
             console.log(`[voice] peer ${fromUserId}: received ${data.sdp.type}`);
             await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+            if (this.peers.get(fromUserId) !== peer) return;
             if (data.sdp.type === 'offer') {
                 // Adopt the transceiver that applying the offer just created.
                 // setRemoteDescription(offer) associates the audio m-line with
@@ -652,9 +704,11 @@ class VoiceChat {
                 } else {
                     console.warn(`[voice] peer ${fromUserId}: no audio transceiver found in remote offer`);
                 }
-                await pc.setLocalDescription(await pc.createAnswer());
+                if (!await this._setLocalAudioDescription(peer, await pc.createAnswer())) return;
                 console.log(`[voice] peer ${fromUserId}: sending answer`);
                 this._signal(fromUserId, { sdp: pc.localDescription });
+            } else if (data.sdp.type === 'answer') {
+                this._capSenderBitrate(peer);
             }
             while (peer.pendingCandidates.length > 0) {
                 await pc.addIceCandidate(peer.pendingCandidates.shift()).catch(() => {});

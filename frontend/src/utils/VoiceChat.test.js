@@ -1,6 +1,16 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import VoiceChat, { resetAudioSessionAccountingForTests } from './VoiceChat';
 
+vi.mock('./VoiceConnectionMonitor', () => ({
+    default: class MockVoiceConnectionMonitor {
+        constructor(options) {
+            this.options = options;
+            this.start = vi.fn();
+            this.stop = vi.fn();
+        }
+    },
+}));
+
 const deferred = () => {
     let resolve;
     let reject;
@@ -45,6 +55,8 @@ let audioContexts;
 class MockSender {
     constructor() {
         this.replaceTrack = vi.fn().mockResolvedValue(undefined);
+        this.getParameters = vi.fn(() => ({ codecs: [{ mimeType: 'audio/opus' }], encodings: [{}] }));
+        this.setParameters = vi.fn().mockResolvedValue(undefined);
     }
 }
 
@@ -147,6 +159,149 @@ describe('VoiceChat microphone lifecycle', () => {
         expect(socket.emit).toHaveBeenCalledWith('voiceJoin', { tableId: 'table-12' });
         expect(socket.handlers.has('voiceRoster')).toBe(true);
         expect(voice.microphoneMuted).toBe(true);
+    });
+
+    test('starts one quality monitor per session and resets it after reconnect', async () => {
+        const onConnectionQuality = vi.fn();
+        const socket = makeSocket();
+        const voice = new VoiceChat(socket, 'table-12', { onConnectionQuality });
+        await voice.join();
+        await voice.join();
+        expect(voice.connectionMonitor.start).toHaveBeenCalledOnce();
+        expect(voice.connectionMonitor.options.onChange).toBe(onConnectionQuality);
+        socket.trigger('voiceRoster', { tableId: 'table-12', peers: [{ userId: 7 }] });
+        expect([...voice.connectionMonitor.options.getPeers()]).toHaveLength(1);
+        socket.trigger('connect');
+        expect(voice.connectionMonitor.stop).toHaveBeenCalledOnce();
+        expect(voice.connectionMonitor.start).toHaveBeenCalledTimes(2);
+        voice.leave();
+        expect(voice.connectionMonitor.stop).toHaveBeenCalledTimes(2);
+    });
+
+    test('negotiates a five-human speech mesh with one mono microphone capture', async () => {
+        const socket = makeSocket();
+        const voice = new VoiceChat(socket, 'tournament:five');
+        const { stream } = makeMicrophone();
+        getUserMedia.mockResolvedValue(stream);
+        await voice.join();
+        await voice.setMicrophoneMuted(false);
+        socket.trigger('voiceRoster', {
+            tableId: 'tournament:five', peers: [2, 3, 4, 5].map(userId => ({ userId })),
+        });
+        expect(getUserMedia).toHaveBeenCalledOnce();
+        expect(getUserMedia).toHaveBeenCalledWith({
+            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: { ideal: 1 } },
+            video: false,
+        });
+        expect(peerConnections).toHaveLength(4);
+        const sdp = 'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=rtpmap:111 opus/48000/2\r\na=sendrecv\r\n';
+        for (const pc of peerConnections) {
+            pc.createOffer.mockResolvedValue({ type: 'offer', sdp });
+            await pc.onnegotiationneeded();
+            expect(pc.localDescription.sdp).toContain('maxaveragebitrate=24000');
+            expect(pc.localDescription.sdp).toContain('usedtx=1');
+            expect(pc.transceivers).toHaveLength(1);
+            expect(pc.transceivers[0].sender.replaceTrack).toHaveBeenCalledWith(stream.getAudioTracks()[0]);
+        }
+        voice.leave();
+        expect(peerConnections.every(pc => pc.close.mock.calls.length === 1)).toBe(true);
+    });
+
+    test('profiles an answer on the adopted transceiver and caps the negotiated sender', async () => {
+        const socket = makeSocket();
+        const voice = new VoiceChat(socket, 'table-12');
+        await voice.join();
+        const peer = voice._createPeer(7, 'Alice', false);
+        expect(peer.pc.transceivers).toHaveLength(0);
+        peer.pc.createAnswer.mockResolvedValue({ type: 'answer', sdp: 'v=0\r\nm=audio 9 RTP/AVP 111\r\na=rtpmap:111 opus/48000/2\r\n' });
+        await voice._handleSignal(7, { sdp: { type: 'offer', sdp: 'incoming-offer' } });
+        expect(peer.pc.transceivers).toHaveLength(1);
+        expect(peer.pc.transceivers[0].direction).toBe('sendrecv');
+        expect(peer.audioSender).toBe(peer.pc.transceivers[0].sender);
+        expect(peer.pc.localDescription.sdp).toContain('usedtx=1');
+        expect(peer.audioSender.setParameters).toHaveBeenCalledWith(expect.objectContaining({ encodings: [{ maxBitrate: 24000 }] }));
+        expect(socket.emit).toHaveBeenCalledWith('voiceSignal', {
+            tableId: 'table-12', targetUserId: 7, data: { sdp: peer.pc.localDescription },
+        });
+        voice.leave();
+    });
+
+    test('preserves voice negotiation when a browser rejects optional Opus preferences', async () => {
+        const socket = makeSocket();
+        const voice = new VoiceChat(socket, 'table-12');
+        await voice.join();
+        const peer = voice._createPeer(7, 'Alice', true);
+        const description = { type: 'offer', sdp: 'v=0\r\nm=audio 9 RTP/AVP 111\r\na=rtpmap:111 opus/48000/2\r\n' };
+        peer.pc.createOffer.mockResolvedValue(description);
+        peer.pc.setLocalDescription.mockRejectedValueOnce(new Error('Unsupported preference'));
+        await peer.pc.onnegotiationneeded();
+        expect(peer.pc.localDescription).toEqual(description);
+        expect(socket.emit).toHaveBeenCalledWith('voiceSignal', { tableId: 'table-12', targetUserId: 7, data: { sdp: description } });
+        voice.leave();
+    });
+
+    test('does not emit a late offer after leaving the room', async () => {
+        const socket = makeSocket();
+        const voice = new VoiceChat(socket, 'table-12');
+        await voice.join();
+        const peer = voice._createPeer(7, 'Alice', true);
+        const offer = deferred();
+        peer.pc.createOffer.mockReturnValue(offer.promise);
+        const negotiation = peer.pc.onnegotiationneeded();
+        voice.leave();
+        offer.resolve({ type: 'offer', sdp: 'offer' });
+        await negotiation;
+        expect(peer.pc.setLocalDescription).not.toHaveBeenCalled();
+        expect(socket.emit.mock.calls.filter(([event]) => event === 'voiceSignal')).toHaveLength(0);
+    });
+
+    test('sends microphone transitions once and resends current state after reconnect', async () => {
+        const socket = makeSocket();
+        const voice = new VoiceChat(socket, 'table-12');
+        getUserMedia.mockResolvedValue(makeMicrophone().stream);
+        await voice.join();
+        socket.trigger('voiceRoster', { tableId: 'table-12', peers: [] });
+        await voice.setMicrophoneMuted(true);
+        await voice.setMicrophoneMuted(false);
+        await voice.setMicrophoneMuted(false);
+        socket.trigger('voicePeerJoined', { tableId: 'table-12', userId: 7 });
+        expect(socket.emit.mock.calls.filter(([event]) => event === 'voiceSpeaking').map(([, data]) => data.speaking)).toEqual([false, true]);
+        socket.trigger('connect');
+        socket.trigger('voiceRoster', { tableId: 'table-12', peers: [{ userId: 7 }] });
+        expect(socket.emit.mock.calls.filter(([event]) => event === 'voiceSpeaking').map(([, data]) => data.speaking)).toEqual([false, true, true]);
+        voice.leave();
+    });
+
+    test('resends an early microphone state once the server acknowledges voice membership', async () => {
+        const socket = makeSocket();
+        const voice = new VoiceChat(socket, 'table-12');
+        getUserMedia.mockResolvedValue(makeMicrophone().stream);
+        await voice.join();
+        await voice.setMicrophoneMuted(false);
+        // The server can discard the first state while its join checks await DB.
+        socket.emit.mockClear();
+        socket.trigger('voiceRoster', { tableId: 'table-12', peers: [] });
+        expect(socket.emit).toHaveBeenCalledWith('voiceSpeaking', { tableId: 'table-12', speaking: true });
+        voice.leave();
+    });
+
+    test('ignores duplicate remote microphone state and does not replay active audio on every gesture', async () => {
+        const socket = makeSocket();
+        const onPeersChanged = vi.fn();
+        const voice = new VoiceChat(socket, 'table-12', { onPeersChanged });
+        await voice.join();
+        const peer = voice._createPeer(7, 'Alice', true);
+        peer.audioEl = { paused: false, play: vi.fn().mockResolvedValue() };
+        socket.trigger('voiceSpeaking', { userId: 7, speaking: true });
+        onPeersChanged.mockClear();
+        socket.trigger('voiceSpeaking', { userId: 7, speaking: true });
+        expect(onPeersChanged).not.toHaveBeenCalled();
+        document.dispatchEvent(new Event('pointerdown'));
+        expect(peer.audioEl.play).not.toHaveBeenCalled();
+        peer.audioEl.paused = true;
+        document.dispatchEvent(new Event('pointerdown'));
+        expect(peer.audioEl.play).toHaveBeenCalledOnce();
+        voice.leave();
     });
 
     test('keeps one stable stream, toggles its track, and attaches it to existing and new senders', async () => {

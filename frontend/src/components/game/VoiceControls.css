@@ -171,6 +171,30 @@
     line-height: 1.45;
 }
 
+.voice-recommendation {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border: 1px solid rgba(241, 207, 140, 0.58);
+    border-radius: 10px;
+    background: rgba(44, 35, 18, 0.98);
+    box-shadow: 0 5px 14px rgba(0, 0, 0, 0.4);
+    color: #f5e8c9;
+}
+
+.voice-recommendation p {
+    margin: 0;
+    font-family: 'Merriweather', serif;
+    font-size: clamp(0.72rem, 1.45vh, 0.82rem);
+    line-height: 1.45;
+}
+
+.voice-recommendation .voice-disable-btn {
+    min-height: 44px;
+    color: #fff1d0;
+    border-color: rgba(241, 207, 140, 0.58);
+}
+
 .voice-mixer {
     display: flex;
     width: 100%;
@@ -372,6 +396,7 @@
     .voice-peer-mute,
     .voice-mixer,
     .voice-error,
+    .voice-recommendation,
     .voice-connection-status {
         border: 2px solid ButtonText;
         background: Canvas;

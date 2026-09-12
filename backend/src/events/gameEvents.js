@@ -16,6 +16,12 @@ const DEFAULT_SOCKET_AUTH_REFRESH_INTERVAL_MS = 60_000;
 // for a loop. Exceeding it drops the packet and tells the client once.
 const SOCKET_EVENT_BURST = 60;
 const SOCKET_EVENTS_PER_SECOND = 30;
+// ICE negotiation fans out to every voice peer, and a tournament voice room
+// holds the whole field: a fresh join to twenty peers trickles a couple of
+// hundred candidates in a second or two. Give it a separate bounded budget so
+// that burst cannot consume the player's game-action tokens.
+const VOICE_SIGNAL_EVENTS = new Set(['voiceSignal', 'voiceSpeaking']);
+const VOICE_MEMBERSHIP_EVENTS = new Set(['voiceJoin', 'voiceLeave']);
 
 function revokeTrustedAdminObserver(socket) {
     socket.data = socket.data || {};
@@ -190,23 +196,37 @@ const registerGameHandlers = (io, gameService, options = {}) => {
     io.on("connection", (socket) => {
         socket.data = socket.data || {};
         if (typeof socket.use === 'function') {
-            let bucket = SOCKET_EVENT_BURST;
-            let lastRefill = Date.now();
-            let warned = false;
+            const createBudget = (burst, rate, label, message) => ({
+                burst, rate, label, message,
+                tokens: burst,
+                lastRefill: Date.now(),
+                warned: false,
+            });
+            const actionBudget = createBudget(SOCKET_EVENT_BURST, SOCKET_EVENTS_PER_SECOND,
+                'actions', 'Too many actions at once. Slow down a moment.');
+            const voiceSignalBudget = createBudget(240, 60,
+                'voice signals', 'Voice chat is reconnecting too quickly. Wait a moment.');
+            // Joining performs a database check. Keep room controls bounded
+            // separately so a flood of ICE candidates cannot block leaving.
+            const voiceMembershipBudget = createBudget(8, 2,
+                'voice room changes', 'Voice chat is changing too quickly. Wait a moment.');
             socket.use((packet, next) => {
+                const event = packet?.[0];
+                const budget = VOICE_SIGNAL_EVENTS.has(event) ? voiceSignalBudget
+                    : VOICE_MEMBERSHIP_EVENTS.has(event) ? voiceMembershipBudget : actionBudget;
                 const now = Date.now();
-                bucket = Math.min(SOCKET_EVENT_BURST, bucket + ((now - lastRefill) / 1000) * SOCKET_EVENTS_PER_SECOND);
-                lastRefill = now;
-                if (bucket < 1) {
-                    if (!warned) {
-                        warned = true;
-                        console.warn(`[RATE] Socket ${socket.id} (${socket.user?.username}) exceeded ${SOCKET_EVENTS_PER_SECOND} events/s; dropping.`);
-                        socket.emit('error', { message: 'Too many actions at once. Slow down a moment.' });
+                budget.tokens = Math.min(budget.burst, budget.tokens + (Math.max(0, now - budget.lastRefill) / 1000) * budget.rate);
+                budget.lastRefill = now;
+                if (budget.tokens < 1) {
+                    if (!budget.warned) {
+                        budget.warned = true;
+                        console.warn(`[RATE] Socket ${socket.id} (${socket.user?.username}) exceeded ${budget.rate} ${budget.label}/s; dropping.`);
+                        socket.emit('error', { message: budget.message });
                     }
                     return; // dropped
                 }
-                warned = false;
-                bucket -= 1;
+                budget.warned = false;
+                budget.tokens -= 1;
                 next();
             });
         }
@@ -795,15 +815,23 @@ const registerGameHandlers = (io, gameService, options = {}) => {
                 .filter(([userId]) => userId !== socket.user.id)
                 .map(([userId, member]) => ({ userId, playerName: member.playerName }));
             const existingMember = room.get(socket.user.id);
-            if (existingMember?.socketId === socket.id) {
-                socket.emit('voiceRoster', { tableId: engine.tableId, peers });
-                return;
+            const alreadyJoined = existingMember?.socketId === socket.id;
+            if (!alreadyJoined) {
+                room.set(socket.user.id, { socketId: socket.id, playerName: socket.user.username });
             }
-            room.set(socket.user.id, { socketId: socket.id, playerName: socket.user.username });
             socket.emit('voiceRoster', { tableId: engine.tableId, peers });
             for (const peer of peers) {
                 const member = room.get(peer.userId);
-                if (member) {
+                // Speaking changes are deduplicated below. A new/rejoining
+                // listener needs the current state even before its next edge.
+                if (member?.speaking === true) {
+                    socket.emit('voiceSpeaking', {
+                        tableId: engine.tableId,
+                        userId: peer.userId,
+                        speaking: true,
+                    });
+                }
+                if (member && !alreadyJoined) {
                     io.to(member.socketId).emit('voicePeerJoined', {
                         tableId: engine.tableId,
                         userId: socket.user.id,
@@ -846,6 +874,8 @@ const registerGameHandlers = (io, gameService, options = {}) => {
             const room = voiceRooms.get(engine.tableId);
             const self = room?.get(socket.user.id);
             if (!self || self.socketId !== socket.id) return;
+            if (self.speaking === payload.speaking) return;
+            self.speaking = payload.speaking;
             for (const [userId, member] of room) {
                 if (userId === socket.user.id) continue;
                 io.to(member.socketId).emit('voiceSpeaking', {

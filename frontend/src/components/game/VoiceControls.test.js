@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import VoiceControls from './VoiceControls';
 import { setVoiceEnabled } from '../../utils/voicePreference';
@@ -405,6 +405,90 @@ describe('VoiceControls', () => {
 
         await user.click(screen.getByRole('button', { name: 'Mute Ben' }));
         expect(voice.setMuted).toHaveBeenCalledWith(7, true);
+    });
+
+    test.each([
+        ['slow-network', /your connection may be too slow for group voice/i],
+        ['unstable-audio', /voice connections are struggling/i],
+    ])('recommends turning voice off for %s without disabling it', async (reason, message) => {
+        renderVoice();
+        await screen.findByRole('button', { name: 'Mute microphone' });
+        const voice = voiceHarness.instances[0];
+
+        act(() => voice.options.onConnectionQuality({ level: 'poor', reason }));
+
+        const recommendation = screen.getByRole('group', { name: 'Voice connection recommendation' });
+        expect(within(recommendation).getByRole('status')).toHaveTextContent(message);
+        expect(recommendation.closest('.voice-popover-stack').parentElement).toBe(document.body);
+        expect(within(recommendation).getByRole('button', { name: 'Turn off voice chat' })).toBeEnabled();
+        expect(screen.getByRole('button', { name: 'Open voice settings' })).toBeInTheDocument();
+        expect(screen.queryByRole('group', { name: 'Voice player volumes' })).not.toBeInTheDocument();
+        expect(voice.leave).not.toHaveBeenCalled();
+        expect(window.localStorage.getItem('sluff_voice_enabled')).toBe('true');
+
+        vi.useFakeTimers();
+        try {
+            act(() => vi.advanceTimersByTime(30000));
+            expect(screen.getByRole('group', { name: 'Voice connection recommendation' })).toBeInTheDocument();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    test.each(['good', 'unknown'])('clears the recommendation when connection quality becomes %s', async (level) => {
+        renderVoice();
+        await screen.findByRole('button', { name: 'Mute microphone' });
+        const voice = voiceHarness.instances[0];
+
+        act(() => voice.options.onConnectionQuality({ level: 'poor', reason: 'unstable-audio' }));
+        expect(screen.getByRole('group', { name: 'Voice connection recommendation' })).toBeInTheDocument();
+
+        act(() => voice.options.onConnectionQuality({ level, reason: null }));
+        expect(screen.queryByRole('group', { name: 'Voice connection recommendation' })).not.toBeInTheDocument();
+        expect(voice.leave).not.toHaveBeenCalled();
+    });
+
+    test('the recommendation turns voice fully off and clears before a new opt-in', async () => {
+        const user = userEvent.setup();
+        renderVoice();
+        await screen.findByRole('button', { name: 'Mute microphone' });
+        const voice = voiceHarness.instances[0];
+
+        act(() => voice.options.onConnectionQuality({ level: 'poor', reason: 'slow-network' }));
+        const recommendation = screen.getByRole('group', { name: 'Voice connection recommendation' });
+        await user.click(within(recommendation).getByRole('button', { name: 'Turn off voice chat' }));
+
+        expect(voice.leave).toHaveBeenCalled();
+        expect(screen.getByRole('button', { name: 'Turn on voice chat' })).toBeInTheDocument();
+        expect(screen.queryByRole('group', { name: 'Voice connection recommendation' })).not.toBeInTheDocument();
+        expect(window.localStorage.getItem('sluff_voice_enabled')).toBe('false');
+
+        act(() => voice.options.onConnectionQuality({ level: 'poor', reason: 'slow-network' }));
+        await user.click(screen.getByRole('button', { name: 'Turn on voice chat' }));
+        await screen.findByRole('button', { name: 'Mute microphone' });
+        expect(voiceHarness.instances).toHaveLength(2);
+        expect(screen.queryByRole('group', { name: 'Voice connection recommendation' })).not.toBeInTheDocument();
+    });
+
+    test('resets quality on table changes and ignores the old session reports', async () => {
+        const { rerender } = renderVoice();
+        await screen.findByRole('button', { name: 'Mute microphone' });
+        const firstVoice = voiceHarness.instances[0];
+        act(() => firstVoice.options.onConnectionQuality({ level: 'poor', reason: 'slow-network' }));
+
+        rerender(<VoiceControls socket={socket} tableId="table-two" />);
+        await screen.findByRole('button', { name: 'Mute microphone' });
+        const secondVoice = voiceHarness.instances[1];
+        expect(firstVoice.leave).toHaveBeenCalled();
+        expect(screen.queryByRole('group', { name: 'Voice connection recommendation' })).not.toBeInTheDocument();
+
+        act(() => firstVoice.options.onConnectionQuality({ level: 'poor', reason: 'slow-network' }));
+        expect(screen.queryByRole('group', { name: 'Voice connection recommendation' })).not.toBeInTheDocument();
+
+        act(() => secondVoice.options.onConnectionQuality({ level: 'poor', reason: 'unstable-audio' }));
+        act(() => firstVoice.options.onConnectionQuality({ level: 'good', reason: null }));
+        expect(screen.getByRole('group', { name: 'Voice connection recommendation' }))
+            .toHaveTextContent(/voice connections are struggling/i);
     });
 });
 

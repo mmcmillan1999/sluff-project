@@ -42,6 +42,14 @@ const connectionStatus = (peer) => {
     return 'connecting';
 };
 
+const connectionRecommendationMessage = (quality) => {
+    if (quality?.level !== 'poor') return '';
+    if (quality.reason === 'slow-network') {
+        return 'Your connection may be too slow for group voice. Turn off voice to reduce data use.';
+    }
+    return 'Voice connections are struggling. Turning off voice can reduce load while you play.';
+};
+
 const MicrophoneIcon = ({ muted }) => (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
         <rect x="9" y="3" width="6" height="11" rx="3" />
@@ -85,6 +93,7 @@ const VoiceControls = ({ socket, tableId }) => {
     // auto-unmute, which would otherwise be explained by nothing but a small
     // slashed icon.
     const [notice, setNotice] = useState('');
+    const [connectionRecommendation, setConnectionRecommendation] = useState('');
     const [peers, setPeers] = useState([]);
     const [mixerOpen, setMixerOpen] = useState(false);
     const voiceRef = useRef(null);
@@ -213,6 +222,7 @@ const VoiceControls = ({ socket, tableId }) => {
                 voiceRef.current = null;
             }
             setConnectionState('off');
+            setConnectionRecommendation('');
             setMicrophoneState('muted');
             setMicBlocked(false);
             setError('');
@@ -225,6 +235,7 @@ const VoiceControls = ({ socket, tableId }) => {
         const session = ++sessionRef.current;
         microphoneOperationRef.current += 1;
         setConnectionState('joining');
+        setConnectionRecommendation('');
         setMicrophoneState('starting');
         setMicBlocked(false);
         setError('');
@@ -237,6 +248,11 @@ const VoiceControls = ({ socket, tableId }) => {
             onPeersChanged: (nextPeers) => {
                 if (voiceRef.current === voice && sessionRef.current === session) {
                     setPeers(nextPeers);
+                }
+            },
+            onConnectionQuality: (quality) => {
+                if (voiceRef.current === voice && sessionRef.current === session) {
+                    setConnectionRecommendation(connectionRecommendationMessage(quality));
                 }
             },
             onError: (micError) => {
@@ -296,6 +312,7 @@ const VoiceControls = ({ socket, tableId }) => {
                 voice.leave();
                 voiceRef.current = null;
                 setConnectionState('error');
+                setConnectionRecommendation('');
                 setMicrophoneState('muted');
                 setError('Table voice could not connect. Re-enter the table to try again.');
             }
@@ -307,6 +324,7 @@ const VoiceControls = ({ socket, tableId }) => {
             sessionRef.current += 1;
             microphoneOperationRef.current += 1;
             if (voiceRef.current === voice) voiceRef.current = null;
+            setConnectionRecommendation('');
             voice.leave();
         };
     }, [setLocalMicrophoneMuted, showNotice, socket, tableId, voiceEnabled]);
@@ -323,6 +341,7 @@ const VoiceControls = ({ socket, tableId }) => {
             sessionRef.current += 1;
             microphoneOperationRef.current += 1;
             setConnectionState('error');
+            setConnectionRecommendation('');
             setMicrophoneState('muted');
             setPeers([]);
             setError('Voice chat ended: your chat access is suspended.');
@@ -443,6 +462,19 @@ const VoiceControls = ({ socket, tableId }) => {
                     <span className="voice-connection-status" role="status" aria-live="polite">
                         {notice}
                     </span>
+                )}
+
+                {connectionRecommendation && (
+                    <div className="voice-recommendation" role="group" aria-label="Voice connection recommendation">
+                        <p role="status" aria-live="polite">{connectionRecommendation}</p>
+                        <button
+                            type="button"
+                            className="voice-disable-btn"
+                            onClick={() => setVoiceEnabled(false)}
+                        >
+                            Turn off voice chat
+                        </button>
+                    </div>
                 )}
 
                 {mixerOpen && (

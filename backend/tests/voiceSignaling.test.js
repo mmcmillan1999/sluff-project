@@ -14,11 +14,12 @@
 const assert = require('node:assert/strict');
 const jsonwebtoken = require('jsonwebtoken');
 const registerGameHandlers = require('../src/events/gameEvents');
+const { TournamentDirector } = require('../src/tournament/TournamentDirector');
 
 const TABLE_ID = 'voice-table';
 const SECOND_TABLE_ID = 'voice-table-two';
 
-function createVoicePool() {
+function createVoicePool(extraUsers = []) {
     // users.id is SERIAL (int4), so pg returns JS numbers. The voice room is
     // keyed by socket.user.id and looked up via Number(targetUserId); this
     // stub intentionally mirrors the numeric id type.
@@ -26,8 +27,10 @@ function createVoicePool() {
         [7, { id: 7, username: 'Anna', is_admin: false }],
         [8, { id: 8, username: 'Ben', is_admin: false }],
         [9, { id: 9, username: 'Cara', is_admin: true }],
+        ...extraUsers.map(user => [user.id, user]),
     ]);
     return {
+        voiceJoinQueries: 0,
         async query(text, params = []) {
             const sql = String(text);
             if (/SELECT\s+id,\s*username,\s*is_admin(?:,\s*sessions_valid_after)?(?:,\s*COALESCE\(untimed_bot_games,\s*FALSE\)\s+AS\s+untimed_bot_games)?\s+FROM\s+users/i.test(sql)) {
@@ -35,6 +38,10 @@ function createVoicePool() {
                 return { rows: user ? [{ ...user }] : [] };
             }
             if (/SUM\(amount\)/i.test(sql)) return { rows: [{ tokens: '10.00' }] };
+            if (/SELECT chat_muted_until FROM users/i.test(sql)) {
+                this.voiceJoinQueries += 1;
+                return { rows: [{ chat_muted_until: null }] };
+            }
             if (/INSERT\s+INTO\s+lobby_chat_messages/i.test(sql)) {
                 return { rows: [{ id: 1, username: 'System', message: '', created_at: new Date(0).toISOString() }] };
             }
@@ -143,10 +150,12 @@ function createSocketHarness(gameService) {
         },
         connect(socket) {
             const handlers = {};
+            const packetMiddleware = [];
             socket.data = socket.data || {};
             socket.emitted = [];
             socket.rooms = new Set();
             socket.on = (event, handler) => { handlers[event] = handler; };
+            socket.use = handler => { packetMiddleware.push(handler); };
             socket.emit = (event, payload) => { socket.emitted.push({ event, payload }); };
             socket.join = room => socket.rooms.add(room);
             socket.leave = room => socket.rooms.delete(room);
@@ -160,6 +169,15 @@ function createSocketHarness(gameService) {
                 },
                 async trigger(event, payload) {
                     if (!handlers[event]) throw new Error('No socket handler registered for ' + event);
+                    // Socket.IO's disconnect is a server-side lifecycle event,
+                    // not an inbound application packet.
+                    if (event !== 'disconnect') {
+                        for (const middleware of packetMiddleware) {
+                            let allowed = false;
+                            middleware([event, payload], () => { allowed = true; });
+                            if (!allowed) return;
+                        }
+                    }
                     return handlers[event](payload);
                 },
             };
@@ -295,12 +313,20 @@ async function runVoiceSignalingTests() {
         assert.match(connB.received('error').at(-1).payload.message, /Invalid voice payload/i);
 
         // --- voiceSpeaking broadcasts to everyone but the speaker -----------
+        await connA.trigger('voiceSpeaking', { tableId: TABLE_ID, speaking: false });
+        assert.deepEqual(connB.received('voiceSpeaking').at(-1).payload,
+            { tableId: TABLE_ID, userId: 7, speaking: false },
+            'the first reported speaking state is delivered even when initially silent');
         await connA.trigger('voiceSpeaking', { tableId: TABLE_ID, speaking: true });
         assert.deepEqual(
             connB.received('voiceSpeaking').at(-1).payload,
             { tableId: TABLE_ID, userId: 7, speaking: true },
         );
         assert.equal(connA.received('voiceSpeaking').length, 0, 'the speaker is not echoed its own state');
+        const speakingUpdates = connB.received('voiceSpeaking').length;
+        await connA.trigger('voiceSpeaking', { tableId: TABLE_ID, speaking: true });
+        assert.equal(connB.received('voiceSpeaking').length, speakingUpdates,
+            'unchanged speaking states do not fan out to the room again');
         await connA.trigger('voiceSpeaking', { tableId: TABLE_ID, speaking: false });
         assert.deepEqual(
             connB.received('voiceSpeaking').at(-1).payload,
@@ -421,10 +447,144 @@ async function runVoiceSignalingTests() {
             'a spectator transition revokes voice without waiting for the client to leave',
         );
 
+        await runTournamentVoiceBudgetTests();
         console.log('Voice chat signaling relay tests passed.');
     } finally {
         if (originalSecret === undefined) delete process.env.JWT_SECRET;
         else process.env.JWT_SECRET = originalSecret;
+    }
+}
+
+async function runTournamentVoiceBudgetTests() {
+    const originalNow = Date.now;
+    let now = originalNow();
+    Date.now = () => now;
+    try {
+        const pool = createVoicePool([
+            { id: 10, username: 'Dan', is_admin: false },
+            { id: 11, username: 'Eva', is_admin: false },
+        ]);
+        const humans = [
+            { userId: 7, username: 'Anna' },
+            { userId: 8, username: 'Ben' },
+            { userId: 9, username: 'Cara' },
+            { userId: 10, username: 'Dan' },
+            { userId: 11, username: 'Eva' },
+        ];
+        const engine = createEngine(TABLE_ID, humans.slice(0, 3).map(human => ({
+            userId: human.userId, playerName: human.username, socketId: null, isSpectator: false,
+        })));
+        const gameActions = [];
+        const gameService = {
+            pool,
+            getAllEngines: () => ({ [TABLE_ID]: engine }),
+            getEngineById: tableId => tableId === TABLE_ID ? engine : null,
+            getLobbyState: () => ({ themes: [] }),
+            emitGameState() {},
+            evaluateTerminalCleanup() {},
+            startGame: (tableId, userId) => { gameActions.push({ tableId, userId }); },
+        };
+        const director = new TournamentDirector({ gameService, store: {} });
+        // Exercise the real tournament membership and voice-room view; the
+        // unrelated lobby/scoreboard serialization can stay out of this fixture.
+        director.publicState = tournament => ({ id: tournament.id, status: tournament.status });
+        director.lobbyState = () => ({ open: null, running: [] });
+        const tournament = {
+            id: 42, status: 'running', tables: new Map(),
+            entries: new Map(humans.map(human => [human.userId, {
+                ...human, isBot: false, status: 'playing', socketId: null,
+            }])),
+        };
+        director.tournaments.set(tournament.id, tournament);
+        gameService.tournamentDirector = director;
+        const harness = createSocketHarness(gameService);
+        director.io = harness.io;
+        const roomId = 'tournament-42';
+        const connections = [];
+        for (const human of humans) {
+            const token = jsonwebtoken.sign({ id: human.userId, username: human.username }, process.env.JWT_SECRET);
+            const socket = makeSocket(`tourney-${human.userId}`, token);
+            assert.equal(await harness.authenticate(socket), undefined);
+            const connection = harness.connect(socket);
+            await connection.trigger('voiceJoin', { tableId: roomId });
+            assert.equal(connection.received('voiceRoster').at(-1).payload.peers.length, connections.length,
+                'every tournament joiner receives all existing humans, including other tables');
+            if (connections.length === 0) {
+                await connection.trigger('voiceSpeaking', { tableId: roomId, speaking: true });
+            } else {
+                assert.deepEqual(connection.received('voiceSpeaking').at(-1).payload,
+                    { tableId: roomId, userId: 7, speaking: true },
+                    'a new listener immediately receives an already-speaking peer');
+            }
+            connections.push(connection);
+        }
+        assert.equal(connections.reduce((sum, connection) => sum
+            + connection.received('voiceRoster').at(-1).payload.peers.length, 0), 10,
+        'five humans establish exactly ten distinct peer pairs');
+
+        for (const from of connections) {
+            for (const target of connections) {
+                if (target === from) continue;
+                await from.trigger('voiceSignal', {
+                    tableId: roomId, targetUserId: target.socket.user.id,
+                    data: { candidate: { candidate: 'candidate:tournament' } },
+                });
+                assert.equal(target.received('voiceSignal').at(-1).payload.fromUserId, from.socket.user.id);
+            }
+        }
+
+        const [speaker, listener] = connections;
+        await listener.trigger('voiceJoin', { tableId: roomId });
+        assert.deepEqual(listener.received('voiceSpeaking').at(-1).payload,
+            { tableId: roomId, userId: 7, speaking: true },
+            'an idempotent roster refresh also refreshes active speakers');
+        const signalCount = () => connections.reduce((sum, connection) => sum + connection.received('voiceSignal').length, 0);
+        const signalsBeforeBurst = signalCount();
+        for (let index = 0; index < 300; index += 1) {
+            await speaker.trigger('voiceSignal', {
+                tableId: roomId, targetUserId: connections[1 + index % 4].socket.user.id,
+                data: { candidate: { candidate: `candidate:burst-${index}` } },
+            });
+        }
+        const relayed = signalCount() - signalsBeforeBurst;
+        assert.ok(relayed >= 200, 'the voice budget tolerates a twenty-peer negotiation burst beyond the game budget');
+        assert.ok(relayed < 300, 'voice traffic still has a finite independent rate limit');
+        assert.match(speaker.received('error').at(-1).payload.message, /Voice chat is reconnecting too quickly/);
+
+        await speaker.trigger('voiceLeave', { tableId: roomId });
+        assert.deepEqual(listener.received('voicePeerLeft').at(-1).payload, { tableId: roomId, userId: 7 },
+            'leaving voice remains available after a signaling flood');
+        await speaker.trigger('voiceJoin', { tableId: roomId });
+        const rostersBeforeFlood = speaker.received('voiceRoster').length;
+        const queriesBeforeFlood = pool.voiceJoinQueries;
+        for (let index = 0; index < 12; index += 1) {
+            await speaker.trigger('voiceJoin', { tableId: roomId });
+        }
+        const joinsAccepted = speaker.received('voiceRoster').length - rostersBeforeFlood;
+        assert.ok(joinsAccepted > 0 && joinsAccepted < 12, 'voice membership changes have their own finite budget');
+        assert.equal(pool.voiceJoinQueries - queriesBeforeFlood, joinsAccepted,
+            'rate-limited joins do not perform database checks');
+
+        for (let index = 0; index < 60; index += 1) {
+            await speaker.trigger('startGame', { tableId: TABLE_ID });
+        }
+        assert.equal(gameActions.length, 60, 'voice traffic leaves the entire existing game-action burst budget available');
+        await speaker.trigger('startGame', { tableId: TABLE_ID });
+        assert.equal(gameActions.length, 60, 'game actions retain their existing rate limit');
+
+        now += 1000;
+        const beforeRefill = signalCount();
+        await speaker.trigger('voiceSignal', {
+            tableId: roomId, targetUserId: 8, data: { candidate: { candidate: 'candidate:after-refill' } },
+        });
+        await speaker.trigger('voiceJoin', { tableId: roomId });
+        await speaker.trigger('startGame', { tableId: TABLE_ID });
+        assert.equal(signalCount(), beforeRefill + 1, 'voice signaling resumes after its independent refill');
+        assert.equal(speaker.received('voiceRoster').length, rostersBeforeFlood + joinsAccepted + 1,
+            'voice membership resumes after its independent refill');
+        assert.equal(gameActions.length, 61, 'the original game-action refill still works');
+    } finally {
+        Date.now = originalNow;
     }
 }
 
