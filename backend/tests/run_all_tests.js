@@ -74,14 +74,39 @@ function loadRunner(suite) {
     return runner;
 }
 
+// `--only <text>` (or --only=<text>, or ONLY=<text>) runs the suites whose
+// name or file contains the text: one area in a second or two instead of
+// the whole run. Timings print per suite, and a failure names its suite.
+function selectSuites(argv = process.argv.slice(2), env = process.env) {
+    const flag = argv.findIndex(arg => arg === '--only' || arg.startsWith('--only='));
+    const only = flag < 0
+        ? env.ONLY
+        : (argv[flag].includes('=') ? argv[flag].slice('--only='.length) : argv[flag + 1]);
+    if (!only) return suites;
+    const needle = only.toLowerCase();
+    const selected = suites.filter(suite => suite.name.toLowerCase().includes(needle) || suite.file.toLowerCase().includes(needle));
+    if (selected.length === 0) throw new Error(`No suite matches --only ${only}. Names: ${suites.map(s => s.name).join(', ')}`);
+    return selected;
+}
+
 async function run() {
-    console.log('--- Running safe backend unit and integration tests ---');
+    const selected = selectSuites();
+    console.log(selected.length === suites.length
+        ? '--- Running safe backend unit and integration tests ---'
+        : `--- Running ${selected.length} of ${suites.length} backend suites ---`);
 
     let completed = 0;
-    for (const suite of suites) {
+    for (const suite of selected) {
         const runner = loadRunner(suite);
         console.log(`\n[${completed + 1}] ${suite.name}`);
-        await runner();
+        const started = Date.now();
+        try {
+            await runner();
+        } catch (error) {
+            error.message = `[${suite.name}] ${error.message}`;
+            throw error;
+        }
+        console.log(`    (${Date.now() - started} ms)`);
         completed += 1;
     }
 

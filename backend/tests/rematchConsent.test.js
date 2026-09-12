@@ -136,3 +136,7 @@ function runRematchConsentTests() {
 }
 
 module.exports = runRematchConsentTests;
+
+if (require.main === module) {
+    runRematchConsentTests().catch(error => { console.error(error); process.exitCode = 1; });
+}

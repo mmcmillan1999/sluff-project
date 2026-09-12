@@ -283,3 +283,7 @@ async function runExhibitionPreemptionTests() {
 }
 
 module.exports = runExhibitionPreemptionTests;
+
+if (require.main === module) {
+    runExhibitionPreemptionTests().catch(error => { console.error(error); process.exitCode = 1; });
+}

@@ -87,3 +87,7 @@ function runDepartedSeatScoreTests() {
 }
 
 module.exports = runDepartedSeatScoreTests;
+
+if (require.main === module) {
+    runDepartedSeatScoreTests().catch(error => { console.error(error); process.exitCode = 1; });
+}

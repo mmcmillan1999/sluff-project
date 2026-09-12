@@ -297,3 +297,7 @@ async function runBotExhibitionTests() {
 }
 
 module.exports = runBotExhibitionTests;
+
+if (require.main === module) {
+    runBotExhibitionTests().catch(error => { console.error(error); process.exitCode = 1; });
+}
