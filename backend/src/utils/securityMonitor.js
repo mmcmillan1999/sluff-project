@@ -103,7 +103,7 @@ const generateSecurityReport = async (pool, hours = 24) => {
         
         if (result.rows.length === 0) {
             console.log('No mercy token activity in the specified period.');
-            return { period: `${hours}h`, users: [] };
+            return { period: `${windowHours}h`, users: [] };
         }
         
         result.rows.forEach((row, index) => {
@@ -118,7 +118,7 @@ const generateSecurityReport = async (pool, hours = 24) => {
         });
         
         return { 
-            period: `${hours}h`, 
+            period: `${windowHours}h`, 
             users: result.rows,
             totalUsers: result.rows.length,
             totalTokensGranted: result.rows.reduce((sum, row) => sum + parseInt(row.mercy_tokens_granted), 0)

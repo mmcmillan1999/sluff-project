@@ -207,7 +207,8 @@ const createAdminRoutes = (pool, jwt, io = null, options = {}) => {
       const report = await securityMonitor.generateSecurityReport(pool, parseInt(hours));
       
       if (report.error) {
-        return res.status(500).json({ error: 'Failed to generate report', details: report.error });
+        // The cause is already in the server log; database text stays there.
+        return res.status(500).json({ error: 'Failed to generate report' });
       }
       
       res.json({
