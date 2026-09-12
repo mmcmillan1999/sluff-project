@@ -24,6 +24,8 @@ const TournamentRoundCard = ({
     playRoundBell = null,
     playRoundCall = null,
     fetchLine = fetchTournamentRoundCall,
+    // () => true while an announcer line is still playing.
+    announcerBusy = null,
     hold = false,
 }) => {
     const round = Number(tableTournament?.roundNumber) || 0;
@@ -41,14 +43,18 @@ const TournamentRoundCard = ({
     // Walk on once per round: the bell, or the bell and Liam's call.
     useEffect(() => {
         if (!key || !pending || shownRef.current === key) return;
-        // Round one waits for the welcome to finish; the card walks on for
-        // the last few seconds of the hold.
-        if (round === 1 && welcome && Number.isFinite(dealIn) && dealIn > ROUND_ONE_LEAD_S) return;
+        // Round one waits for the welcome to finish: the card walks on for
+        // the last few seconds of the hold, and not while Liam is still
+        // talking — though never later than the last second before the deal.
+        if (round === 1 && welcome && Number.isFinite(dealIn)) {
+            if (dealIn > ROUND_ONE_LEAD_S) return;
+            if (dealIn > 1 && typeof announcerBusy === 'function' && announcerBusy()) return;
+        }
         shownRef.current = key;
         setShowing(key);
         if (call && typeof playRoundCall === 'function') playRoundCall(key, () => fetchLine(tournamentId));
         else if (typeof playRoundBell === 'function') playRoundBell();
-    }, [key, pending, round, welcome, dealIn, call, playRoundCall, playRoundBell, fetchLine, tournamentId]);
+    }, [key, pending, round, welcome, dealIn, call, playRoundCall, playRoundBell, fetchLine, tournamentId, announcerBusy]);
 
     // Liam's line lands when the server says it is ready; the hook plays it once.
     useEffect(() => {

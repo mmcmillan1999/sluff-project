@@ -60,6 +60,29 @@ describe('TournamentRoundCard', () => {
         expect(late).toHaveBeenCalledTimes(1);
     });
 
+    test('round one waits for Liam to finish the welcome, but never past the last second', () => {
+        const bell = vi.fn();
+        let speaking = true;
+        const { container } = render(
+            <TournamentRoundCard tableTournament={table(1)} tableState="Dealing Pending" welcome={{ dealInSeconds: 4, audio: true }} playRoundBell={bell} announcerBusy={() => speaking} />,
+        );
+        act(() => { vi.advanceTimersByTime(1_000); }); // 3 s: Liam still talking
+        expect(container.querySelector('.ring-card')).toBeNull();
+        act(() => { vi.advanceTimersByTime(1_000); }); // 2 s: still talking
+        expect(container.querySelector('.ring-card')).toBeNull();
+        act(() => { vi.advanceTimersByTime(1_000); }); // 1 s: the card goes regardless
+        expect(screen.getByLabelText('Round 1')).toBeTruthy();
+        expect(bell).toHaveBeenCalledTimes(1);
+
+        speaking = false;
+        const quick = vi.fn();
+        const second = render(
+            <TournamentRoundCard tableTournament={{ ...table(1), tournamentId: 33 }} tableState="Dealing Pending" welcome={{ dealInSeconds: 3, audio: true }} playRoundBell={quick} announcerBusy={() => speaking} />,
+        );
+        expect(second.container.querySelector('.ring-card')).toBeTruthy();
+        expect(quick).toHaveBeenCalledTimes(1);
+    });
+
     test('with a round call the card stays for the hold, Liam is fetched when ready, and the deal takes it away', () => {
         const bell = vi.fn();
         const call = vi.fn();

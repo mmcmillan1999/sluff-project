@@ -113,4 +113,24 @@ function buildWelcomeScript({ id, name, entries, favorites = [] }) {
     return parts.join(' ');
 }
 
-module.exports = { pickFavorites, buildWelcomeScript, buildRoundCall, numberWord, spokenTitle, listWithAnd, FAVORITES_COUNT, MAX_NAMED, NAMED_WHEN_MORE };
+// How long round one holds for the welcome: the bugle and the gap before
+// Liam starts, his line at the announcer's pace, then the bell and the ring
+// card with the felt to themselves — never less than the floor, never past
+// the ceiling. Sized to the script so a nine-name field is not cut off
+// mid-sentence and a three-name field is not left waiting.
+const BUGLE_MS = 3_600;
+const WORDS_PER_SECOND = 2.5;
+const PAUSE_MS = 450;        // each "..." in the script
+const RING_CARD_LEAD_MS = 3_500;
+const HOLD_CEILING_MS = 30_000;
+
+function welcomeHoldFor(script, floorMs = 18_000) {
+    const text = typeof script === 'string' ? script : '';
+    const words = text.trim().split(/\s+/).filter(Boolean).length;
+    const pauses = (text.match(/\.\.\./g) || []).length;
+    const speechMs = Math.round((words / WORDS_PER_SECOND) * 1000) + pauses * PAUSE_MS;
+    const total = BUGLE_MS + speechMs + RING_CARD_LEAD_MS;
+    return Math.min(HOLD_CEILING_MS, Math.max(floorMs, Math.ceil(total / 500) * 500));
+}
+
+module.exports = { pickFavorites, buildWelcomeScript, buildRoundCall, welcomeHoldFor, numberWord, spokenTitle, listWithAnd, FAVORITES_COUNT, MAX_NAMED, NAMED_WHEN_MORE };

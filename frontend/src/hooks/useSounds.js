@@ -640,6 +640,8 @@ export const useSounds = ({ musicActive = false } = {}) => {
     // 204 (not made yet) is simply tried again on the next call. A muted or
     // locked context skips the lot — the card on the felt still shows.
     const announcerRef = useRef(new Map());
+    // When the last announcer line stops, on the audio clock.
+    const lineEndsAtRef = useRef(0);
     const playAnnouncement = useCallback(async (kind, key, fetchLine, opener, lineDelaySeconds) => {
         if (key == null) return;
         const ledger = announcerRef.current;
@@ -675,7 +677,9 @@ export const useSounds = ({ musicActive = false } = {}) => {
             shout.connect(boost);
             boost.connect(gainRef.current);
             shout.onended = () => { try { boost.disconnect(); } catch { /* best effort */ } };
-            shout.start(Math.max(live.currentTime + 0.05, moment.openedAt + lineDelaySeconds));
+            const at = Math.max(live.currentTime + 0.05, moment.openedAt + lineDelaySeconds);
+            shout.start(at);
+            lineEndsAtRef.current = Math.max(lineEndsAtRef.current, at + buffer.duration);
         } catch { /* the opener stands on its own */ } finally {
             moment.fetching = false;
         }
@@ -696,6 +700,13 @@ export const useSounds = ({ musicActive = false } = {}) => {
         ctx => { boxingBell(ctx, gainRef.current); haptic('roundBell'); },
         0.9,
     ), [playAnnouncement]);
+
+    // Whether an announcer line is still playing — the ring card waits for
+    // Liam to finish before it walks on.
+    const announcerSpeaking = useCallback(() => {
+        const ctx = ctxRef.current;
+        return Boolean(ctx) && lineEndsAtRef.current > ctx.currentTime;
+    }, []);
 
     // The ring bell alone: the card with no line to follow it.
     const playRoundBell = useCallback(() => {
@@ -737,6 +748,7 @@ export const useSounds = ({ musicActive = false } = {}) => {
         playTournamentWelcome,
         playRoundBell,
         playRoundCall,
+        announcerSpeaking,
         enableSound,
         soundSettings: {
             muted,

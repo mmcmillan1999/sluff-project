@@ -22,7 +22,7 @@ const { seatRound, tableSizes } = require('./seating');
 const { rankFinishers, allocatePrizeCents } = require('./prizes');
 const { ROUND_PRESENTATION_LOCK_MS, THEMES } = require('../core/constants');
 const tournamentClock = require('../core/tournamentClock');
-const { pickFavorites, buildWelcomeScript, buildRoundCall } = require('./tournamentWelcome');
+const { pickFavorites, buildWelcomeScript, buildRoundCall, welcomeHoldFor } = require('./tournamentWelcome');
 
 const TRICKS_PER_ROUND = 11;
 const BIDDING_STATES = new Set([
@@ -767,7 +767,8 @@ class TournamentDirector {
         // opens on the ordinary deal delay.
         const roundCall = t.round >= 2 ? this._prepareRoundCall(t) : null;
         const openDelayMs = t.round === 1 && t.welcome
-            ? Math.max(this.dealDelayMs, this.welcomeHoldMs)
+            // A zero floor means no welcome hold at all (the test harness).
+            ? Math.max(this.dealDelayMs, this.welcomeHoldMs > 0 ? welcomeHoldFor(t.welcome.script, this.welcomeHoldMs) : 0)
             : (roundCall ? Math.max(this.dealDelayMs, this.roundCallHoldMs) : this.dealDelayMs);
         for (const table of plan) {
             const tableId = reuseTableId || `tn-${t.id}-r${t.round}-t${table.index + 1}`;

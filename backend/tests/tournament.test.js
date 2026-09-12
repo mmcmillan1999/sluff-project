@@ -9,6 +9,7 @@ const assert = require('node:assert/strict');
 const GameService = require('../src/services/GameService');
 const { TournamentDirector, TournamentError, TOURNAMENT_VENUE, REGISTRATION_TTL_MS, FAST_PLAY_DIVISOR } = require('../src/tournament/TournamentDirector');
 const { createMemoryStore } = require('../src/tournament/tournamentStore');
+const { welcomeHoldFor } = require('../src/tournament/tournamentWelcome');
 const { tableSizes, seatRound } = require('../src/tournament/seating');
 const { prizeSplitCents, rankFinishers, allocatePrizeCents } = require('../src/tournament/prizes');
 const { registerBrainProfile } = require('../src/core/bot-brains');
@@ -742,13 +743,15 @@ async function runTournamentTests() {
         assert.deepEqual(opening.favorites, ['Tourney Flytrap A', 'Tourney Sphinx A'], 'favorites by podium rate; a player who never placed is not one');
         assert.equal(spoken.length, 1, 'Liam gets one script, at the start');
         assert.match(spoken[0], /^Welcome to Sluff Tournament number \d+\.\.\. Matt's Tournament\. Tonight at the tables: Matt, Tourney Counting A, Tourney Flytrap A, Tourney Sphinx A, Tourney Coyote A, and Tourney Counting B\. Tonight's favorites\.\.\. Tourney Flytrap A and Tourney Sphinx A\. Six players\. One champion\. Take your seats\.$/);
-        assert.equal(opening.welcome.dealInSeconds, 18, 'the felt shows the hold');
+        const hold = welcomeHoldFor(spoken[0], 18_000);
+        assert.ok(hold > 18_000 && hold <= 30_000, 'a six-name script needs more than the floor');
+        assert.equal(opening.welcome.dealInSeconds, hold / 1000, 'the felt shows the hold, sized to the script');
         assert.equal(opening.welcome.audio, false, 'the line is still being made');
         const engines = [...live.tables.keys()].map(tableId => gameService.getEngineById(tableId));
         assert.equal(engines.length, 2);
         for (const engine of engines) {
             assert.equal(engine.state, 'Dealing Pending');
-            assert.equal(engine.tournamentDealDueAt, clock.now + 18_000, 'round one holds for the welcome');
+            assert.equal(engine.tournamentDealDueAt, clock.now + hold, 'round one holds for the welcome');
         }
         clock.now += 2_500;
         await director.tick();
@@ -759,11 +762,11 @@ async function runTournamentTests() {
         await new Promise(resolve => setImmediate(resolve));
         const ready = director.publicState(live, 11);
         assert.equal(ready.welcome.audio, true, 'the clients are told the line is ready');
-        assert.equal(ready.welcome.dealInSeconds, 16);
+        assert.equal(ready.welcome.dealInSeconds, Math.ceil((hold - 2_500) / 1000));
         assert.equal(director.welcomeAudioFor(t.id, 11).toString(), 'LIAM', 'an entrant can fetch the line');
         assert.equal(director.welcomeAudioFor(t.id, 999), null, 'a stranger cannot');
 
-        clock.now += 15_500;
+        clock.now += hold - 2_500;
         await director.tick();
         for (const engine of engines) assert.equal(engine.state, 'Bidding Phase', 'the cards fly when the hold ends');
         const dealt = director.publicState(live, 11);
@@ -775,12 +778,12 @@ async function runTournamentTests() {
         const saved = harness.store.state.snapshots.get(t.id).snapshot;
         assert.deepEqual(saved.tournament.favorites, ['Tourney Flytrap A', 'Tourney Sphinx A'], 'the favorites ride the deploy snapshot');
 
-        assert.deepEqual(delays.filter(ms => ms === 18_000).length, 2, 'both round-one tables were scheduled to deal after the hold');
+        assert.deepEqual(delays.filter(ms => ms === hold).length, 2, 'both round-one tables were scheduled to deal after the hold');
         await playRound(harness, live); // round one plays out; the board (no delay here) seats and deals round two
         assert.equal(live.round, 2);
         assert.equal(director.welcomeAudioFor(t.id, 11), null, 'the line is not kept past the opening');
         assert.equal(delays.at(-1), 2_500, 'later rounds open on the ordinary delay');
-        assert.equal(delays.filter(ms => ms === 18_000).length, 2, 'the hold belongs to round one alone');
+        assert.equal(delays.filter(ms => ms === hold).length, 2, 'the hold belongs to round one alone');
         pass('Round one holds for the welcome: favorites from the record, Liam’s line served to entrants, cards fly when the hold ends.');
 
         const second = buildHarness({ balances });

@@ -8,7 +8,7 @@
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const express = require('express');
-const { pickFavorites, buildWelcomeScript, buildRoundCall, numberWord, spokenTitle, listWithAnd } = require('../src/tournament/tournamentWelcome');
+const { pickFavorites, buildWelcomeScript, buildRoundCall, welcomeHoldFor, numberWord, spokenTitle, listWithAnd } = require('../src/tournament/tournamentWelcome');
 const { getAnnouncerLine, textKey } = require('../src/services/announcerLines');
 const { createMemoryStore } = require('../src/tournament/tournamentStore');
 const createSoundsRoutes = require('../src/api/sounds');
@@ -73,6 +73,19 @@ async function runTournamentWelcomeTests() {
         assert.equal(listWithAnd(['a']), 'a');
         assert.equal(listWithAnd(['a', 'b']), 'a and b');
         pass('Player names and the event name are reduced to speakable text before they reach the voice.');
+    }
+
+    // --- The hold ---
+    {
+        const three = buildWelcomeScript({ id: 1, name: 'Short', entries: field(['A', 'B', 'C']), favorites: [] });
+        assert.equal(welcomeHoldFor(three, 18_000), 18_000, 'a short script keeps the floor');
+        const nine = buildWelcomeScript({ id: 31, name: "Mcsaddle's Tournament", entries: field(['Mcsaddle', 'MrNoobCrusher', 'Zacattack', 'jazzachy', 'Grandpa George', 'Doc Shuffle', 'Cliff', 'Otis Draw', 'Stephen Richins']), favorites: ['Doc Shuffle', 'Grandpa George', 'Otis Draw'] });
+        const hold = welcomeHoldFor(nine, 18_000);
+        assert.ok(hold > 24_000 && hold <= 30_000, `nine names and three favorites need the long hold (${hold})`);
+        assert.equal(hold % 500, 0, 'holds are whole half-seconds');
+        assert.equal(welcomeHoldFor('word '.repeat(200), 18_000), 30_000, 'the ceiling holds');
+        assert.equal(welcomeHoldFor(null, 18_000), 18_000);
+        pass('Round one holds for the bugle, the script at the announcer’s pace, and the ring card.');
     }
 
     // --- The round call ---

@@ -102,7 +102,7 @@ function App() {
     const [showMercyWindow, setShowMercyWindow] = useState(false);
     const {
         playSound, playDealSounds, playWheelTick, playWheelSettle, playMidnightSpecial,
-        prefetchChampionLine, playChampionSting, playTournamentWelcome, playRoundBell, playRoundCall,
+        prefetchChampionLine, playChampionSting, playTournamentWelcome, playRoundBell, playRoundCall, announcerSpeaking,
         enableSound, soundSettings,
     } = useSounds({
         musicActive: Boolean(user) && (view === 'lobby' || view === 'gameTable'),
@@ -1054,7 +1054,7 @@ function App() {
                                 />
                             );
                         case 'gameTable':
-                            return currentTableState ? <GameTableView user={user} playerId={user.id} currentTableState={currentTableState} handleLeaveTable={handleLeaveTable} handleLogout={handleLogout} handleShowHowToPlay={handleShowHowToPlay} errorMessage={errorMessage} emitEvent={emitEvent} playSound={playSound} playDealSounds={playDealSounds} playMidnightSpecial={playMidnightSpecial} prefetchChampionLine={prefetchChampionLine} playChampionSting={playChampionSting} playTournamentWelcome={playTournamentWelcome} playRoundBell={playRoundBell} playRoundCall={playRoundCall} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} soundSettings={soundSettings} tutorialState={{ tutorialVersion: Number(user.tutorial_version) || 0, activeVersion: Number(user.tutorial_active_version) || 0, gamesPlayed: Number(user.games_played) || 0 }} onTutorialAction={handleTutorialAction} onShowTokenLedger={() => setView('tokenLedger')} tournament={myTournament} watchingTableId={watchingTableId} onWatchTable={handleWatchTournamentTable} onStopWatching={handleStopWatchingTournamentTable} /> : <div>Loading table...</div>;
+                            return currentTableState ? <GameTableView user={user} playerId={user.id} currentTableState={currentTableState} handleLeaveTable={handleLeaveTable} handleLogout={handleLogout} handleShowHowToPlay={handleShowHowToPlay} errorMessage={errorMessage} emitEvent={emitEvent} playSound={playSound} playDealSounds={playDealSounds} playMidnightSpecial={playMidnightSpecial} prefetchChampionLine={prefetchChampionLine} playChampionSting={playChampionSting} playTournamentWelcome={playTournamentWelcome} playRoundBell={playRoundBell} playRoundCall={playRoundCall} announcerSpeaking={announcerSpeaking} socket={socket} handleOpenFeedbackModal={handleOpenFeedbackModal} soundSettings={soundSettings} tutorialState={{ tutorialVersion: Number(user.tutorial_version) || 0, activeVersion: Number(user.tutorial_active_version) || 0, gamesPlayed: Number(user.games_played) || 0 }} onTutorialAction={handleTutorialAction} onShowTokenLedger={() => setView('tokenLedger')} tournament={myTournament} watchingTableId={watchingTableId} onWatchTable={handleWatchTournamentTable} onStopWatching={handleStopWatchingTournamentTable} /> : <div>Loading table...</div>;
                         case 'leaderboard':
                             return <LeaderboardView user={user} onReturnToLobby={handleReturnToLobby} handleShowAdmin={handleShowAdmin} onShowTokenLedger={() => setView('tokenLedger')} />;
                         case 'tokenLedger':
