@@ -157,14 +157,15 @@ const LobbyChat = ({ socket, messages = [], currentUserId }) => {
                 <input
                     type="text"
                     placeholder="Type a message..."
+                    aria-label="Message"
                     className="chat-input"
                     value={message}
                     maxLength={MAX_MESSAGE_LENGTH}
                     onChange={(e) => setMessage(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                 />
-                <button className="chat-send-button" onClick={handleSend} disabled={!message.trim()}>
-                    <svg width="24" height="24" viewBox="0 0 24 24">
+                <button type="button" className="chat-send-button" onClick={handleSend} disabled={!message.trim()} aria-label="Send message">
+                    <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
                         <path fill="currentColor" d="M13,20H11V8L5.5,13.5L4.08,12.08L12,4.16L19.92,12.08L18.5,13.5L13,8V20Z" />
                     </svg>
                 </button>

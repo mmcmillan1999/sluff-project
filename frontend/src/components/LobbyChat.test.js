@@ -111,7 +111,7 @@ describe('LobbyChat moderation', () => {
         renderChat();
 
         await user.type(screen.getByPlaceholderText('Type a message...'), 'hello');
-        await user.click(screen.getByRole('button', { name: '' }));
+        await user.click(screen.getByRole('button', { name: 'Send message' }));
 
         expect(await screen.findByRole('alert')).toHaveTextContent(/limited to 300 characters/i);
     });
