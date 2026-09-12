@@ -75,15 +75,21 @@ export { getServerUrl };
 
 const SERVER_URL = getServerUrl();
 
+// Vitest's jsdom also answers to localhost; keep the dev-only chatter and
+// the connection probe out of the test run.
+const underTest = import.meta.env?.MODE === 'test';
+
 // Log the detected environment (helpful for debugging)
-console.log(`[API] Auto-detected environment:`, {
-    hostname: window.location.hostname,
-    api: SERVER_URL,
-    timestamp: new Date().toISOString()
-});
+if (!underTest) {
+    console.log(`[API] Auto-detected environment:`, {
+        hostname: window.location.hostname,
+        api: SERVER_URL,
+        timestamp: new Date().toISOString()
+    });
+}
 
 // Optional: Test the connection on load (for development)
-if (window.location.hostname === 'localhost') {
+if (window.location.hostname === 'localhost' && !underTest) {
     fetch(`${SERVER_URL}/api/ping`)
         .then(res => res.json())
         .then(data => console.log('[API] Backend connection test:', data))
