@@ -23,7 +23,16 @@
 // restarts the clock, so leave the pointer alone while you wait — and note
 // that a backgrounded tab throttles the timer.
 // ?mode=lobby renders the lobby with canned venues — the venue wheel can be
-// spun and screenshotted without a backend (quick play just logs).
+// spun and screenshotted without a backend (quick play just logs). It also
+// seeds five private tables per venue (?tables=0 for empty venues) and a
+// tournament slot (?tourney=open|running|none).
+// ?ringcard=N[&players=M][&hold=1] opens a tournament round N on the table so
+// the ring card walks on (players=M adds the round-call timing; hold=1
+// freezes it mid-walk — the same flag freezes the ident in ?mode=ident).
+// ?tourneyname=Name[&left=N] — the felt wears the event's name; N of five or
+// fewer adds FINAL TABLE.
+// ?mode=tourney[&phase=wait|board|host&me=ID] previews the tournament board;
+// ?mode=og&variant=home|tournament|table renders the share cards.
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';

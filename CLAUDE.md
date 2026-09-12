@@ -31,7 +31,7 @@ Debug overlay in game: `Shift+D`.
 - **Netlify gotcha (July 2026)**: webhook-triggered deploys can all show "skipped — a new deploy was scheduled for the same branch" (suspected duplicate deploy triggers). If pushes to `main` skip, use Deploys → "Trigger deploy" in the dashboard. Verify what's live via `https://playsluff.com/version.json` and the Client stamp in the lobby footer.
 
 ## Env vars (backend/.env, see .env.example)
-`POSTGRES_CONNECT_STRING`, `JWT_SECRET`, `CLIENT_ORIGIN`, `PORT`, `RESEND_API_KEY` (transactional email; `SENDGRID_API_KEY` is a legacy fallback), `SENDER_EMAIL_ADDRESS`, plus `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GOOGLE_API_KEY` / `GROQ_API_KEY` for bots. Optional recovery tuning: `ABANDONED_GAME_GRACE_HOURS` and `ABANDONED_GAME_RECOVERY_INTERVAL_MINUTES`.
+`POSTGRES_CONNECT_STRING`, `JWT_SECRET`, `CLIENT_ORIGIN`, `PORT`, `RESEND_API_KEY` (transactional email; Resend is the only provider since Sept 2026), `SENDER_EMAIL_ADDRESS`, plus `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GOOGLE_API_KEY` / `GROQ_API_KEY` for bots. Optional recovery tuning: `ABANDONED_GAME_GRACE_HOURS` and `ABANDONED_GAME_RECOVERY_INTERVAL_MINUTES`.
 
 ## Architecture map
 - `frontend/src/utils/CardPhysicsEngine.js` — momentum drag physics (~3k lines, the crown jewel).
@@ -50,7 +50,7 @@ Debug overlay in game: `Shift+D`.
   `tournament-stage` in venueThemes.css). Clock: `core/tournamentClock.js` (doubled after the first
   live event: 24 s bid, 16 s trump, 40 s discards, 12 s + 90 s bank per card; pace pressure at
   two-thirds done = free ×2/3, bank drains 2×; absent seat 6 s; playout vote 20 s) drives
-  afkTurnTimer for tournament tables. Rounds open in Dealing Pending and the director deals 2.5 s later
+  afkTurnTimer for tournament tables. Rounds open in Dealing Pending and the director deals after the round's hold — round one 18–30 s sized to Liam's welcome script (`tournamentWelcome.welcomeHoldFor`), rounds two onward 7.5 s for the ring card and round call, 2.5 s when no voice is wired
   (clients need that transition for the deal animation); one table left reopens the same engine in
   place; voice is one `tournament-<id>` room per event (socketActionGuard + TournamentVoiceDock);
   chip drain `tournaments.drain_percent` (Off/5/10/20, default 10) drops every live stack by that much between
@@ -73,7 +73,7 @@ Debug overlay in game: `Shift+D`.
 - Positioning uses wrapper components (`docs/PLAYERSEAT_POSITIONING_SYSTEM.md`).
 - 4-space indent, single quotes, CommonJS in backend, ESM in frontend.
 - **Orientation policy (July 2026)**: mobile portrait is the gold-standard layout. Phone landscape is intentionally blocked by `OrientationScrim` (landscape + coarse pointer + ≤600px tall) and `manifest.json` locks installed PWAs to portrait — don't build phone-landscape layouts. Portrait tablets get the phone layout (wide-mode threshold aspect ≥ 1.25 in `PlayerSeatPositioner.js`); desktop/tablet-landscape geometry is vh-capped via `min()`/`max()` terms that are no-ops on portrait.
-- **Layout harness**: `npm run dev` then open `/harness.html?mode=3|4` — renders the real game table with canned state, no backend needed. Use it to screenshot layout changes at any viewport. Add `?turn=1` for a live hand (playCard really moves the card), `?playstyle=flick|fast` to preset the card play style (implies turn), `?volley=1` to have the opponents answer your lead on the bot cadence (their cards fly in from the seats, then linger + magnet, then the lead returns; add `&afk=0` so the AFK backstop doesn't play for you).
+- **Layout harness**: `npm run dev` then open `/harness.html?mode=3|4` — renders the real game table with canned state, no backend needed. Use it to screenshot layout changes at any viewport. Add `?turn=1` for a live hand (playCard really moves the card), `?playstyle=flick|fast` to preset the card play style (implies turn), `?volley=1` to have the opponents answer your lead on the bot cadence (their cards fly in from the seats, then linger + magnet, then the lead returns; add `&afk=0` so the AFK backstop doesn't play for you). `?mode=lobby` renders the lobby (three columns at ≥1024 px landscape) with canned venues, private tables and a tournament slot (`?tables=0`, `?tourney=open|running|none`); `?mode=tourney`, `?ringcard=N&players=M&hold=1` and `?tourneyname=…&left=N` cover the tournament screens — the full list is in the `devHarness.jsx` header.
 
 ## Known quirks
 - **Player name is live game-state identity.** GameEngine keys `scores`, `hands`,

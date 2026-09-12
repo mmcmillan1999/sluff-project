@@ -10,7 +10,9 @@ npm run build    # production build -> build/
 ```
 
 - Layout harness with canned game state, no backend needed: `/harness.html?mode=3|4`
-  (`?turn=1` for a live hand, `?playstyle=flick|fast` to preset the play style).
+  (`?turn=1` for a live hand, `?playstyle=flick|fast` to preset the play style);
+  `?mode=lobby` renders the lobby with canned tables, `?mode=tourney` the tournament
+  board, `?ringcard=N&hold=1` the ring card — the full list is in `src/devHarness.jsx`.
 - Backend URL is detected from the hostname (`src/services/api.js`); set
   `VITE_SERVER_URL` in `.env` to override (see `.env.example`).
 - Native shells: `npm run native:sync`, `npm run android:open`, `npm run ios:open`
