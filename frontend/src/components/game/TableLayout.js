@@ -20,6 +20,7 @@ import { arrivalKey, reconcileArrivals, launchArrival } from './playedCardArriva
 import { getThemePresentation } from '../../config/themePresentation';
 import { useCosmetics } from '../../utils/cosmetics';
 import DecorBoundary from '../DecorBoundary';
+import FeltMark from './FeltMark';
 import TrumpMagma from './TrumpMagma';
 
 // Full deck of 36 cards (9 ranks × 4 suits)
@@ -61,6 +62,8 @@ const magmaOriginFor = (state, seatAssignments, tableEl) => {
 };
 
 const TableLayout = ({
+    // The cloth's inscription on a tournament table (FeltMark.js).
+    feltMark = null,
     currentTableState,
     seatAssignments,
     isSpectator,
@@ -1111,11 +1114,7 @@ const TableLayout = ({
                     />
                 )}
 
-                <img
-                    src="/SluffLogo.png" 
-                    alt="Sluff Watermark" 
-                    className="sluff-watermark"
-                />
+                <FeltMark mark={feltMark} />
                 
                 {renderTrickTallyPiles()}
                 {renderWidowPile()}

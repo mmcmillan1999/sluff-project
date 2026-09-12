@@ -788,16 +788,7 @@ button.card-display:disabled {
     margin-top: 0.25vh;
 }
 
-.sluff-watermark {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 40%;
-    max-width: 45vh;
-    opacity: 0.1;
-    pointer-events: none;
-}
+/* The SLUFF mark and the tournament inscription: FeltMark.css. */
 
 /* Card drop zone */
 .card-drop-zone-hitbox {

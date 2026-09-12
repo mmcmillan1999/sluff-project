@@ -1,0 +1,70 @@
+/* frontend/src/components/game/FeltMark.css */
+/* The inscription at the center of the cloth: the SLUFF mark, and on a
+   tournament table the event's name above it and FINAL TABLE below it.
+   Everything here is ghosted and pointer-transparent; the cards are dealt
+   over it. Widths follow the felt (%), heights the viewport (vh), so the
+   lines stay small on a phone and never crowd the trick. */
+
+.felt-mark {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 40%;
+    max-width: 45vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.9vh;
+    pointer-events: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.felt-mark .sluff-watermark {
+    display: block;
+    width: 100%;
+    opacity: 0.1;
+}
+
+/* Both lines sit above the mark: below it, a landscape felt has the
+   player's own seat. A landscape felt is also short, so the mark itself
+   stays a little smaller there, clear of the far seat. */
+@media (orientation: landscape) {
+    .felt-mark {
+        max-width: 38vh;
+    }
+}
+
+/* The lines may run wider than the mark: 175% of the mark's 40% is 70%
+   of the cloth, and a long event name is cut with an ellipsis rather than
+   wrapped onto the trick. */
+.felt-mark-event,
+.felt-mark-final {
+    max-width: 175%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: 'Oswald', sans-serif;
+    text-transform: uppercase;
+    text-align: center;
+    color: #f3ead6;
+    opacity: 0.26;
+    text-shadow: 0 0.3vh 0.6vh rgba(0, 0, 0, 0.45);
+}
+
+.felt-mark-event {
+    font-weight: 500;
+    font-size: clamp(0.55rem, 1.5vh, 0.95rem);
+    letter-spacing: 0.32em;
+    /* The trailing letter-space would otherwise sit off-center. */
+    padding-left: 0.32em;
+}
+
+.felt-mark-final {
+    font-weight: 700;
+    font-size: clamp(0.8rem, 2.4vh, 1.4rem);
+    letter-spacing: 0.42em;
+    padding-left: 0.42em;
+    opacity: 0.34;
+}

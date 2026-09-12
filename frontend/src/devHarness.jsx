@@ -223,6 +223,15 @@ if (ringCardRound > 0) {
     tableState.tournament = { tournamentId: 1, name: 'Harness Open', roundNumber: ringCardRound, tableIndex: 0, drainPercent: 0 };
 }
 
+// ?tourneyname=Name[&left=N] — the felt wears the event's name; five or
+// fewer left makes it the final table.
+const feltEvent = params.get('tourneyname');
+if (feltEvent) {
+    tableState.tournament = tableState.tournament || { tournamentId: 1, name: feltEvent, roundNumber: 9, tableIndex: 0, drainPercent: 0 };
+    tableState.tournament.name = feltEvent;
+}
+const playersLeft = Number(params.get('left')) || 0;
+
 const promptMode = params.get('prompt');
 if (promptMode) {
     tableState.currentTrickCards = [];
@@ -448,8 +457,15 @@ const HarnessApp = () => {
                     playSound={(name) => console.log('[harness] playSound', name)}
                     playRoundBell={() => console.log('[harness] ding ding')}
                     playRoundCall={(key) => console.log('[harness] ding ding + round call', key)}
-                    tournament={ringCardRound > 0 && params.get('players')
-                        ? { id: 1, status: 'running', roundCall: { round: ringCardRound, playersLeft: Number(params.get('players')), dealInSeconds: 8, audio: false } }
+                    tournament={(ringCardRound > 0 && params.get('players')) || playersLeft > 0
+                        ? {
+                            id: 1,
+                            status: 'running',
+                            playersLeft: playersLeft || Number(params.get('players')) || 0,
+                            roundCall: ringCardRound > 0 && params.get('players')
+                                ? { round: ringCardRound, playersLeft: Number(params.get('players')), dealInSeconds: 8, audio: false }
+                                : null,
+                        }
                         : undefined}
                     ringCardHold={ringCardHold}
                     socket={fakeSocket}
