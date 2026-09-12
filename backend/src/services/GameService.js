@@ -2627,14 +2627,16 @@ const { botPlayDelay, isDeliberateBot } = require('../core/botPacing');
             }
 
             if (engine.state === 'Playing Phase' && !engine.drawRequest.isActive && !engine.playoutVote?.isActive && engine.insurance.isActive && !engine.insurance.dealExecuted) {
-                console.log(`[INSURANCE] Processing insurance for table ${tableId} - ${Object.keys(engine.bots).length} bots`);
+                // Quiet on tournament tables: they have no game_history row
+                // (gameId null by design), so there is nothing to log.
+                if (engine.gameId) console.log(`[INSURANCE] Processing insurance for table ${tableId} - ${Object.keys(engine.bots).length} bots`);
                 let insuranceDelay = quick(500);
                 for (const botId in engine.bots) {
                     const bot = engine.bots[botId];
                     setTimeout(async () => {
                         const currentEngine = this.getEngineById(tableId);
                         if (currentEngine && currentEngine.insurance.isActive && !currentEngine.insurance.dealExecuted) {
-                            console.log(`[INSURANCE] Bot ${bot.playerName} making insurance decision`);
+                            if (currentEngine.gameId) console.log(`[INSURANCE] Bot ${bot.playerName} making insurance decision`);
                             const decision = await this._calculateBotInsuranceMove(currentEngine, bot);
                             if (decision) {
                                 currentEngine.updateInsuranceSetting(bot.userId, decision.settingType, decision.value);
@@ -2646,9 +2648,10 @@ const { botPlayDelay, isDeliberateBot } = require('../core/botPacing');
                                     this._triggerBots(tableId);
                                 }
                                 
-                                // Log the decision for learning
-                                console.log(`[INSURANCE] Logging decision for ${bot.playerName}, gameId: ${currentEngine.gameId}`);
+                                // Log the decision for learning (live games
+                                // only — a tournament table has no game row).
                                 if (currentEngine.gameId) {
+                                    console.log(`[INSURANCE] Logging decision for ${bot.playerName}, gameId: ${currentEngine.gameId}`);
                                     await this.adaptiveInsurance.logInsuranceDecision(
                                         currentEngine.gameId,
                                         bot.playerName,
@@ -2656,8 +2659,6 @@ const { botPlayDelay, isDeliberateBot } = require('../core/botPacing');
                                         false, // deal not executed yet
                                         null // hindsight value will be calculated later
                                     );
-                                } else {
-                                    console.log(`[INSURANCE] WARNING: No gameId available for logging`);
                                 }
                             }
                         }
