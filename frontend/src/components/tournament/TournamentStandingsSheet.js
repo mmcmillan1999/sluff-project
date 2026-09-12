@@ -16,6 +16,14 @@ const TournamentStandingsSheet = ({ tournament, viewerUserId, onClose, watchingT
         return () => clearTimeout(timer);
     }, [onClose, tournament]);
 
+    // Keyboard users leave the way the popup lets them: Escape.
+    useEffect(() => {
+        if (!tournament) return undefined;
+        const closeOnEscape = event => { if (event.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', closeOnEscape);
+        return () => document.removeEventListener('keydown', closeOnEscape);
+    }, [onClose, tournament]);
+
     if (!tournament) return null;
     const { me, ranked, myTable } = describeViewer(tournament, viewerUserId);
     const tableOf = (name) => (tournament.tables || []).find(table => table.seats.includes(name));
@@ -27,7 +35,7 @@ const TournamentStandingsSheet = ({ tournament, viewerUserId, onClose, watchingT
     const pick = (event, fn) => { event.stopPropagation(); fn(); onClose(); };
 
     return createPortal(
-        <div className="tournament-sheet" role="dialog" aria-label="Tournament standings" onClick={onClose}>
+        <div className="tournament-sheet" role="dialog" aria-modal="true" aria-label="Tournament standings" onClick={onClose}>
             <h2>{tournament.name} · round {tournament.round}</h2>
             {(tournament.tables || []).length > 0 && (
                 <ul className="tournament-sheet-tables">
