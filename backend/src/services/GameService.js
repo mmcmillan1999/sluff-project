@@ -2668,45 +2668,65 @@ const { botPlayDelay, isDeliberateBot } = require('../core/botPacing');
                 }
             }
 
-            if (engine.state === 'Playing Phase' && !engine.drawRequest.isActive && !engine.playoutVote?.isActive && engine.insurance.isActive && !engine.insurance.dealExecuted) {
-                // Quiet on tournament tables: they have no game_history row
-                // (gameId null by design), so there is nothing to log.
-                if (engine.gameId) console.log(`[INSURANCE] Processing insurance for table ${tableId} - ${Object.keys(engine.bots).length} bots`);
+            // TrickCompleteLinger counts: the engine takes insurance changes
+            // while a finished trick lingers on the felt, which is exactly
+            // when a human has just learned something. A bot whose quote was
+            // priced before that last card must not sit there for the linger.
+            const insuranceOpen = ['Playing Phase', 'TrickCompleteLinger'].includes(engine.state);
+            if (insuranceOpen && !engine.drawRequest.isActive && !engine.playoutVote?.isActive && engine.insurance.isActive && !engine.insurance.dealExecuted) {
                 let insuranceDelay = quick(500);
                 for (const botId in engine.bots) {
                     const bot = engine.bots[botId];
-                    setTimeout(async () => {
-                        const currentEngine = this.getEngineById(tableId);
-                        if (currentEngine && currentEngine.insurance.isActive && !currentEngine.insurance.dealExecuted) {
-                            if (currentEngine.gameId) console.log(`[INSURANCE] Bot ${bot.playerName} making insurance decision`);
-                            const decision = await this._calculateBotInsuranceMove(currentEngine, bot);
-                            if (decision) {
-                                currentEngine.updateInsuranceSetting(bot.userId, decision.settingType, decision.value);
-                                this.emitGameState(tableId);
-                                // A bot's offer can be the one that executes
-                                // the deal: re-run the trigger so the playout
-                                // vote's bot votes get scheduled.
-                                if (currentEngine.playoutVote?.isActive) {
-                                    this._triggerBots(tableId);
-                                }
-                                
-                                // Log the decision for learning (live games
-                                // only — a tournament table has no game row).
-                                if (currentEngine.gameId) {
-                                    console.log(`[INSURANCE] Logging decision for ${bot.playerName}, gameId: ${currentEngine.gameId}`);
-                                    await this.adaptiveInsurance.logInsuranceDecision(
-                                        currentEngine.gameId,
-                                        bot.playerName,
-                                        currentEngine,
-                                        false, // deal not executed yet
-                                        null // hindsight value will be calculated later
-                                    );
-                                }
-                            }
-                        }
-                    }, insuranceDelay);
+                    const delay = insuranceDelay;
                     insuranceDelay += quick(750);
+                    // A move that makes the bot's quote LESS generous lands at
+                    // once: a quote priced for the last board is an open door
+                    // for whoever saw the new card first. Only a move that
+                    // gives ground waits out the human-like pause.
+                    this._calculateBotInsuranceMove(engine, bot).then((decision) => {
+                        if (!decision) return undefined;
+                        if (this._insuranceTightens(engine, bot, decision)) return this._applyBotInsuranceMove(tableId, bot);
+                        setTimeout(() => {
+                            this._applyBotInsuranceMove(tableId, bot)
+                                .catch(error => console.error(`[INSURANCE] Bot ${bot.playerName} move failed on ${tableId}:`, error));
+                        }, delay);
+                        return undefined;
+                    }).catch(error => console.error(`[INSURANCE] Bot ${bot.playerName} move failed on ${tableId}:`, error));
                 }
+            }
+        }
+
+        // Less generous than what the bot has standing: a bidder asking for
+        // more, a defender offering less.
+        _insuranceTightens(engine, bot, decision) {
+            if (decision.settingType === 'bidderRequirement') {
+                return decision.value > (engine.insurance?.bidderRequirement ?? -Infinity);
+            }
+            return decision.value < (engine.insurance?.defenderOffers?.[bot.playerName] ?? Infinity);
+        }
+
+        // Re-priced at the moment it lands, so a move that waited out its
+        // pause is for the board as it is now, not as it was.
+        async _applyBotInsuranceMove(tableId, bot) {
+            const currentEngine = this.getEngineById(tableId);
+            if (!currentEngine || !currentEngine.insurance.isActive || currentEngine.insurance.dealExecuted) return;
+            const decision = await this._calculateBotInsuranceMove(currentEngine, bot);
+            if (!decision) return;
+            currentEngine.updateInsuranceSetting(bot.userId, decision.settingType, decision.value);
+            this.emitGameState(tableId);
+            // A bot's offer can be the one that executes the deal: re-run the
+            // trigger so the playout vote's bot votes get scheduled.
+            if (currentEngine.playoutVote?.isActive) this._triggerBots(tableId);
+            // Log the decision for learning (live games only — a tournament
+            // table has no game_history row, gameId null by design).
+            if (currentEngine.gameId) {
+                await this.adaptiveInsurance.logInsuranceDecision(
+                    currentEngine.gameId,
+                    bot.playerName,
+                    currentEngine,
+                    false, // deal not executed yet
+                    null // hindsight value will be calculated later
+                );
             }
         }
     }

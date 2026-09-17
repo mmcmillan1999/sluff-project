@@ -49,6 +49,7 @@ const suites = [
     { name: 'AI prompt rule contract', file: './aiPromptRules.test.js' },
     { name: 'market insurance strategy', file: './marketInsurance.test.js' },
     { name: 'insurance limits', file: './insuranceLimits.test.js' },
+    { name: 'insurance pricing', file: './insurancePricing.test.js' },
     { name: 'game resume and play timing', file: './gameResume.test.js' },
     { name: 'bot brain profiles', file: './botBrains.test.js' },
     { name: 'raven brain', file: './ravenBrain.test.js' },

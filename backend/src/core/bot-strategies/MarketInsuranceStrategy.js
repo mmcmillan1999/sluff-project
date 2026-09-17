@@ -12,6 +12,19 @@
 // escapes for free" leak; a dominating bidder's ask tracks the projected
 // exchange, which closes the "winning bot asks for 5" leak.
 //
+// SEPT 2026: the rule above priced the ROUND and lost to the PERSON. In games
+// with a human (Aug 20 - Sept 17) humans took 13.1 points a deal off the bots:
+// a quote that is fair on average, offered to someone who knows their own hand
+// and only says yes when it is wrong in their favour, loses. The default is
+// now the 'informed' rule (insurancePricing.js, _informedMove below): post the
+// quote that earns the most GIVEN that the other side only accepts what is
+// good for them, priced from an estimate corrected for its measured bias and
+// overconfidence. scripts/simulate-insurance.js is the harness that chose it:
+// against an adversary who strikes whenever a deal suits them the rule above
+// loses ~550 points per 100 rounds; the informed rule makes ~+14 on the rounds
+// it was tuned on and +12 to +15 on 3,300 it never saw. The rule above stays
+// as the rollback: INSURANCE_PRICING=market.
+//
 // A structural note the estimator prices automatically: a failed bid pays
 // three shares (two defenders plus the absorber/sitting dealer) while a made
 // bid collects only two, so on a failing bid there is real mutual surplus in
@@ -22,6 +35,20 @@
 const { buildPublicView } = require('./PublicRoundView');
 const { estimateBidderPoints } = require('./RolloutEstimator');
 const { insuranceLimits } = require('../insuranceLimits');
+const { informedQuote, estimatorCorrection } = require('./insurancePricing');
+
+// Which rule prices a quote. 'informed' (Sept 2026) assumes the other side
+// only accepts what is good for them; 'market' is the Aug 2026 certainty-
+// equivalent rule it replaced, kept as the rollback: INSURANCE_PRICING=market.
+const DEFAULT_PRICING = process.env.INSURANCE_PRICING === 'market' ? 'market' : 'informed';
+// Chosen on the exploitability harness (scripts/simulate-insurance.js). Tried
+// beside it: assuming a less informed counterparty (75%, 50% — fewer, fatter
+// deals; about the same total), a minimum edge of 3 (too few deals to matter),
+// stopping at trick 8 (+4 instead of +14), and the raw estimate without the
+// measured correction (-3 to -8: still bleeding from the bidder's seat).
+const INFORMED_COUNTERPARTY = 1;        // assume they know how the round ends
+const INFORMED_MIN_EDGE = 1;            // expected points a quote must earn to be posted
+const INFORMED_LAST_QUOTE_TRICK = 10;   // from here the quote comes down
 
 const NO_QUOTE_AFTER_TRICK = 8;   // parity with the legacy strategy
 const MIN_EMIT_DELTA = 5;         // engine granularity
@@ -41,10 +68,11 @@ function seedFrom(text) {
 }
 
 class MarketInsuranceStrategy {
-    constructor(pool = null, io = null, { rollouts = 160 } = {}) {
+    constructor(pool = null, io = null, { rollouts = 160, pricing = DEFAULT_PRICING } = {}) {
         this.pool = pool;
         this.io = io;
         this.rollouts = rollouts;
+        this.pricing = pricing;
         // The estimator used to run fresh on every 1.5 s heartbeat while a
         // human thought, with a fresh random seed each time. Its sampling
         // noise exceeded MIN_EMIT_DELTA, so quotes drifted 15 points on an
@@ -126,6 +154,7 @@ class MarketInsuranceStrategy {
     calculateInsuranceMove(engine, bot) {
         const insurance = engine.insurance;
         if (!insurance?.isActive || insurance.dealExecuted) return null;
+        if (this.pricing === 'informed') return this._informedMove(engine, bot);
         if (engine.tricksPlayedCount >= NO_QUOTE_AFTER_TRICK) return null;
 
         const view = buildPublicView(engine, bot.playerName);
@@ -196,6 +225,48 @@ class MarketInsuranceStrategy {
             return { settingType: 'defenderOffer', value: offer };
         }
         return null;
+    }
+
+    // The Sept 2026 rule (insurancePricing.informedQuote): price the person on
+    // the other side, not only the round. Differences from the rule above
+    // that matter at the table:
+    //   - a bot with nothing worth offering posts NOTHING agreeable — it sits
+    //     at the round's unagreeable default, like a player who has not
+    //     touched insurance — instead of always quoting something;
+    //   - it quotes whole points, and re-quotes through trick 10;
+    //   - when it stops, it takes its quote DOWN. The old rule stopped
+    //     updating after trick 8 and left its last quote standing for the
+    //     three tricks in which everyone learns how the round ends.
+    _informedMove(engine, bot) {
+        const insurance = engine.insurance;
+        const view = buildPublicView(engine, bot.playerName);
+        if (!view) return null;
+        const isBidder = view.botIsBidder;
+        if (!isBidder && !(bot.playerName in insurance.defenderOffers)) return null;
+
+        const m = insurance.bidMultiplier || 1;
+        const limits = insuranceLimits({ multiplier: m, stack: view.scores[view.botName], isBidder });
+        const unagreeable = isBidder ? limits.max : limits.min;
+        const key = `informed|${this._stateKey(engine, bot.playerName)}`;
+        const { value: quote } = this._cachedPrice(key, () => {
+            if (view.tricksPlayed >= INFORMED_LAST_QUOTE_TRICK) return { value: unagreeable };
+            const { samples } = estimateBidderPoints(view, { rollouts: this.rollouts, seed: seedFrom(key) });
+            const priced = informedQuote({
+                samples,
+                m,
+                isBidder,
+                limits,
+                informed: INFORMED_COUNTERPARTY,
+                // Personality is a little more or less appetite for a deal.
+                minEdge: INFORMED_MIN_EDGE * this._personality(bot.playerName).marginScale,
+                correction: estimatorCorrection({ isBidder, bidType: view.bidType, tricksPlayed: view.tricksPlayed }),
+            });
+            return { value: priced.quote };
+        });
+
+        const current = isBidder ? insurance.bidderRequirement : insurance.defenderOffers[bot.playerName];
+        if (quote === current) return null;
+        return { settingType: isBidder ? 'bidderRequirement' : 'defenderOffer', value: quote };
     }
 }
 

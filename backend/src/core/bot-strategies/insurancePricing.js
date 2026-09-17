@@ -1,0 +1,211 @@
+// backend/src/core/bot-strategies/insurancePricing.js
+//
+// How a bot turns "what I think the bidder will score" into an insurance
+// quote. Pure functions over a sample of the bidder's final card points, so
+// the live strategy (MarketInsuranceStrategy) and the exploitability harness
+// (scripts/simulate-insurance.js) price with exactly the same code.
+//
+// TWO RULES LIVE HERE.
+//
+// marketQuote — the Aug 2026 rule: quote your own certainty equivalent of
+// playing the round out (mean - lambda x sd), shaded by a margin that decays
+// as tricks resolve, in steps of five. It prices the ROUND. It does not price
+// the PERSON ON THE OTHER SIDE, and that is where it bled: over Aug 20 - Sept
+// 17 2026, in games with a human, humans took 13.1 points a deal off the bots
+// (CJ +1,941, jazzachy +1,826). Two leaks carried it. A failing human bidder
+// escaped for 5 x m where the cards would have cost 35 x m — each bot defender
+// collected 2.5 of the 11.7 it was owed. And a bot bidder holding a winner
+// sold it for 20 where the cards paid 35.
+//
+// Neither is a bad estimate of the round. Both are ADVERSE SELECTION: the
+// human knows their own hand, and only says yes when the bot's quote is wrong
+// in the human's favour. An honest average, quoted to someone who picks their
+// moments, loses.
+//
+// informedQuote — the Sept 2026 rule: assume the other side only accepts when
+// accepting is good for them, and post the quote that earns the most GIVEN
+// that. For every candidate quote, walk the sample: in which futures would an
+// informed counterparty say yes, and what does the bot gain or lose in exactly
+// those futures? Post the best one; if nothing clears `minEdge`, post nothing
+// agreeable at all. What falls out, with no special cases:
+//   - a bid that is making is zero-sum between bidder and defenders, so an
+//     informed defender only buys it for less than it is worth: a winning bot
+//     bidder does not sell. (Leak two.)
+//   - a bid that is failing pays THREE shares on the cards — two defenders
+//     and the absorber / sitting-out dealer — and a deal has no absorber, so
+//     there is real money for both sides in settling it. The bot asks for its
+//     full card value and a slice of the absorber's share, instead of handing
+//     the whole surplus to the bidder. (Leak one.) These are the deals that
+//     still happen, and they are fair ones.
+// `informed` (0..1) is how much the counterparty is assumed to know beyond
+// the bot's own estimate: 1 = they know how the round ends. Quotes are whole
+// points; nothing here rounds to five.
+
+'use strict';
+
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const roundTo5 = v => Math.round(v / 5) * 5;
+
+// Card payoffs per seat for a bidder surplus (final card points - 60).
+// A made bid collects one share from each defender; a failed bid pays a share
+// to each defender AND one to the absorber / sitting-out dealer.
+const bidderCardValue = (surplus, m) => (surplus > 0 ? 2 : 3) * surplus * m;
+const defenderCardValue = (surplus, m) => -surplus * m;
+
+const NO_QUOTE_AFTER_TRICK = 8;
+
+function stats(values) {
+    const n = values.length;
+    const mean = values.reduce((s, v) => s + v, 0) / n;
+    const sd = Math.sqrt(values.reduce((s, v) => s + (v - mean) * (v - mean), 0) / Math.max(1, n - 1));
+    return { mean, sd };
+}
+
+/**
+ * The Aug 2026 rule. `samples` = sampled final bidder card points.
+ */
+function marketQuote({ samples, m, isBidder, tricksPlayed, limits, lambda = 0.12, marginScale = 1 }) {
+    const myDeltas = samples.map(pts => (isBidder ? bidderCardValue(pts - 60, m) : defenderCardValue(pts - 60, m)));
+    const { mean, sd } = stats(myDeltas);
+    const decay = Math.max(0, NO_QUOTE_AFTER_TRICK - tricksPlayed) / NO_QUOTE_AFTER_TRICK;
+    const margin = 0.45 * sd * decay * marginScale + 3;
+    const ce = mean - lambda * sd;
+    // Bidder: the ask is the settlement received; never below the certainty
+    // equivalent of playing. Defender: willing to offer at most -ce.
+    const raw = isBidder ? roundTo5(ce + margin) : roundTo5(-ce - margin);
+    return clamp(raw, limits.min, limits.max);
+}
+
+// --- What the estimator gets wrong, measured -----------------------------
+//
+// The quote is only as honest as the sample it is priced from, and the
+// sample comes from a rollout that plays every seat with one simple policy.
+// Against 4,500 recorded rounds of real brains (scripts/simulate-insurance.js
+// record; counting / flytrap / sphinx / raven-1.2 tables, Sept 2026):
+//
+//   BIAS — from a DEFENDER's seat it underrates the bidder for most of the
+//   round: Frog -4.5, Solo -6.5, Heart Solo -10 to -12 points, fading to
+//   -0.4 / -2.0 / -3.8 from trick 8. From the BIDDER's own seat it is close
+//   (-1.0 / 0 / -2.5). A defender who thinks the bidder is weaker than they
+//   are lets a failing bidder out cheap; a bidder who thinks they are failing
+//   harder than they are overpays to escape.
+//
+//   OVERCONFIDENCE — it starts honest and then claims far more certainty than
+//   it has. By tricks 4-7 the truth lands 5-9 points further from the
+//   estimate than its own spread allows, worst from the bidder's seat, where
+//   the bot knows its hand, the rollouts barely vary, and it believes it knows
+//   the result to within two points. That missing spread is error in the
+//   rollout MODEL, which no amount of resampling shows, so it is added back
+//   here as independent noise.
+//
+// [trick bucket 0-1, 2-3, 4-5, 6-7, 8+]
+const BUCKET_OF_TRICK = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 4, 4];
+const ESTIMATOR_CORRECTION = {
+    defender: {
+        Frog: { shift: [4.5, 3.7, 4.7, 2.7, 0.4], extraSd: [0, 7.5, 9.1, 8.7, 5.5] },
+        Solo: { shift: [6.5, 6.0, 8.0, 6.3, 2.0], extraSd: [0, 0, 0, 2.4, 2.2] },
+        'Heart Solo': { shift: [10.1, 11.4, 12.0, 8.4, 3.8], extraSd: [0, 0, 0, 0, 0] },
+    },
+    bidder: {
+        Frog: { shift: [1.0, 1.0, 1.0, 0.3, 0], extraSd: [1.7, 4.9, 6.0, 5.0, 2.0] },
+        Solo: { shift: [0.1, 0, 0.3, 0, 0], extraSd: [0, 4.3, 5.9, 6.2, 4.7] },
+        'Heart Solo': { shift: [2.7, 2.5, 2.0, 0.3, 0], extraSd: [0, 4.0, 8.6, 8.7, 6.1] },
+    },
+};
+
+function estimatorCorrection({ isBidder, bidType, tricksPlayed }) {
+    const row = ESTIMATOR_CORRECTION[isBidder ? 'bidder' : 'defender'][bidType];
+    if (!row) return { shift: 0, extraSd: 0 };
+    const bucket = BUCKET_OF_TRICK[clamp(Math.floor(tricksPlayed) || 0, 0, 11)];
+    return { shift: row.shift[bucket], extraSd: row.extraSd[bucket] };
+}
+
+// Inverse normal CDF (Acklam's rational approximation, |error| < 1.2e-9).
+function normalQuantile(p) {
+    const a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02, 1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00];
+    const b = [-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02, 6.680131188771972e+01, -1.328068155288572e+01];
+    const c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00, -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00];
+    const d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00, 3.754408661907416e+00];
+    const lo = 0.02425;
+    if (p < lo) {
+        const q = Math.sqrt(-2 * Math.log(p));
+        return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+    }
+    if (p > 1 - lo) return -normalQuantile(1 - p);
+    const q = p - 0.5;
+    const r = q * q;
+    return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+}
+
+// Move the sample to where the truth tends to be and widen it to the
+// uncertainty that is really there: the claimed spread and the model error
+// are independent, so their variances add. A sample with no spread of its own
+// (a bidder late in the round) becomes a bell of the model error alone.
+function adjustSamples(samples, { shift = 0, extraSd = 0 } = {}) {
+    if (shift === 0 && extraSd === 0) return samples;
+    const { mean, sd } = stats(samples);
+    const target = Math.sqrt(sd * sd + extraSd * extraSd);
+    const n = samples.length;
+    if (sd < 1e-6) {
+        return samples.map((_, k) => clamp(mean + shift + target * normalQuantile((k + 0.5) / n), 0, 120));
+    }
+    const scale = target / sd;
+    return samples.map(pts => clamp(mean + shift + (pts - mean) * scale, 0, 120));
+}
+
+/**
+ * The Sept 2026 rule. Returns { quote, edge, agreeable }: `quote` is always a
+ * legal setting — the most unagreeable one the seat may post when no deal is
+ * worth offering (`agreeable: false`).
+ *
+ *   informed    0..1  how much of the truth the counterparty is assumed to hold
+ *   minEdge     points of expected gain a quote must clear to be posted at all
+ *   correction  { shift, extraSd } from estimatorCorrection(), or none
+ */
+function informedQuote({
+    samples, m, isBidder, limits,
+    informed = 1, minEdge = 1, correction = null,
+}) {
+    const pts = correction ? adjustSamples(samples, correction) : samples;
+    const surplus = pts.map(p => p - 60);
+    const meanSurplus = surplus.reduce((s, v) => s + v, 0) / surplus.length;
+    // What the counterparty believes in each future: the truth, blended with
+    // the bot's own average to the degree they are NOT informed.
+    const believed = surplus.map(s => informed * s + (1 - informed) * meanSurplus);
+    const n = surplus.length;
+    const noDeal = isBidder ? limits.max : limits.min;
+
+    let best = { quote: noDeal, edge: 0, agreeable: false };
+    for (let quote = limits.min; quote <= limits.max; quote += 1) {
+        let total = 0;
+        for (let k = 0; k < n; k += 1) {
+            if (isBidder) {
+                // My ask A. Each defender will offer at most what the cards
+                // would cost them, so together they meet A only if A <= 2 x
+                // (their believed card loss).
+                if (quote > 2 * believed[k] * m) continue;
+                total += quote - bidderCardValue(surplus[k], m);
+            } else {
+                // My offer o, my partner assumed to match it: the bidder is
+                // offered 2o and takes it only if that beats the cards.
+                if (2 * quote < bidderCardValue(believed[k], m)) continue;
+                total += surplus[k] * m - quote; // (-o) - (-S x m)
+            }
+        }
+        const edge = total / n;
+        if (edge > best.edge + 1e-9 && edge >= minEdge) best = { quote, edge, agreeable: true };
+    }
+    return best;
+}
+
+module.exports = {
+    NO_QUOTE_AFTER_TRICK,
+    bidderCardValue,
+    defenderCardValue,
+    marketQuote,
+    informedQuote,
+    estimatorCorrection,
+    adjustSamples,
+    normalQuantile,
+    stats,
+};

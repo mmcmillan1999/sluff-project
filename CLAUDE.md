@@ -68,6 +68,23 @@ Debug overlay in game: `Shift+D`.
   asks/offers from a Monte Carlo rollout (`RolloutEstimator.js`) over public information only
   (`PublicRoundView.js` is the enforced no-cheating boundary — see `tests/marketInsurance.test.js`).
   `INSURANCE_STRATEGY=legacy` reverts to `AdaptiveInsuranceStrategy`, which is also the on-error fallback.
+  **Pricing rule (Sept 17 2026): `informed`, in `bot-strategies/insurancePricing.js`** (pure; shared by the
+  live strategy and the harness). The Aug rule priced the ROUND (certainty equivalent ± a decaying margin) and
+  lost to the PERSON: in human games humans took 13.1 pts a deal off the bots, because a human knows their own
+  hand and only accepts a quote that is wrong in their favour (a failing human bidder escaped for 5×m where the
+  cards cost 35×m; a bot bidder sold a winner for 20 where cards paid 35). `informedQuote` posts the quote that
+  earns the most GIVEN that the other side only accepts what is good for them — so a winning bot bidder does
+  not sell, a failing bidder must pay the defenders their card value plus a slice of the absorber's share, and
+  a bot with nothing worth offering sits at the unagreeable default. It prices from an estimate corrected by a
+  measured table (`ESTIMATOR_CORRECTION`: a defender's view underrates the bidder by 4–12 pts; both seats are
+  5–9 pts overconfident mid-round). Whole points, no steps of five; quotes through trick 10 and then comes
+  DOWN (the old rule left its last quote standing for tricks 9–11). `GameService` re-quotes during
+  `TrickCompleteLinger` too and lands any move that TIGHTENS a quote at once (only loosening waits out the
+  human-like pause). All 20 bots share this logic — brains differ in card play only. Harness:
+  `scripts/simulate-insurance.js record|analyze` (an adversary who strikes whenever a deal suits them): old rule
+  ≈ −550 pts/100 rounds, new ≈ +14 in sample, +12–15 on 3,300 unseen rounds. Rollback:
+  `INSURANCE_PRICING=market`. Wrapped-early rounds are never logged to `round_results`, so every logged deal is
+  one a human voted to play out.
   **Nobody may offer more insurance points than they hold (Sept 17 2026):** the most a seat can put up is
   every point but its last — `core/insuranceLimits.js`, one pure rule shared by `GameEngine.
   updateInsuranceSetting` (humans and bots, regular and tournament tables: the score IS the stack), the market

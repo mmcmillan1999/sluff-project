@@ -92,7 +92,11 @@ function runMarketInsuranceTests() {
     console.log('Running MarketInsuranceStrategy tests...');
     let testCounter = 1;
     const pass = (name) => console.log(`  ✔ Test ${testCounter++}: ${name}`);
-    const strategy = new MarketInsuranceStrategy(null, null, { rollouts: 120 });
+    // The Aug 2026 'market' pricing rule, which these leak regressions were
+    // written against and which stays as the rollback
+    // (INSURANCE_PRICING=market). The Sept 2026 default, 'informed', has its
+    // own suite: tests/insurancePricing.test.js.
+    const strategy = new MarketInsuranceStrategy(null, null, { rollouts: 120, pricing: 'market' });
 
     // ------------------------------------------------------------------
     // A monster Solo hand: boss cards everywhere plus long trump.
