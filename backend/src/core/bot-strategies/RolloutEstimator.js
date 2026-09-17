@@ -186,8 +186,8 @@ function placeKeyCards(view, pool, zones, rng) {
 // last resort the voids are relaxed rather than failing the estimate.
 //
 // `reshuffle` (view.unbiasedDeal, Sept 2026 — on for the insurance market's
-// informed rule, off everywhere else until the raven brains are re-measured
-// with it): an unweighted zone takes the FRONT of what is left, and what is
+// informed rule; off for the search brains, where 48,000 paired rounds showed
+// no gain, see ravenNextBrain.js): an unweighted zone takes the FRONT of what is left, and what is
 // left after an earlier zone is "the cards that zone could have held, then the
 // cards its voids refused". So the second seat was dealt the first seat's
 // leftovers and almost never a card in a suit the first seat is void in —

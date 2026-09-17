@@ -100,8 +100,12 @@ Debug overlay in game: `Shift+D`.
   voids refused", so the second seat almost never got a card in a suit the first is void in (exactly where
   those cards are) and they fell to the widow; a bidder on the last trick "knew" in 160 worlds of 160 the jack
   of trump was not out. `view.unbiasedDeal` reshuffles before every zone. **It is OFF for the raven brains and
-  the market rule** — raven samples with the same function, so turning it on there is a card-play change that
-  needs the paired defence/offence harness first (open follow-up; likely a real gain). The last three tricks
+  the market rule — measured, not pending:** raven-1.2 with it vs without (search-brain profile option
+  `unbiasedDeal`), 48,000 paired rounds over four tables: defending +0.11 ±0.06 / +0.12 ±0.06 (the bidder takes
+  a shade more; Heart Solo +0.64 ±0.22), bidding +0.18 ±0.07 — a wash. The search barely meets the bias: it
+  bites only when a seat is dealt with no weight function after a seat with a void, and the played-low floors
+  weight nearly every seat (3–5% of a search brain's decisions exposed vs 31–54% for the insurance estimator,
+  which has no floors). Don't chase it again. The last three tricks
   are solved per world with `ravenSearch.solveExact` instead of played out. Correction table
   (`ESTIMATOR_CORRECTION`, re-measured on every card state of 4,500 rounds, columns 0-1/2-3/4-5/6-7/8/9/10):
   a defender's view underrates the bidder by 3–10 pts early, fading to 0; mid-round both seats are 4–9 pts

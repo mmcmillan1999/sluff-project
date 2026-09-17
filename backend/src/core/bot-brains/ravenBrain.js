@@ -92,6 +92,7 @@ const DEFAULTS = {
     keyCardStrength: 1,       // 0..1 blend of that belief with plain zone-size odds
     tenLeadGuard: 'off',      // defender leading a 10 under an unaccounted Ace
     riskAversion: 0,          // defender's penalty on a lead's downside across worlds
+    unbiasedDeal: false,      // deal hidden hands without the void-order bias (RolloutEstimator.dealHands)
 };
 
 // Round payoff for THIS seat given the bidder's final card points. Made bids
@@ -229,6 +230,7 @@ function createSearchBrain(profile = {}) {
             frogBuryModel: config.frogBuryModel,
             keyCardModel: config.keyCardModel,
             keyCardStrength: config.keyCardStrength,
+            unbiasedDeal: config.unbiasedDeal === true,
         };
         for (let w = 0; w < config.worlds; w += 1) {
             if (used >= config.minWorlds && now() - started > config.timeBudgetMs) break;

@@ -101,6 +101,19 @@
 // -0.16 / -0.10 against raven, all within ±0.17. Cashing a boss 10 at a
 // coin-flip ruff risk is simply the best of bad options; holding it loses as
 // much. So those leads stay, and the model was taken back out.
+//
+// And the sampler's void-order bias (RolloutEstimator.dealHands; found Sept 17
+// 2026 through the insurance market, where it mattered a great deal). The fix
+// is the profile option unbiasedDeal, and for these brains it is OFF because
+// it was measured: raven-1.2 with it against raven-1.2 without, 48,000 paired
+// rounds over four tables — defending +0.11 ±0.06 and +0.12 ±0.06 (the bidder
+// takes a shade MORE; Heart Solo +0.64 ±0.22), bidding +0.18 ±0.07. A wash:
+// worth about a twentieth of a point a round, inside the noise. The reason is
+// that the search barely meets the bias. It bites only when a hidden seat is
+// dealt with no weight function after a seat with a proven void, and the
+// played-low floors give nearly every seat a weight: 3-5% of a search brain's
+// decisions are exposed, against 31-54% for the insurance estimator, which has
+// no floors. (scratch tool: biasExposure.js.)
 
 'use strict';
 
