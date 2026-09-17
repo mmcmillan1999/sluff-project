@@ -40,7 +40,7 @@ export const bulletinEntries = Object.freeze([
             + 'and the room plays one round at every table before the standings reseat everyone, top with top.',
         highlights: [
             'Every table plays exactly one round, then the leaders share a table and so do the short stacks — no easy rides.',
-            'Between rounds every stack drops the creator’s chip drain (off, 5, 10 or 20 percent), so the field keeps shrinking.',
+            'Between rounds every stack drops the creator’s chip drain (off, 5, 10 or 20 percent), so the field keeps shrinking. The drain never takes your last point — you only go out at the table.',
             'A shot clock rings the nameplate of whoever is on the clock: teal while their free time runs, orange when they are eating their bank.',
             'Once your table is done you can watch any table still playing; the header cube shows every table’s trick and the way back.',
             'One voice room for the whole event carries from table to table, through the board, and all the way to the podium.',

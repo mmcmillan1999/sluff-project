@@ -477,11 +477,42 @@ async function runTournamentTestsSeeded() {
         for (const entry of live.entries.values()) {
             const before = chipsBefore[entry.username];
             if (!Number.isFinite(before) || before <= 0) continue;
-            const drop = Math.ceil(before * 0.1);
-            assert.equal(drained.drops[entry.username], drop, `${entry.username} drops ten percent, rounded up`);
+            const drop = Math.min(Math.ceil(before * 0.1), before - 1);
+            assert.equal(drained.drops[entry.username], drop || undefined, `${entry.username} drops ten percent, rounded up`);
             assert.equal(entry.stack, before - drop, `${entry.username}'s stack after the drain`);
         }
         pass('Between rounds every live stack drops by the chip drain, rounded up, and the board is told.');
+
+        // The drain squeezes; only the table eliminates. It rounds up, so
+        // without a floor a stack of 1 lost its last point to the drain and
+        // went out between rounds without playing a card.
+        for (const percent of [5, 10, 20]) {
+            const stacks = { Last: 1, Two: 2, Five: 5, Nine: 9, Ten: 10, Eleven: 11, Big: 120 };
+            const expected = {
+                5: { Last: 1, Two: 1, Five: 4, Nine: 8, Ten: 9, Eleven: 10, Big: 114 },
+                10: { Last: 1, Two: 1, Five: 4, Nine: 8, Ten: 9, Eleven: 9, Big: 108 },
+                20: { Last: 1, Two: 1, Five: 4, Nine: 7, Ten: 8, Eleven: 8, Big: 96 },
+            }[percent];
+            const entries = new Map(Object.entries(stacks).map(([username, stack], i) => (
+                [500 + i, { userId: 500 + i, username, stack, status: 'playing', quit: false, bustedRound: null }]
+            )));
+            entries.set(599, { userId: 599, username: 'Emptied', stack: 0, status: 'playing', quit: false, bustedRound: null });
+            entries.set(598, { userId: 598, username: 'Overdrawn', stack: -14, status: 'playing', quit: false, bustedRound: null });
+            const fake = { drainPercent: percent, round: 4, entries };
+            const drain = director._applyDrain(fake);
+            for (const entry of entries.values()) {
+                if (entry.stack <= 0) continue;
+                assert.equal(entry.stack, expected[entry.username], `${percent}%: ${entry.username} ${stacks[entry.username]} -> ${expected[entry.username]}`);
+                assert.ok(entry.stack >= 1, 'the drain never takes a last point');
+            }
+            assert.equal(fake.lastDrain.drops.Last, undefined, 'the board is not told of a drop that did not happen');
+            assert.equal(drain.changes[500], undefined, 'and none is recorded');
+            assert.equal(fake.lastDrain.drops.Two, 1);
+            assert.equal(fake.lastDrain.drops.Big, stacks.Big - expected.Big);
+            const busted = director._applyBusts(fake).map(entry => entry.username).sort();
+            assert.deepEqual(busted, ['Emptied', 'Overdrawn'], 'only a stack the ROUND emptied goes out');
+        }
+        pass('The chip drain never takes a last point: a stack of 1 is left alone and only the table eliminates.');
         assert.equal(live.entries.get(11).watchingTableId, null, 'reseating ends the watch');
         assert.ok(!mattSocket.rooms.has(other), 'and leaves the old room');
         pass('A player whose table is done can watch another table; the watch ends when the room reseats.');

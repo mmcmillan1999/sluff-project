@@ -54,7 +54,8 @@ Debug overlay in game: `Shift+D`.
   (clients need that transition for the deal animation); one table left reopens the same engine in
   place; voice is one `tournament-<id>` room per event (socketActionGuard + TournamentVoiceDock);
   chip drain `tournaments.drain_percent` (Off/5/10/20, default 10) drops every live stack by that much between
-  rounds, rounded up, before busts (rounds play at even stakes; the escalation multiplier was retired the same
+  rounds, rounded up, before busts — but never a player's last point (`_applyDrain` floors the stack at 1: the
+  drain squeezes, only the table eliminates; Matt, Sept 17) (rounds play at even stakes; the escalation multiplier was retired the same
   day because it muddied the insurance math); watchers (tournamentWatch) sit as hand-hidden spectators at a
   table still playing until the room reseats; board delay 8 s with a countdown. Deploy survival:
   `tournament_snapshots` (director.snapshotForShutdown on SIGTERM, restoreSnapshots at boot + sweep;

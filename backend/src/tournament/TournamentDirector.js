@@ -854,9 +854,11 @@ class TournamentDirector {
     }
 
     // Between rounds every live stack drops by the tournament's percentage,
-    // rounded up so the smallest stack still feels it. Applied after the
-    // round's chips have moved and before busts, so a drop to nothing is a
-    // bust like any other.
+    // rounded up so a small stack still feels it — but never a player's LAST
+    // point. The drain squeezes; only the table eliminates: a player goes out
+    // by losing their last point in a round (Matt, Sept 17 2026). Applied
+    // after the round's chips have moved and before busts, so a stack the
+    // round itself emptied is still a bust like any other.
     _applyDrain(t) {
         const percent = Number(t.drainPercent) || 0;
         if (percent <= 0) {
@@ -867,7 +869,10 @@ class TournamentDirector {
         const changes = {};
         for (const entry of this._alive(t)) {
             if (entry.stack <= 0) continue;
-            const drop = Math.ceil(entry.stack * percent / 100);
+            const drop = Math.min(Math.ceil(entry.stack * percent / 100), Math.max(0, entry.stack - 1));
+            // A stack already down to its last point is left alone, and the
+            // board is not told of a drop that did not happen.
+            if (drop <= 0) continue;
             entry.stack -= drop;
             drops[entry.username] = drop;
             changes[entry.userId] = -drop;
