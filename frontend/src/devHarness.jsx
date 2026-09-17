@@ -38,6 +38,8 @@
 // ?mode=og&variant=home|tournament|table renders the share cards.
 // ?mode=session[&reason=active] shows the "Play here" scrim a client wears
 // while the account is live on another device or tab.
+// ?mode=insurance&stack=N[&role=bidder] opens the insurance prompt for a seat
+// holding N points: it can put up every point but its last, no more.
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
@@ -58,6 +60,7 @@ import TournamentView from './components/tournament/TournamentView';
 import './components/ClaudeLanding.css';
 import OrientationScrim from './components/OrientationScrim.js';
 import SessionScrim from './components/SessionScrim.js';
+import InsurancePrompt from './components/game/InsurancePrompt.js';
 import SluffIdent from './components/SluffIdent.js';
 import { setCosmetic } from './utils/cosmetics.js';
 import { setCardPlayStyle } from './utils/playStyle.js';
@@ -112,6 +115,38 @@ if (sessionMode) {
             reason={params.get('reason') === 'active' ? 'active-elsewhere' : 'claimed-elsewhere'}
             onPlayHere={() => console.log('[harness] Play here')}
         />,
+    );
+}
+
+// --- Insurance prompt on a short stack: /harness.html?mode=insurance&stack=13[&role=bidder] ---
+// Nobody may offer more points than they hold: the prompt stops at every
+// point but the last. The limits are what the server would send.
+const insuranceMode = params.get('mode') === 'insurance';
+if (insuranceMode) {
+    const stack = Number(params.get('stack')) || 13;
+    const asBidder = params.get('role') === 'bidder';
+    const pay = Math.max(0, stack - 1);
+    const insuranceState = {
+        isActive: true,
+        bidMultiplier: 2,
+        bidderPlayerName: asBidder ? 'You' : 'Brandi',
+        bidderRequirement: 40,
+        defenderOffers: asBidder ? { Brandi: -20, Elena: 10 } : { You: -20, Elena: 10 },
+        dealExecuted: false,
+        limits: {
+            You: asBidder ? { min: Math.max(-240, -pay), max: 240 } : { min: -120, max: Math.min(120, pay) },
+        },
+    };
+    ReactDOM.createRoot(document.getElementById('root')).render(
+        <div style={{ position: 'fixed', inset: 0, background: 'radial-gradient(ellipse at 50% 35%, #15673a 0%, #0f4d2a 55%, #0a3a1f 100%)' }}>
+            <InsurancePrompt
+                show
+                insuranceState={insuranceState}
+                selfPlayerName="You"
+                emitEvent={(event, payload) => console.log('[harness]', event, payload)}
+                onClose={() => console.log('[harness] close')}
+            />
+        </div>,
     );
 }
 
@@ -708,7 +743,7 @@ if (ogMode) {
     );
 }
 
-if (!identMode && !sessionMode && !lobbyMode && !tourneyMode && !ogMode) {
+if (!identMode && !sessionMode && !insuranceMode && !lobbyMode && !tourneyMode && !ogMode) {
 document.body.classList.add('game-active');
 
 ReactDOM.createRoot(document.getElementById('root')).render(<HarnessApp />);

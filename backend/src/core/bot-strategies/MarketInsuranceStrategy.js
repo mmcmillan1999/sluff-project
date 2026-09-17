@@ -21,6 +21,7 @@
 
 const { buildPublicView } = require('./PublicRoundView');
 const { estimateBidderPoints } = require('./RolloutEstimator');
+const { insuranceLimits } = require('../insuranceLimits');
 
 const NO_QUOTE_AFTER_TRICK = 8;   // parity with the legacy strategy
 const MIN_EMIT_DELTA = 5;         // engine granularity
@@ -162,23 +163,23 @@ class MarketInsuranceStrategy {
             const ce = mean - lambda * sd;
             const myScore = view.scores[view.botName];
 
+            // Nobody offers more points than they hold: when the price this
+            // bot would pay runs past its stack it puts up every point but
+            // its last, no more (insuranceLimits.js — the engine enforces the
+            // same fence, so quoting past it would only be pulled back).
+            const limits = insuranceLimits({ multiplier: m, stack: myScore, isBidder });
+
             if (isBidder) {
                 // The ask is the settlement the bidder receives; never quote
-                // below the certainty equivalent of just playing.
-                let ask = roundTo5(ce + margin);
-                // A negative ask means paying to escape a failing bid; never pay
-                // yourself out of the game.
-                if (Number.isFinite(myScore)) ask = Math.max(ask, roundTo5(-(myScore - 5)));
-                return { value: clamp(ask, -120 * m, 120 * m) };
+                // below the certainty equivalent of just playing. A negative
+                // ask means paying to escape a failing bid.
+                return { value: clamp(roundTo5(ce + margin), limits.min, limits.max) };
             }
 
             // Defender: the deal changes this bot's round by -offer, so it is
             // willing to offer at most -ce (negative ce -> pays to cap a loss,
             // positive ce -> demands payment to give up a winning position).
-            let offer = roundTo5(-ce - margin);
-            // Never pay yourself out of the game to settle a round.
-            if (Number.isFinite(myScore)) offer = Math.min(offer, roundTo5(myScore - 5));
-            return { value: clamp(offer, -60 * m, 60 * m) };
+            return { value: clamp(roundTo5(-ce - margin), limits.min, limits.max) };
         });
 
         if (isBidder) {

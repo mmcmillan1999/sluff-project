@@ -68,6 +68,15 @@ Debug overlay in game: `Shift+D`.
   asks/offers from a Monte Carlo rollout (`RolloutEstimator.js`) over public information only
   (`PublicRoundView.js` is the enforced no-cheating boundary — see `tests/marketInsurance.test.js`).
   `INSURANCE_STRATEGY=legacy` reverts to `AdaptiveInsuranceStrategy`, which is also the on-error fallback.
+  **Nobody may offer more insurance points than they hold (Sept 17 2026):** the most a seat can put up is
+  every point but its last — `core/insuranceLimits.js`, one pure rule shared by `GameEngine.
+  updateInsuranceSetting` (humans and bots, regular and tournament tables: the score IS the stack), the market
+  strategy, and `GameService._withinInsuranceLimits` (holds the legacy fallback strategy to it and stops a bot
+  at its limit from re-submitting every tick). "Offering" is the PAYING direction of each control — a
+  defender's positive offer, a bidder's NEGATIVE ask; receiving is never stack-limited. A value past the limit
+  is pulled back to it (a value outside ±60×m / ±120×m is still ignored). The client state carries
+  `insurance.limits[name] = {min, max}` so the stepper, quick picks and prompt stop there; preview with
+  `/harness.html?mode=insurance&stack=13[&role=bidder]`.
 - Search brains (Sept 2026): `bot-brains/ravenBrain.js` exports `createSearchBrain(profile)` — raven is the
   empty profile, and `ravenNextBrain.js` holds **raven-1.1 / raven-1.2** — raven with a repaired defense, same
   offense card for card. **raven-1.2 plays Grandpa George and Courtney M. since Sept 17 2026** (Matt's call;

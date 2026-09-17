@@ -18,6 +18,7 @@
 const { botPlayDelay, isDeliberateBot } = require('../core/botPacing');
     const AdaptiveInsuranceStrategy = require('../core/bot-strategies/AdaptiveInsuranceStrategy');
     const MarketInsuranceStrategy = require('../core/bot-strategies/MarketInsuranceStrategy');
+    const { clampToLimits } = require('../core/insuranceLimits');
     const { serializeEngineForResume, restoreEngineFromResume } = require('../serialization/gameResume');
 
     const MAX_SETTLEMENT_ATTEMPTS = 3;
@@ -2444,6 +2445,10 @@ const { botPlayDelay, isDeliberateBot } = require('../core/botPacing');
         // stays available via INSURANCE_STRATEGY=legacy and as the on-error
         // fallback so an estimator bug can never silence bot insurance play.
         async _calculateBotInsuranceMove(engine, bot) {
+            return this._withinInsuranceLimits(engine, bot, await this._strategyInsuranceMove(engine, bot));
+        }
+
+        async _strategyInsuranceMove(engine, bot) {
             if (process.env.INSURANCE_STRATEGY === 'legacy') {
                 return this.adaptiveInsurance.calculateInsuranceMove(engine, bot);
             }
@@ -2456,6 +2461,21 @@ const { botPlayDelay, isDeliberateBot } = require('../core/botPacing');
                 console.error(`[INSURANCE] Market strategy failed for ${bot.playerName} (fallback #${this.insuranceFallbackCount} since boot); using legacy strategy:`, error.message);
                 return this.adaptiveInsurance.calculateInsuranceMove(engine, bot);
             }
+        }
+
+        // Whatever a strategy asks for, a bot puts up no more than every point
+        // but its last — the same fence the engine holds a human to. Resolved
+        // here, and not only in the engine, so a bot already standing at its
+        // limit has no move: a legacy strategy that still wants more would
+        // otherwise re-submit, re-broadcast and re-log on every bot tick.
+        _withinInsuranceLimits(engine, bot, decision) {
+            if (!decision || typeof engine.insuranceLimitsFor !== 'function') return decision;
+            const allowed = clampToLimits(Number(decision.value), engine.insuranceLimitsFor(bot.playerName));
+            if (allowed === null) return null;
+            const current = decision.settingType === 'bidderRequirement'
+                ? engine.insurance?.bidderRequirement
+                : engine.insurance?.defenderOffers?.[bot.playerName];
+            return allowed === current ? null : { ...decision, value: allowed };
         }
 
         _triggerBots(tableId) {

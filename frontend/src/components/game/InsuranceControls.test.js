@@ -133,4 +133,27 @@ describe('InsuranceControls for a party to the deal', () => {
 
         expect(props.emitEvent).toHaveBeenCalledWith('updateInsuranceSetting', { settingType: 'bidderRequirement', value: 19 });
     });
+
+    // Nobody may offer more points than they hold: the stepper stops at the
+    // limit the server sent instead of asking for a value it would pull back.
+    test('a defender at every point but their last cannot step any higher', async () => {
+        const user = userEvent.setup();
+        const atLimit = { ...negotiation, defenderOffers: { Bob: 12, Cara: 5 }, limits: { Bob: { min: -60, max: 12 } } };
+        const { props } = renderControls({ selfPlayerName: 'Bob', isSpectator: false, insuranceState: atLimit });
+
+        await user.click(screen.getByRole('button', { name: 'Increase insurance offer' }));
+        expect(props.emitEvent).not.toHaveBeenCalled();
+
+        await user.click(screen.getByRole('button', { name: 'Decrease insurance offer' }));
+        expect(props.emitEvent).toHaveBeenCalledWith('updateInsuranceSetting', { settingType: 'defenderOffer', value: 11 });
+    });
+
+    test('a bidder cannot step their ask below what they hold', async () => {
+        const user = userEvent.setup();
+        const atLimit = { ...negotiation, bidderRequirement: -8, limits: { Alice: { min: -8, max: 120 } } };
+        const { props } = renderControls({ selfPlayerName: 'Alice', isSpectator: false, insuranceState: atLimit });
+
+        await user.click(screen.getByRole('button', { name: 'Decrease insurance ask' }));
+        expect(props.emitEvent).not.toHaveBeenCalled();
+    });
 });

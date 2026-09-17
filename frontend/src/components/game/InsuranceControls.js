@@ -35,9 +35,16 @@ const InsuranceControls = ({ insuranceState, selfPlayerName, isSpectator, emitEv
         } else {
             return;
         }
-        const newValue = currentValue + amount;
-        emitEvent("updateInsuranceSetting", { settingType, value: newValue });
+        // Nobody may offer more points than they hold: the server sends each
+        // seat its limits and would pull a larger value back, so stop here.
+        const limits = insuranceState.limits?.[selfPlayerName];
+        const newValue = Math.min(
+            Number.isFinite(limits?.max) ? limits.max : Infinity,
+            Math.max(Number.isFinite(limits?.min) ? limits.min : -Infinity, currentValue + amount),
+        );
         onInsuranceInteract?.();
+        if (newValue === currentValue) return; // already at the limit
+        emitEvent("updateInsuranceSetting", { settingType, value: newValue });
     };
 
     const openDetailsOnKey = (event) => {

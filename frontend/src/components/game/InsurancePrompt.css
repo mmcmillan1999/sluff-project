@@ -289,6 +289,14 @@
     line-height: 1.4;
 }
 
+/* Why the value stopped short of the slider's end: the stack, not the range. */
+.insurance-cap-note {
+    margin-top: 4px;
+    color: #a8a293;
+    font-size: 11px;
+    line-height: 1.35;
+}
+
 .insurance-gap-preview {
     margin-top: 6px;
     color: #fbbf24;
@@ -433,6 +441,16 @@
     box-shadow:
         0 0 0 rgba(0, 0, 0, 0.5),
         inset 0 2px 5px rgba(0, 0, 0, 0.45);
+}
+
+/* A pick past what the seat can afford (more points than it holds). */
+.quick-jump-button:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+.quick-jump-button:disabled:active {
+    transform: none;
 }
 
 .quick-jump-button.tone-get { border-color: rgba(74, 222, 128, 0.45); }

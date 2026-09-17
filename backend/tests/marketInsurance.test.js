@@ -166,18 +166,18 @@ function runMarketInsuranceTests() {
         pass(`Crushed defender pays ${move.value} to cap a Heart Solo blowout.`);
     }
 
-    // 5) Survival guard: a defender near elimination never deals itself out.
+    // 5) Nobody offers more points than they hold. The same crushed defender
+    //    as above would pay far more than 20 to cap this blowout; holding 20
+    //    it puts up every point but its last, and with a single point nothing.
     {
-        const engine = mockEngine({
+        const offerAt = (stack) => strategy.calculateInsuranceMove(mockEngine({
             bid: 'Heart Solo', trumpSuit: 'H', hands: { DefA: junkHand },
-            scores: { Bidder: 200, DefA: 20, DefB: 140 },
-        });
-        const move = strategy.calculateInsuranceMove(engine, { playerName: 'DefA' });
-        if (move) {
-            assert.ok(move.value <= 15,
-                `defender at 20 points must not pay ${move.value} and eliminate itself`);
-        }
-        pass('A defender near elimination never deals itself out of the game.');
+            scores: { Bidder: 200, DefA: stack, DefB: 140 },
+        }), { playerName: 'DefA' });
+        assert.strictEqual(offerAt(20)?.value, 19, 'at 20 points the price runs past the stack: all but one');
+        assert.strictEqual(offerAt(7)?.value, 6);
+        assert.strictEqual(offerAt(1)?.value, 0, 'a last point is never put up');
+        pass('A defender whose price runs past its stack offers every point but its last.');
     }
 
     // 6) The 4-player sitting dealer (not a party to insurance) gets no quote.

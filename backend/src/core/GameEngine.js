@@ -13,6 +13,7 @@ const BotPlayer = require('./BotPlayer');
 const { brainNameFor } = require('./bot-brains');
 const { deadlineFor: afkDeadlineFor, pendingHumanAction: afkPendingHumanAction } = require('./afkTurnTimer');
 const tournamentClock = require('./tournamentClock');
+const { insuranceLimits, clampToLimits } = require('./insuranceLimits');
 
 // Quick Play seat-draft directive: list brain names here to force one bot
 // from each listed brain into every Quick Play table before any random
@@ -985,26 +986,43 @@ class GameEngine {
         return this._effects([{ type: 'BROADCAST_STATE' }, { type: 'UPDATE_LOBBY' }]);
     }
     
+    // What this seat may set its ask / offer to right now: the round's range,
+    // narrowed so it never offers more points than it holds.
+    insuranceLimitsFor(playerName) {
+        return insuranceLimits({
+            multiplier: this.insurance.bidMultiplier,
+            stack: this.scores?.[playerName],
+            isBidder: playerName === this.insurance.bidderPlayerName,
+        });
+    }
+
+    // The same limits for every party to the deal, for the client's controls.
+    _insuranceLimitsForClient() {
+        if (!this.insurance?.isActive) return {};
+        const limits = {};
+        for (const name of [this.insurance.bidderPlayerName, ...Object.keys(this.insurance.defenderOffers || {})]) {
+            if (!name) continue;
+            const { min, max } = this.insuranceLimitsFor(name);
+            limits[name] = { min, max };
+        }
+        return limits;
+    }
+
     updateInsuranceSetting(userId, settingType, value) {
         const player = this.players[userId];
         const insuranceStates = ['Bid Announcement', 'Playing Phase', 'TrickCompleteLinger'];
         if (!player || player.isSpectator || !insuranceStates.includes(this.state)
             || this.drawRequest.isActive || !this.insurance.isActive || this.insurance.dealExecuted) return this._effects();
-        const multiplier = this.insurance.bidMultiplier;
         const parsedValue = parseInt(value, 10);
         if (isNaN(parsedValue)) return this._effects();
+        // Nobody may offer more points than they hold: a value inside the
+        // round's range is pulled back to every point but the seat's last
+        // (insuranceLimits.js). A value outside the range is ignored, as ever.
+        const allowed = clampToLimits(parsedValue, this.insuranceLimitsFor(player.playerName));
         if (settingType === 'bidderRequirement' && player.playerName === this.insurance.bidderPlayerName) {
-            const minReq = -120 * multiplier;
-            const maxReq = 120 * multiplier;
-            if (parsedValue >= minReq && parsedValue <= maxReq) {
-                this.insurance.bidderRequirement = parsedValue;
-            }
+            if (allowed !== null) this.insurance.bidderRequirement = allowed;
         } else if (settingType === 'defenderOffer' && this.insurance.defenderOffers.hasOwnProperty(player.playerName)) {
-            const minOffer = -60 * multiplier;
-            const maxOffer = 60 * multiplier;
-            if (parsedValue >= minOffer && parsedValue <= maxOffer) {
-                this.insurance.defenderOffers[player.playerName] = parsedValue;
-            }
+            if (allowed !== null) this.insurance.defenderOffers[player.playerName] = allowed;
         } else { return this._effects(); }
         const sumOfOffers = Object.values(this.insurance.defenderOffers || {}).reduce((sum, offer) => sum + (offer || 0), 0);
         if (this.insurance.bidderRequirement <= sumOfOffers) {
@@ -1515,7 +1533,7 @@ class GameEngine {
             // The stack size is public presentation state. Card identities are
             // still removed per viewer by gameStateSerializer.
             widowCount: Array.isArray(this.widow) ? this.widow.length : 0,
-            originalDealtWidow: this.originalDealtWidow, scores: this.scores, currentHighestBidDetails: this.currentHighestBidDetails, bidWinnerInfo: this.bidWinnerInfo, gameStarted: this.gameStarted, trumpSuit: this.trumpSuit, currentTrickCards: this.currentTrickCards, tricksPlayedCount: this.tricksPlayedCount, leadSuitCurrentTrick: this.leadSuitCurrentTrick, trumpBroken: this.trumpBroken, capturedTricks: this.capturedTricks, roundSummary: this.roundSummary, lastCompletedTrick: this.lastCompletedTrick, playersWhoPassedThisRound: this.playersWhoPassedThisRound.map(id => this.players[id]?.playerName), playerMode: this.playerMode, serverVersion: this.serverVersion, insurance: this.insurance, forfeiture: this.forfeiture, drawRequest: this.drawRequest, originalFrogBidderId: this.originalFrogBidderId, soloBidMadeAfterFrog: this.soloBidMadeAfterFrog, revealedWidowForFrog: this.revealedWidowForFrog, widowDiscardsForFrogBidder: this.widowDiscardsForFrogBidder,
+            originalDealtWidow: this.originalDealtWidow, scores: this.scores, currentHighestBidDetails: this.currentHighestBidDetails, bidWinnerInfo: this.bidWinnerInfo, gameStarted: this.gameStarted, trumpSuit: this.trumpSuit, currentTrickCards: this.currentTrickCards, tricksPlayedCount: this.tricksPlayedCount, leadSuitCurrentTrick: this.leadSuitCurrentTrick, trumpBroken: this.trumpBroken, capturedTricks: this.capturedTricks, roundSummary: this.roundSummary, lastCompletedTrick: this.lastCompletedTrick, playersWhoPassedThisRound: this.playersWhoPassedThisRound.map(id => this.players[id]?.playerName), playerMode: this.playerMode, serverVersion: this.serverVersion, insurance: { ...this.insurance, limits: this._insuranceLimitsForClient() }, forfeiture: this.forfeiture, drawRequest: this.drawRequest, originalFrogBidderId: this.originalFrogBidderId, soloBidMadeAfterFrog: this.soloBidMadeAfterFrog, revealedWidowForFrog: this.revealedWidowForFrog, widowDiscardsForFrogBidder: this.widowDiscardsForFrogBidder,
             bidderCardPoints: this.bidderCardPoints, defenderCardPoints: this.defenderCardPoints,
             playoutVote: this.playoutVote,
             drawCountdown: this.drawCountdown,

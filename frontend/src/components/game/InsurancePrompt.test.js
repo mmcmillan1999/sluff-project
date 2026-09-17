@@ -212,3 +212,60 @@ describe('InsurancePrompt for an observer', () => {
         expect(screen.queryByRole('slider')).not.toBeInTheDocument();
     });
 });
+
+// Nobody may offer more points than they hold: the server sends each seat
+// the most it can put up (every point but its last) in insuranceState.limits.
+describe('InsurancePrompt stack limits', () => {
+    const shortStacks = {
+        ...baseState,
+        // Bob holds 13 points, Alice (the bidder) 9.
+        limits: { Alice: { min: -8, max: 120 }, Bob: { min: -60, max: 12 }, Cara: { min: -60, max: 60 } },
+    };
+
+    test('a defender cannot pick, step or slide past every point but their last', async () => {
+        const user = userEvent.setup();
+        const emitEvent = vi.fn();
+        render(<InsurancePrompt show insuranceState={shortStacks} selfPlayerName="Bob" emitEvent={emitEvent} onClose={vi.fn()} />);
+
+        expect(await screen.findByText('The most you can put up is 12 — every point you hold but one.')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Set offer to 10' })).toBeEnabled();
+        expect(screen.getByRole('button', { name: 'Set offer to 20' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Set offer to 30' })).toBeDisabled();
+        // The slider keeps the round's full range so zero stays centred.
+        expect(screen.getByRole('slider')).toHaveAttribute('max', '60');
+
+        await user.click(screen.getByRole('button', { name: 'Set offer to 10' }));
+        await user.click(screen.getByRole('button', { name: 'Increase offer by 1' }));
+        await user.click(screen.getByRole('button', { name: 'Increase offer by 1' }));
+        expect(screen.getByRole('button', { name: 'Increase offer by 1' })).toBeDisabled();
+        await user.click(screen.getByRole('button', { name: 'Save Offer' }));
+        expect(emitEvent).toHaveBeenCalledWith('updateInsuranceSetting', { settingType: 'defenderOffer', value: 12 });
+    });
+
+    test('a bidder cannot pay more than they hold to escape, and may still ask for anything', async () => {
+        render(<InsurancePrompt show insuranceState={shortStacks} selfPlayerName="Alice" emitEvent={vi.fn()} onClose={vi.fn()} />);
+
+        expect(await screen.findByText('The most you can put up is 8 — every point you hold but one.')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Set ask to -20' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Set ask to -40' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Set ask to 60' })).toBeEnabled();
+    });
+
+    test('says nothing when the stack is deep, or when the server sends no limits', async () => {
+        const { rerender } = render(<InsurancePrompt show insuranceState={shortStacks} selfPlayerName="Cara" emitEvent={vi.fn()} onClose={vi.fn()} />);
+        expect(await screen.findByRole('button', { name: 'Set offer to 30' })).toBeEnabled();
+        expect(screen.queryByText(/The most you can put up/)).not.toBeInTheDocument();
+
+        rerender(<InsurancePrompt show insuranceState={baseState} selfPlayerName="Bob" emitEvent={vi.fn()} onClose={vi.fn()} />);
+        expect(screen.getByRole('button', { name: 'Set offer to 30' })).toBeEnabled();
+        expect(screen.queryByText(/The most you can put up/)).not.toBeInTheDocument();
+    });
+
+    test('a seat on its last point is told it can still ask to be paid', async () => {
+        const lastPoint = { ...baseState, limits: { Bob: { min: -60, max: 0 } } };
+        render(<InsurancePrompt show insuranceState={lastPoint} selfPlayerName="Bob" emitEvent={vi.fn()} onClose={vi.fn()} />);
+        expect(await screen.findByText('You have no points to put up — you can still ask to be paid.')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Set offer to 10' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Set offer to -10' })).toBeEnabled();
+    });
+});

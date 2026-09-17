@@ -45,6 +45,17 @@ const InsurancePrompt = ({ show, insuranceState, selfPlayerName, isSpectator, em
 
     const config = useMemo(() => {
         if (!insuranceState) return null;
+        // Nobody may offer more points than they hold: the server sends each
+        // seat the most it can put up (every point but its last) and pulls
+        // anything past it back. The slider keeps the round's full range so
+        // zero stays centred; the VALUE stops at the limit.
+        const seatLimits = insuranceState.limits?.[selfPlayerName];
+        const within = (minValue, maxValue) => ({
+            minValue,
+            maxValue,
+            minAllowed: Math.max(minValue, Number.isFinite(seatLimits?.min) ? seatLimits.min : minValue),
+            maxAllowed: Math.min(maxValue, Number.isFinite(seatLimits?.max) ? seatLimits.max : maxValue),
+        });
         // Quick picks are tuned to real outcomes, not the theoretical range
         // (the slider still covers that). From ~2,700 logged bot rounds
         // (bot_insurance_logs, Aug 2025–Jul 2026), per multiplier unit:
@@ -55,8 +66,7 @@ const InsurancePrompt = ({ show, insuranceState, selfPlayerName, isSpectator, em
             return {
                 roleLabel: 'Ask',
                 settingType: 'bidderRequirement',
-                minValue: -120 * multiplier,
-                maxValue: 120 * multiplier,
+                ...within(-120 * multiplier, 120 * multiplier),
                 quickJumpValues: [-40, -20, 0, 20, 40, 60].map(v => v * multiplier),
                 // For the bidder, higher = defenders pay you (green to the right)
                 trackGradient: 'linear-gradient(to right, #b91c1c, #52525b 50%, #15803d)',
@@ -66,14 +76,13 @@ const InsurancePrompt = ({ show, insuranceState, selfPlayerName, isSpectator, em
         return {
             roleLabel: 'Offer',
             settingType: 'defenderOffer',
-            minValue: -60 * multiplier,
-            maxValue: 60 * multiplier,
+            ...within(-60 * multiplier, 60 * multiplier),
             quickJumpValues: [-20, -10, 0, 10, 20, 30].map(v => v * multiplier),
             // For a defender, lower = the bidder pays you (green to the left)
             trackGradient: 'linear-gradient(to right, #15803d, #52525b 50%, #b91c1c)',
             untouchedValue: -60 * multiplier,
         };
-    }, [insuranceState, isBidder, multiplier]);
+    }, [insuranceState, isBidder, multiplier, selfPlayerName]);
 
     const savedValue = isBidder
         ? Number(bidderRequirement)
@@ -83,7 +92,7 @@ const InsurancePrompt = ({ show, insuranceState, selfPlayerName, isSpectator, em
     useEffect(() => {
         if (!show || !config || isInitialized) return;
         const startValue = Number.isFinite(savedValue)
-            ? Math.min(config.maxValue, Math.max(config.minValue, savedValue))
+            ? Math.min(config.maxAllowed, Math.max(config.minAllowed, savedValue))
             : 0;
         setValue(startValue);
         setIsInitialized(true);
@@ -104,8 +113,16 @@ const InsurancePrompt = ({ show, insuranceState, selfPlayerName, isSpectator, em
 
     if (!show || !config) return null;
 
-    const clampValue = (v) => Math.min(config.maxValue, Math.max(config.minValue, v));
+    const clampValue = (v) => Math.min(config.maxAllowed, Math.max(config.minAllowed, v));
     const setTo = (v) => setValue(clampValue(v));
+    // Shown only when the stack, not the round's range, is what stops you.
+    const mostYouCanPay = isBidder ? -config.minAllowed : config.maxAllowed;
+    const stackLimited = isBidder ? config.minAllowed > config.minValue : config.maxAllowed < config.maxValue;
+    const capNote = stackLimited
+        ? (mostYouCanPay > 0
+            ? `The most you can put up is ${mostYouCanPay} — every point you hold but one.`
+            : 'You have no points to put up — you can still ask to be paid.')
+        : null;
 
     const handleSubmit = () => {
         emitEvent('updateInsuranceSetting', { settingType: config.settingType, value });
@@ -212,7 +229,7 @@ const InsurancePrompt = ({ show, insuranceState, selfPlayerName, isSpectator, em
                                     type="button"
                                     className={`stepper-button ${isBidder ? 'stepper-red' : 'stepper-green'}`}
                                     onClick={() => setTo(value - multiplier)}
-                                    disabled={value <= config.minValue}
+                                    disabled={value <= config.minAllowed}
                                     aria-label={`Decrease ${config.roleLabel.toLowerCase()} by ${multiplier}`}
                                 >
                                     −
@@ -222,13 +239,14 @@ const InsurancePrompt = ({ show, insuranceState, selfPlayerName, isSpectator, em
                                     type="button"
                                     className={`stepper-button ${isBidder ? 'stepper-green' : 'stepper-red'}`}
                                     onClick={() => setTo(value + multiplier)}
-                                    disabled={value >= config.maxValue}
+                                    disabled={value >= config.maxAllowed}
                                     aria-label={`Increase ${config.roleLabel.toLowerCase()} by ${multiplier}`}
                                 >
                                     +
                                 </button>
                             </div>
                             <div className="value-description">{getValueDescription()}</div>
+                            {capNote && <div className="insurance-cap-note">{capNote}</div>}
                             <div className={`insurance-gap-preview ${previewGap <= 0 ? 'is-ready' : ''}`}>
                                 {previewGap <= 0
                                     ? 'This setting reaches the deal threshold and would lock the agreement.'
@@ -271,6 +289,7 @@ const InsurancePrompt = ({ show, insuranceState, selfPlayerName, isSpectator, em
                                     type="button"
                                     className={`quick-jump-button tone-${valueTone(quickValue)} ${value === quickValue ? 'active' : ''}`}
                                     onClick={() => setTo(quickValue)}
+                                    disabled={quickValue < config.minAllowed || quickValue > config.maxAllowed}
                                     aria-label={`Set ${config.roleLabel.toLowerCase()} to ${quickValue}`}
                                 >
                                     {signed(quickValue)}
