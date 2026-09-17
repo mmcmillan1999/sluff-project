@@ -103,6 +103,12 @@ const validators = {
     ) ? null : 'Choose three unique valid cards to discard.',
     drawVote: payload => ['wash', 'split', 'no'].includes(payload.vote) ? null : 'Invalid draw vote.',
     playoutVote: payload => ['play', 'wrap'].includes(payload.vote) ? null : 'Invalid playout vote.',
+    // The engine owns the rules (and the reason a proposal is refused is worth
+    // telling the player); this only keeps junk away from it.
+    drainProposal: (payload, { engine, player }) => (
+        Number.isFinite(Number(payload.percent)) ? engine.pointDrainProposalError(player?.userId, payload.percent) : 'Invalid point drain.'
+    ),
+    drainVote: payload => ['yes', 'no'].includes(payload.vote) ? null : 'Invalid point drain vote.',
     rematchVote: payload => ['accept', 'decline'].includes(payload.vote) ? null : 'Invalid rematch vote.',
     insurance: payload => (
         ['bidderRequirement', 'defenderOffer'].includes(payload.settingType)

@@ -1,0 +1,194 @@
+/* frontend/src/components/game/PointDrainVote.css */
+/* The point drain's dock (vote, outcome, per-round notice) and the sheet a
+   player proposes from. Same dark-and-gold as the deal-struck vote; the dock
+   sits just under the header and never reaches the hand. */
+
+.point-drain-dock {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 8.6vh);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 900; /* over the felt, under every modal */
+    width: min(92vw, 25rem);
+    box-sizing: border-box;
+    padding: 1.1vh 1.6vh 1.3vh;
+    background: rgba(28, 28, 28, 0.96);
+    border: 0.12vh solid rgba(246, 207, 116, 0.55);
+    border-radius: 1vh;
+    box-shadow: 0 0.5vh 1.6vh rgba(0, 0, 0, 0.55);
+    color: #fff;
+    text-align: center;
+    font-family: 'Merriweather', serif;
+    animation: point-drain-in 220ms ease-out;
+}
+
+@keyframes point-drain-in {
+    from { opacity: 0; transform: translate(-50%, -1vh); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .point-drain-dock { animation: none; }
+}
+
+.point-drain-dock--agreed { border-color: rgba(88, 196, 140, 0.8); }
+.point-drain-dock--declined,
+.point-drain-dock--expired { border-color: rgba(255, 255, 255, 0.28); }
+
+.point-drain-eyebrow {
+    margin: 0 0 0.4vh;
+    color: #f6cf74;
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(0.68rem, 1.3vh, 0.82rem);
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.point-drain-copy {
+    margin: 0;
+    font-size: clamp(0.78rem, 1.55vh, 0.92rem);
+    line-height: 1.45;
+    color: #e6e6e6;
+}
+
+.point-drain-copy strong { color: #fff; }
+
+.point-drain-actions {
+    display: flex;
+    gap: 1vh;
+    margin-top: 1vh;
+}
+
+.point-drain-btn {
+    flex: 1;
+    min-height: 40px;
+    padding: 0.8vh 1vh;
+    border: none;
+    border-radius: 0.6vh;
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(0.82rem, 1.7vh, 0.98rem);
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    color: #fff;
+    cursor: pointer;
+}
+
+.point-drain-btn--yes { background: #198754; }
+.point-drain-btn--no { background: #5c636a; }
+.point-drain-btn:hover { filter: brightness(1.12); }
+.point-drain-btn:focus-visible { outline: 0.25vh solid #f6cf74; outline-offset: 0.2vh; }
+
+.point-drain-dock--slim { padding: 0.8vh 1.4vh 0.9vh; }
+.point-drain-dock--slim .point-drain-waiting { margin-top: 0.2vh; }
+
+.point-drain-waiting {
+    margin: 0.7vh 0 0;
+    font-size: clamp(0.74rem, 1.45vh, 0.88rem);
+    color: #cfcfcf;
+}
+
+.point-drain-drops {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.4vh 1.6vh;
+}
+
+.point-drain-drop strong { color: #ffb4a8; }
+
+/* --- The sheet a player proposes from ---------------------------------- */
+
+.point-drain-sheet-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+}
+
+.point-drain-sheet {
+    width: min(90vw, 25rem);
+    max-height: 86vh;
+    overflow-y: auto;
+    box-sizing: border-box;
+    padding: 2.2vh 2.2vh 2vh;
+    background: #212121;
+    border: 0.12vh solid rgba(246, 207, 116, 0.5);
+    border-radius: 1vh;
+    box-shadow: 0 0.6vh 2vh rgba(0, 0, 0, 0.6);
+    color: #fff;
+    text-align: center;
+    font-family: 'Merriweather', serif;
+}
+
+.point-drain-sheet h3 {
+    margin: 0 0 0.8vh;
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(1.15rem, 2.6vh, 1.5rem);
+}
+
+.point-drain-sheet-copy {
+    margin: 0 0 1.4vh;
+    font-size: clamp(0.8rem, 1.55vh, 0.93rem);
+    line-height: 1.5;
+    color: #e2e2e2;
+}
+
+.point-drain-options {
+    display: grid;
+    gap: 0.8vh;
+    margin: 0 0 1.4vh;
+    padding: 0;
+    border: none;
+}
+
+.point-drain-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1vh;
+    min-height: 44px;
+    padding: 0.8vh 1.4vh;
+    box-sizing: border-box;
+    background: #2d2d2d;
+    border: 0.15vh solid rgba(255, 255, 255, 0.16);
+    border-radius: 0.7vh;
+    color: #fff;
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(0.95rem, 1.9vh, 1.1rem);
+    cursor: pointer;
+    text-align: left;
+}
+
+.point-drain-option[aria-checked='true'] {
+    border-color: #f6cf74;
+    background: #3a3322;
+}
+
+.point-drain-option:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.point-drain-option:focus-visible { outline: 0.25vh solid #f6cf74; outline-offset: 0.2vh; }
+
+.point-drain-option-note {
+    font-family: 'Merriweather', serif;
+    font-size: clamp(0.68rem, 1.3vh, 0.8rem);
+    color: #cfcfcf;
+    text-align: right;
+}
+
+.point-drain-option-note--recommended { color: #f6cf74; }
+
+.point-drain-sheet-actions {
+    display: flex;
+    gap: 1vh;
+}
+
+.point-drain-sheet-actions .point-drain-btn { min-height: 44px; }
+.point-drain-btn--propose { background: #0d6efd; }
+.point-drain-btn--propose:disabled { background: #44546b; cursor: not-allowed; filter: none; }

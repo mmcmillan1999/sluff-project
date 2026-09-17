@@ -40,6 +40,11 @@
 // while the account is live on another device or tab.
 // ?mode=insurance&stack=N[&role=bidder] opens the insurance prompt for a seat
 // holding N points: it can put up every point but its last, no more.
+// ?drain=vote|waiting|agreed|declined|notice|active — the voted point drain
+// ("speed up the game") over a live table: the docked vote card as a seat that
+// has yet to answer / has answered, the outcome, what a drain took as the
+// round was dealt, and a table playing under one (open the menu → the sheet).
+// ?mode=drainsheet[&active=10] is that sheet on its own.
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
@@ -57,6 +62,7 @@ import GameHeader from './components/GameHeader.js';
 import GameTableView from './components/GameTableView.js';
 import LobbyView from './components/LobbyView.js';
 import TournamentView from './components/tournament/TournamentView';
+import PointDrainSheet from './components/game/PointDrainSheet';
 import './components/ClaudeLanding.css';
 import OrientationScrim from './components/OrientationScrim.js';
 import SessionScrim from './components/SessionScrim.js';
@@ -144,6 +150,21 @@ if (insuranceMode) {
                 insuranceState={insuranceState}
                 selfPlayerName="You"
                 emitEvent={(event, payload) => console.log('[harness]', event, payload)}
+                onClose={() => console.log('[harness] close')}
+            />
+        </div>,
+    );
+}
+
+// --- The "Speed up the game" sheet: /harness.html?mode=drainsheet[&active=10] ---
+const drainSheetMode = params.get('mode') === 'drainsheet';
+if (drainSheetMode) {
+    ReactDOM.createRoot(document.getElementById('root')).render(
+        <div style={{ position: 'fixed', inset: 0, background: 'radial-gradient(ellipse at 50% 35%, #15673a 0%, #0f4d2a 55%, #0a3a1f 100%)' }}>
+            <PointDrainSheet
+                show
+                pointDrain={{ percent: Number(params.get('active')) || 0, options: [5, 7.5, 10, 15, 20], recommended: 10 }}
+                onPropose={percent => console.log('[harness] proposePointDrain', percent)}
                 onClose={() => console.log('[harness] close')}
             />
         </div>,
@@ -245,6 +266,8 @@ const tableState = {
         dealExecuted: false,
     },
     drawRequest: null,
+    pointDrain: { percent: 0, par: 120, last: null, options: [5, 7.5, 10, 15, 20], recommended: 10 },
+    drainVote: { isActive: false, initiator: null, percent: null, votes: {}, endsAt: null, resolution: null, resolvedAt: null },
     settlement: { status: 'complete' },
     roundSummary: null,
     lastCompletedTrick: null,
@@ -307,6 +330,27 @@ if (feltEvent) {
     tableState.tournament.name = feltEvent;
 }
 const playersLeft = Number(params.get('left')) || 0;
+
+// ?drain=… — the voted point drain, over whatever else the table is doing.
+const drainScene = params.get('drain');
+if (drainScene) {
+    tableState.serverTime = Date.now();
+    const openVote = (votes) => ({
+        isActive: true, initiator: 'Brandi', percent: 10, votes, endsAt: Date.now() + 27000, resolution: null, resolvedAt: null,
+    });
+    const closedVote = (resolution) => ({
+        isActive: false, initiator: 'Brandi', percent: 10, votes: {}, endsAt: null, resolution, resolvedAt: Date.now(),
+    });
+    if (drainScene === 'vote') tableState.drainVote = openVote({ You: null, Brandi: 'yes', Elena: null });
+    if (drainScene === 'waiting') tableState.drainVote = openVote({ You: 'yes', Brandi: 'yes', Elena: null });
+    if (drainScene === 'declined') tableState.drainVote = closedVote('declined');
+    if (['agreed', 'notice', 'active'].includes(drainScene)) tableState.pointDrain.percent = 10;
+    if (drainScene === 'agreed') tableState.drainVote = closedVote('agreed');
+    // 'notice' lands a moment after mount (HarnessApp), the way the next
+    // round's broadcast would: a client that reconnects mid-round is not
+    // shown an old drop again.
+}
+const drainNotice = { afterRound: 1, percent: 10, drops: { You: 14, Brandi: 9, Elena: 13 } };
 
 const promptMode = params.get('prompt');
 if (promptMode) {
@@ -448,6 +492,13 @@ const HarnessApp = () => {
     const volleyTimersRef = React.useRef([]);
     const volleyPlayCountRef = React.useRef(0);
     React.useEffect(() => () => volleyTimersRef.current.forEach(clearTimeout), []);
+    React.useEffect(() => {
+        if (drainScene !== 'notice') return undefined;
+        const timer = setTimeout(() => setLiveState(state => ({
+            ...state, pointDrain: { ...state.pointDrain, par: 108, last: drainNotice },
+        })), 400);
+        return () => clearTimeout(timer);
+    }, []);
 
     // Play the rest of the trick back on the bot cadence, linger it onto the
     // first responder's pile, then hand the lead back. Each step is a plain
@@ -743,7 +794,7 @@ if (ogMode) {
     );
 }
 
-if (!identMode && !sessionMode && !insuranceMode && !lobbyMode && !tourneyMode && !ogMode) {
+if (!identMode && !sessionMode && !insuranceMode && !drainSheetMode && !lobbyMode && !tourneyMode && !ogMode) {
 document.body.classList.add('game-active');
 
 ReactDOM.createRoot(document.getElementById('root')).render(<HarnessApp />);

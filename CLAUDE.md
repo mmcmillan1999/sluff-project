@@ -64,6 +64,31 @@ Debug overlay in game: `Shift+D`.
   (ranked by winnings = sum of prizes, never reduced) and /recent (podiums), the Tournaments panel in
   LeaderboardView, `tournaments` on the player profile, ledger category 'tournament'. Tournaments never
   touch wins/losses/washes. Spec: the tournament whiteboard artifact (see memory).
+- Voted point drain — "Speed up the game" (Sept 17 2026): a normal table can vote in what tournaments get
+  from the director. `core/pointDrain.js` is the one rule for both (`drainDrop`: the percentage, rounded UP,
+  never a LAST point; options 5 / 7.5 / 10 / 15 / 20, 10 recommended — the tournament's own Off/5/10/20 host
+  setting is unchanged). `GameEngine.proposePointDrain(userId, percent)` / `submitDrainVote(userId, 'yes'|'no')`
+  (socket events `proposePointDrain`, `submitDrainVote`; `pointDrainProposalError` is the single source of "why
+  not", used by the socket validator too): any held seat of a started non-tournament game, during play or
+  between rounds, while no draw / playout / drain vote is open; one proposal per player per round; percent 0
+  ("stop") only while a drain runs. EVERY seat that is there must say yes within 30 s — one no or silence
+  leaves things as they are; a seat whose player is disconnected is not asked (the rematch offer's rule), so a
+  table waiting on a dropped player can still speed up. **The vote never stops play**: no state change, one
+  `setTimeout` and an `endsAt` the client counts down from (not the draw vote's per-second broadcast), and
+  house seats answer yes on a human pause from `GameService._scheduleBotDrainVotes` (not the bot trigger,
+  which stands down while a bot card is pending). An agreed drain lands in `requestNextRound` — after a SCORED
+  round only, as the next one is dealt (`_applyPointDrain`; all-pass redeals cost nothing; the sitting-out
+  dealer drops too, the absorber never) — so the round summary's score ceremony stays true and the drain can
+  never end a game. `pointDrain = { percent, par, last }`: `par` is what an untouched 120 is worth now, and
+  the split draw pays the low seat against it (`scorePar` in the settlement snapshot, `gameSettlement.
+  buildDrawSettlement`) instead of a flat 120; `last` = the drops just taken, for the client's notice. Per game
+  (reset on start / rematch), carried across deploys (`gameResume` COPY_FIELDS; an open vote is not). Client:
+  `components/game/PointDrainVote.js` (a DOCKED card under the header, never a modal — full card until you
+  answer, a slim strip after, then the outcome, then each round's drops) and `PointDrainSheet.js` (game menu →
+  "Speed up the game"); preview `/harness.html?mode=3&drain=vote|waiting|agreed|declined|notice|active` and
+  `?mode=drainsheet[&active=10]`. Measured on 300 simulated games a setting: mean rounds 7.7 → 6.4 / 5.8 / 5.5 /
+  5.1 / 4.8, 90th percentile 15 → 11 / 10 / 9 / 8 / 7 — it mostly cuts the marathons. Tests:
+  `tests/pointDrain.test.js`, `PointDrainVote.test.js`.
 - Bot insurance (Aug 2026): `backend/src/core/bot-strategies/MarketInsuranceStrategy.js` prices
   asks/offers from a Monte Carlo rollout (`RolloutEstimator.js`) over public information only
   (`PublicRoundView.js` is the enforced no-cheating boundary — see `tests/marketInsurance.test.js`).

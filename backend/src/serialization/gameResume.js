@@ -58,6 +58,10 @@ const COPY_FIELDS = [
     // Tournament tables: the round's context, its all-pass count and the
     // shot clock (banks and pressure) come back with the cards.
     'tournament', 'tournamentAllPassRedeals', 'tournamentClock',
+    // A voted point drain is part of the game: a deploy must not switch it
+    // off. (An OPEN vote is not carried — it dies with its timer and the
+    // table can simply ask again.)
+    'pointDrain',
 ];
 
 /**
@@ -159,6 +163,9 @@ function restoreEngineFromResume(engine, snapshot) {
     engine.gameStartPending = false;
     engine.settlement = engine._newSettlementState();
     for (const field of COPY_FIELDS) engine[field] = snapshot[field];
+    // Snapshots from before the point drain existed carry none.
+    if (!engine.pointDrain || typeof engine.pointDrain !== 'object') engine.pointDrain = engine._newPointDrain();
+    engine.drainVote = engine._newDrainVote();
     engine.trickTurnPlayerId = snapshot.trickTurnPlayerId;
     engine.currentTrickCards = snapshot.currentTrickCards || [];
     engine.leadSuitCurrentTrick = snapshot.leadSuitCurrentTrick ?? null;

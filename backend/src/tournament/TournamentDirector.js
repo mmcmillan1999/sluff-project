@@ -22,6 +22,7 @@ const { seatRound, tableSizes } = require('./seating');
 const { rankFinishers, allocatePrizeCents } = require('./prizes');
 const { ROUND_PRESENTATION_LOCK_MS, THEMES } = require('../core/constants');
 const tournamentClock = require('../core/tournamentClock');
+const { drainDrop } = require('../core/pointDrain');
 const { pickFavorites, buildWelcomeScript, buildRoundCall, welcomeHoldFor } = require('./tournamentWelcome');
 
 const TRICKS_PER_ROUND = 11;
@@ -869,7 +870,7 @@ class TournamentDirector {
         const changes = {};
         for (const entry of this._alive(t)) {
             if (entry.stack <= 0) continue;
-            const drop = Math.min(Math.ceil(entry.stack * percent / 100), Math.max(0, entry.stack - 1));
+            const drop = drainDrop(entry.stack, percent); // one rule with the normal tables' voted drain
             // A stack already down to its last point is left alone, and the
             // board is not told of a drop that did not happen.
             if (drop <= 0) continue;

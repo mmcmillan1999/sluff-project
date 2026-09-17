@@ -22,6 +22,7 @@ export const alphaSeasonTwo = Object.freeze({
 });
 
 export const bulletinTickerItems = Object.freeze([
+    'Game running long? Any table can now vote to speed it up — game menu, Speed up the game',
     'Tournaments are here — one round a table, then the leaders share a table',
     'Chip drain between rounds keeps every tournament moving',
     'Break trump and the felt burns: the Magma effect is the new house look',
@@ -31,6 +32,21 @@ export const bulletinTickerItems = Object.freeze([
 ]);
 
 export const bulletinEntries = Object.freeze([
+    {
+        id: 'speed-up-vote',
+        dateLabel: 'September 2026',
+        status: 'New feature',
+        title: 'Vote to speed up a long game',
+        summary: 'Some games run an hour. Now any table can agree to a point drop: after every round every score '
+            + 'falls by a percentage, so the game gets to its finish sooner — the long ones most of all.',
+        highlights: [
+            'Open the game menu and choose Speed up the game. Pick 5, 7.5, 10, 15 or 20 percent a round — 10 is the one we recommend.',
+            'It is a table vote: everyone seated has thirty seconds to agree, and one No keeps the game as it is. The cards keep moving while the table decides.',
+            'An agreed drop first lands when the next round is dealt, and a note on the felt shows what each player gave up.',
+            'It never takes your last point. You only go out by losing a round.',
+            'Changed your mind? The same vote can change the rate or switch it off. It lasts for that game only.',
+        ],
+    },
     {
         id: 'tournaments',
         dateLabel: 'September 2026',

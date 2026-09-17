@@ -15,6 +15,7 @@ const suites = [
     { name: 'rematch consent', file: './rematchConsent.test.js' },
     { name: 'departed seat scores', file: './departedSeatScores.test.js' },
     { name: 'playout vote', file: './playoutVote.test.js' },
+    { name: 'voted point drain', file: './pointDrain.test.js' },
     { name: 'bot exhibition', file: './botExhibition.test.js' },
     { name: 'payouts', file: './payouts.test.js' },
     { name: 'quick play', file: './quickPlay.test.js' },

@@ -4,6 +4,8 @@ import { createPortal } from 'react-dom';
 import './GameTableView.css';
 import DrawVoteModal from './game/DrawVoteModal';
 import PlayoutVoteModal from './game/PlayoutVoteModal';
+import PointDrainVote, { formatPercent } from './game/PointDrainVote';
+import PointDrainSheet from './game/PointDrainSheet';
 import PlayerHand from './game/PlayerHand';
 import InsuranceControls from './game/InsuranceControls';
 import RoundSummaryModal from './game/RoundSummaryModal';
@@ -127,6 +129,7 @@ const GameTableView = ({ ringCardHold = false, user, playerId, currentTableState
     const [showIosPwaPrompt, setShowIosPwaPrompt] = useState(false);
     const [showDrawVoteModal, setShowDrawVoteModal] = useState(false);
     const [showPlayoutVoteModal, setShowPlayoutVoteModal] = useState(false);
+    const [showPointDrainSheet, setShowPointDrainSheet] = useState(false);
     const [chatOpen, setChatOpen] = useState(false);
     const [unreadChat, setUnreadChat] = useState(0);
     const [touchStartX, setTouchStartX] = useState(null);
@@ -224,6 +227,16 @@ const GameTableView = ({ ringCardHold = false, user, playerId, currentTableState
         && gameState === 'Playing Phase'
         && !currentTableState?.drawRequest?.isActive;
     const canForfeit = activeSeatIsHeld && gameState !== 'Draw Resolving';
+    // The voted point drain ("speed up the game"): any held seat of a normal
+    // game may ask, between rounds too, while no other vote is open. The
+    // server has the last word (one proposal a round) and says why if not.
+    const activePointDrain = Number(currentTableState?.pointDrain?.percent) || 0;
+    const canProposePointDrain = activeSeatIsHeld
+        && !currentTableState?.tournament
+        && !['Draw Resolving', 'DrawDeclined'].includes(gameState)
+        && !currentTableState?.drainVote?.isActive
+        && !currentTableState?.drawRequest?.isActive
+        && !currentTableState?.playoutVote?.isActive;
     const dealLocalPlayerName = isObserverMode
         ? currentTableState?.players?.[observedPlayerId]?.playerName
         : (!isSpectator ? selfPlayerName : null);
@@ -1463,9 +1476,17 @@ const GameTableView = ({ ringCardHold = false, user, playerId, currentTableState
                             </p>
                         )}
                     </div>
-                    {(canRequestDraw || canForfeit) && (
+                    {(canRequestDraw || canForfeit || canProposePointDrain) && (
                         <div className="game-menu-section game-menu-game-actions">
                             <p className="game-menu-section-title">Game Actions</p>
+                            {canProposePointDrain && (
+                                <button
+                                    onClick={() => { setShowPointDrainSheet(true); setShowGameMenu(false); }}
+                                    className="game-menu-button primary"
+                                >
+                                    {activePointDrain > 0 ? `Change the speed-up (${formatPercent(activePointDrain)})` : 'Speed up the game'}
+                                </button>
+                            )}
                             {canRequestDraw && (
                                 <button
                                     onClick={() => { emitEvent("requestDraw"); setShowGameMenu(false); }}
@@ -1662,6 +1683,23 @@ const GameTableView = ({ ringCardHold = false, user, playerId, currentTableState
                 currentTableState={currentTableState}
                 selfPlayerName={selfPlayerName}
                 onVote={(vote) => emitEvent("submitPlayoutVote", { vote })}
+            />
+
+            {/* Docked, never modal: the game plays on under this vote. It
+                steps aside for the votes that DO stop the table. */}
+            {!showDrawVoteModal && !showPlayoutVoteModal && !showPointDrainSheet && (
+                <PointDrainVote
+                    currentTableState={currentTableState}
+                    selfPlayerName={selfPlayerName}
+                    isSpectator={Boolean(isSpectator)}
+                    onVote={(vote) => emitEvent("submitDrainVote", { vote })}
+                />
+            )}
+            <PointDrainSheet
+                show={showPointDrainSheet && canProposePointDrain}
+                pointDrain={currentTableState?.pointDrain}
+                onClose={() => setShowPointDrainSheet(false)}
+                onPropose={(percent) => { emitEvent("proposePointDrain", { percent }); setShowPointDrainSheet(false); }}
             />
 
             <IosPwaPrompt show={showIosPwaPrompt} onClose={() => setShowIosPwaPrompt(false)} />

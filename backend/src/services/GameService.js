@@ -1300,6 +1300,40 @@ const { botPlayDelay, isDeliberateBot } = require('../core/botPacing');
             await this._performAction(tableId, (engine) => engine.submitPlayoutVote(userId, vote));
         }
 
+        // The point drain vote (core/pointDrain.js). Play does not stop for it,
+        // so the house seats answer from here rather than from the bot trigger,
+        // which stands down while a bot's card is pending.
+        async proposePointDrain(tableId, userId, percent) {
+            await this._performAction(tableId, (engine) => engine.proposePointDrain(userId, percent));
+            this._scheduleBotDrainVotes(tableId);
+        }
+
+        async submitDrainVote(tableId, userId, vote) {
+            await this._performAction(tableId, (engine) => engine.submitDrainVote(userId, vote));
+        }
+
+        // Like the play-it-out vote, the house never blocks a faster game: each
+        // open house seat says yes after a pause a person would take, one after
+        // another. Tied to THIS vote, so a later proposal is not answered by a
+        // timer left over from an earlier one.
+        _scheduleBotDrainVotes(tableId) {
+            const engine = this.getEngineById(tableId);
+            const vote = engine?.drainVote;
+            if (!vote?.isActive) return;
+            const speed = fastSpeed(engine);
+            let delay = 1800 + Math.floor(Math.random() * 1400);
+            for (const botId of Object.keys(engine.bots || {})) {
+                const bot = engine.bots[botId];
+                if (vote.votes[bot.playerName] !== null) continue;
+                setTimeout(async () => {
+                    const current = this.getEngineById(tableId);
+                    if (!current || current.drainVote !== vote || !vote.isActive || vote.votes[bot.playerName] !== null) return;
+                    await this.submitDrainVote(tableId, bot.userId, 'yes');
+                }, speed > 1 ? Math.max(50, Math.round(delay / speed)) : delay);
+                delay += 1100 + Math.floor(Math.random() * 1200);
+            }
+        }
+
         async requestDraw(tableId, userId) {
             await this._performAction(tableId, (engine) => {
                 const result = engine.requestDraw(userId);

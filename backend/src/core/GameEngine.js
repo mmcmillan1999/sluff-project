@@ -14,6 +14,7 @@ const { brainNameFor } = require('./bot-brains');
 const { deadlineFor: afkDeadlineFor, pendingHumanAction: afkPendingHumanAction } = require('./afkTurnTimer');
 const tournamentClock = require('./tournamentClock');
 const { insuranceLimits, clampToLimits } = require('./insuranceLimits');
+const pointDrain = require('./pointDrain');
 
 // Quick Play seat-draft directive: list brain names here to force one bot
 // from each listed brain into every Quick Play table before any random
@@ -84,6 +85,9 @@ class GameEngine {
         this.fastPlayDivisor = 1;
         this.learnerUserIds = [];
         this.internalTimers = {};
+        // The table's voted point drain (core/pointDrain.js): per game.
+        this.pointDrain = this._newPointDrain();
+        this.drainVote = this._newDrainVote();
         this.bots = {};
         // Production supplies persistent bot principals so bot seats participate
         // in the same funded ledger and statistics as human seats. Keeping the
@@ -282,6 +286,9 @@ class GameEngine {
             theme: this.theme,
             players,
             scores: { ...this.scores },
+            // What an untouched score is worth now: 120 until a point drain
+            // is voted in. The split draw measures the low score against it.
+            scorePar: this.pointDrain?.par || pointDrain.STARTING_SCORE,
             seatingOrderIds: [...this.playerOrder.allIds],
             ...extra,
         });
@@ -762,6 +769,7 @@ class GameEngine {
                 // Per-game recap: one compact public entry per settled round
                 // (see scoringHandler). Shown at the podium.
                 this.roundHistory = [];
+                this._resetPointDrain();
                 startRoster.forEach(({ userId, playerName }) => {
                     if (this.scores[playerName] === undefined) this.scores[playerName] = 120;
                     const livePlayer = this.players[userId];
@@ -891,6 +899,9 @@ class GameEngine {
         if (this.state === "Awaiting Next Round Trigger"
             && requestingUserId === this.roundSummary?.dealerOfRoundId
             && this.isRoundPresentationAdvanceReady()) {
+            // Only after a SCORED round: an all-pass redeal goes through
+            // _advanceRound too and costs nobody anything.
+            this._applyPointDrain();
             this._advanceRound();
         }
         return this._effects([{ type: 'BROADCAST_STATE' }]);
@@ -938,6 +949,7 @@ class GameEngine {
         this.gameId = null;
         this.playerMode = null;
         this.roundHistory = [];
+        this._resetPointDrain();
         // A fallback bot belongs only to the completed/failed match that
         // authorized it. It never carries into a rematch decision.
         if (this.tableType === 'quickplay' && this.qpFallbackBot) {
@@ -1139,6 +1151,144 @@ class GameEngine {
             this.roundSummary.insuranceWrap = { reason };
         }
         return effects;
+    }
+
+    // --- The point drain vote (core/pointDrain.js) -----------------------
+
+    _newPointDrain() {
+        // par = what a score nobody has won or lost a point from is worth now.
+        return { percent: 0, par: pointDrain.STARTING_SCORE, last: null };
+    }
+
+    _newDrainVote() {
+        return { isActive: false, initiator: null, percent: null, votes: {}, endsAt: null, resolution: null, resolvedAt: null, proposedInRound: {} };
+    }
+
+    _resetPointDrain() {
+        this._clearDrainVoteTimer();
+        this.pointDrain = this._newPointDrain();
+        this.drainVote = this._newDrainVote();
+    }
+
+    _clearDrainVoteTimer() {
+        if (this.internalTimers.drainVoteTimer) {
+            clearTimeout(this.internalTimers.drainVoteTimer);
+            delete this.internalTimers.drainVoteTimer;
+        }
+    }
+
+    _closeDrainVote(resolution) {
+        this._clearDrainVoteTimer();
+        if (!this.drainVote?.isActive) return;
+        this.drainVote.isActive = false;
+        this.drainVote.resolution = resolution;
+        this.drainVote.resolvedAt = Date.now();
+    }
+
+    // Who proposed when is the server's business (the one-a-round limit).
+    _drainVoteForClient() {
+        const { proposedInRound, ...vote } = this.drainVote || this._newDrainVote();
+        return vote;
+    }
+
+    // May this seat put a drain to the table right now, and if not, why not.
+    // percent 0 = "turn it off", only on offer while one is running.
+    pointDrainProposalError(userId, percent) {
+        const player = this.players[userId];
+        const rate = Number(percent);
+        if (this.tournament) return 'A tournament sets its own chip drain.';
+        if (!this.gameStarted || ['Game Over', 'DrawComplete', 'Draw Resolving', 'DrawDeclined'].includes(this.state)) return 'There is no game to speed up.';
+        if (!player || player.isSpectator) return 'Only seated players can propose that.';
+        if (this.drainVote.isActive || this.drawRequest.isActive || this.playoutVote?.isActive) return 'Another vote is open.';
+        if (!(pointDrain.isDrainOption(rate) || (rate === 0 && this.pointDrain.percent > 0))) return 'That is not one of the choices.';
+        if (rate === this.pointDrain.percent) return 'That is already how the table is playing.';
+        if (this.drainVote.proposedInRound[player.playerName] === this.roundHistory.length) return 'One proposal a round. Try again next round.';
+        return null;
+    }
+
+    proposePointDrain(userId, percent) {
+        if (this.pointDrainProposalError(userId, percent)) return this._effects();
+        const player = this.players[userId];
+        const rate = Number(percent);
+        const votes = {};
+        for (const id of this.playerOrder.allIds) {
+            const seat = this.players[id];
+            // Every seat that is THERE must agree. A seat whose player has
+            // dropped cannot answer, and a table waiting on them is exactly
+            // the table that wants a faster game (the rematch offer's rule).
+            if (!seat || seat.isSpectator || seat.disconnected) continue;
+            votes[seat.playerName] = seat.playerName === player.playerName ? 'yes' : null;
+        }
+        this.drainVote = {
+            ...this._newDrainVote(),
+            isActive: true,
+            initiator: player.playerName,
+            percent: rate,
+            votes,
+            endsAt: Date.now() + pointDrain.VOTE_SECONDS * 1000,
+            proposedInRound: { ...this.drainVote.proposedInRound, [player.playerName]: this.roundHistory.length },
+        };
+        console.log(`[${this.tableId}] ${player.playerName} proposed a ${rate}% point drain.`);
+        // Nobody else is there to ask: the proposer's yes is every yes.
+        if (this._agreeDrainIfUnanimous()) return this._effects([{ type: 'BROADCAST_STATE' }]);
+        // Play goes on under an open vote, so this is one timeout, not the
+        // draw vote's once-a-second interval: clients count down to endsAt.
+        this._clearDrainVoteTimer();
+        this.internalTimers.drainVoteTimer = setTimeout(() => {
+            delete this.internalTimers.drainVoteTimer;
+            if (!this.drainVote.isActive) return;
+            console.log(`[${this.tableId}] Point drain vote ran out of time.`);
+            this._closeDrainVote('expired');
+            this.emitLobbyUpdateCallback([{ type: 'BROADCAST_STATE' }]);
+        }, pointDrain.VOTE_SECONDS * 1000);
+        return this._effects([{ type: 'BROADCAST_STATE' }]);
+    }
+
+    submitDrainVote(userId, vote) {
+        const player = this.players[userId];
+        if (!player || !this.drainVote.isActive || !['yes', 'no'].includes(vote)
+            || this.drainVote.votes[player.playerName] !== null) {
+            return this._effects();
+        }
+        this.drainVote.votes[player.playerName] = vote;
+        if (vote === 'no') {
+            console.log(`[${this.tableId}] Point drain declined by ${player.playerName}.`);
+            this._closeDrainVote('declined');
+        } else {
+            this._agreeDrainIfUnanimous();
+        }
+        return this._effects([{ type: 'BROADCAST_STATE' }]);
+    }
+
+    _agreeDrainIfUnanimous() {
+        if (!this.drainVote.isActive || !Object.values(this.drainVote.votes).every(v => v === 'yes')) return false;
+        this.pointDrain.percent = this.drainVote.percent;
+        console.log(`[${this.tableId}] Point drain agreed: ${this.drainVote.percent}% after every round.`);
+        this._closeDrainVote('agreed');
+        return true;
+    }
+
+    // Between rounds, as the next one is dealt: every seat's score drops by
+    // the agreed percentage (the sitting-out dealer of a four-player table
+    // included, the absorber never). It cannot end a game — the game-over
+    // check ran at scoring, and a drain never takes a last point.
+    _applyPointDrain() {
+        const percent = Number(this.pointDrain?.percent) || 0;
+        if (this.tournament || !(percent > 0)) {
+            if (this.pointDrain) this.pointDrain.last = null;
+            return;
+        }
+        const drops = {};
+        for (const id of this.playerOrder.allIds) {
+            const name = this.players[id]?.playerName;
+            if (!name || this.scores[name] === undefined) continue;
+            const drop = pointDrain.drainDrop(this.scores[name], percent);
+            if (drop <= 0) continue;
+            this.scores[name] -= drop;
+            drops[name] = drop;
+        }
+        this.pointDrain.par -= pointDrain.drainDrop(this.pointDrain.par, percent);
+        this.pointDrain.last = { afterRound: this.roundHistory.length, percent, drops };
     }
 
     requestDraw(userId) {
@@ -1397,6 +1547,7 @@ class GameEngine {
         this.drawRequest.isActive = false;
         this._clearPlayoutTimer();
         if (this.playoutVote) this.playoutVote.isActive = false;
+        this._closeDrainVote('cancelled');
         this.state = "Game Over";
         this.beginSettlement('forfeit');
         this.roundSummary = {
@@ -1536,6 +1687,8 @@ class GameEngine {
             originalDealtWidow: this.originalDealtWidow, scores: this.scores, currentHighestBidDetails: this.currentHighestBidDetails, bidWinnerInfo: this.bidWinnerInfo, gameStarted: this.gameStarted, trumpSuit: this.trumpSuit, currentTrickCards: this.currentTrickCards, tricksPlayedCount: this.tricksPlayedCount, leadSuitCurrentTrick: this.leadSuitCurrentTrick, trumpBroken: this.trumpBroken, capturedTricks: this.capturedTricks, roundSummary: this.roundSummary, lastCompletedTrick: this.lastCompletedTrick, playersWhoPassedThisRound: this.playersWhoPassedThisRound.map(id => this.players[id]?.playerName), playerMode: this.playerMode, serverVersion: this.serverVersion, insurance: { ...this.insurance, limits: this._insuranceLimitsForClient() }, forfeiture: this.forfeiture, drawRequest: this.drawRequest, originalFrogBidderId: this.originalFrogBidderId, soloBidMadeAfterFrog: this.soloBidMadeAfterFrog, revealedWidowForFrog: this.revealedWidowForFrog, widowDiscardsForFrogBidder: this.widowDiscardsForFrogBidder,
             bidderCardPoints: this.bidderCardPoints, defenderCardPoints: this.defenderCardPoints,
             playoutVote: this.playoutVote,
+            pointDrain: { ...this.pointDrain, options: pointDrain.DRAIN_OPTIONS, recommended: pointDrain.RECOMMENDED_DRAIN },
+            drainVote: this._drainVoteForClient(),
             drawCountdown: this.drawCountdown,
             rematchOffer: this.rematchOffer,
             settlement: this.settlement,

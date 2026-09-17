@@ -366,9 +366,13 @@ function buildDrawSettlement(table, requestedOutcome) {
         const splitters = ascending.slice(1).sort((left, right) => (
             right.score - left.score || compareIdentity(left, right)
         ));
+        // Against par, not a flat 120: under a voted point drain every score
+        // shrinks between rounds, and the low seat must not be paid as if it
+        // had LOST those points (table.scorePar; 120 when no drain ran).
+        const par = Number(table.scorePar) > 0 ? Number(table.scorePar) : 120;
         const lowestRecovery = Math.min(
             buyInCents,
-            Math.max(0, Math.round(buyInCents * Math.max(0, lowest.score) / 120)),
+            Math.max(0, Math.round(buyInCents * Math.max(0, lowest.score) / par)),
         );
         payoutCents.set(lowest.userId, lowestRecovery);
         const bonus = allocateWeightedCents(
