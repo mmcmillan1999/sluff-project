@@ -60,20 +60,20 @@ const quantilesOf = (samples) => {
 
 // ---------------------------------------------------------------- record
 
-// The estimate each seat would price from, under both world samplers: the
-// market's (what production uses today) and the calibrated one the raven 1.x
-// brains sample with.
+// The estimate each seat would price from:
+//   q   the Aug 2026 estimator, as the market rule prices from it
+//   qn  the informed rule's estimator (Sept 17 2026): hidden hands dealt
+//       without the void-order bias, the last tricks solved instead of played
+// (Recordings made before that day carry `qc` instead of `qn`: the raven 1.x
+// calibrated sampler, which made Frog worse for this estimator and was dropped.)
 function estimatesFor(engine, names, seed) {
     const out = {};
     for (const name of names) {
         const view = buildPublicView(engine, name);
         if (!view) continue;
         const market = estimateBidderPoints(view, { rollouts: ROLLOUTS, seed });
-        const calibrated = estimateBidderPoints(
-            { ...view, frogBuryModel: 'calibrated', keyCardModel: 'calibrated' },
-            { rollouts: ROLLOUTS, seed },
-        );
-        out[name] = { q: quantilesOf(market.samples), qc: quantilesOf(calibrated.samples) };
+        const informed = estimateBidderPoints({ ...view, ...pricing.INFORMED_VIEW }, { rollouts: ROLLOUTS, seed, ...pricing.INFORMED_ESTIMATE });
+        out[name] = { q: quantilesOf(market.samples), qn: quantilesOf(informed.samples) };
     }
     return out;
 }
@@ -101,12 +101,11 @@ function recordRound(seatNames, index, seedBase) {
         if (state === 'Playing Phase') {
             const tricks = engine.tricksPlayedCount || 0;
             const inTrick = engine.currentTrickCards.length;
-            // Every card through trick 8, then the start of each later trick.
-            if (tricks < pricing.NO_QUOTE_AFTER_TRICK || inTrick === 0) {
-                // Seeded, so the harness's sampling never touches the deal stream.
-                const est = estimatesFor(engine, seatNames, (seedBase * 7919 + index * 131 + points.length) >>> 0);
-                points.push({ t: tricks, c: tricks * 3 + inTrick, est });
-            }
+            // Every card of the round: the informed rule quotes to the last one.
+            // Seeded, so the harness's sampling never touches the deal stream.
+            // bp / dp = card points each side has banked, which everyone can see.
+            const est = estimatesFor(engine, seatNames, (seedBase * 7919 + index * 131 + points.length) >>> 0);
+            points.push({ t: tricks, c: tricks * 3 + inTrick, bp: engine.bidderCardPoints || 0, dp: engine.defenderCardPoints || 0, est });
             const id = engine.trickTurnPlayerId;
             engine.playCard(id, engine.bots[id].playCard());
             continue;
@@ -167,6 +166,9 @@ const mean = (values) => values.reduce((s, v) => s + v, 0) / values.length;
 // at a decision point, or null for "nothing agreeable posted".
 //   persists: the Aug 2026 strategy stops re-quoting after trick 8 and LEAVES
 //   its last quote on the table through tricks 9-11.
+const TABLES = {};
+const tableFor = (file) => (file ? (TABLES[file] = TABLES[file] || JSON.parse(fs.readFileSync(file, 'utf8'))) : undefined);
+
 function rulesFrom(spec) {
     const rules = [
         {
@@ -189,15 +191,21 @@ function rulesFrom(spec) {
             name: params.name,
             sampler: params.sampler || 'q',
             persists: false,
-            quote: ({ samples, m, isBidder, t, limits, bid }) => {
+            quote: ({ samples, m, isBidder, t, limits, bid, bounds }) => {
                 if (t >= (params.lastTrick ?? pricing.NO_QUOTE_AFTER_TRICK)) return null;
+                // correctionTable: a table measured by hand (JSON file) to try
+                // before it replaces the built-in one.
                 const correction = params.corrected
-                    ? pricing.estimatorCorrection({ isBidder, bidType: bid, tricksPlayed: t })
+                    ? pricing.estimatorCorrection({ isBidder, bidType: bid, tricksPlayed: t, table: tableFor(params.correctionTable) })
                     : null;
                 const priced = pricing.informedQuote({
                     samples, m, isBidder, limits, correction,
                     ...params.pricing,
-                    lossBudget: (params.budgetPerM || 0) * m,
+                    bounds: params.bounded ? bounds : null,
+                    // budgetLatePerM: the budget at the last trick, reached in a
+                    // straight line from budgetPerM at the deal.
+                    lossBudget: ((params.budgetPerM || 0) + ((params.budgetLatePerM ?? params.budgetPerM ?? 0) - (params.budgetPerM || 0)) * Math.min(1, t / 10)) * m,
+                    entice: (params.enticePerM || 0) * m,
                     safety: ((isBidder ? params.bidderSafetyPerM ?? 2 * (params.safetyPerM || 0) : params.safetyPerM) || 0) * m,
                 });
                 return priced.agreeable ? priced.quote : null;
@@ -223,13 +231,15 @@ function playAdversary(round, human, rule, { knows, threshold }) {
             const limits = insuranceLimits({ multiplier: m, stack, isBidder });
             const samples = point.est[bot]?.[rule.sampler || 'q'];
             if (!samples) continue;
-            const quoted = rule.quote({ samples, m, isBidder, t: point.t, limits, bid: round.bid });
+            // What both sides have banked in plain sight bounds the result.
+            const bounds = point.bp === undefined ? null : { lo: point.bp, hi: 120 - point.dp };
+            const quoted = rule.quote({ samples, m, isBidder, t: point.t, limits, bid: round.bid, bounds });
             if (quoted !== undefined) standing[bot] = quoted;
         }
         // What the adversary expects from the cards: their own public
         // estimate, pulled toward the truth by what they know — and everyone
         // knows more as the round runs out.
-        const publicMean = mean(point.est[human].q);
+        const publicMean = mean(point.est[human].qn || point.est[human].q);
         const w = knows + (1 - knows) * (point.c / 33);
         const believedSurplus = w * pts + (1 - w) * publicMean - 60;
 
@@ -281,7 +291,7 @@ function analyze() {
 
     // How good is the estimate the bots price from? Bias and spread at the
     // first card of the round, from a DEFENDER's seat.
-    for (const sampler of ['q', 'qc']) {
+    for (const sampler of ['q', 'qn']) {
         const byBid = {};
         for (const round of rounds) {
             const first = round.points[0];
@@ -292,7 +302,7 @@ function analyze() {
             const row = byBid[round.bid] = byBid[round.bid] || { n: 0, err: 0, z2: 0 };
             row.n += 1; row.err += mu - round.pts; row.z2 += ((round.pts - mu) / Math.max(1, sd)) ** 2;
         }
-        console.log(`  estimator (${sampler === 'q' ? 'market sampler' : 'calibrated sampler'}) at the first card, defender's seat: ${Object.entries(byBid).map(([bid, r]) => `${bid} bias ${(r.err / r.n).toFixed(1)} pts, truth-spread/claimed-spread ${Math.sqrt(r.z2 / r.n).toFixed(2)}`).join(' · ')}`);
+        console.log(`  estimator (${sampler === 'q' ? 'Aug 2026' : 'informed'}) at the first card, defender's seat: ${Object.entries(byBid).map(([bid, r]) => `${bid} bias ${(r.err / r.n).toFixed(1)} pts, truth-spread/claimed-spread ${Math.sqrt(r.z2 / r.n).toFixed(2)}`).join(' · ')}`);
     }
 
     for (const knows of adversaries) {
@@ -317,17 +327,24 @@ function analyze() {
     }
 }
 
+// The live rule and what each piece of it is worth. Rule fields:
+//   sampler        which recorded estimate to price from ('qn' = the informed estimator)
+//   corrected      apply the measured estimator correction (correctionTable: a JSON file to try instead)
+//   bounded        hold estimate and quote inside what the banked points allow
+//   lastTrick      stop quoting from this trick (11 = never)
+//   budgetPerM     expected loss allowed per card state (budgetLatePerM: ramp to this by the last trick)
+//   enticePerM     points the other side must gain before they say yes
+//   safetyPerM / bidderSafetyPerM   a flat margin; pricing.safetyPerSd = one sized to the spread
+const LIVE_RULE = { sampler: 'qn', corrected: true, bounded: true, lastTrick: 11, budgetPerM: 0.25, enticePerM: 2, pricing: { informed: 1, minEdge: 1, safetyPerSd: 0.7 } };
 const DEFAULT_RULES = [
-    { name: 'informed 100%, raw estimate', pricing: { informed: 1, minEdge: 1 } },
-    { name: 'informed 100% + measured correction', corrected: true, pricing: { informed: 1, minEdge: 1 } },
-    { name: 'informed 75% + measured correction', corrected: true, pricing: { informed: 0.75, minEdge: 1 } },
-    { name: 'informed 50% + measured correction', corrected: true, pricing: { informed: 0.5, minEdge: 1 } },
-    { name: 'informed 100% + correction, min edge 3', corrected: true, pricing: { informed: 1, minEdge: 3 } },
-    { name: 'informed 100% + correction, quotes to trick 10', corrected: true, lastTrick: 10, pricing: { informed: 1, minEdge: 1 } },
-    // Always a price on the table: budgetPerM = expected loss allowed per card
-    // state, safetyPerM / bidderSafetyPerM = points the price is backed off.
-    { name: 'always quotes, no margin', corrected: true, lastTrick: 10, budgetPerM: 0.25, pricing: { informed: 1, minEdge: 1 } },
-    { name: 'always quotes, margin 12 (live)', corrected: true, lastTrick: 10, budgetPerM: 0.25, safetyPerM: 12, bidderSafetyPerM: 24, pricing: { informed: 1, minEdge: 1 } },
+    { ...LIVE_RULE, name: 'informed, to the last card (live)' },
+    { ...LIVE_RULE, name: '  ...nothing to tempt them (entice 0)', enticePerM: 0 },
+    { ...LIVE_RULE, name: '  ...tempting harder (entice 3)', enticePerM: 3 },
+    { ...LIVE_RULE, name: '  ...half the margin (0.35 sd)', pricing: { ...LIVE_RULE.pricing, safetyPerSd: 0.35 } },
+    { ...LIVE_RULE, name: '  ...four times the budget', budgetPerM: 1 },
+    { ...LIVE_RULE, name: '  ...withdrawn at trick 10', lastTrick: 10 },
+    { ...LIVE_RULE, name: '  ...quotes only what it wants', budgetPerM: 0, enticePerM: 0 },
+    { ...LIVE_RULE, name: '  ...raw estimate, no correction', corrected: false },
 ];
 
 if (require.main === module) {

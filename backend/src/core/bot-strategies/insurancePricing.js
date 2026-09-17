@@ -40,6 +40,14 @@
 // `informed` (0..1) is how much the counterparty is assumed to know beyond
 // the bot's own estimate: 1 = they know how the round ends. Quotes are whole
 // points; nothing here rounds to five.
+//
+// A rule that only ever posts what it wants is right and silent, and a silent
+// table is no fun, so the live strategy also gives it a loss budget, a margin
+// sized to what is still unknown, the bounds the banked points set, and the
+// enticement the other side needs (all documented on informedQuote): a price
+// is always up, stingy at the deal when a bot has only the statistics of its
+// hand, homing in on the fair number as the cards fall, exact once the hand is
+// decided, and never withdrawn.
 
 'use strict';
 
@@ -53,6 +61,15 @@ const bidderCardValue = (surplus, m) => (surplus > 0 ? 2 : 3) * surplus * m;
 const defenderCardValue = (surplus, m) => -surplus * m;
 
 const NO_QUOTE_AFTER_TRICK = 8;
+
+// The estimate the informed rule prices from (RolloutEstimator options; the
+// live strategy and the harness recorder both read them here). Hidden hands
+// are dealt without the void-order bias, and the last three tricks are solved
+// rather than played out, so what is left late in a round is the honest
+// uncertainty — where the unseen cards are — and a decided hand prices as
+// decided. The market rule and the raven brains keep the estimator as it was.
+const INFORMED_VIEW = { unbiasedDeal: true };
+const INFORMED_ESTIMATE = { exactTricks: 3 };
 
 function stats(values) {
     const n = values.length;
@@ -81,42 +98,48 @@ function marketQuote({ samples, m, isBidder, tricksPlayed, limits, lambda = 0.12
 // The quote is only as honest as the sample it is priced from, and the
 // sample comes from a rollout that plays every seat with one simple policy.
 // Against 4,500 recorded rounds of real brains (scripts/simulate-insurance.js
-// record; counting / flytrap / sphinx / raven-1.2 tables, Sept 2026):
+// record; counting / flytrap / sphinx / raven-1.2 tables), every card state of
+// every round, with the INFORMED_VIEW / INFORMED_ESTIMATE estimator above:
 //
 //   BIAS — from a DEFENDER's seat it underrates the bidder for most of the
-//   round: Frog -4.5, Solo -6.5, Heart Solo -10 to -12 points, fading to
-//   -0.4 / -2.0 / -3.8 from trick 8. From the BIDDER's own seat it is close
-//   (-1.0 / 0 / -2.5). A defender who thinks the bidder is weaker than they
-//   are lets a failing bidder out cheap; a bidder who thinks they are failing
-//   harder than they are overpays to escape.
+//   round: Frog 3-4 points, Solo 6-7, Heart Solo 9-10, fading to nothing by
+//   the last trick. From the BIDDER's own seat it is within a point or two.
+//   A defender who thinks the bidder is weaker than they are lets a failing
+//   bidder out cheap; a bidder who thinks they are failing harder than they
+//   are overpays to escape.
 //
-//   OVERCONFIDENCE — it starts honest and then claims far more certainty than
-//   it has. By tricks 4-7 the truth lands 5-9 points further from the
-//   estimate than its own spread allows, worst from the bidder's seat, where
-//   the bot knows its hand, the rollouts barely vary, and it believes it knows
-//   the result to within two points. That missing spread is error in the
-//   rollout MODEL, which no amount of resampling shows, so it is added back
-//   here as independent noise.
+//   OVERCONFIDENCE — it starts honest and then claims more certainty than it
+//   has: mid-round the truth lands 4-9 points further from the estimate than
+//   its own spread allows (worst for a Frog defender, who is guessing the
+//   bidder's discards to the end). That missing spread is error in the rollout
+//   MODEL, which no amount of resampling shows, so it is added back here as
+//   independent noise. It was far worse before the hidden hands were dealt
+//   without the void-order bias: a Solo bidder at trick 8 claimed 5.4 points
+//   of spread against a real error of 8.1; now 6.5 against 7.0.
 //
-// [trick bucket 0-1, 2-3, 4-5, 6-7, 8+]
-const BUCKET_OF_TRICK = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 4, 4];
+// [tricks played 0-1, 2-3, 4-5, 6-7, 8, 9, 10] — a table with fewer columns
+// (the first measurement had 8+ as one) reads its last column for the rest.
+const BUCKET_OF_TRICK = [0, 0, 1, 1, 2, 2, 3, 3, 4, 5, 6, 6];
 const ESTIMATOR_CORRECTION = {
     defender: {
-        Frog: { shift: [4.5, 3.7, 4.7, 2.7, 0.4], extraSd: [0, 7.5, 9.1, 8.7, 5.5] },
-        Solo: { shift: [6.5, 6.0, 8.0, 6.3, 2.0], extraSd: [0, 0, 0, 2.4, 2.2] },
-        'Heart Solo': { shift: [10.1, 11.4, 12.0, 8.4, 3.8], extraSd: [0, 0, 0, 0, 0] },
+        Frog: { shift: [3.3, 4.0, 4.1, 2.2, 1.3, 0.2, -0.7], extraSd: [0, 7.2, 9.0, 8.0, 6.5, 5.2, 3.1] },
+        Solo: { shift: [6.0, 6.5, 7.0, 4.3, 2.6, 1.2, 0], extraSd: [0, 0, 0, 2.7, 2.2, 0, 0.2] },
+        'Heart Solo': { shift: [8.9, 10.2, 9.5, 6.3, 3.3, 2.6, 0.9], extraSd: [0, 0, 0, 2.0, 1.7, 0, 0] },
     },
     bidder: {
-        Frog: { shift: [1.0, 1.0, 1.0, 0.3, 0], extraSd: [1.7, 4.9, 6.0, 5.0, 2.0] },
-        Solo: { shift: [0.1, 0, 0.3, 0, 0], extraSd: [0, 4.3, 5.9, 6.2, 4.7] },
-        'Heart Solo': { shift: [2.7, 2.5, 2.0, 0.3, 0], extraSd: [0, 4.0, 8.6, 8.7, 6.1] },
+        Frog: { shift: [0.6, 0.6, 0.4, 0, 0.4, 0.1, 0], extraSd: [1.1, 5.0, 5.3, 3.9, 2.9, 1.5, 0] },
+        Solo: { shift: [0, 0.2, 0.4, -0.4, -0.3, -0.3, -0.3], extraSd: [2.5, 4.6, 4.6, 3.7, 2.6, 1.5, 0.6] },
+        'Heart Solo': { shift: [1.5, 2.3, 1.8, 0.5, -0.3, -0.4, -0.3], extraSd: [0, 5.7, 6.5, 5.0, 4.6, 2.1, 0] },
     },
 };
 
-function estimatorCorrection({ isBidder, bidType, tricksPlayed }) {
-    const row = ESTIMATOR_CORRECTION[isBidder ? 'bidder' : 'defender'][bidType];
+// `table`: another table of the same shape (the harness tries a freshly
+// measured one before it replaces the one above).
+function estimatorCorrection({ isBidder, bidType, tricksPlayed, table = ESTIMATOR_CORRECTION }) {
+    const row = table[isBidder ? 'bidder' : 'defender']?.[bidType];
     if (!row) return { shift: 0, extraSd: 0 };
-    const bucket = BUCKET_OF_TRICK[clamp(Math.floor(tricksPlayed) || 0, 0, 11)];
+    const trick = clamp(Math.floor(tricksPlayed) || 0, 0, 11);
+    const bucket = Math.min(BUCKET_OF_TRICK[trick], row.shift.length - 1);
     return { shift: row.shift[bucket], extraSd: row.extraSd[bucket] };
 }
 
@@ -141,16 +164,27 @@ function normalQuantile(p) {
 // uncertainty that is really there: the claimed spread and the model error
 // are independent, so their variances add. A sample with no spread of its own
 // (a bidder late in the round) becomes a bell of the model error alone.
-function adjustSamples(samples, { shift = 0, extraSd = 0 } = {}) {
-    if (shift === 0 && extraSd === 0) return samples;
+//
+// `bounds` { lo, hi } is what everyone at the table can see: the bidder
+// already has `lo` points banked and the defenders hold all but `hi` of the
+// rest, so no correction may imagine a result outside that. It is what makes
+// the estimate close on the truth as the round runs out — three cards left
+// with the defenders on 50 and the bidder cannot finish past 70, whatever the
+// model error says.
+function adjustSamples(samples, { shift = 0, extraSd = 0 } = {}, bounds = null) {
+    const lo = bounds ? bounds.lo : 0;
+    const hi = bounds ? bounds.hi : 120;
+    if (shift === 0 && extraSd === 0) {
+        return bounds && samples.some(pts => pts < lo || pts > hi) ? samples.map(pts => clamp(pts, lo, hi)) : samples;
+    }
     const { mean, sd } = stats(samples);
     const target = Math.sqrt(sd * sd + extraSd * extraSd);
     const n = samples.length;
     if (sd < 1e-6) {
-        return samples.map((_, k) => clamp(mean + shift + target * normalQuantile((k + 0.5) / n), 0, 120));
+        return samples.map((_, k) => clamp(mean + shift + target * normalQuantile((k + 0.5) / n), lo, hi));
     }
     const scale = target / sd;
-    return samples.map(pts => clamp(mean + shift + (pts - mean) * scale, 0, 120));
+    return samples.map(pts => clamp(mean + shift + (pts - mean) * scale, lo, hi));
 }
 
 /**
@@ -173,13 +207,28 @@ function adjustSamples(samples, { shift = 0, extraSd = 0 } = {}) {
  *               offers less, a bidder asks more), never past a quote the bot
  *               wants. The budget is per card state and the sample is a few
  *               dozen rollouts; without this a standing price still bleeds.
+ *   safetyPerSd the same margin, sized to what is still unknown: this many
+ *               times the spread of the (corrected) estimate, per share. Wide
+ *               at the deal, when all a bot has is the statistics of its hand;
+ *               a point or two by the last tricks; nothing once the hand is
+ *               decided. This is what lets the price home in on fair value
+ *               instead of being withdrawn (Matt, Sept 17 2026).
+ *   entice      points the other side must GAIN over playing the cards before
+ *               they say yes. A bidder going down 10 pays 30 on the cards —
+ *               ten to each defender and ten to the absorber. Asking -20 leaves
+ *               the defenders nothing to say yes for; -26 saves the bidder 4
+ *               and hands each defender 3 more than the cards would: a deal all
+ *               three want. 0 = they take any deal that is not worse.
+ *   bounds      { lo, hi } the final bidder points still possible given the
+ *               points both sides have banked in plain sight
  *   correction  { shift, extraSd } from estimatorCorrection(), or none
  */
 function informedQuote({
     samples, m, isBidder, limits,
-    informed = 1, minEdge = 1, lossBudget = 0, safety = 0, correction = null,
+    informed = 1, minEdge = 1, lossBudget = 0, safety = 0, safetyPerSd = 0, entice = 0,
+    bounds = null, correction = null,
 }) {
-    const pts = correction ? adjustSamples(samples, correction) : samples;
+    const pts = correction || bounds ? adjustSamples(samples, correction || {}, bounds) : samples;
     const surplus = pts.map(p => p - 60);
     const meanSurplus = surplus.reduce((s, v) => s + v, 0) / surplus.length;
     // What the counterparty believes in each future: the truth, blended with
@@ -196,13 +245,13 @@ function informedQuote({
             if (isBidder) {
                 // My ask A. Each defender will offer at most what the cards
                 // would cost them, so together they meet A only if A <= 2 x
-                // (their believed card loss).
-                if (quote > 2 * believed[k] * m) continue;
+                // (their believed card loss), less what it takes to tempt them.
+                if (quote > 2 * believed[k] * m - entice) continue;
                 total += quote - bidderCardValue(surplus[k], m);
             } else {
                 // My offer o, my partner assumed to match it: the bidder is
                 // offered 2o and takes it only if that beats the cards.
-                if (2 * quote < bidderCardValue(believed[k], m)) continue;
+                if (2 * quote < bidderCardValue(believed[k], m) + entice) continue;
                 total += surplus[k] * m - quote; // (-o) - (-S x m)
             }
         }
@@ -228,16 +277,28 @@ function informedQuote({
         // someone to pick the one moment it is wrong. Never past the quote the
         // bot actually wants — being stingier than that only loses good deals.
         const generous = limits.min + index;
-        let quote = isBidder ? generous + safety : generous - safety;
+        // A bidder's ask covers two shares, so its margin is two shares wide.
+        const margin = safety + safetyPerSd * stats(surplus).sd * m * (isBidder ? 2 : 1);
+        let quote = isBidder ? generous + margin : generous - margin;
         if (best.agreeable) quote = isBidder ? Math.min(quote, best.quote) : Math.max(quote, best.quote);
+        // Never a price the cards can no longer justify: a bidder cannot ask
+        // for more than the most the round can still pay them, and a defender
+        // need not offer less than it would pay if the bidder won nothing more.
+        if (bounds) {
+            quote = isBidder
+                ? Math.min(quote, bidderCardValue(bounds.hi - 60, m))
+                : Math.max(quote, (bounds.lo - 60) * m);
+        }
         quote = Math.round(clamp(quote, limits.min, limits.max));
-        return { quote, edge: edges[quote - limits.min], agreeable: quote !== noDeal };
+        return { quote, edge: edges[quote - limits.min], agreeable: quote !== noDeal, margin };
     }
     return best;
 }
 
 module.exports = {
     NO_QUOTE_AFTER_TRICK,
+    INFORMED_VIEW,
+    INFORMED_ESTIMATE,
     bidderCardValue,
     defenderCardValue,
     marketQuote,

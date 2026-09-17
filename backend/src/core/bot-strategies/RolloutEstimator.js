@@ -184,7 +184,19 @@ function placeKeyCards(view, pool, zones, rng) {
 // retries. Voids come from actual play, so a satisfying assignment always
 // exists in reality; retries only paper over unlucky greedy orders. As a
 // last resort the voids are relaxed rather than failing the estimate.
-function dealHands(pool, zones, rng, maxAttempts = 30) {
+//
+// `reshuffle` (view.unbiasedDeal, Sept 2026 — on for the insurance market's
+// informed rule, off everywhere else until the raven brains are re-measured
+// with it): an unweighted zone takes the FRONT of what is left, and what is
+// left after an earlier zone is "the cards that zone could have held, then the
+// cards its voids refused". So the second seat was dealt the first seat's
+// leftovers and almost never a card in a suit the first seat is void in —
+// which is exactly where those cards are — and they fell through to the widow.
+// Found on the last trick: a bidder holding the 9 of trump, one opponent void
+// in it, "knew" in 160 worlds of 160 that the other did not hold the jack. It
+// did. Reshuffling what is left before every zone deals each seat from all of
+// it.
+function dealHands(pool, zones, rng, maxAttempts = 30, { reshuffle = false } = {}) {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
         const remaining = shuffleInPlace([...pool], rng);
         const result = {};
@@ -192,6 +204,7 @@ function dealHands(pool, zones, rng, maxAttempts = 30) {
         const order = [...zones].sort((a, b) => (b.voids?.size || 0) - (a.voids?.size || 0));
         let failed = false;
         for (const zone of order) {
+            if (reshuffle && zone !== order[0]) shuffleInPlace(remaining, rng);
             const allowed = [];
             const rejected = [];
             for (const card of remaining) {
@@ -295,7 +308,7 @@ function sampleWorld(view, rng) {
             ...partners
                 .map(name => ({ name, size: handSize(name) - partnerKeyed.length, voids: view.voids[name], weight: withFloors(view, name, null) })),
         ];
-        const { assigned } = dealHands(rest, zones, rng);
+        const { assigned } = dealHands(rest, zones, rng, 30, { reshuffle: view.unbiasedDeal === true });
         hands[view.bidderName] = [...bidderHand, ...assigned[view.bidderName]];
         partners.forEach(name => { hands[name] = [...partnerKeyed, ...assigned[name]]; });
         frogDiscards = discards;
@@ -324,7 +337,7 @@ function sampleWorld(view, rng) {
             // Condition the bidder's unseen cards on the announced bid.
             weight: withFloors(view, name, !view.botIsBidder && name === view.bidderName ? bidWeightFn(view) : null),
         }));
-        const { assigned, leftover } = dealHands(pool, zones, rng);
+        const { assigned, leftover } = dealHands(pool, zones, rng, 30, { reshuffle: view.unbiasedDeal === true });
         others.forEach(name => { hands[name] = [...(keyedHands[name] || []), ...assigned[name]]; });
         // Solo / Heart Solo: the three leftovers are the face-down widow.
         // Frog with the bot as bidder: nothing is left over.
@@ -454,23 +467,73 @@ function playOut(view, world, rng) {
     return sim.bidderPts;
 }
 
+// --- Exact endgame -------------------------------------------------------
+//
+// The playout policy above is a fair guess at eleven tricks of play and a poor
+// one at the last few, where real players — and anyone pricing insurance off
+// them — can simply work the hand out. With `exactTricks` set, a world with
+// that many tricks or fewer left is SOLVED instead of played: the raven
+// brain's alpha-beta solver (bot-brains/ravenSearch.js), every seat playing
+// its best card with the hands of that world face up. The uncertainty that is
+// left is then the honest one — which sampled world is the real one — and a
+// position that is already decided (a bidder holding every boss) prices as
+// decided. (ravenBrain.js builds the same state for its own search.)
+const search = require('../bot-brains/ravenSearch');
+
+const handMasks = (cards) => {
+    const masks = [0, 0, 0, 0];
+    for (const card of cards) {
+        const idx = search.cardIdx(card);
+        masks[(idx / 9) | 0] |= 1 << (idx % 9);
+    }
+    return masks;
+};
+
+function solveWorld(view, world, maxNodes) {
+    const seats = view.activeNames;
+    if (seats.length !== 3) return null;
+    const widowPts = calculateCardPoints(world.widow || []);
+    const st = search.makeState({
+        hands: seats.map(name => handMasks(world.hands[name])),
+        trump: search.SUIT_IDX[view.trumpSuit],
+        broken: view.trumpBroken,
+        bidder: seats.indexOf(view.bidderName),
+        leader: seats.indexOf(view.trickLeaderName),
+        plays: view.partialTrick.map((play) => {
+            const idx = search.cardIdx(play.card);
+            return { p: seats.indexOf(play.playerName), s: (idx / 9) | 0, r: idx % 9 };
+        }),
+        tricksLeft: search.TRICKS_PER_ROUND - view.tricksPlayed,
+        bidderPts: view.bidderCardPoints,
+        bonus: view.bidType === 'Frog' ? calculateCardPoints(world.frogDiscards || []) : (view.bidType === 'Solo' ? widowPts : 0),
+        lastTrickBonus: view.bidType === 'Heart Solo' ? widowPts : 0,
+    });
+    const future = search.solveExact(st, maxNodes, new Map());
+    return future === null ? null : st.bidderPts + future + st.bonus;
+}
+
 // --- Public API --------------------------------------------------------
 
 /**
  * Estimate the distribution of the bidder's final card points.
- * @returns {{ samples: number[], mean: number, sd: number }}
+ *   exactTricks  solve (not play out) a world with this many tricks or fewer
+ *                left; 0 = always play out, the behaviour everything but the
+ *                insurance market's informed rule relies on.
+ * @returns {{ samples: number[], mean: number, sd: number, exact: boolean }}
  */
-function estimateBidderPoints(view, { rollouts = 160, seed = null } = {}) {
+function estimateBidderPoints(view, { rollouts = 160, seed = null, exactTricks = 0, maxNodes = 40000 } = {}) {
     const rng = makeRng(seed === null ? Math.floor(Math.random() * 0xFFFFFFFF) : seed);
     const samples = [];
+    const exact = exactTricks > 0 && (search.TRICKS_PER_ROUND - view.tricksPlayed) <= exactTricks;
     for (let i = 0; i < rollouts; i++) {
         const world = sampleWorld(view, rng);
-        samples.push(playOut(view, world, rng));
+        const solved = exact ? solveWorld(view, world, maxNodes) : null;
+        samples.push(solved === null ? playOut(view, world, rng) : solved);
     }
     const mean = samples.reduce((s, v) => s + v, 0) / samples.length;
     const variance = samples.reduce((s, v) => s + (v - mean) * (v - mean), 0)
         / Math.max(1, samples.length - 1);
-    return { samples, mean, sd: Math.sqrt(variance) };
+    return { samples, mean, sd: Math.sqrt(variance), exact };
 }
 
 module.exports = { estimateBidderPoints, sampleWorld, makeRng, keyCardCells };

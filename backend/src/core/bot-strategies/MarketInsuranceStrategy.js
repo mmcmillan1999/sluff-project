@@ -35,7 +35,8 @@
 const { buildPublicView } = require('./PublicRoundView');
 const { estimateBidderPoints } = require('./RolloutEstimator');
 const { insuranceLimits } = require('../insuranceLimits');
-const { informedQuote, estimatorCorrection } = require('./insurancePricing');
+const { informedQuote, estimatorCorrection, INFORMED_VIEW, INFORMED_ESTIMATE } = require('./insurancePricing');
+const gameLogic = require('../logic');
 
 // Which rule prices a quote. 'informed' (Sept 2026) assumes the other side
 // only accepts what is good for them; 'market' is the Aug 2026 certainty-
@@ -44,37 +45,51 @@ const DEFAULT_PRICING = process.env.INSURANCE_PRICING === 'market' ? 'market' : 
 // Chosen on the exploitability harness (scripts/simulate-insurance.js). Tried
 // beside it: assuming a less informed counterparty (75%, 50% — fewer, fatter
 // deals; about the same total), a minimum edge of 3 (too few deals to matter),
-// stopping at trick 8 (+4 instead of +14), and the raw estimate without the
-// measured correction (-3 to -8: still bleeding from the bidder's seat).
+// and the raw estimate without the measured correction (still bleeding from
+// the bidder's seat).
 const INFORMED_COUNTERPARTY = 1;        // assume they know how the round ends
 const INFORMED_MIN_EDGE = 1;            // expected points a quote must earn to be a deal the bot wants
-const INFORMED_LAST_QUOTE_TRICK = 10;   // from here the quote comes down
-// ALWAYS A PRICE ON THE TABLE (Sept 17 2026, the same day). The first live
-// game under the rule above: Matt bid a Heart Solo he was making, asked 120,
-// and both bot defenders sat at the default for seven tricks — "bots not
-// playing insurance at all". Correct, and no fun: nobody can sell a winner to
-// someone who knows it is a winner, so the bots said nothing. Now a bot always
-// shows the friendliest price it can afford (informedQuote's lossBudget), held
-// back by a safety margin, per 1x. The harness set the margin. Bots' points per
-// 100 rounds against the adversary, on 3,300 rounds no setting was tuned on
-// (adversary knowing 25% / 50% / all of the result):
-//     quotes only what it wants      +12 / +12 / +15   a quote up 10% of the time
-//     always quotes, margin 12        +6 /  +2 / +14   92-100%   <- live
-//     always quotes, margin 10        +2 /  -2 / +14
-//     always quotes, margin  6       -14 / -23 /  -4
-//     always quotes, no margin       -92 / -101 / -60
-//     the Aug market rule           -595 / -645 / -539
-// A standing price is there through thirty-odd card states for someone to
-// pick the one where it is wrong, so friendliness is paid for in points: 12 a
-// share is the friendliest margin that stays in front. The price is stingy
-// early (a bidder who goes on to make it sees the two offers ~105 per 1x under
-// what the cards pay) and closes on fair value as the round resolves (~60 by
-// tricks 8-9); a human who takes it is paying for certainty. The bidder's
-// margin is two shares' worth; 30 and 40 measured the same to the point.
+// A PRICE ON THE TABLE, TO THE LAST CARD (Sept 17 2026, the same day, in two
+// steps). The first live game under the rule above: Matt bid a Heart Solo he
+// was making, asked 120, and both bot defenders sat at the default for seven
+// tricks — "bots not playing insurance at all". Correct, and no fun: nobody
+// can sell a winner to someone who knows it is a winner, so the bots said
+// nothing. Step one kept a stingy price up behind a flat 12-point margin and
+// still took it down at trick 10. Matt again: "I don't want them to withdraw
+// their bid. They should just keep a small margin... Closer to the end of the
+// round it should dial in closer and closer." So now:
+//   - the bot always shows the friendliest price it can afford (lossBudget: a
+//     quarter point per 1x of expected loss per card state, against someone
+//     who KNOWS the result);
+//   - the margin behind it is sized to what is still unknown — 0.7 of the
+//     estimate's spread per share: a dozen points at the deal, when all a bot
+//     has is the statistics of its hand; a point or two by the last tricks;
+//     nothing once the hand is decided. It never quotes past what the banked
+//     points allow, and it quotes to the last card;
+//   - it assumes the other side needs a reason to say yes (entice: 2 points
+//     per 1x), so the deals that are good for everyone — a bidder going down
+//     10 pays 30 on the cards, 26 in a deal, and each defender gets 13 instead
+//     of 10 — are offered at a price people take.
+// Bots' points per 100 rounds against the harness adversary (knowing 25% / 50%
+// / all of the result at the first card) on 3,300 rounds nothing was tuned on,
+// and how often that adversary found a deal worth taking:
+//                                       strikes at +3        strikes at +1
+//     this rule                       +18 /  +9 / +16  44%   +31 / +26 / +45  57%
+//     ...entice 1                     +77 / +68 / +77  21%  +126 /+119 /+133  29%
+//     ...entice 3                     -99 /-105 / -93  55%   -78 / -82 / -62  59%
+//     flat margin 12, down at trick 10 +29 / +25 / +38   6%   +46 / +41 / +56   7%
+//     the Aug market rule            -533 /-601 /-510  54%  -460 /-532 /-434  57%
+// As many deals as the rule humans were farming, and the bots a little ahead
+// instead of 500 behind. Pricing to the end is worth more than it costs: the
+// last tricks are where a failing bidder settles, and where a stale or absent
+// quote gave that away. A budget that GROWS late (0.25 -> 1.5) was tried and
+// bleeds 180-300: late is exactly when the other side knows the most.
 // INSURANCE_ALWAYS_QUOTE=false goes back to quoting only what the bot wants.
 const INFORMED_LOSS_BUDGET_PER_M = 0.25;
-const INFORMED_SAFETY_PER_M = { defender: 12, bidder: 24 };
-const INFORMED_MIN_MOVE_PER_M = 3;      // smaller re-prices are not worth a state emit
+const INFORMED_SAFETY_PER_SD = 0.7;
+const INFORMED_ENTICE_PER_M = 2;
+const INFORMED_MIN_MOVE_PER_M = 3;      // smaller re-prices are not worth a state emit...
+const INFORMED_MIN_MOVE_SHARE = 0.25;   // ...unless the margin itself is small: a quarter of it, never under a point
 const DEFAULT_ALWAYS_QUOTE = process.env.INSURANCE_ALWAYS_QUOTE !== 'false';
 
 const NO_QUOTE_AFTER_TRICK = 8;   // parity with the legacy strategy
@@ -263,10 +278,14 @@ class MarketInsuranceStrategy {
     //     it still shows a price, a stingy one (see INFORMED_LOSS_BUDGET_PER_M)
     //     — only when even that is off the scale does it sit at the round's
     //     unagreeable default like a player who has not touched insurance;
-    //   - it quotes whole points, and re-quotes through trick 10;
-    //   - when it stops, it takes its quote DOWN. The old rule stopped
-    //     updating after trick 8 and left its last quote standing for the
-    //     three tricks in which everyone learns how the round ends.
+    //   - it quotes whole points, re-priced on every card to the LAST one. The
+    //     old rule stopped updating after trick 8 and left a stale quote
+    //     standing for the three tricks in which everyone learns how the round
+    //     ends; this one keeps pricing, and its margin shrinks with what is
+    //     still unknown, so it homes in on the fair number instead;
+    //   - it never quotes past what the banked points allow: with the
+    //     defenders on 50, a Frog bidder cannot ask for more than the 20 a
+    //     70-50 finish would pay.
     _informedMove(engine, bot) {
         const insurance = engine.insurance;
         const view = buildPublicView(engine, bot.playerName);
@@ -278,9 +297,19 @@ class MarketInsuranceStrategy {
         const limits = insuranceLimits({ multiplier: m, stack: view.scores[view.botName], isBidder });
         const unagreeable = isBidder ? limits.max : limits.min;
         const key = `informed|${this._stateKey(engine, bot.playerName)}`;
-        const { value: quote } = this._cachedPrice(key, () => {
-            if (view.tricksPlayed >= INFORMED_LAST_QUOTE_TRICK) return { value: unagreeable };
-            const { samples } = estimateBidderPoints(view, { rollouts: this.rollouts, seed: seedFrom(key) });
+        const { value: quote, margin } = this._cachedPrice(key, () => {
+            const { samples } = estimateBidderPoints(
+                { ...view, ...INFORMED_VIEW },
+                { rollouts: this.rollouts, seed: seedFrom(key), ...INFORMED_ESTIMATE },
+            );
+            // What the table can see bounds the result: the bidder keeps what
+            // is banked (a Frog bidder knows its own discards too) and cannot
+            // touch what the defenders have taken.
+            const ownDiscards = isBidder ? (view.frog?.myDiscards || []) : [];
+            const bounds = {
+                lo: (view.bidderCardPoints || 0) + gameLogic.calculateCardPoints(ownDiscards),
+                hi: 120 - (view.defenderCardPoints || 0),
+            };
             // Personality is a little more or less appetite for a deal.
             const appetite = this._personality(bot.playerName).marginScale;
             const priced = informedQuote({
@@ -288,22 +317,27 @@ class MarketInsuranceStrategy {
                 m,
                 isBidder,
                 limits,
+                bounds,
                 informed: INFORMED_COUNTERPARTY,
                 minEdge: INFORMED_MIN_EDGE * appetite,
+                entice: INFORMED_ENTICE_PER_M * m,
                 lossBudget: this.alwaysQuote ? INFORMED_LOSS_BUDGET_PER_M * m : 0,
-                safety: (isBidder ? INFORMED_SAFETY_PER_M.bidder : INFORMED_SAFETY_PER_M.defender) * m * appetite,
+                safetyPerSd: INFORMED_SAFETY_PER_SD * appetite,
                 correction: estimatorCorrection({ isBidder, bidType: view.bidType, tricksPlayed: view.tricksPlayed }),
             });
-            return { value: priced.quote };
+            return { value: priced.quote, margin: priced.margin || 0 };
         });
 
         const current = isBidder ? insurance.bidderRequirement : insurance.defenderOffers[bot.playerName];
         if (quote === current) return null;
         // A standing price re-priced on every card would twitch a point or two
-        // each time (and emit state and write an analytics row for it). Small
-        // moves wait; taking the quote down, or putting one up, never does.
+        // each time (and emit state and write an analytics row for it). Moves
+        // small beside the margin wait — so early on it takes a few points to
+        // move a quote and at the end a single point does; putting a quote up
+        // or taking one down never waits.
         const withdrawing = quote === unagreeable || current === unagreeable;
-        if (!withdrawing && Math.abs(quote - current) < INFORMED_MIN_MOVE_PER_M * m) return null;
+        const worthMoving = Math.max(1, Math.min(INFORMED_MIN_MOVE_PER_M * m, Math.round(margin * INFORMED_MIN_MOVE_SHARE)));
+        if (!withdrawing && Math.abs(quote - current) < worthMoving) return null;
         return { settingType: isBidder ? 'bidderRequirement' : 'defenderOffer', value: quote };
     }
 }

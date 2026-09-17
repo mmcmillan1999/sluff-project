@@ -75,23 +75,42 @@ Debug overlay in game: `Shift+D`.
   cards cost 35×m; a bot bidder sold a winner for 20 where cards paid 35). `informedQuote` posts the quote that
   earns the most GIVEN that the other side only accepts what is good for them — so a winning bot bidder does
   not sell, a failing bidder must pay the defenders their card value plus a slice of the absorber's share.
-  **Always a price on the table (same day):** the first live game under that rule had Matt making a Heart Solo
-  while both bot defenders sat at the default for seven tricks ("bots not playing insurance at all") — right,
-  and no fun. With nothing it wants a bot now still shows the friendliest price it can afford
-  (`informedQuote`'s `lossBudget`, 0.25×m of expected loss per card state against someone who knows the
-  result) backed off by a `safety` margin (12×m a defender, 24×m the bidder's ask); only a price off the scale
-  leaves it at the default. Stingy early, closing on fair value as the round resolves — a human who takes it
-  pays for certainty. The margin is measured, not guessed: a standing price is up through ~33 card states for
-  someone to pick the one where it is wrong (unseen rounds, bots per 100 rounds vs the 25% adversary: quote
-  only what it wants +12, margin 12 +6, margin 10 +2, margin 6 −14, none −92, Aug rule −595). Re-prices under
-  3×m are not sent. `INSURANCE_ALWAYS_QUOTE=false` = quote only what it wants. It prices from an estimate corrected by a
-  measured table (`ESTIMATOR_CORRECTION`: a defender's view underrates the bidder by 4–12 pts; both seats are
-  5–9 pts overconfident mid-round). Whole points, no steps of five; quotes through trick 10 and then comes
-  DOWN (the old rule left its last quote standing for tricks 9–11). `GameService` re-quotes during
+  **A price on the table, to the last card (same day, two steps):** the first live game under that rule had
+  Matt making a Heart Solo while both bot defenders sat at the default for seven tricks ("bots not playing
+  insurance at all") — right, and no fun. Then Matt on the first fix: "I don't want them to withdraw their bid…
+  they should just keep a small margin… closer to the end it should dial in closer and closer… okay if they
+  leak some points." So a bot now (1) always shows the friendliest price it can afford (`lossBudget` 0.25×m of
+  expected loss per card state against someone who KNOWS the result); (2) backs it off by a margin sized to
+  what is still unknown (`safetyPerSd` 0.7 × the estimate's spread per share: ~12 at the deal, a point or two
+  by the last tricks, zero on a decided hand — a midnight-special Frog with 35 banked against it asks exactly
+  50); (3) never quotes past what the banked points allow (`bounds`: defenders on 50 → a Frog bidder cannot
+  ask more than 20); (4) assumes the other side needs a reason to say yes (`entice` 2×m — the bidder going
+  down 10 offers −26, not −20, so all three gain); (5) quotes to the LAST card, re-priced on every card (moves
+  under a quarter of the margin, max 3×m, are not sent). Only a price off the scale sits at the default — and a
+  defender at −60×m is usually demanding the cap, not silent. Unseen 3,300 rounds, bots per 100 rounds vs the
+  harness adversary (25%/50%/oracle; striking at +3): this rule +18/+9/+16 with a deal struck in 44% of rounds
+  (57% vs an eager +1 adversary, bots +31/+26/+45); entice 1 +77 (21%); entice 3 −99 (55%); the first fix (flat
+  margin 12, down at trick 10) +29 (6%); Aug rule −533 (54%). Tried and dropped: a budget that grows late
+  (−180 to −300: late is when the other side knows most). Table feel: a bidder who makes it sees the two
+  offers ~110 per 1x under the card value at the deal, 66 by tricks 6–7, 40 by 8–9, 9 on the last trick; a bot
+  bidder asks its fair value from trick 8. `INSURANCE_ALWAYS_QUOTE=false` = quote only what it wants.
+  **The estimate it prices from** (`insurancePricing.INFORMED_VIEW` / `INFORMED_ESTIMATE`, informed rule only):
+  `unbiasedDeal` + `exactTricks: 3`. `RolloutEstimator.dealHands` had a void-order bias — an unweighted seat
+  takes the FRONT of what is left, which after an earlier seat is "cards that seat could hold, then cards its
+  voids refused", so the second seat almost never got a card in a suit the first is void in (exactly where
+  those cards are) and they fell to the widow; a bidder on the last trick "knew" in 160 worlds of 160 the jack
+  of trump was not out. `view.unbiasedDeal` reshuffles before every zone. **It is OFF for the raven brains and
+  the market rule** — raven samples with the same function, so turning it on there is a card-play change that
+  needs the paired defence/offence harness first (open follow-up; likely a real gain). The last three tricks
+  are solved per world with `ravenSearch.solveExact` instead of played out. Correction table
+  (`ESTIMATOR_CORRECTION`, re-measured on every card state of 4,500 rounds, columns 0-1/2-3/4-5/6-7/8/9/10):
+  a defender's view underrates the bidder by 3–10 pts early, fading to 0; mid-round both seats are 4–9 pts
+  overconfident. Whole points, no steps of five. `GameService` re-quotes during
   `TrickCompleteLinger` too and lands any move that TIGHTENS a quote at once (only loosening waits out the
   human-like pause). All 20 bots share this logic — brains differ in card play only. Harness:
-  `scripts/simulate-insurance.js record|analyze` (an adversary who strikes whenever a deal suits them): old rule
-  ≈ −550 pts/100 rounds, new ≈ +14 in sample, +12–15 on 3,300 unseen rounds. Rollback:
+  `scripts/simulate-insurance.js record|analyze [--threshold=N] [--rules=file]` (an adversary who strikes
+  whenever a deal suits them; records every card state with `q` = Aug estimator, `qn` = informed estimator,
+  `bp`/`dp` = banked points; default rules = the live rule and its ablations). Rollback:
   `INSURANCE_PRICING=market`. Wrapped-early rounds are never logged to `round_results`, so every logged deal is
   one a human voted to play out.
   **Nobody may offer more insurance points than they hold (Sept 17 2026):** the most a seat can put up is

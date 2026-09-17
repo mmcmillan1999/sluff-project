@@ -159,11 +159,16 @@ async function runInsurancePricingTests() {
     //    underrates the bidder) and widened mid-round; a bidder's is widened.
     {
         const early = pricing.estimatorCorrection({ isBidder: false, bidType: 'Heart Solo', tricksPlayed: 0 });
-        assert.deepEqual(early, { shift: 10.1, extraSd: 0 });
+        assert.deepEqual(early, { shift: 8.9, extraSd: 0 });
         const mid = pricing.estimatorCorrection({ isBidder: true, bidType: 'Solo', tricksPlayed: 6 });
-        assert.deepEqual(mid, { shift: 0, extraSd: 6.2 });
+        assert.deepEqual(mid, { shift: -0.4, extraSd: 3.7 });
         assert.deepEqual(pricing.estimatorCorrection({ isBidder: false, bidType: 'Nonsense', tricksPlayed: 3 }), { shift: 0, extraSd: 0 });
-        assert.deepEqual(pricing.estimatorCorrection({ isBidder: false, bidType: 'Frog', tricksPlayed: 99 }), { shift: 0.4, extraSd: 5.5 });
+        // The last tricks each have their own column: the error shrinks fast there.
+        const late = [8, 9, 10, 99].map(tricksPlayed => pricing.estimatorCorrection({ isBidder: false, bidType: 'Frog', tricksPlayed }).extraSd);
+        assert.deepEqual(late, [6.5, 5.2, 3.1, 3.1]);
+        // A table measured with fewer columns reads its last one for the rest.
+        const five = { defender: { Frog: { shift: [1, 2, 3, 4, 5], extraSd: [0, 0, 0, 0, 9] } }, bidder: {} };
+        assert.deepEqual(pricing.estimatorCorrection({ isBidder: false, bidType: 'Frog', tricksPlayed: 10, table: five }), { shift: 5, extraSd: 9 });
 
         const samples = bell(60, 3);
         const widened = pricing.stats(pricing.adjustSamples(samples, { shift: 5, extraSd: 4 }));
@@ -173,6 +178,9 @@ async function runInsurancePricingTests() {
         const certain = pricing.stats(pricing.adjustSamples(new Array(161).fill(72), { shift: 0, extraSd: 6 }));
         assert.ok(Math.abs(certain.mean - 72) < 0.2 && Math.abs(certain.sd - 6) < 0.4, `a spike becomes a bell of the model error (${certain.sd})`);
         assert.equal(pricing.adjustSamples(samples, { shift: 0, extraSd: 0 }), samples, 'no correction, no copy');
+        // No correction may imagine a result the banked points rule out.
+        const bounded = pricing.adjustSamples(bell(66, 3), { shift: 5, extraSd: 6 }, { lo: 58, hi: 70 });
+        assert.ok(Math.min(...bounded) >= 58 && Math.max(...bounded) <= 70, 'held inside what is still possible');
         assert.ok(Math.abs(pricing.normalQuantile(0.975) - 1.96) < 0.001);
         pass('The estimator correction shifts a defender’s view of the bidder and restores the spread the rollouts hide.');
     }
@@ -200,32 +208,90 @@ async function runInsurancePricingTests() {
         // A defender being crushed does not pay to cap it...
         const asDefender = trapPrivateInfo(mockEngine({ hands: { ...hands } }), 'DefA');
         assert.equal(strategy.calculateInsuranceMove(asDefender, { playerName: 'DefA' }), null);
-        // ...and one facing a bidder with nothing demands to be paid, in whole points.
-        const weakBidder = { Bidder: junkHand, DefA: monsterHand, DefB: rest.slice(0, 11) };
+        // ...and one facing a bidder who is coming up short demands to be paid, in
+        // whole points. (Against a bidder with NOTHING the demand is the cap,
+        // which is also where an untouched offer sits.)
+        const shortHand = ['KS', 'QS', '9S', '8S', '6S', 'KH', '7H', 'QC', '8C', 'JD', '7D'];
+        const solidHand = ['AS', '10S', 'AH', 'KC', '9C', '10D', '9D', '8H', '9H', '6C', '7C'];
+        const others = deck.filter(card => !shortHand.includes(card) && !solidHand.includes(card));
+        const weakBidder = { Bidder: shortHand, DefA: solidHand, DefB: others.slice(0, 11) };
         const demand = strategy.calculateInsuranceMove(trapPrivateInfo(mockEngine({ hands: { ...weakBidder } }), 'DefA'), { playerName: 'DefA' });
         assert.equal(demand.settingType, 'defenderOffer');
         assert.ok(demand.value < 0 && demand.value > -120, `demands payment inside the range (${demand.value})`);
         assert.ok(Number.isInteger(demand.value));
-        pass(`The live strategy prices by the informed rule from public information only (a crushing defender demands ${-demand.value}).`);
+        pass(`The live strategy prices by the informed rule from public information only (a defender facing a short bidder demands ${-demand.value}).`);
     }
 
-    // 8) No stale quote: from trick 10 the quote comes DOWN, where the old
-    //    rule stopped updating at trick 8 and left its last quote standing.
+    // 8) No stale quote, and no withdrawn one. The old market rule stopped
+    //    updating at trick 8 and left its last quote standing; the first
+    //    informed rule took its quote DOWN at trick 10. Matt, Sept 17: "I don't
+    //    want them to withdraw their bid... we hone in on a fair offer as it
+    //    gets closer to the end." Whole seeded rounds, a bot in every seat, the
+    //    two defenders pricing on every card as they do live:
     {
+        const sim = require('../scripts/simulate-brains');
+        const { makeRng } = require('../src/core/bot-strategies/RolloutEstimator');
         const strategy = new MarketInsuranceStrategy(null, null, { rollouts: 120 });
-        const junkHand = ['6S', '7S'];
-        const late = mockEngine({ hands: { Bidder: junkHand, DefA: ['AS', 'KS'], DefB: ['QS', 'JS'] }, tricksPlayedCount: 10 });
-        late.insurance.defenderOffers.DefA = -37; // what it had standing
-        const move = strategy.calculateInsuranceMove(late, { playerName: 'DefA' });
-        assert.deepEqual(move, { settingType: 'defenderOffer', value: -120 }, 'withdrawn to the unagreeable default');
-        late.insurance.defenderOffers.DefA = -120;
-        assert.equal(strategy.calculateInsuranceMove(late, { playerName: 'DefA' }), null, 'and then it stands still');
+        const realLog = console.log;
+        const realRandom = Math.random;
+        const gaps = { early: [], late: [] };
+        let lastTrickQuotes = 0; let lastTrickStates = 0; let rounds = 0;
+        console.log = () => {};
+        try {
+            for (let seed = 1; rounds < 8 && seed < 40; seed += 1) {
+                Math.random = makeRng(424242 + seed);
+                const engine = sim.buildEngine(sim.seats('counting', 'counting', 'counting'));
+                const seen = [];
+                for (let step = 0; step < 2000; step += 1) {
+                    const state = engine.state;
+                    if (state === 'Awaiting Next Round Trigger' || state === 'Game Over') break;
+                    if (state === 'Dealing Pending') engine.dealCards(engine.dealer);
+                    else if (state === 'Bidding Phase') engine.placeBid(engine.biddingTurnPlayerId, engine.bots[engine.biddingTurnPlayerId].decideBid());
+                    else if (state === 'Awaiting Frog Upgrade Decision') engine.placeBid(engine.biddingTurnPlayerId, engine.bots[engine.biddingTurnPlayerId].decideFrogUpgrade());
+                    else if (state === 'AllPassWidowReveal') engine._advanceRound();
+                    else if (state === 'Trump Selection') engine.chooseTrump(engine.bidWinnerInfo.userId, engine.bots[engine.bidWinnerInfo.userId].chooseTrump());
+                    else if (state === 'Frog Widow Exchange') engine.submitFrogDiscards(engine.bidWinnerInfo.userId, engine.bots[engine.bidWinnerInfo.userId].submitFrogDiscards());
+                    else if (state === 'Bid Announcement') engine.state = 'Playing Phase';
+                    else if (state === 'TrickCompleteLinger') {
+                        engine.currentTrickCards = []; engine.leadSuitCurrentTrick = null;
+                        engine.trickTurnPlayerId = engine.trickLeaderId; engine.state = 'Playing Phase';
+                    } else if (state === 'Playing Phase') {
+                        const ins = engine.insurance;
+                        if (ins?.isActive && !ins.dealExecuted) {
+                            // The bidder's seat plays the human who never touches the ask.
+                            for (const name of Object.keys(ins.defenderOffers)) {
+                                const move = strategy.calculateInsuranceMove(engine, { playerName: name });
+                                if (move) ins.defenderOffers[name] = move.value;
+                            }
+                            const offers = Object.values(ins.defenderOffers);
+                            seen.push({ t: engine.tricksPlayedCount || 0, sum: offers[0] + offers[1], m: ins.bidMultiplier, atDefault: offers.every(o => o === -60 * ins.bidMultiplier) });
+                        }
+                        engine.playCard(engine.trickTurnPlayerId, engine.bots[engine.trickTurnPlayerId].playCard());
+                    } else throw new Error(`unexpected state ${state}`);
+                }
+                const round = engine.roundHistory[0];
+                if (!round || seen.length === 0) continue;
+                rounds += 1;
+                const fair = pricing.bidderCardValue(round.bidderCardPoints - 60, seen[0].m);
+                for (const s of seen) {
+                    if (s.t <= 1) gaps.early.push(Math.abs(fair - s.sum) / s.m);
+                    if (s.t === 10) { gaps.late.push(Math.abs(fair - s.sum) / s.m); lastTrickStates += 1; if (!s.atDefault) lastTrickQuotes += 1; }
+                }
+            }
+        } finally {
+            console.log = realLog;
+            Math.random = realRandom;
+        }
+        const avg = (v) => v.reduce((s, x) => s + x, 0) / v.length;
+        assert.ok(rounds >= 6, `played ${rounds} rounds`);
+        assert.ok(lastTrickQuotes >= 0.8 * lastTrickStates, `a real price is still up on the last trick (${lastTrickQuotes} of ${lastTrickStates} states)`);
+        assert.ok(avg(gaps.late) < 0.35 * avg(gaps.early), `and it has closed on what the cards paid: ${avg(gaps.early).toFixed(0)} per 1x away at the deal, ${avg(gaps.late).toFixed(0)} on the last trick`);
 
         const market = new MarketInsuranceStrategy(null, null, { rollouts: 120, pricing: 'market' });
-        const stale = mockEngine({ hands: { Bidder: junkHand, DefA: ['AS', 'KS'], DefB: ['QS', 'JS'] }, tricksPlayedCount: 9 });
+        const stale = mockEngine({ hands: { Bidder: ['6S', '7S'], DefA: ['AS', 'KS'], DefB: ['QS', 'JS'] }, tricksPlayedCount: 9 });
         stale.insurance.defenderOffers.DefA = -37;
         assert.equal(market.calculateInsuranceMove(stale, { playerName: 'DefA' }), null, 'the old rule leaves -37 on the table for tricks 9-11');
-        pass('When a bot stops quoting it takes its quote down.');
+        pass(`Bots price to the last card and home in: the two offers sit ${avg(gaps.early).toFixed(0)} per 1x from the truth at the deal and ${avg(gaps.late).toFixed(0)} on the last trick (${rounds} rounds).`);
     }
 
     // 9) A price is only as good as it is fresh. While a finished trick
@@ -351,6 +417,72 @@ async function runInsurancePricingTests() {
         near.insurance.defenderOffers.DefA = offer.value + 1;
         assert.equal(strategy.calculateInsuranceMove(near, { playerName: 'DefA' }), null);
         pass(`Live bots keep a price up: the bidder asks ${ask.value} (old rule ${soldFor}), the defender offers ${offer.value} (old rule ${paid}).`);
+    }
+
+    // 12) Matt's table examples, as the rule prices them.
+    {
+        const m = 1;
+        const budget = 0.25 * m;
+        // "Say I get a midnight special on a frog. If I can see the other
+        //  players' points so far are 35, I know I'm going to get 25 from each
+        //  of them. So I can require 50."
+        const decided = pricing.informedQuote({ samples: new Array(160).fill(85), m, isBidder: true, limits: limitsFor(true, m), lossBudget: budget, safetyPerSd: 0.7, bounds: { lo: 60, hi: 85 } });
+        assert.equal(decided.quote, 50, 'a decided hand is priced as decided: no spread, no margin');
+
+        // "Three cards left, I'm the bidder of a frog, the opponents have 50.
+        //  My max I should require is 20 because that is the max amount they
+        //  will collectively lose." Trump splits 2-1 (I take the rest: 70) or
+        //  3-0 (I lose the last trick: 62).
+        const split = [...new Array(112).fill(70), ...new Array(48).fill(62)];
+        const capped = pricing.informedQuote({ samples: split, m, isBidder: true, limits: limitsFor(true, m), lossBudget: budget, safetyPerSd: 0.7, bounds: { lo: 50, hi: 70 } });
+        assert.ok(capped.margin > 0, 'there is a margin, because there is doubt');
+        assert.ok(capped.quote <= 20, `but never more than the round can still pay (${capped.quote})`);
+        const unbounded = pricing.informedQuote({ samples: split, m, isBidder: true, limits: limitsFor(true, m), lossBudget: budget, safetyPerSd: 0.7 });
+        assert.ok(unbounded.quote > 20, `without the bound the margin would carry it past that (${unbounded.quote})`);
+
+        // "In the case where the bidder will lose 10 points, his payout will
+        //  be 30 since he would pay the widow. If instead he required -26 it
+        //  would save them 4 points, and the defenders could get 3 extra each."
+        const down10 = new Array(160).fill(50);
+        const greedy = pricing.informedQuote({ samples: down10, m, isBidder: true, limits: limitsFor(true, m), lossBudget: budget });
+        assert.equal(greedy.quote, -20, 'with nothing to tempt them, the bot keeps the whole absorber share');
+        const shared = pricing.informedQuote({ samples: down10, m, isBidder: true, limits: limitsFor(true, m), lossBudget: budget, entice: 6 });
+        assert.equal(shared.quote, -26, 'tempting each defender with 3: the deal all three want');
+        assert.ok(shared.edge > 3.5, 'and the bidder still saves 4 of the 30');
+
+        // The margin is sized to what is still unknown.
+        const [wide, narrow] = [14, 3].map(sd => pricing.informedQuote({ samples: bell(80, sd), m: 2, isBidder: false, limits: limitsFor(false, 2), lossBudget: 0.5, safetyPerSd: 0.7 }).margin);
+        assert.ok(wide > 4 * narrow, `${wide.toFixed(1)} points at the deal, ${narrow.toFixed(1)} late`);
+        pass(`A decided Frog asks exactly 50; with 50 banked against it a bidder asks ${capped.quote}, never past 20; a bidder going down 10 offers -26 so that everyone gains.`);
+    }
+
+    // 13) The estimate it prices from deals the hidden hands without the
+    //     void-order bias. The position that exposed it: last trick, the bidder
+    //     holds the 9 of trump and plays second; one opponent is void in trump
+    //     and spades. Five cards are unseen — two in hand, three in the widow.
+    //     The old deal gave the second opponent the first one's leftover CLUB,
+    //     every time, so the jack of trump was "in the widow" in every world.
+    {
+        const { sampleWorld, makeRng } = require('../src/core/bot-strategies/RolloutEstimator');
+        const unseen = ['10C', 'JD', 'KS', 'KC', '8D'];
+        const played = deck.filter(card => card !== '9D' && !unseen.includes(card));
+        const view = {
+            botName: 'B', bidderName: 'B', botIsBidder: true, bidType: 'Solo', trumpSuit: 'D', tricksPlayed: 10,
+            activeNames: ['B', 'R', 'K'], myHand: ['9D'], playedSet: new Set(played),
+            playedBy: { B: new Array(10).fill('x'), R: new Array(10).fill('x'), K: new Array(10).fill('x') },
+            voids: { B: new Set(), R: new Set(['S', 'D']), K: new Set() }, frog: null,
+        };
+        const share = (v) => {
+            const rng = makeRng(77);
+            let jack = 0;
+            for (let i = 0; i < 400; i += 1) if (sampleWorld(v, rng).hands.K[0] === 'JD') jack += 1;
+            return jack / 400;
+        };
+        assert.equal(share(view), 0, 'the legacy deal (still what the raven brains sample with) never lets K hold the jack');
+        const fair = share({ ...view, ...pricing.INFORMED_VIEW });
+        assert.ok(fair > 0.17 && fair < 0.33, `dealt from everything that is left, K holds it about one world in four (${fair})`);
+        assert.deepEqual(pricing.INFORMED_ESTIMATE, { exactTricks: 3 });
+        pass(`Hidden hands are dealt without the void-order bias (the jack sits with the second opponent in ${Math.round(fair * 100)}% of worlds, not 0%).`);
     }
 
     console.log('All insurance pricing tests passed.');
