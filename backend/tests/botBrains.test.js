@@ -82,9 +82,10 @@ async function runBotBrainTests() {
         // Claude's sealed trial brains (blind-tested by Matt).
         assert.strictEqual(brainNameFor('Doc Shuffle'), 'sphinx');
         assert.strictEqual(brainNameFor('Cliff'), 'sphinx');
-        // Sept 7 2026: Lucky Lou and Mabel Moon retired; their accounts play raven.
-        assert.strictEqual(brainNameFor('Grandpa George'), 'raven');
-        assert.strictEqual(brainNameFor('Courtney M.'), 'raven');
+        // Sept 7 2026: Lucky Lou and Mabel Moon retired; their accounts play
+        // raven — raven-1.2 since Sept 17 (the repaired defense).
+        assert.strictEqual(brainNameFor('Grandpa George'), 'raven-1.2');
+        assert.strictEqual(brainNameFor('Courtney M.'), 'raven-1.2');
         assert.strictEqual(brainNameFor('Mabel Moon'), 'counting', 'a retired name is just an unknown name now');
         assert.strictEqual(brainNameFor('Otis Draw'), 'coyote');
         assert.strictEqual(brainNameFor('Frankie Four'), 'coyote');
@@ -95,9 +96,9 @@ async function runBotBrainTests() {
             tally[brain] = (tally[brain] || 0) + 1;
             return tally;
         }, {});
-        assert.deepStrictEqual(armCounts, { counting: 5, flytrap: 5, sphinx: 3, coyote: 5, raven: 2 });
+        assert.deepStrictEqual(armCounts, { counting: 5, flytrap: 5, sphinx: 3, coyote: 5, 'raven-1.2': 2 });
         assert.ok(!Object.values(BRAIN_PROFILES).includes('classic'), 'no live bot plays classic');
-        pass('Classic is retired: 20 bots across five arms (raven took two sphinx seats), unknowns default to counting.');
+        pass('Classic is retired: 20 bots across five arms (raven-1.2 holds the two raven seats), unknowns default to counting.');
     }
 
     // 2) Matt's overruff rule: partner led, the bid winner trumped with the

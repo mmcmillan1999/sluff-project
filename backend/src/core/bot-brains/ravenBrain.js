@@ -83,12 +83,16 @@ const DEFAULTS = {
     // worth ~+0.5 pts/round bidding and ~0.2 defending against the
     // heuristic brains, and neutral against a searching bidder.
     floorPenalty: envNumber('RAVEN_FLOOR_PENALTY', 0.15),
+    // --- Defensive options (Sept 2026). All OFF for raven itself: they are
+    // the knobs the raven 1.x candidates turn (ravenNextBrain.js),
+    // kept here so every search brain shares one engine. Documented where
+    // they are implemented, below and in RolloutEstimator.js.
+    frogBuryModel: 'market',  // how the sampler guesses a Frog bidder's discards
+    keyCardModel: 'off',      // where the sampler believes unseen Aces and 10s live
+    keyCardStrength: 1,       // 0..1 blend of that belief with plain zone-size odds
+    tenLeadGuard: 'off',      // defender leading a 10 under an unaccounted Ace
+    riskAversion: 0,          // defender's penalty on a lead's downside across worlds
 };
-const config = { ...DEFAULTS };
-
-// Simulator / test hook: tune the search budget without touching the module.
-const configure = (overrides = {}) => Object.assign(config, overrides);
-const resetConfig = () => Object.assign(config, DEFAULTS);
 
 // Round payoff for THIS seat given the bidder's final card points. Made bids
 // collect one share from each defender; failed bids pay a share to each
@@ -165,103 +169,178 @@ const buildState = (view, world) => {
     });
 };
 
-// Which seats the solver treats as policy players rather than searchers,
-// per the configured models. Null when everyone searches (pure PIMC).
-const fixedSeatsFor = (view, me) => {
-    const bidder = view.activeNames.indexOf(view.bidderName);
-    const fixed = [false, false, false];
-    let any = false;
-    for (let seat = 0; seat < 3; seat += 1) {
-        if (seat === me) continue;
-        const isPartner = !view.botIsBidder && seat !== bidder;
-        const model = isPartner ? config.partnerModel : config.opponentModel;
-        if (model === 'policy') { fixed[seat] = true; any = true; }
-    }
-    return any ? fixed : null;
-};
+// One search brain = this engine plus a profile of option overrides. raven is
+// the profile with none; a sibling brain (ravenNextBrain.js) is the same
+// engine with its own defaults, so two of them can sit at one simulator table
+// without sharing a config object.
+function createSearchBrain(profile = {}) {
+    const defaults = { ...DEFAULTS, ...profile };
+    const config = { ...defaults };
 
-// Score every candidate across sampled worlds; returns { card, payoff } per
-// candidate plus the number of worlds actually used.
-const searchCandidates = (view, candidates, rng, now = Date.now) => {
-    const me = view.activeNames.indexOf(view.botName);
-    const multiplier = BID_MULTIPLIERS[view.bidType] || 1;
-    const myStack = Number.isFinite(view.scores?.[view.botName]) ? view.scores[view.botName] : Infinity;
-    const floor = config.utility === 'clip' ? -Math.max(0, myStack) : -Infinity;
-    const utility = (bidderPts) => Math.max(floor, payoffFor(view.botIsBidder, multiplier, bidderPts));
-    const totals = new Array(candidates.length).fill(0);
-    const started = now();
-    let used = 0;
-    const samplingView = (config.bidBiasScale === 1 && config.floorPenalty >= 1)
-        ? view
-        : { ...view, bidBiasScale: config.bidBiasScale, floorPenalty: config.floorPenalty };
-    for (let w = 0; w < config.worlds; w += 1) {
-        if (used >= config.minWorlds && now() - started > config.timeBudgetMs) break;
-        const world = sampleWorld(samplingView, rng);
-        const st = buildState(view, world);
-        st.fixedSeats = fixedSeatsFor(view, me);
-        const tt = new Map(); // shared by every candidate in this world
-        for (let i = 0; i < candidates.length; i += 1) {
-            const idx = search.cardIdx(candidates[i]);
-            search.applyPlay(st, me, (idx / 9) | 0, idx % 9);
-            let closed = null;
-            if (st.plays.length === 3) closed = search.closeTrick(st);
-            const bidderPts = search.evaluate(st, {
-                exactTricks: config.exactTricks,
-                maxNodes: config.maxNodes,
-                tt,
-            });
-            if (closed) search.reopenTrick(st, closed);
-            search.undoPlay(st);
-            totals[i] += utility(bidderPts);
+    // Simulator / test hook: tune the search budget without touching the module.
+    const configure = (overrides = {}) => Object.assign(config, overrides);
+    const resetConfig = () => Object.assign(config, defaults);
+
+    // Which seats the solver treats as policy players rather than searchers,
+    // per the configured models. Null when everyone searches (pure PIMC).
+    const fixedSeatsFor = (view, me) => {
+        const bidder = view.activeNames.indexOf(view.bidderName);
+        const fixed = [false, false, false];
+        let any = false;
+        for (let seat = 0; seat < 3; seat += 1) {
+            if (seat === me) continue;
+            const isPartner = !view.botIsBidder && seat !== bidder;
+            const model = isPartner ? config.partnerModel : config.opponentModel;
+            if (model === 'policy') { fixed[seat] = true; any = true; }
         }
-        used += 1;
-    }
-    return {
-        worlds: used,
-        results: candidates.map((card, i) => ({ card, payoff: totals[i] / Math.max(1, used) })),
+        return any ? fixed : null;
     };
-};
 
-const playCard = (engine, bot) => {
-    const hand = engine.hands[bot.playerName];
-    if (!hand || hand.length === 0) return null;
+    // Score every candidate across sampled worlds; returns { card, payoff } per
+    // candidate plus the number of worlds actually used.
+    const searchCandidates = (view, candidates, rng, now = Date.now) => {
+        const me = view.activeNames.indexOf(view.botName);
+        const multiplier = BID_MULTIPLIERS[view.bidType] || 1;
+        const myStack = Number.isFinite(view.scores?.[view.botName]) ? view.scores[view.botName] : Infinity;
+        const floor = config.utility === 'clip' ? -Math.max(0, myStack) : -Infinity;
+        const utility = (bidderPts) => Math.max(floor, payoffFor(view.botIsBidder, multiplier, bidderPts));
+        const totals = new Array(candidates.length).fill(0);
+        // Per-world utilities, kept only when a defender scores regret.
+        const regretAverse = config.riskAversion > 0 && !view.botIsBidder;
+        const perWorld = regretAverse ? candidates.map(() => []) : null;
+        // A defender LEADING a 10 while its ace is unaccounted for (not
+        // played, not in hand): count the worlds where the bidder holds that
+        // ace, so the lead can be held to a risk limit (tenLeadGuard).
+        const tenUnderAce = candidates.map(card => (
+            config.tenLeadGuard !== 'off'
+            && !view.botIsBidder
+            && view.partialTrick.length === 0
+            && gameLogic.getRank(card) === '10'
+            && !view.playedSet.has(`A${gameLogic.getSuit(card)}`)
+            && !view.myHand.includes(`A${gameLogic.getSuit(card)}`)
+        ));
+        const aceWithBidder = new Array(candidates.length).fill(0);
+        const started = now();
+        let used = 0;
+        const samplingView = {
+            ...view,
+            bidBiasScale: config.bidBiasScale,
+            floorPenalty: config.floorPenalty,
+            frogBuryModel: config.frogBuryModel,
+            keyCardModel: config.keyCardModel,
+            keyCardStrength: config.keyCardStrength,
+        };
+        for (let w = 0; w < config.worlds; w += 1) {
+            if (used >= config.minWorlds && now() - started > config.timeBudgetMs) break;
+            const world = sampleWorld(samplingView, rng);
+            const st = buildState(view, world);
+            st.fixedSeats = fixedSeatsFor(view, me);
+            const tt = new Map(); // shared by every candidate in this world
+            for (let i = 0; i < candidates.length; i += 1) {
+                const idx = search.cardIdx(candidates[i]);
+                search.applyPlay(st, me, (idx / 9) | 0, idx % 9);
+                let closed = null;
+                if (st.plays.length === 3) closed = search.closeTrick(st);
+                const bidderPts = search.evaluate(st, {
+                    exactTricks: config.exactTricks,
+                    maxNodes: config.maxNodes,
+                    tt,
+                });
+                if (closed) search.reopenTrick(st, closed);
+                search.undoPlay(st);
+                const value = utility(bidderPts);
+                totals[i] += value;
+                if (perWorld) perWorld[i].push(value);
+                if (tenUnderAce[i] && world.hands[view.bidderName].includes(`A${gameLogic.getSuit(candidates[i])}`)) {
+                    aceWithBidder[i] += 1;
+                }
+            }
+            used += 1;
+        }
+        const worldsUsed = Math.max(1, used);
+        // Regret-averse score: a card's average payoff, less riskAversion x
+        // its downside against the FIELD in the same world (root mean square
+        // of how far it falls below the candidates' average there). Pairing
+        // by world cancels the luck of the deal; what is left is the play
+        // that is fine in most worlds and ruinous in a few.
+        const downside = candidates.map((_, i) => {
+            if (!perWorld) return 0;
+            let sum = 0;
+            for (let w = 0; w < used; w += 1) {
+                let field = 0;
+                for (let j = 0; j < candidates.length; j += 1) field += perWorld[j][w];
+                const gap = perWorld[i][w] - field / candidates.length;
+                if (gap < 0) sum += gap * gap;
+            }
+            return Math.sqrt(sum / worldsUsed);
+        });
+        return {
+            worlds: used,
+            results: candidates.map((card, i) => {
+                const payoff = totals[i] / worldsUsed;
+                return {
+                    card,
+                    payoff,
+                    score: perWorld ? payoff - config.riskAversion * downside[i] : payoff,
+                    tenRisk: tenUnderAce[i] ? aceWithBidder[i] / worldsUsed : null,
+                };
+            }),
+        };
+    };
 
-    const isLeading = engine.currentTrickCards.length === 0;
-    const legal = getLegalMoves(hand, isLeading, engine.leadSuitCurrentTrick, engine.trumpSuit, engine.trumpBroken);
-    if (legal.length === 0) return null;
-    if (legal.length === 1) return legal[0];
+    const playCard = (engine, bot) => {
+        const hand = engine.hands[bot.playerName];
+        if (!hand || hand.length === 0) return null;
 
-    const view = buildPublicView(engine, bot.playerName);
-    if (!view) return countingBrain.playCard(engine, bot);
+        const isLeading = engine.currentTrickCards.length === 0;
+        const legal = getLegalMoves(hand, isLeading, engine.leadSuitCurrentTrick, engine.trumpSuit, engine.trumpBroken);
+        if (legal.length === 0) return null;
+        if (legal.length === 1) return legal[0];
 
-    const candidates = distinctCandidates(view, legal);
-    if (candidates.length === 1) return candidates[0];
+        const view = buildPublicView(engine, bot.playerName);
+        if (!view) return countingBrain.playCard(engine, bot);
 
-    const rng = makeRng(Math.floor(Math.random() * 0xFFFFFFFF));
-    const { results } = searchCandidates(view, candidates, rng);
+        const candidates = distinctCandidates(view, legal);
+        if (candidates.length === 1) return candidates[0];
 
-    // Best average payoff; ties go to the counting brain's instinct when it
-    // is among the tied cards, else the cheapest card.
-    let best = results[0];
-    for (const r of results) if (r.payoff > best.payoff + 1e-9) best = r;
-    const tied = results.filter(r => Math.abs(r.payoff - best.payoff) <= 1e-9);
-    if (tied.length > 1) {
-        const instinct = countingBrain.playCard(engine, bot);
-        const match = tied.find(r => r.card === instinct);
-        if (match) return match.card;
-        return tied.sort((a, b) => (pointValue(a.card) - pointValue(b.card)) || (rankValue(a.card) - rankValue(b.card)))[0].card;
-    }
-    return best.card;
-};
+        const rng = makeRng(Math.floor(Math.random() * 0xFFFFFFFF));
+        const searched = searchCandidates(view, candidates, rng);
+        // The 10-lead risk limit: a 10 led under an unaccounted ace is dropped
+        // when the bidder holds that ace in more than the allowed share of
+        // worlds — as long as some other lead remains.
+        const limit = config.tenLeadGuard === 'off' ? Infinity : Number(config.tenLeadGuard);
+        const allowed = searched.results.filter(r => r.tenRisk === null || r.tenRisk <= limit);
+        const results = allowed.length > 0 ? allowed : searched.results;
+
+        // Best score (the average payoff unless the profile is regret-averse);
+        // ties go to the counting brain's instinct when it is among the tied
+        // cards, else the cheapest card.
+        let best = results[0];
+        for (const r of results) if (r.score > best.score + 1e-9) best = r;
+        const tied = results.filter(r => Math.abs(r.score - best.score) <= 1e-9);
+        if (tied.length > 1) {
+            const instinct = countingBrain.playCard(engine, bot);
+            const match = tied.find(r => r.card === instinct);
+            if (match) return match.card;
+            return tied.sort((a, b) => (pointValue(a.card) - pointValue(b.card)) || (rankValue(a.card) - rankValue(b.card)))[0].card;
+        }
+        return best.card;
+    };
+
+    return { playCard, configure, resetConfig, searchCandidates, config };
+}
+
+const raven = createSearchBrain();
 
 module.exports = {
-    playCard,
-    configure,
-    resetConfig,
+    playCard: raven.playCard,
+    configure: raven.configure,
+    resetConfig: raven.resetConfig,
+    createSearchBrain,
     // exposed for tests
     payoffFor,
     distinctCandidates,
     buildState,
-    searchCandidates,
+    searchCandidates: raven.searchCandidates,
     DEFAULTS,
 };

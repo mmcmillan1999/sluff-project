@@ -17,7 +17,8 @@
 const GameEngine = require('../src/core/GameEngine');
 const BotPlayer = require('../src/core/BotPlayer');
 const { PLACEHOLDER_ID } = require('../src/core/constants');
-const { brainNameFor, registerBrainProfile } = require('../src/core/bot-brains');
+const { BRAINS, brainNameFor, registerBrainProfile } = require('../src/core/bot-brains');
+const { createSearchBrain } = require('../src/core/bot-brains/ravenBrain');
 const { shuffle } = require('../src/utils/shuffle');
 const { makeRng } = require('../src/core/bot-strategies/RolloutEstimator');
 
@@ -47,6 +48,21 @@ const SEAT_POOL = {
     raven: ['Raven A', 'Raven B', 'Raven C'],
 };
 for (const brain of ['classic', 'coyote', 'sphinx', 'raven']) {
+    SEAT_POOL[brain].forEach(name => registerBrainProfile(name, brain));
+}
+// Auditioning brains that hold no roster seat: they sit under synthetic names.
+for (const brain of Object.keys(BRAINS)) {
+    if (SEAT_POOL[brain]) continue;
+    SEAT_POOL[brain] = ['A', 'B', 'C'].map(tag => `${brain} ${tag}`);
+    SEAT_POOL[brain].forEach(name => registerBrainProfile(name, brain));
+}
+// Lab seats: a search-brain profile given on the command line, for paired
+// tuning runs (simulate-defense.js). LAB_PROFILE='{"keyCardModel":"calibrated"}'
+// adds the brain "lab"; LAB_PROFILE_B adds "lab-b". Simulator only.
+for (const [envKey, brain] of [['LAB_PROFILE', 'lab'], ['LAB_PROFILE_B', 'lab-b']]) {
+    if (!process.env[envKey]) continue;
+    BRAINS[brain] = createSearchBrain(JSON.parse(process.env[envKey]));
+    SEAT_POOL[brain] = ['A', 'B', 'C'].map(tag => `${brain} ${tag}`);
     SEAT_POOL[brain].forEach(name => registerBrainProfile(name, brain));
 }
 const seats = (...brains) => brains.map((brain, i) => SEAT_POOL[brain][i % 3]);

@@ -64,6 +64,11 @@ function buildPublicView(engine, botName) {
     // nothing.
     const floors = {};
     activeNames.forEach(name => { floors[name] = {}; });
+    // How many tricks have been led in each suit (the live one included). A
+    // big card that has not shown after its suit went round says something
+    // about where it is — see RolloutEstimator's key-card calibration.
+    const suitLeads = {};
+    ALL_SUITS.forEach(suit => { suitLeads[suit] = 0; });
 
     let brokenDuringReplay = false;
     let leaderName = bidderName;
@@ -74,7 +79,10 @@ function buildPublicView(engine, botName) {
         playedSet.add(card);
         if (playedBy[playerName]) playedBy[playerName].push(card);
         const suit = getSuit(card);
-        if (positionInTrick === 0) trickSoFar = [];
+        if (positionInTrick === 0) {
+            trickSoFar = [];
+            if (suitLeads[suit] !== undefined) suitLeads[suit] += 1;
+        }
         if (positionInTrick > 0 && suit === leadSuit && trickSoFar.length > 0) {
             const winner = determineTrickWinner(trickSoFar, leadSuit, trumpSuit);
             const winnerIsOpponent = winner && ((playerName === bidderName) !== (winner.playerName === bidderName));
@@ -160,6 +168,7 @@ function buildPublicView(engine, botName) {
         playedSet,
         voids,
         floors,
+        suitLeads,
         bidderCardPoints: engine.bidderCardPoints || 0,
         defenderCardPoints: engine.defenderCardPoints || 0,
         tricksPlayed: engine.tricksPlayedCount || 0,

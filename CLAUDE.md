@@ -68,6 +68,26 @@ Debug overlay in game: `Shift+D`.
   asks/offers from a Monte Carlo rollout (`RolloutEstimator.js`) over public information only
   (`PublicRoundView.js` is the enforced no-cheating boundary — see `tests/marketInsurance.test.js`).
   `INSURANCE_STRATEGY=legacy` reverts to `AdaptiveInsuranceStrategy`, which is also the on-error fallback.
+- Search brains (Sept 2026): `bot-brains/ravenBrain.js` exports `createSearchBrain(profile)` — raven is the
+  empty profile, and `ravenNextBrain.js` holds **raven-1.1 / raven-1.2** — raven with a repaired defense, same
+  offense card for card. **raven-1.2 plays Grandpa George and Courtney M. since Sept 17 2026** (Matt's call;
+  raven and raven-1.1 stay registered for the simulators and as a one-line rollback in `BRAIN_PROFILES`;
+  `tests/ravenNext.test.js` pins the seats). Proven on 25,581 paired rounds: −0.25 ±0.05 pts/round conceded
+  (z −5.2), and 44.9% vs raven's 43.1% in the five-brain round robin.
+  They exist because the raven seats led 10s under unplayed aces: the search was sound but the shared world
+  sampler believed a Frog bidder buries ACES (weight `1 + points/2`; truth over 8,264 Frog rounds: never).
+  Opt-in sampler repairs, all off for raven and the insurance market: `frogBuryModel: 'calibrated'` and
+  `keyCardModel: 'calibrated'` (`RolloutEstimator.placeKeyCards` + the measured `keyCardTable.json`: a
+  defender's unseen Aces/10s go to bidder / partner / buried by odds keyed on public facts only — bid type,
+  trump or side, is the 10's ace gone, `PublicRoundView.suitLeads`, round phase). Decision opt-ins:
+  `tenLeadGuard` (a defender may not lead a 10 under an unaccounted ace when the bidder holds it in more than
+  that share of sampled worlds) and `riskAversion` (regret-averse defender score). Tools: `scripts/
+  analyze-ten-leads.js` (the behaviour + belief-vs-truth), `calibrate-sampler.js` (regenerates the table;
+  WHO plays matters — strong bidders sit on aces, so it is fitted on a mixed raven/sphinx/counting/flytrap
+  table), `simulate-defense.js --json` + `compare-defense.js` (paired diff ±SE on identical deals, `--by-bid`,
+  pooled seeds), and `LAB_PROFILE='{...}'` for an ad-hoc search brain `lab` in any simulator. Paired runs need
+  `RAVEN_TIME_MS=1000000` — the 90 ms wall-clock guard makes a loaded machine non-deterministic. Do NOT "fix"
+  the market's Frog prior in isolation: the market under-estimates bidders everywhere and that prior masks it.
 
 ## Conventions
 - Game layout sizes in vh/vw only; cards keep 5:7 aspect ratio; header is 7.5vh.

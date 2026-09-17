@@ -20,6 +20,7 @@ const flytrapBrain = require('./flytrapBrain');
 const coyoteBrain = require('./coyoteBrain');
 const sphinxBrain = require('./sphinxBrain');
 const ravenBrain = require('./ravenBrain');
+const ravenNext = require('./ravenNextBrain');
 
 const BRAINS = {
     classic: classicBrain,
@@ -28,9 +29,14 @@ const BRAINS = {
     coyote: coyoteBrain,
     sphinx: sphinxBrain,
     // raven (Sept 2026): the search brain — samples hidden worlds from public
-    // information and solves the endgame of each one exactly. Auditioning in
-    // the simulator; no roster seat until Matt assigns one.
+    // information and solves the endgame of each one exactly.
     raven: ravenBrain,
+    // raven-1.1 / raven-1.2 (Sept 2026): raven with a repaired defense — it
+    // no longer leads a 10 under an unplayed ace (ravenNextBrain.js).
+    // raven-1.2 holds both raven seats since Sept 17 2026; raven-1.1 and the
+    // original raven stay registered for the simulators and as a one-line
+    // rollback in BRAIN_PROFILES below.
+    ...ravenNext.brains,
 };
 
 // Unknown names (future bot accounts not yet assigned below) get a solid
@@ -70,8 +76,14 @@ const BRAIN_PROFILES = {
     'Ruby Rook': 'coyote',
     // raven (Sept 7 2026): the search brain, on the accounts that were
     // Lucky Lou and Mabel Moon (see data/botAccounts.js BOT_RENAMES).
-    'Grandpa George': 'raven',
-    'Courtney M.': 'raven',
+    // Sept 17 2026: both seats moved to raven-1.2 (Matt's call) after they
+    // were seen leading 10s under unplayed aces. Same offense card for card;
+    // on 25,581 paired rounds it concedes 0.25 ±0.05 points a round less on
+    // defense (z -5.2) and won the five-brain round robin, 44.9% to raven's
+    // 43.1%. round_results records the brain per round, so the live series
+    // breaks cleanly from 'raven' to 'raven-1.2' at this deploy.
+    'Grandpa George': 'raven-1.2',
+    'Courtney M.': 'raven-1.2',
 };
 
 const brainNameFor = (botName) => BRAIN_PROFILES[botName] || DEFAULT_BRAIN;
