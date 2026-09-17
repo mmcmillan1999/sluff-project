@@ -194,7 +194,12 @@ function rulesFrom(spec) {
                 const correction = params.corrected
                     ? pricing.estimatorCorrection({ isBidder, bidType: bid, tricksPlayed: t })
                     : null;
-                const priced = pricing.informedQuote({ samples, m, isBidder, limits, correction, ...params.pricing });
+                const priced = pricing.informedQuote({
+                    samples, m, isBidder, limits, correction,
+                    ...params.pricing,
+                    lossBudget: (params.budgetPerM || 0) * m,
+                    safety: ((isBidder ? params.bidderSafetyPerM ?? 2 * (params.safetyPerM || 0) : params.safetyPerM) || 0) * m,
+                });
                 return priced.agreeable ? priced.quote : null;
             },
         });
@@ -319,6 +324,10 @@ const DEFAULT_RULES = [
     { name: 'informed 50% + measured correction', corrected: true, pricing: { informed: 0.5, minEdge: 1 } },
     { name: 'informed 100% + correction, min edge 3', corrected: true, pricing: { informed: 1, minEdge: 3 } },
     { name: 'informed 100% + correction, quotes to trick 10', corrected: true, lastTrick: 10, pricing: { informed: 1, minEdge: 1 } },
+    // Always a price on the table: budgetPerM = expected loss allowed per card
+    // state, safetyPerM / bidderSafetyPerM = points the price is backed off.
+    { name: 'always quotes, no margin', corrected: true, lastTrick: 10, budgetPerM: 0.25, pricing: { informed: 1, minEdge: 1 } },
+    { name: 'always quotes, margin 12 (live)', corrected: true, lastTrick: 10, budgetPerM: 0.25, safetyPerM: 12, bidderSafetyPerM: 24, pricing: { informed: 1, minEdge: 1 } },
 ];
 
 if (require.main === module) {

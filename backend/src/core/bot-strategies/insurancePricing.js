@@ -159,12 +159,25 @@ function adjustSamples(samples, { shift = 0, extraSd = 0 } = {}) {
  * worth offering (`agreeable: false`).
  *
  *   informed    0..1  how much of the truth the counterparty is assumed to hold
- *   minEdge     points of expected gain a quote must clear to be posted at all
+ *   minEdge     points of expected gain a quote must clear to count as a
+ *               deal the bot WANTS
+ *   lossBudget  points. With nothing it wants, the bot still shows the most
+ *               generous quote that would cost it no more than this, on
+ *               average, against a counterparty who knows the result. A table
+ *               where the bots never quote is no fun — a winning human bidder
+ *               saw two defenders sit at the default all round (Sept 17 2026)
+ *               — and a rational opponent cannot hurt a stingy quote by more
+ *               than the budget, while a nervous one who takes it pays for the
+ *               certainty. 0 = only quote what is wanted.
+ *   safety      points that budgeted price is then backed off by (a defender
+ *               offers less, a bidder asks more), never past a quote the bot
+ *               wants. The budget is per card state and the sample is a few
+ *               dozen rollouts; without this a standing price still bleeds.
  *   correction  { shift, extraSd } from estimatorCorrection(), or none
  */
 function informedQuote({
     samples, m, isBidder, limits,
-    informed = 1, minEdge = 1, correction = null,
+    informed = 1, minEdge = 1, lossBudget = 0, safety = 0, correction = null,
 }) {
     const pts = correction ? adjustSamples(samples, correction) : samples;
     const surplus = pts.map(p => p - 60);
@@ -176,6 +189,7 @@ function informedQuote({
     const noDeal = isBidder ? limits.max : limits.min;
 
     let best = { quote: noDeal, edge: 0, agreeable: false };
+    const edges = [];
     for (let quote = limits.min; quote <= limits.max; quote += 1) {
         let total = 0;
         for (let k = 0; k < n; k += 1) {
@@ -193,7 +207,31 @@ function informedQuote({
             }
         }
         const edge = total / n;
+        edges.push(edge);
         if (edge > best.edge + 1e-9 && edge >= minEdge) best = { quote, edge, agreeable: true };
+    }
+    if (!(lossBudget > 0)) return best;
+
+    // The friendliest price within `lossBudget` of the best the bot could do.
+    // One rule for both situations, so the quote never jumps between them: with
+    // a deal worth wanting it gives up a little of that edge to look
+    // approachable; with none it shows a stingy price that costs next to
+    // nothing even against someone who knows how the round ends.
+    const floor = Math.max(0, ...edges) - lossBudget;
+    for (let step = 0; step < edges.length; step += 1) {
+        // Most generous first: a bidder's lowest ask, a defender's highest offer.
+        const index = isBidder ? step : edges.length - 1 - step;
+        if (edges[index] + 1e-9 < floor) continue;
+        // `safety` (points of quote) backs the price off for what the sample
+        // cannot see: it is a few dozen rollouts, so its worst case is not the
+        // worst case, and the quote stands through thirty-odd card states for
+        // someone to pick the one moment it is wrong. Never past the quote the
+        // bot actually wants — being stingier than that only loses good deals.
+        const generous = limits.min + index;
+        let quote = isBidder ? generous + safety : generous - safety;
+        if (best.agreeable) quote = isBidder ? Math.min(quote, best.quote) : Math.max(quote, best.quote);
+        quote = Math.round(clamp(quote, limits.min, limits.max));
+        return { quote, edge: edges[quote - limits.min], agreeable: quote !== noDeal };
     }
     return best;
 }

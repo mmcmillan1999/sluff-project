@@ -74,8 +74,17 @@ Debug overlay in game: `Shift+D`.
   hand and only accepts a quote that is wrong in their favour (a failing human bidder escaped for 5×m where the
   cards cost 35×m; a bot bidder sold a winner for 20 where cards paid 35). `informedQuote` posts the quote that
   earns the most GIVEN that the other side only accepts what is good for them — so a winning bot bidder does
-  not sell, a failing bidder must pay the defenders their card value plus a slice of the absorber's share, and
-  a bot with nothing worth offering sits at the unagreeable default. It prices from an estimate corrected by a
+  not sell, a failing bidder must pay the defenders their card value plus a slice of the absorber's share.
+  **Always a price on the table (same day):** the first live game under that rule had Matt making a Heart Solo
+  while both bot defenders sat at the default for seven tricks ("bots not playing insurance at all") — right,
+  and no fun. With nothing it wants a bot now still shows the friendliest price it can afford
+  (`informedQuote`'s `lossBudget`, 0.25×m of expected loss per card state against someone who knows the
+  result) backed off by a `safety` margin (12×m a defender, 24×m the bidder's ask); only a price off the scale
+  leaves it at the default. Stingy early, closing on fair value as the round resolves — a human who takes it
+  pays for certainty. The margin is measured, not guessed: a standing price is up through ~33 card states for
+  someone to pick the one where it is wrong (unseen rounds, bots per 100 rounds vs the 25% adversary: quote
+  only what it wants +12, margin 12 +6, margin 10 +2, margin 6 −14, none −92, Aug rule −595). Re-prices under
+  3×m are not sent. `INSURANCE_ALWAYS_QUOTE=false` = quote only what it wants. It prices from an estimate corrected by a
   measured table (`ESTIMATOR_CORRECTION`: a defender's view underrates the bidder by 4–12 pts; both seats are
   5–9 pts overconfident mid-round). Whole points, no steps of five; quotes through trick 10 and then comes
   DOWN (the old rule left its last quote standing for tricks 9–11). `GameService` re-quotes during

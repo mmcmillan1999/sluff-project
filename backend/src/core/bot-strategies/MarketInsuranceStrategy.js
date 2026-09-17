@@ -47,8 +47,35 @@ const DEFAULT_PRICING = process.env.INSURANCE_PRICING === 'market' ? 'market' : 
 // stopping at trick 8 (+4 instead of +14), and the raw estimate without the
 // measured correction (-3 to -8: still bleeding from the bidder's seat).
 const INFORMED_COUNTERPARTY = 1;        // assume they know how the round ends
-const INFORMED_MIN_EDGE = 1;            // expected points a quote must earn to be posted
+const INFORMED_MIN_EDGE = 1;            // expected points a quote must earn to be a deal the bot wants
 const INFORMED_LAST_QUOTE_TRICK = 10;   // from here the quote comes down
+// ALWAYS A PRICE ON THE TABLE (Sept 17 2026, the same day). The first live
+// game under the rule above: Matt bid a Heart Solo he was making, asked 120,
+// and both bot defenders sat at the default for seven tricks — "bots not
+// playing insurance at all". Correct, and no fun: nobody can sell a winner to
+// someone who knows it is a winner, so the bots said nothing. Now a bot always
+// shows the friendliest price it can afford (informedQuote's lossBudget), held
+// back by a safety margin, per 1x. The harness set the margin. Bots' points per
+// 100 rounds against the adversary, on 3,300 rounds no setting was tuned on
+// (adversary knowing 25% / 50% / all of the result):
+//     quotes only what it wants      +12 / +12 / +15   a quote up 10% of the time
+//     always quotes, margin 12        +6 /  +2 / +14   92-100%   <- live
+//     always quotes, margin 10        +2 /  -2 / +14
+//     always quotes, margin  6       -14 / -23 /  -4
+//     always quotes, no margin       -92 / -101 / -60
+//     the Aug market rule           -595 / -645 / -539
+// A standing price is there through thirty-odd card states for someone to
+// pick the one where it is wrong, so friendliness is paid for in points: 12 a
+// share is the friendliest margin that stays in front. The price is stingy
+// early (a bidder who goes on to make it sees the two offers ~105 per 1x under
+// what the cards pay) and closes on fair value as the round resolves (~60 by
+// tricks 8-9); a human who takes it is paying for certainty. The bidder's
+// margin is two shares' worth; 30 and 40 measured the same to the point.
+// INSURANCE_ALWAYS_QUOTE=false goes back to quoting only what the bot wants.
+const INFORMED_LOSS_BUDGET_PER_M = 0.25;
+const INFORMED_SAFETY_PER_M = { defender: 12, bidder: 24 };
+const INFORMED_MIN_MOVE_PER_M = 3;      // smaller re-prices are not worth a state emit
+const DEFAULT_ALWAYS_QUOTE = process.env.INSURANCE_ALWAYS_QUOTE !== 'false';
 
 const NO_QUOTE_AFTER_TRICK = 8;   // parity with the legacy strategy
 const MIN_EMIT_DELTA = 5;         // engine granularity
@@ -68,11 +95,12 @@ function seedFrom(text) {
 }
 
 class MarketInsuranceStrategy {
-    constructor(pool = null, io = null, { rollouts = 160, pricing = DEFAULT_PRICING } = {}) {
+    constructor(pool = null, io = null, { rollouts = 160, pricing = DEFAULT_PRICING, alwaysQuote = DEFAULT_ALWAYS_QUOTE } = {}) {
         this.pool = pool;
         this.io = io;
         this.rollouts = rollouts;
         this.pricing = pricing;
+        this.alwaysQuote = alwaysQuote;
         // The estimator used to run fresh on every 1.5 s heartbeat while a
         // human thought, with a fresh random seed each time. Its sampling
         // noise exceeded MIN_EMIT_DELTA, so quotes drifted 15 points on an
@@ -230,9 +258,11 @@ class MarketInsuranceStrategy {
     // The Sept 2026 rule (insurancePricing.informedQuote): price the person on
     // the other side, not only the round. Differences from the rule above
     // that matter at the table:
-    //   - a bot with nothing worth offering posts NOTHING agreeable — it sits
-    //     at the round's unagreeable default, like a player who has not
-    //     touched insurance — instead of always quoting something;
+    //   - with a deal it wants (a failing bidder, mostly) it posts the price
+    //     that earns the most from someone who knows their own hand; with none
+    //     it still shows a price, a stingy one (see INFORMED_LOSS_BUDGET_PER_M)
+    //     — only when even that is off the scale does it sit at the round's
+    //     unagreeable default like a player who has not touched insurance;
     //   - it quotes whole points, and re-quotes through trick 10;
     //   - when it stops, it takes its quote DOWN. The old rule stopped
     //     updating after trick 8 and left its last quote standing for the
@@ -251,14 +281,17 @@ class MarketInsuranceStrategy {
         const { value: quote } = this._cachedPrice(key, () => {
             if (view.tricksPlayed >= INFORMED_LAST_QUOTE_TRICK) return { value: unagreeable };
             const { samples } = estimateBidderPoints(view, { rollouts: this.rollouts, seed: seedFrom(key) });
+            // Personality is a little more or less appetite for a deal.
+            const appetite = this._personality(bot.playerName).marginScale;
             const priced = informedQuote({
                 samples,
                 m,
                 isBidder,
                 limits,
                 informed: INFORMED_COUNTERPARTY,
-                // Personality is a little more or less appetite for a deal.
-                minEdge: INFORMED_MIN_EDGE * this._personality(bot.playerName).marginScale,
+                minEdge: INFORMED_MIN_EDGE * appetite,
+                lossBudget: this.alwaysQuote ? INFORMED_LOSS_BUDGET_PER_M * m : 0,
+                safety: (isBidder ? INFORMED_SAFETY_PER_M.bidder : INFORMED_SAFETY_PER_M.defender) * m * appetite,
                 correction: estimatorCorrection({ isBidder, bidType: view.bidType, tricksPlayed: view.tricksPlayed }),
             });
             return { value: priced.quote };
@@ -266,6 +299,11 @@ class MarketInsuranceStrategy {
 
         const current = isBidder ? insurance.bidderRequirement : insurance.defenderOffers[bot.playerName];
         if (quote === current) return null;
+        // A standing price re-priced on every card would twitch a point or two
+        // each time (and emit state and write an analytics row for it). Small
+        // moves wait; taking the quote down, or putting one up, never does.
+        const withdrawing = quote === unagreeable || current === unagreeable;
+        if (!withdrawing && Math.abs(quote - current) < INFORMED_MIN_MOVE_PER_M * m) return null;
         return { settingType: isBidder ? 'bidderRequirement' : 'defenderOffer', value: quote };
     }
 }

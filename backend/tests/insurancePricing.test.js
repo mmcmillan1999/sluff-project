@@ -181,7 +181,8 @@ async function runInsurancePricingTests() {
     //    whole points, and the market rule still there as the rollback.
     {
         assert.equal(new MarketInsuranceStrategy().pricing, 'informed', 'the default rule');
-        const strategy = new MarketInsuranceStrategy(null, null, { rollouts: 120 });
+        // alwaysQuote off: what the bot WANTS, with no courtesy price (test 10).
+        const strategy = new MarketInsuranceStrategy(null, null, { rollouts: 120, alwaysQuote: false });
         const monsterHand = ['AS', '10S', 'KS', 'QS', 'JS', '9S', 'AH', '10H', 'AC', '10C', 'AD'];
         const junkHand = ['6S', '7S', '6H', '7H', '8H', '6C', '7C', '6D', '7D', '8D', '9D'];
         const rest = deck.filter(card => !monsterHand.includes(card) && !junkHand.includes(card));
@@ -277,6 +278,79 @@ async function runInsurancePricingTests() {
             assert.equal(engine.insurance.defenderOffers.Carol, -60);
         });
         pass('Bots re-quote while a trick lingers, tighten at once, and only loosen after a pause.');
+    }
+
+    // 10) Always a price on the table. The first live game under the rule had
+    //     a human making a Heart Solo and two bot defenders sitting at the
+    //     default for seven tricks: right, and no fun. With a loss budget the
+    //     bot shows the friendliest price it can afford — stingy, never free.
+    {
+        const m = 2;
+        const making = bell(80, 8); // making by 20: the cards cost each defender ~40
+        const limits = limitsFor(false, m);
+        const budget = 0.25 * m;
+        const silent = pricing.informedQuote({ samples: making, m, isBidder: false, limits });
+        assert.equal(silent.agreeable, false, 'without a budget there is nothing to say');
+        const shown = pricing.informedQuote({ samples: making, m, isBidder: false, limits, lossBudget: budget });
+        assert.equal(shown.agreeable, true, 'with one there is a price up');
+        assert.ok(shown.quote > -60 * m && shown.quote < 20 * m, `a real offer, under the ~${20 * m} the cards would cost (${shown.quote})`);
+        assert.ok(shown.edge >= -budget - 1e-9, `someone who KNOWS the result takes at most the budget off it (${shown.edge.toFixed(2)})`);
+
+        // The safety margin backs the price off by exactly that, each seat in
+        // its own direction: a defender offers less, a bidder asks more.
+        const safe = pricing.informedQuote({ samples: making, m, isBidder: false, limits, lossBudget: budget, safety: 10 * m });
+        assert.equal(safe.quote, shown.quote - 10 * m);
+        const bareAsk = pricing.informedQuote({ samples: making, m, isBidder: true, limits: limitsFor(true, m), lossBudget: budget });
+        const ask = pricing.informedQuote({ samples: making, m, isBidder: true, limits: limitsFor(true, m), lossBudget: budget, safety: 20 * m });
+        assert.equal(ask.quote, bareAsk.quote + 20 * m);
+        assert.ok(ask.quote > 2 * 20 * m && ask.quote < 120 * m, `a winning bot bidder names a price above the ~${2 * 20 * m} it is worth (${ask.quote})`);
+
+        // The price closes on fair value as the round resolves...
+        const [early, late] = [14, 3].map(sd => pricing.informedQuote({ samples: bell(80, sd), m, isBidder: false, limits, lossBudget: budget, safety: 10 * m }).quote);
+        assert.ok(late > early, `stingy early, nearer the truth late (${early} → ${late})`);
+
+        // ...and never costs the bot a deal it wants: against a failing bidder
+        // the friendly price is at least as easy to meet as the wanted one, no
+        // stingier, and gives up no more than the budget to be so.
+        const failing = bell(44, 8);
+        const wanted = pricing.informedQuote({ samples: failing, m, isBidder: false, limits });
+        const friendly = pricing.informedQuote({ samples: failing, m, isBidder: false, limits, lossBudget: budget, safety: 10 * m });
+        assert.equal(wanted.agreeable, true);
+        assert.ok(friendly.quote >= wanted.quote, `${friendly.quote} >= ${wanted.quote}`);
+        assert.ok(friendly.edge >= wanted.edge - budget - 1e-9);
+        pass(`With nothing it wants, a bot still shows a price: offers ${safe.quote} where the cards would cost ~${20 * m}, asks ${ask.quote} for a hand worth ~${2 * 20 * m}.`);
+    }
+
+    // 11) The live strategy carries it: on by default, both seats quote where
+    //     test 7's bots sat still, dearer than the old market rule's prices,
+    //     and a re-price too small to matter is not sent.
+    {
+        const strategy = new MarketInsuranceStrategy(null, null, { rollouts: 120 });
+        assert.equal(strategy.alwaysQuote, true);
+        const market = new MarketInsuranceStrategy(null, null, { rollouts: 120, pricing: 'market' });
+        // A fair Solo, not test 7's monster: that hand's price is above the
+        // cap, and a bot whose price is off the scale rightly sits at the default.
+        const goodHand = ['AS', 'KS', 'QS', '9S', '7S', 'AH', 'KH', '7C', '8C', 'QD', '6D'];
+        const junkHand = ['6S', '8S', '6H', '7H', '8H', '6C', '9C', '7D', '8D', '9D', 'JD'];
+        const rest = deck.filter(card => !goodHand.includes(card) && !junkHand.includes(card));
+        const hands = { Bidder: goodHand, DefA: junkHand, DefB: rest.slice(0, 11) };
+
+        const ask = strategy.calculateInsuranceMove(trapPrivateInfo(mockEngine({ hands: { ...hands } }), 'Bidder'), { playerName: 'Bidder' });
+        const soldFor = market.calculateInsuranceMove(mockEngine({ hands: { ...hands } }), { playerName: 'Bidder' }).value;
+        assert.equal(ask.settingType, 'bidderRequirement');
+        assert.ok(ask.value < 240, `the bidder names a price (${ask.value})`);
+        assert.ok(ask.value > soldFor, `dearer than the old rule sold for (${ask.value} > ${soldFor})`);
+
+        const offer = strategy.calculateInsuranceMove(trapPrivateInfo(mockEngine({ hands: { ...hands } }), 'DefA'), { playerName: 'DefA' });
+        const paid = market.calculateInsuranceMove(mockEngine({ hands: { ...hands } }), { playerName: 'DefA' }).value;
+        assert.equal(offer.settingType, 'defenderOffer');
+        assert.ok(offer.value > -120 && offer.value < paid, `the defender has a price up, below what the old rule paid (${offer.value} < ${paid})`);
+
+        // Already standing a point away from the fresh price: not worth a move.
+        const near = mockEngine({ hands: { ...hands } });
+        near.insurance.defenderOffers.DefA = offer.value + 1;
+        assert.equal(strategy.calculateInsuranceMove(near, { playerName: 'DefA' }), null);
+        pass(`Live bots keep a price up: the bidder asks ${ask.value} (old rule ${soldFor}), the defender offers ${offer.value} (old rule ${paid}).`);
     }
 
     console.log('All insurance pricing tests passed.');
