@@ -36,6 +36,8 @@
 // fewer adds FINAL TABLE.
 // ?mode=tourney[&phase=wait|board|host&me=ID] previews the tournament board;
 // ?mode=og&variant=home|tournament|table renders the share cards.
+// ?mode=session[&reason=active] shows the "Play here" scrim a client wears
+// while the account is live on another device or tab.
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
@@ -55,6 +57,7 @@ import LobbyView from './components/LobbyView.js';
 import TournamentView from './components/tournament/TournamentView';
 import './components/ClaudeLanding.css';
 import OrientationScrim from './components/OrientationScrim.js';
+import SessionScrim from './components/SessionScrim.js';
 import SluffIdent from './components/SluffIdent.js';
 import { setCosmetic } from './utils/cosmetics.js';
 import { setCardPlayStyle } from './utils/playStyle.js';
@@ -98,6 +101,18 @@ if (identMode) {
         );
     };
     ReactDOM.createRoot(document.getElementById('root')).render(<IdentHarness />);
+}
+
+// --- "Play here" scrim: /harness.html?mode=session[&reason=active] ---
+// What a client shows once the account is live on another device or tab.
+const sessionMode = params.get('mode') === 'session';
+if (sessionMode) {
+    ReactDOM.createRoot(document.getElementById('root')).render(
+        <SessionScrim
+            reason={params.get('reason') === 'active' ? 'active-elsewhere' : 'claimed-elsewhere'}
+            onPlayHere={() => console.log('[harness] Play here')}
+        />,
+    );
 }
 
 // ?role=watcher — You are a spectator at a three-seat table (Brandi bids,
@@ -693,7 +708,7 @@ if (ogMode) {
     );
 }
 
-if (!identMode && !lobbyMode && !tourneyMode && !ogMode) {
+if (!identMode && !sessionMode && !lobbyMode && !tourneyMode && !ogMode) {
 document.body.classList.add('game-active');
 
 ReactDOM.createRoot(document.getElementById('root')).render(<HarnessApp />);

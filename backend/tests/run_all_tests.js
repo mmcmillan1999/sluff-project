@@ -43,6 +43,7 @@ const suites = [
     { name: 'settlement retry', file: './settlementRetry.test.js' },
     { name: 'authentication integrity', file: './authenticationIntegrity.test.js' },
     { name: 'voice chat signaling', file: './voiceSignaling.test.js' },
+    { name: 'one live client per account', file: './sessionArbiter.test.js' },
     { name: 'tutorial persistence', file: './tutorialPersistence.test.js' },
     { name: 'quick-tips read receipts', file: './tips.test.js' },
     { name: 'AI prompt rule contract', file: './aiPromptRules.test.js' },

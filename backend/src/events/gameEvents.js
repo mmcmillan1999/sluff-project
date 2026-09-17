@@ -3,6 +3,7 @@
 const jwt = require("jsonwebtoken");
 const transactionManager = require('../data/transactionManager');
 const { authorizeTableAction, isPlainObject, validators } = require('./socketActionGuard');
+const { createSessionRegistry, readClientSession } = require('./sessionArbiter');
 const { loadCurrentUserByTokenId } = require('../middleware/requireAuth');
 const { nextChangeAllowedAt } = require('../data/accountIdentity');
 const afkTurnTimer = require('../core/afkTurnTimer');
@@ -94,6 +95,32 @@ const registerGameHandlers = (io, gameService, options = {}) => {
     const scheduleInterval = options.setIntervalFn || setInterval;
     const cancelInterval = options.clearIntervalFn || clearInterval;
     const latestSocketIdByUser = new Map();
+
+    // One account, one live client (sessionArbiter.js): a deliberate open
+    // takes the account over, an automatic reconnect never does.
+    const sessionRegistry = createSessionRegistry({ now: options.nowFn });
+    const otherLiveSocketsOf = (socket) => {
+        const connectedSockets = io.sockets?.sockets;
+        if (!connectedSockets || typeof connectedSockets.values !== 'function') return [];
+        const others = [];
+        for (const candidate of connectedSockets.values()) {
+            if (candidate.id !== socket.id
+                && candidate.connected !== false
+                && String(candidate.user?.id) === String(socket.user.id)) {
+                others.push({ socketId: candidate.id, clientId: candidate.data?.clientId || null });
+            }
+        }
+        return others;
+    };
+    // Forensics next to seat_guard_reject: how often accounts run two clients.
+    const recordSessionEvent = (name, socket, detail) => {
+        try {
+            Promise.resolve(gameService.pool?.query?.(
+                'INSERT INTO funnel_events (name, session_id) VALUES ($1, $2)',
+                [name, `u${socket.user?.id} ${detail}`.slice(0, 64)],
+            )).catch(() => {});
+        } catch (error) { /* forensics never block a connect */ }
+    };
 
     // Voice chat signaling. Audio flows peer-to-peer over WebRTC; the server
     // only relays session descriptions / ICE candidates between players seated
@@ -195,6 +222,20 @@ const registerGameHandlers = (io, gameService, options = {}) => {
 
     io.on("connection", (socket) => {
         socket.data = socket.data || {};
+        // Rule on the session before this socket touches a seat, a voice
+        // room or the matchmaking registry. A parked connection gets none of
+        // them: it is told why and closed, and because the server closed it
+        // the client does not reconnect until the player taps "Play here".
+        const session = readClientSession(socket);
+        socket.data.clientId = session.clientId;
+        const sessionRuling = sessionRegistry.arbitrate(socket.user.id, session, otherLiveSocketsOf(socket));
+        if (sessionRuling.verdict === 'park') {
+            console.log(`[SESSION] ${socket.user.username} (ID: ${socket.user.id}, Socket: ${socket.id}) parked: the account is live on another client and this was an automatic reconnect.`);
+            recordSessionEvent('session_parked', socket, session.intent);
+            socket.emit('sessionDisplaced', { reason: 'active-elsewhere' });
+            if (typeof socket.disconnect === 'function') socket.disconnect(true);
+            return;
+        }
         if (typeof socket.use === 'function') {
             const createBudget = (burst, rate, label, message) => ({
                 burst, rate, label, message,
@@ -320,7 +361,25 @@ const registerGameHandlers = (io, gameService, options = {}) => {
                 })
                 .catch(err => console.error("Error refreshing tokens on reconnect:", err));
         }
-        
+
+        // Put the account's other clients down. This runs only now, after
+        // this socket holds the seat and the tournament entry, so each closed
+        // socket's 'disconnect' finds nothing left to hand over or mark
+        // offline — the table never sees the player blink. The client shows
+        // "Play here" and stays off until the player asks for it back.
+        for (const displacedSocketId of sessionRuling.displace) {
+            const displacedSocket = io.sockets?.sockets?.get(displacedSocketId);
+            if (!displacedSocket) continue;
+            // This client's own stale socket is an ordinary reconnect beating
+            // a timeout; only another client counts as a second device.
+            if (displacedSocket.data?.clientId !== session.clientId) {
+                console.log(`[SESSION] ${socket.user.username} (ID: ${socket.user.id}): ${socket.id} took the account over (${sessionRuling.basis}); closing ${displacedSocketId} on another client.`);
+                recordSessionEvent('session_displaced', socket, sessionRuling.basis);
+            }
+            displacedSocket.emit('sessionDisplaced', { reason: 'claimed-elsewhere' });
+            if (typeof displacedSocket.disconnect === 'function') displacedSocket.disconnect(true);
+        }
+
         socket.emit("lobbyState", gameService.getLobbyState());
 
         // ===================== TOURNAMENTS =====================
@@ -1248,6 +1307,12 @@ const registerGameHandlers = (io, gameService, options = {}) => {
             socketIdentityRefreshStopped = true;
             cancelInterval(socketIdentityRefreshTimer);
             const socketUserKey = String(socket.user.id);
+            // Starts the owner's grace clock when its last socket closes.
+            sessionRegistry.noteDisconnect(
+                socket.user.id,
+                socket.data?.clientId,
+                otherLiveSocketsOf(socket).some(other => other.clientId === socket.data?.clientId),
+            );
             let promotedFallbackSocket = null;
             if (latestSocketIdByUser.get(socketUserKey) === socket.id) {
                 // A user may still have an older tab/connection alive. Promote

@@ -26,6 +26,7 @@ import PrivacyPolicy from "./components/legal/PrivacyPolicy.js";
 import TermsOfService from "./components/legal/TermsOfService.js";
 import FirstGameWelcome, { shouldShowFirstGameWelcome } from "./components/FirstGameWelcome.js";
 import OrientationScrim from "./components/OrientationScrim.js";
+import SessionScrim from "./components/SessionScrim.js";
 import SluffIdent from "./components/SluffIdent.js";
 import DecorBoundary from "./components/DecorBoundary.js";
 import { extractInviteTableId } from "./utils/tableInvites.js";
@@ -33,6 +34,7 @@ import { extractInviteTournamentId } from "./utils/tournamentInvites.js";
 import { onViewportSettle, resetStrayScroll, viewportSnapshot } from "./utils/viewportSettle.js";
 import { startLayoutBeacon } from "./utils/layoutBeacon.js";
 import { newBuildAvailable } from "./utils/clientVersion.js";
+import { markAutoReload, parkedAs, requestClaim, setParked, settleClaim, socketAuthFor } from "./utils/clientSession.js";
 import "./App.css";
 import "./components/AdminView.css";
 import "./styles/no-scroll-fix.css"; // Prevent all scrolling in game view
@@ -100,12 +102,18 @@ function App() {
     const [connectionNotice, setConnectionNotice] = useState(null);
     const [serverVersion, setServerVersion] = useState('');
     const [showMercyWindow, setShowMercyWindow] = useState(false);
+    // One account, one live client (utils/clientSession.js). Set while the
+    // server has put this client down for another device or tab: the app is
+    // replaced by SessionScrim and nothing reconnects until "Play here". The
+    // ref is for the socket and foreground handlers, which must not re-bind.
+    const [sessionDisplaced, setSessionDisplaced] = useState(parkedAs);
+    const sessionDisplacedRef = React.useRef(sessionDisplaced);
     const {
         playSound, playDealSounds, playWheelTick, playWheelSettle, playMidnightSpecial,
         prefetchChampionLine, playChampionSting, playTournamentWelcome, playRoundBell, playRoundCall, announcerSpeaking,
         enableSound, soundSettings,
     } = useSounds({
-        musicActive: Boolean(user) && (view === 'lobby' || view === 'gameTable'),
+        musicActive: Boolean(user) && !sessionDisplaced && (view === 'lobby' || view === 'gameTable'),
     });
     // The venue wheel's flapper-and-clunk voice, bundled for the lobby.
     const wheelAudio = React.useMemo(
@@ -187,8 +195,28 @@ function App() {
         watchingTableIdRef.current = null;
         setSocketSessionReady(false);
         setInviteJoinInFlight(false);
+        // Parking belongs to the account that was signed in, not the tab.
+        setParked(null);
+        sessionDisplacedRef.current = null;
+        setSessionDisplaced(null);
         socket.disconnect();
     }, []);
+
+    // "Play here" on the SessionScrim: the one deliberate way back in. The
+    // connect goes out as a claim, so the server puts the other client down
+    // and reseats this one.
+    const handlePlayHere = useCallback(() => {
+        if (!token) return;
+        setParked(null);
+        requestClaim();
+        sessionDisplacedRef.current = null;
+        setSessionDisplaced(null);
+        // Nothing queued while this client was put down may replay now.
+        socket.sendBuffer = [];
+        socket.auth = socketAuthFor(token);
+        socket.connect();
+        socket.emit("requestUserSync");
+    }, [token]);
 
     // The API already swapped the stored JWT for one carrying the new name.
     // Re-reading it keeps `token` in step, and requestUserSync repoints the
@@ -226,6 +254,12 @@ function App() {
         // (AuthContainer logged out, the overlay logged in). Re-derive from the
         // path so a document open at login is still open after it.
         setLegalPage(legalPageFromPath());
+        // Signing in is as deliberate as it gets: this client takes the
+        // account from any other device still holding it.
+        requestClaim();
+        setParked(null);
+        sessionDisplacedRef.current = null;
+        setSessionDisplaced(null);
         localStorage.setItem("sluff_token", data.token);
         setToken(data.token);
         setUser(data.user);
@@ -310,11 +344,16 @@ function App() {
 
     useEffect(() => {
         if (token) {
-            socket.auth = { token };
-            socket.connect();
-            socket.emit("requestUserSync");
+            socket.auth = socketAuthFor(token);
+            // A parked client stays off — across a reload too — until the
+            // player taps "Play here" (handlePlayHere).
+            if (!sessionDisplacedRef.current) {
+                socket.connect();
+                socket.emit("requestUserSync");
+            }
 
             const onConnect = () => {
+                settleClaim();
                 serverRestartingRef.current = false;
                 socket.emit('tournamentSync');
                 // Only a genuine reconnect while seated expects a reseat; a
@@ -332,7 +371,7 @@ function App() {
                 }
             };
             const onDisconnect = (reason) => {
-                if (reason === 'io client disconnect') return;
+                if (reason === 'io client disconnect' || sessionDisplacedRef.current) return;
                 if (connectionNoticeTimerRef.current) clearTimeout(connectionNoticeTimerRef.current);
                 // ~1.2s after the restart notice the socket drops; keep telling
                 // the truth ("updating") instead of reverting to a scary
@@ -458,7 +497,10 @@ function App() {
                 // manual refresh would — the server reseats this connection
                 // on connect — so heal silently instead of showing an error.
                 if (/no longer controls/i.test(msg)) {
-                    if (Date.now() - seatReclaimAtRef.current > 5000) {
+                    // The reconnect goes out as a 'resume', so it can never
+                    // take the seat from another live client — the server
+                    // parks this one instead of letting the two fight.
+                    if (!sessionDisplacedRef.current && Date.now() - seatReclaimAtRef.current > 5000) {
                         seatReclaimAtRef.current = Date.now();
                         socket.disconnect();
                         socket.connect();
@@ -502,6 +544,29 @@ function App() {
                 if (connectionNoticeTimerRef.current) clearTimeout(connectionNoticeTimerRef.current);
                 setConnectionNotice({ kind: 'reconnecting', message: 'Sluff is updating — back in a moment. Games resume automatically.' });
             };
+            // The account went live on another device or tab and the server
+            // put this client down. Stand down completely: two clients that
+            // both reconnect by themselves trade the seat forever. The table
+            // is dropped so the felt, its timers and the voice mic unmount;
+            // "Play here" reconnects and the server reseats us as usual.
+            const onSessionDisplaced = (notice) => {
+                const reason = notice?.reason === 'active-elsewhere' ? 'active-elsewhere' : 'claimed-elsewhere';
+                setParked(reason);
+                settleClaim();
+                sessionDisplacedRef.current = reason;
+                setSessionDisplaced(reason);
+                socket.disconnect();
+                awaitingReseatRef.current = false;
+                tableRef.current = null;
+                setCurrentTableState(null);
+                setWatchingTableId(null);
+                setView(v => (v === 'gameTable' ? 'lobby' : v));
+                setSocketSessionReady(false);
+                setInviteJoinInFlight(false);
+                setErrorMessage('');
+                if (connectionNoticeTimerRef.current) clearTimeout(connectionNoticeTimerRef.current);
+                setConnectionNotice(null);
+            };
 
             socket.on('connect', onConnect);
             socket.on('disconnect', onDisconnect);
@@ -521,6 +586,7 @@ function App() {
             socket.on('identityChanged', onIdentityChanged);
             socket.on('accountDeleted', onAccountDeleted);
             socket.on('serverRestarting', onServerRestarting);
+            socket.on('sessionDisplaced', onSessionDisplaced);
             socket.on('tournamentLobby', onTournamentLobby);
             socket.on('tournamentState', onTournamentState);
             socket.on('tournamentActionFailed', onTournamentActionFailed);
@@ -547,6 +613,7 @@ function App() {
                 socket.off('identityChanged', onIdentityChanged);
                 socket.off('accountDeleted', onAccountDeleted);
                 socket.off('serverRestarting', onServerRestarting);
+                socket.off('sessionDisplaced', onSessionDisplaced);
                 if (errorMessageTimerRef.current) clearTimeout(errorMessageTimerRef.current);
                 if (connectionNoticeTimerRef.current) clearTimeout(connectionNoticeTimerRef.current);
             };
@@ -574,14 +641,18 @@ function App() {
         const STALE_AFTER_HIDDEN_MS = 20 * 1000;
         const ensureConnected = () => {
             if (document.visibilityState !== 'visible') return;
+            // Coming to the foreground is not the player asking for this
+            // client back: a parked one waits for "Play here", and the
+            // reconnects below go out as a 'resume'.
+            if (sessionDisplacedRef.current) return;
             const hiddenAt = socketHiddenAtRef.current;
             socketHiddenAtRef.current = null;
             if (!socket.connected) {
-                socket.auth = { token };
+                socket.auth = socketAuthFor(token);
                 socket.connect();
             } else if (hiddenAt !== null && Date.now() - hiddenAt >= STALE_AFTER_HIDDEN_MS) {
                 socket.disconnect();
-                socket.auth = { token };
+                socket.auth = socketAuthFor(token);
                 socket.connect();
             }
         };
@@ -638,7 +709,12 @@ function App() {
         // "Seated anywhere" is the real guard: a player checking the
         // leaderboard mid-game is still in a live hand.
         const applyIfSafe = () => {
-            if (viewRef.current !== 'gameTable' && tableRef.current === null) window.location.reload();
+            if (viewRef.current !== 'gameTable' && tableRef.current === null) {
+                // The page this boots into reconnects as a 'resume': a reload
+                // nobody asked for must not take the account from another device.
+                markAutoReload();
+                window.location.reload();
+            }
         };
         const check = async () => {
             if (pendingReloadRef.current) { applyIfSafe(); return; }
@@ -663,7 +739,10 @@ function App() {
 
     // A stale client that was mid-game reloads as soon as it leaves the table.
     useEffect(() => {
-        if (view !== 'gameTable' && !currentTableState && pendingReloadRef.current) window.location.reload();
+        if (view !== 'gameTable' && !currentTableState && pendingReloadRef.current) {
+            markAutoReload();
+            window.location.reload();
+        }
     }, [view, currentTableState]);
 
     // Native deep links arrive as a window event (see utils/nativeInit.js)
@@ -907,6 +986,20 @@ function App() {
                 <OrientationScrim />
                 <AuthContainer onLoginSuccess={handleLoginSuccess} inviteTableId={pendingInviteTableId} inviteTournamentId={pendingInviteTournamentId} />
             </div>
+        );
+    }
+
+    // Put down for another device or tab: the scrim stands in for the whole
+    // app, so the felt, its timers and the voice mic are not running here.
+    if (sessionDisplaced) {
+        return (
+            <>
+                {showBootIdent && (
+                    <SluffIdent key={bootIdentRun} onDone={() => setShowBootIdent(false)} />
+                )}
+                <OrientationScrim />
+                <SessionScrim reason={sessionDisplaced} onPlayHere={handlePlayHere} />
+            </>
         );
     }
 

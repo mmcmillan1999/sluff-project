@@ -1,0 +1,108 @@
+/* frontend/src/components/SessionScrim.css */
+/* Same felt-and-gold treatment as OrientationScrim so it reads as part of the
+   game. Sizes are rem on purpose: this covers every view on every device, and
+   the button must stay a comfortable tap target on all of them. */
+
+.session-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 90000;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1.5rem;
+    padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+    box-sizing: border-box;
+    text-align: center;
+    background: radial-gradient(ellipse at 50% 35%, #15673a 0%, #0f4d2a 55%, #0a3a1f 100%);
+    color: #fff;
+}
+
+.session-scrim__devices {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.9rem;
+    margin-bottom: 1rem;
+}
+
+.session-scrim__device {
+    width: 2.6rem;
+    height: 4.3rem;
+    border: 0.2rem solid #f6cf74;
+    border-radius: 0.55rem;
+    box-sizing: border-box;
+    box-shadow: 0 0.4rem 1.2rem rgba(0, 0, 0, 0.45);
+}
+
+.session-scrim__device--idle {
+    opacity: 0.4;
+}
+
+.session-scrim__device--live {
+    background: rgba(246, 207, 116, 0.22);
+    animation: session-scrim-live 2.4s ease-in-out infinite;
+}
+
+@keyframes session-scrim-live {
+    0%, 100% { background: rgba(246, 207, 116, 0.16); }
+    50%      { background: rgba(246, 207, 116, 0.42); }
+}
+
+.session-scrim__title {
+    margin: 0;
+    font-family: 'Oswald', sans-serif;
+    font-size: 1.45rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: #f6cf74;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.session-scrim__copy {
+    margin: 0;
+    max-width: 24rem;
+    font-size: 1rem;
+    line-height: 1.4;
+    color: rgba(255, 255, 255, 0.88);
+}
+
+/* Every property App.css's global `button` rule sets is set here too. */
+.session-scrim .session-scrim__button {
+    margin: 1.1rem 0 0;
+    padding: 0.85rem 2.4rem;
+    min-height: 3rem;
+    border: none;
+    border-radius: 0.6rem;
+    background-color: #f6cf74;
+    color: #0a3a1f;
+    font-family: 'Oswald', sans-serif;
+    font-size: 1.15rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    box-shadow: 0 0.4rem 1.2rem rgba(0, 0, 0, 0.4);
+}
+
+.session-scrim .session-scrim__button:hover {
+    background-color: #ffe09a;
+}
+
+.session-scrim .session-scrim__button:focus-visible {
+    outline: 0.18rem solid #fff;
+    outline-offset: 0.2rem;
+}
+
+.session-scrim__note {
+    margin: 0.35rem 0 0;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .session-scrim__device--live {
+        animation: none;
+    }
+}
