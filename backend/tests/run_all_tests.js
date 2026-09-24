@@ -54,6 +54,7 @@ const suites = [
     { name: 'bot brain profiles', file: './botBrains.test.js' },
     { name: 'raven brain', file: './ravenBrain.test.js' },
     { name: 'raven 1.x candidates', file: './ravenNext.test.js' },
+    { name: 'opus-5.5 candidate', file: './opusBrain.test.js' },
     // After the raven suites: its whole-round test loads scripts/simulate-brains,
     // which registers practice seats the bot roster count must not see.
     { name: 'insurance pricing', file: './insurancePricing.test.js' },

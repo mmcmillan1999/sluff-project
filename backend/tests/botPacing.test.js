@@ -43,8 +43,9 @@ async function runBotPacingTests() {
         pass('Fixed profile: 1.2 s (Stephen Richins 2.4 s), times the learner pace.');
     }
 
-    // 3) Human profile reproduces the fitted sample: overall median near
-    //    2.7 s, mean near 3.3 s, sd near 2.1 s; trick 1 slower than trick 11.
+    // 3) Human profile reproduces the fitted sample at HUMAN_SPEED (0.67,
+    //    Sept 24 2026): overall median near 1.8 s, mean near 2.2 s, sd near
+    //    1.4 s; trick 1 slower than trick 11.
     {
         const rng = makeRng(2026);
         const all = [];
@@ -56,12 +57,12 @@ async function runBotPacingTests() {
             (byTrick[trickNumber] = byTrick[trickNumber] || []).push(ms);
         }
         const overall = stats(all);
-        assert.ok(overall.median > 2400 && overall.median < 3100, `median ${overall.median}`);
-        assert.ok(overall.mean > 3000 && overall.mean < 3700, `mean ${overall.mean}`);
-        assert.ok(overall.sd > 1700 && overall.sd < 2500, `sd ${overall.sd}`);
+        assert.ok(overall.median > 1600 && overall.median < 2100, `median ${overall.median}`);
+        assert.ok(overall.mean > 2000 && overall.mean < 2500, `mean ${overall.mean}`);
+        assert.ok(overall.sd > 1100 && overall.sd < 1700, `sd ${overall.sd}`);
         assert.ok(overall.min >= pacing.HUMAN_MIN_MS && overall.max <= pacing.HUMAN_MAX_MS);
-        assert.ok(stats(byTrick[1]).median > stats(byTrick[11]).median + 800, 'trick 1 is slower than the last trick');
-        pass(`Human profile: median ${Math.round(overall.median)} ms, mean ${Math.round(overall.mean)} ms, sd ${Math.round(overall.sd)} ms (target 2.7 s / 3.3 s / 2.1 s).`);
+        assert.ok(stats(byTrick[1]).median > stats(byTrick[11]).median + 500, 'trick 1 is slower than the last trick');
+        pass(`Human profile: median ${Math.round(overall.median)} ms, mean ${Math.round(overall.mean)} ms, sd ${Math.round(overall.sd)} ms (target 1.8 s / 2.2 s / 1.4 s).`);
     }
 
     // 4) A forced play is quicker; every value is an integer inside the clamp.

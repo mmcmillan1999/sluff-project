@@ -1,0 +1,5 @@
+{
+  "measured": "2026-09-22",
+  "source": "scripts/calibrate-opus-bids.js: 4,800 rounds at a raven-1.2 x3 table (seeds 31000-42000) and 2,400 at raven-1.2/counting/sphinx (51000-56000); bidder points the face-up playouts over-state. Frog +0.4 / -1.1, Solo +4.0 / +2.4, Heart Solo +4.5 / +5.0 (±0.2-0.7).",
+  "offsets": { "Frog": 0, "Solo": 3.5, "Heart Solo": 4.7 }
+}

@@ -109,13 +109,22 @@ function buildPublicView(engine, botName) {
         if (suit === trumpSuit) brokenDuringReplay = true;
     };
 
+    // Every card in the order it hit the table, grouped by trick with its
+    // seat attribution — the same record a human who watched the round has.
+    // Search brains replay it to ask how likely each seat's plays were in a
+    // sampled world (bot-brains/playInference.js).
+    const tricks = [];
     for (const trick of completedTricks) {
         const leaderIdx = activeNames.indexOf(leaderName);
         if (leaderIdx === -1) return null;
         const leadSuit = getSuit(trick.cards[0]);
+        const plays = [];
         trick.cards.forEach((card, i) => {
-            replayPlay(activeNames[(leaderIdx + i) % n], card, i, leadSuit);
+            const playerName = activeNames[(leaderIdx + i) % n];
+            replayPlay(playerName, card, i, leadSuit);
+            plays.push({ playerName, card });
         });
+        tricks.push({ leaderName, plays });
         leaderName = trick.winnerName;
     }
 
@@ -128,6 +137,7 @@ function buildPublicView(engine, botName) {
         .map(play => ({ playerName: play.playerName, card: play.card }));
     const partialLeadSuit = partialTrick.length > 0 ? getSuit(partialTrick[0].card) : null;
     partialTrick.forEach((play, i) => replayPlay(play.playerName, play.card, i, partialLeadSuit));
+    if (partialTrick.length > 0) tricks.push({ leaderName: partialTrick[0].playerName, plays: partialTrick.map(play => ({ ...play })) });
 
     const trickLeaderName = partialTrick.length > 0
         ? partialTrick[0].playerName
@@ -174,6 +184,7 @@ function buildPublicView(engine, botName) {
         tricksPlayed: engine.tricksPlayedCount || 0,
         partialTrick,
         partialLeadSuit,
+        tricks,
         trickLeaderName,
         frog,
         scores,

@@ -29,6 +29,10 @@ class BotPlayer {
     }
 
     decideBid() {
+        // A brain with its own auction (opus-5.5) bids for itself; every live
+        // brain has none and uses the shared evaluator below.
+        const brain = brainFor(this.playerName);
+        if (brain.decideBid) return brain.decideBid(this.engine, this);
         // The evaluator lives in bidAdvice.js, shared with the player-facing
         // bid hint — thresholds and their tuning notes live there. The
         // strategy resolves per bot name (sim-rotated candidates; production
@@ -38,6 +42,8 @@ class BotPlayer {
     }
 
     decideFrogUpgrade() {
+        const brain = brainFor(this.playerName);
+        if (brain.decideFrogUpgrade) return brain.decideFrogUpgrade(this.engine, this);
         const hand = this.engine.hands[this.playerName] || [];
         const { points, suits } = this._analyzeHand(hand);
         if (suits.H >= 5 && points > 35) {
@@ -47,6 +53,8 @@ class BotPlayer {
     }
 
     chooseTrump() {
+        const brain = brainFor(this.playerName);
+        if (brain.chooseTrump) return brain.chooseTrump(this.engine, this);
         const hand = this.engine.hands[this.playerName] || [];
         const handStats = this._analyzeHand(hand);
         let bestSuit = 'C';
@@ -61,6 +69,8 @@ class BotPlayer {
     }
 
     submitFrogDiscards() {
+        const brain = brainFor(this.playerName);
+        if (brain.submitFrogDiscards) return brain.submitFrogDiscards(this.engine, this);
         // Strategy resolves per bot name (frogDiscards.js registry) — the
         // sim rotates candidates; production runs the default.
         const hand = this.engine.hands[this.playerName] || [];

@@ -4,7 +4,7 @@
 // where Aces and 10s live, plus (1.2) explicit risk controls on defense. Born
 // from the Sept 2026 sighting of the raven seats leading a 10 under an
 // unplayed ace. These tests pin
-//   1. who plays what — raven-1.2 on the two raven seats and nowhere else,
+//   1. who plays what — raven-1.2 on Grandpa George and nowhere else,
 //      raven-1.1 on no bot — and that raven itself is untouched;
 //   2. the information boundary — same trapped engine as raven's;
 //   3. the repaired beliefs: a Frog bidder never buries an ace, key cards
@@ -104,7 +104,8 @@ async function runRavenNextTests() {
     const pass = (name) => console.log(`  ✔ Test ${testCounter++}: ${name}`);
     const candidates = Object.keys(PROFILES);
 
-    // 1) Registered; raven-1.2 on the two raven seats (Matt, Sept 17 2026) and
+    // 1) Registered; raven-1.2 on Grandpa George (both raven seats Sept 17 2026;
+    //    Courtney M. moved to opus-5.5 Sept 24) and
     //    nowhere else; raven-1.1 on no bot; raven exactly what it was.
     {
         assert.deepStrictEqual(candidates, ['raven-1.1', 'raven-1.2']);
@@ -122,15 +123,15 @@ async function runRavenNextTests() {
             .filter(([bot, brain]) => candidates.includes(brain) && !/^raven-1\.\d [ABC]$/.test(bot))
             .map(([bot, brain]) => `${bot}=${brain}`)
             .sort();
-        assert.deepStrictEqual(seated, ['Courtney M.=raven-1.2', 'Grandpa George=raven-1.2'],
-            'raven-1.2 plays the two raven seats and no other bot; raven-1.1 plays none');
+        assert.deepStrictEqual(seated, ['Grandpa George=raven-1.2'],
+            'raven-1.2 plays Grandpa George and no other bot (Courtney M. moved to opus-5.5 Sept 24 2026); raven-1.1 plays none');
         assert.strictEqual(brainNameFor('Doc Shuffle'), 'sphinx', 'sphinx keeps its own brain');
         assert.ok(BRAINS.raven && BRAINS['raven-1.1'], 'raven and raven-1.1 stay registered: the simulators’ baselines and a one-line rollback');
         assert.strictEqual(raven.DEFAULTS.frogBuryModel, 'market');
         assert.strictEqual(raven.DEFAULTS.keyCardModel, 'off');
         assert.strictEqual(raven.DEFAULTS.tenLeadGuard, 'off');
         assert.strictEqual(raven.DEFAULTS.riskAversion, 0);
-        pass('raven-1.2 holds the two raven seats, raven-1.1 holds none, and raven’s own defaults are untouched.');
+        pass('raven-1.2 holds Grandpa George, raven-1.1 holds none, and raven’s own defaults are untouched.');
     }
 
     // 2) Information boundary, in the round type the repair touches most.

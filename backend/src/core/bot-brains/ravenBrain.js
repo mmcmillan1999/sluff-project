@@ -46,6 +46,7 @@ const { buildPublicView } = require('../bot-strategies/PublicRoundView');
 const { sampleWorld, makeRng } = require('../bot-strategies/RolloutEstimator');
 const countingBrain = require('./countingBrain');
 const search = require('./ravenSearch');
+const playInference = require('./playInference');
 
 const rankValue = (card) => RANKS_ORDER.indexOf(gameLogic.getRank(card));
 const pointValue = (card) => CARD_POINT_VALUES[gameLogic.getRank(card)] || 0;
@@ -93,6 +94,13 @@ const DEFAULTS = {
     tenLeadGuard: 'off',      // defender leading a 10 under an unaccounted Ace
     riskAversion: 0,          // defender's penalty on a lead's downside across worlds
     unbiasedDeal: false,      // deal hidden hands without the void-order bias (RolloutEstimator.dealHands)
+    // Reading the table (Opus 5.5, Sept 2026; OFF for raven and 1.x): sample
+    // a larger pool of worlds, weight each by how well it explains the plays
+    // the other seats have made (playInference.js), and search the worlds
+    // drawn from that weighting. { pool, beta, epsilon } — pool worlds
+    // sampled, beta tempers the likelihood (1 = full Bayes), epsilon is the
+    // play model's uniform floor.
+    inference: null,
 };
 
 // Round payoff for THIS seat given the bidder's final card points. Made bids
@@ -170,6 +178,44 @@ const buildState = (view, world) => {
     });
 };
 
+// Reading the table: sample `pool` worlds, score each by the log-likelihood
+// of the public play history in it, and return a draw function that hands out
+// worlds by systematic resampling on weight^beta — the worlds that explain
+// what the other seats did come up often, the ones that do not, rarely.
+// Early in the round (nothing played by anyone else) this is plain sampling.
+function weightedWorlds(view, samplingView, rng, config) {
+    const { pool = 160, beta = 1, epsilon = 0.1 } = config.inference;
+    const othersPlayed = view.activeNames.some(name => name !== view.botName && (view.playedBy[name] || []).length > 0);
+    if (!othersPlayed) return () => sampleWorld(samplingView, rng);
+    const worlds = [];
+    const logw = [];
+    for (let i = 0; i < pool; i += 1) {
+        const world = sampleWorld(samplingView, rng);
+        worlds.push(world);
+        logw.push(beta * playInference.historyLogLikelihood(view, world, { epsilon }));
+    }
+    const max = Math.max(...logw);
+    const weights = logw.map(v => Math.exp(v - max));
+    const total = weights.reduce((a, b) => a + b, 0);
+    // Systematic resampling into config.worlds slots, in random order.
+    const n = config.worlds;
+    const picks = [];
+    const step = total / n;
+    let u = rng() * step;
+    let acc = 0;
+    let i = 0;
+    for (let k = 0; k < n; k += 1) {
+        while (i < worlds.length - 1 && acc + weights[i] < u) { acc += weights[i]; i += 1; }
+        picks.push(worlds[i]);
+        u += step;
+    }
+    for (let k = picks.length - 1; k > 0; k -= 1) {
+        const j = Math.floor(rng() * (k + 1));
+        [picks[k], picks[j]] = [picks[j], picks[k]];
+    }
+    return (w) => picks[w % picks.length];
+}
+
 // One search brain = this engine plus a profile of option overrides. raven is
 // the profile with none; a sibling brain (ravenNextBrain.js) is the same
 // engine with its own defaults, so two of them can sit at one simulator table
@@ -232,9 +278,10 @@ function createSearchBrain(profile = {}) {
             keyCardStrength: config.keyCardStrength,
             unbiasedDeal: config.unbiasedDeal === true,
         };
+        const drawWorld = config.inference ? weightedWorlds(view, samplingView, rng, config) : () => sampleWorld(samplingView, rng);
         for (let w = 0; w < config.worlds; w += 1) {
             if (used >= config.minWorlds && now() - started > config.timeBudgetMs) break;
-            const world = sampleWorld(samplingView, rng);
+            const world = drawWorld(w);
             const st = buildState(view, world);
             st.fixedSeats = fixedSeatsFor(view, me);
             const tt = new Map(); // shared by every candidate in this world

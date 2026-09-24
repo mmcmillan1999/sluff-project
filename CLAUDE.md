@@ -172,6 +172,17 @@ Debug overlay in game: `Shift+D`.
   `RAVEN_TIME_MS=1000000` — the 90 ms wall-clock guard makes a loaded machine non-deterministic. Do NOT "fix"
   the market's Frog prior in isolation: the market under-estimates bidders everywhere and that prior masks it.
 
+- Opus 5.5 (Sept 2026): `bot-brains/opusBrain.js` — raven-1.2's card play plus its OWN auction, Solo trump call
+  and Frog burial, searched by playing the hand out over random deals of the unseen cards (`opusBidding.js`:
+  48 worlds per contract, face-up bias subtracted per bid type from `opusBidCalibration.json`, bid bar −10).
+  `BotPlayer` defers decideBid / chooseTrump / decideFrogUpgrade / submitFrogDiscards to a brain that defines
+  them — only opus does. **Plays Courtney M. since Sept 24 2026; Grandpa George stays raven-1.2 as the live
+  control.** Measured vs raven-1.2 in the same seat, 12,000 fresh paired rounds: +2.6 to +3.8 pts/round
+  (`scripts/simulate-seat.js`, the whole-round harness — bids differ, so it pairs the seat's score); round
+  robin 50.8% vs 42.6%. Tuned against bots only. Table-reading inference (`playInference.js`, option
+  `inference`) is built and OFF: truer beliefs, no better play. Both raven seats' think time runs at
+  `botPacing.HUMAN_SPEED` 0.67 since Sept 24 (mean ~2.2 s, median ~1.8 s).
+
 ## Conventions
 - Game layout sizes in vh/vw only; cards keep 5:7 aspect ratio; header is 7.5vh.
 - Positioning uses wrapper components (`docs/PLAYERSEAT_POSITIONING_SYSTEM.md`).

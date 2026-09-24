@@ -21,6 +21,7 @@ const coyoteBrain = require('./coyoteBrain');
 const sphinxBrain = require('./sphinxBrain');
 const ravenBrain = require('./ravenBrain');
 const ravenNext = require('./ravenNextBrain');
+const opus = require('./opusBrain');
 
 const BRAINS = {
     classic: classicBrain,
@@ -37,6 +38,10 @@ const BRAINS = {
     // original raven stay registered for the simulators and as a one-line
     // rollback in BRAIN_PROFILES below.
     ...ravenNext.brains,
+    // opus-5.5 (Sept 2026): raven-1.2's card play plus an auction, trump
+    // call and Frog burial searched by playing the hand out (opusBrain.js).
+    // Plays Courtney M. since Sept 24 2026.
+    ...opus.brains,
 };
 
 // Unknown names (future bot accounts not yet assigned below) get a solid
@@ -82,8 +87,11 @@ const BRAIN_PROFILES = {
     // defense (z -5.2) and won the five-brain round robin, 44.9% to raven's
     // 43.1%. round_results records the brain per round, so the live series
     // breaks cleanly from 'raven' to 'raven-1.2' at this deploy.
+    // Sept 24 2026: Courtney M. moved to opus-5.5 (Matt's call) — raven-1.2's
+    // card play with its own searched auction, trump call and Frog burial
+    // (opusBrain.js); Grandpa George stays on raven-1.2 as the live control.
     'Grandpa George': 'raven-1.2',
-    'Courtney M.': 'raven-1.2',
+    'Courtney M.': 'opus-5.5',
 };
 
 const brainNameFor = (botName) => BRAIN_PROFILES[botName] || DEFAULT_BRAIN;

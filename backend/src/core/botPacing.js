@@ -13,7 +13,9 @@
 //           Aug 5 – Sept 7 2026: 2,028 card plays, the slow tail past 12 s
 //           dropped on Matt's instruction). Overall that sample has median
 //           2.7 s, mean 3.3 s, sd 2.1 s; trick 1 is the slowest (median
-//           3.2 s) and the last trick the quickest (1.8 s). A forced play
+//           3.2 s) and the last trick the quickest (1.8 s). Since Sept 24
+//           2026 the draw runs at HUMAN_SPEED (0.67): median ~1.8 s, mean
+//           ~2.2 s. A forced play
 //           (one legal card) is shortened, since nobody deliberates over it.
 //
 // The draw is clamped so a bot can never look AFK (12 s, 8 s at a tournament
@@ -36,6 +38,12 @@ const HUMAN_TRICK_PARAMS = Object.freeze([
     [7.764, 0.512],
     [7.548, 0.465],
 ]);
+
+// Sept 24 2026 (Matt): the human-paced seats play about a third quicker —
+// every draw scaled by this, so the shape (slow first trick, quick last one,
+// the long tail) is kept and only the clock runs faster: median ~1.8 s, mean
+// ~2.2 s, still slower than the 1.2 s fixed beat.
+const HUMAN_SPEED = 0.67;
 
 const HUMAN_MIN_MS = 700;
 const HUMAN_MAX_MS = 12_000;
@@ -77,7 +85,7 @@ const clamp = (value, lo, hi) => Math.min(hi, Math.max(lo, value));
 function sampleHumanThinkMs({ trickNumber = 1, legalCount = 2, rng = Math.random } = {}) {
     const index = clamp(Math.round(Number(trickNumber) || 1), 1, HUMAN_TRICK_PARAMS.length) - 1;
     const [mu, sigma] = HUMAN_TRICK_PARAMS[index];
-    let ms = Math.exp(mu + sigma * gaussian(rng));
+    let ms = Math.exp(mu + sigma * gaussian(rng)) * HUMAN_SPEED;
     if (Number(legalCount) === 1) ms *= FORCED_PLAY_FACTOR;
     return clamp(Math.round(ms), HUMAN_MIN_MS, HUMAN_MAX_MS);
 }
@@ -108,6 +116,7 @@ function botPlayDelay(botName, { trickNumber = 1, legalCount = 2, pace = 1, tour
 module.exports = {
     PACING_PROFILES,
     HUMAN_TRICK_PARAMS,
+    HUMAN_SPEED,
     HUMAN_MIN_MS,
     HUMAN_MAX_MS,
     HUMAN_TOURNAMENT_MAX_MS,
