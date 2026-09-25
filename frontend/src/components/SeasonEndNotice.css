@@ -1,0 +1,144 @@
+/* Season 2 closing notice — same felt-green card family as FirstGameWelcome. */
+.season-end-notice,
+.season-end-notice * {
+    box-sizing: border-box;
+}
+
+.season-end-notice {
+    position: fixed;
+    inset: 0;
+    z-index: 3150;
+    display: grid;
+    grid-template-columns: minmax(0, 420px);
+    justify-content: center;
+    align-content: center;
+    padding: max(18px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+    background:
+        radial-gradient(circle at 50% 12%, rgba(221, 183, 98, 0.2), transparent 35%),
+        rgba(10, 18, 17, 0.86);
+    backdrop-filter: blur(8px);
+}
+
+.season-end-notice__card {
+    width: 100%;
+    max-height: 100%;
+    overflow-y: auto;
+    padding: clamp(22px, 6vw, 34px) clamp(20px, 6vw, 32px) clamp(20px, 5vw, 28px);
+    color: #f8f4e9;
+    text-align: center;
+    border: 1px solid rgba(225, 195, 126, 0.52);
+    border-radius: 24px;
+    outline: none;
+    background: linear-gradient(155deg, #183b32 0%, #102820 62%, #0b1d18 100%);
+    box-shadow: 0 26px 70px rgba(0, 0, 0, 0.48), inset 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.season-end-notice__eyebrow {
+    margin-bottom: 8px;
+    color: #dfbd70;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+.season-end-notice__card h1 {
+    margin: 0;
+    color: #f8f4e9;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(1.8rem, 8vw, 2.4rem);
+    font-weight: 700;
+    line-height: 1.05;
+    text-wrap: balance;
+}
+
+.season-end-notice__date {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    width: 76px;
+    margin: 16px auto 4px;
+    overflow: hidden;
+    border: 1px solid rgba(225, 195, 126, 0.55);
+    border-radius: 12px;
+    background: rgba(248, 244, 233, 0.06);
+}
+
+.season-end-notice__month {
+    width: 100%;
+    padding: 3px 0;
+    color: #172419;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    background: linear-gradient(180deg, #f2d795, #d4aa55);
+}
+
+.season-end-notice__day {
+    padding: 2px 0 6px;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1.1;
+}
+
+.season-end-notice__intro {
+    max-width: 34ch;
+    margin: 12px auto 6px;
+    color: rgba(248, 244, 233, 0.9);
+    font-size: 0.98rem;
+    line-height: 1.5;
+}
+
+.season-end-notice__local {
+    margin: 0 auto 14px;
+    color: rgba(248, 244, 233, 0.7);
+    font-size: 0.88rem;
+}
+
+.season-end-notice__local strong {
+    color: #f2d795;
+    font-weight: 700;
+}
+
+.season-end-notice__points {
+    margin: 0 0 20px;
+    padding: 14px 16px 14px 34px;
+    text-align: left;
+    color: rgba(248, 244, 233, 0.82);
+    font-size: 0.9rem;
+    line-height: 1.45;
+    border: 1px solid rgba(225, 195, 126, 0.25);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.035);
+}
+
+.season-end-notice__points li + li {
+    margin-top: 8px;
+}
+
+.season-end-notice__primary {
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 18px;
+    color: #172419;
+    font-size: 1rem;
+    font-weight: 800;
+    border: 1px solid #f0d28c;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #f2d795, #d4aa55);
+    box-shadow: 0 8px 22px rgba(2, 8, 6, 0.36);
+    cursor: pointer;
+}
+
+.season-end-notice__primary:focus-visible {
+    outline: 3px solid rgba(242, 215, 149, 0.6);
+    outline-offset: 3px;
+}
+
+@media (max-height: 610px) {
+    .season-end-notice {
+        align-content: start;
+    }
+}

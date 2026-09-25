@@ -22,6 +22,7 @@ export const alphaSeasonTwo = Object.freeze({
 });
 
 export const bulletinTickerItems = Object.freeze([
+    'Season 2 ends at midnight Mountain Time on September 30 — last call for the podium',
     'Game running long? Any table can now vote to speed it up — game menu, Speed up the game',
     'Tournaments are here — one round a table, then the leaders share a table',
     'Chip drain between rounds keeps every tournament moving',
@@ -32,6 +33,20 @@ export const bulletinTickerItems = Object.freeze([
 ]);
 
 export const bulletinEntries = Object.freeze([
+    {
+        id: 'season-2-finale',
+        dateLabel: 'September 2026',
+        status: 'Season news',
+        title: 'Season 2 ends September 30',
+        summary: 'The final whistle for Alpha Season 2 blows at midnight Mountain Time at the close of Wednesday, '
+            + 'September 30. Whoever holds the top of the standings then is the Season 2 champion.',
+        highlights: [
+            'Standings freeze at midnight Mountain Time (06:00 UTC, October 1). Every ranked game until then still counts.',
+            'Sluff goes offline for a couple of hours right after, while Season 2 is sealed in the record book and Season 3 is set up.',
+            'Plan to finish your game before midnight: the servers shut down for the changeover.',
+            'The Season 2 podium and final scoreboard will join Season 1 in Season Recaps, and Season 3 opens when the servers come back.',
+        ],
+    },
     {
         id: 'speed-up-vote',
         dateLabel: 'September 2026',

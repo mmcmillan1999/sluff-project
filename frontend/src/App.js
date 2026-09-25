@@ -27,6 +27,7 @@ import TermsOfService from "./components/legal/TermsOfService.js";
 import FirstGameWelcome, { shouldShowFirstGameWelcome } from "./components/FirstGameWelcome.js";
 import OrientationScrim from "./components/OrientationScrim.js";
 import SessionScrim from "./components/SessionScrim.js";
+import SeasonEndNotice, { shouldShowSeasonEndNotice } from "./components/SeasonEndNotice.js";
 import SluffIdent from "./components/SluffIdent.js";
 import DecorBoundary from "./components/DecorBoundary.js";
 import { extractInviteTableId } from "./utils/tableInvites.js";
@@ -136,6 +137,8 @@ function App() {
     const [feedbackGameContext, setFeedbackGameContext] = useState(null);
     const [socketSessionReady, setSocketSessionReady] = useState(false);
     const [welcomeDelayElapsed, setWelcomeDelayElapsed] = useState(false);
+    // Season 2 closing notice: shown once in the lobby until "Got it".
+    const [seasonNoticeDismissed, setSeasonNoticeDismissed] = useState(false);
     // Invite link (/join/<tableId>): parsed once on load, held until the user
     // is logged in and the socket is up, then consumed by the auto-join effect.
     // window.__sluffInviteTableId is the native cold-start handoff (nativeInit).
@@ -966,6 +969,14 @@ function App() {
         socketSessionReady,
     });
 
+    // The Season 2 closing notice waits its turn behind the first-game welcome.
+    const seasonNoticeVisible = !seasonNoticeDismissed && shouldShowSeasonEndNotice({
+        user,
+        isLobby: view === 'lobby',
+        hasCurrentTable: Boolean(currentTableState),
+        blocked: welcomeIsEligible || Boolean(pendingInviteTableId || inviteJoinInFlight),
+    });
+
     // Give a restored table's immediate gameState a chance to arrive before a
     // first-game prompt is mounted. Any table/invite/view change cancels this
     // delay, preventing a welcome flash during reconnect navigation.
@@ -1116,6 +1127,9 @@ function App() {
                     onUsernameChanged={handleUsernameChanged}
                     onAccountDeleted={handleAccountDeleted}
                 />
+                {seasonNoticeVisible && (
+                    <SeasonEndNotice onDismiss={() => setSeasonNoticeDismissed(true)} />
+                )}
                 {welcomeIsEligible && welcomeDelayElapsed && (
                     <FirstGameWelcome
                         activeVersion={user.tutorial_active_version}

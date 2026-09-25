@@ -36,6 +36,7 @@
 // fewer adds FINAL TABLE.
 // ?mode=tourney[&phase=wait|board|host&me=ID] previews the tournament board;
 // ?mode=og&variant=home|tournament|table renders the share cards.
+// ?mode=seasonend shows the Season 2 closing notice ("Got it" logs to the console).
 // ?mode=session[&reason=active] shows the "Play here" scrim a client wears
 // while the account is live on another device or tab.
 // ?mode=insurance&stack=N[&role=bidder] opens the insurance prompt for a seat
@@ -66,6 +67,7 @@ import PointDrainSheet from './components/game/PointDrainSheet';
 import './components/ClaudeLanding.css';
 import OrientationScrim from './components/OrientationScrim.js';
 import SessionScrim from './components/SessionScrim.js';
+import SeasonEndNotice from './components/SeasonEndNotice.js';
 import InsurancePrompt from './components/game/InsurancePrompt.js';
 import SluffIdent from './components/SluffIdent.js';
 import { setCosmetic } from './utils/cosmetics.js';
@@ -121,6 +123,14 @@ if (sessionMode) {
             reason={params.get('reason') === 'active' ? 'active-elsewhere' : 'claimed-elsewhere'}
             onPlayHere={() => console.log('[harness] Play here')}
         />,
+    );
+}
+
+// --- Season 2 closing notice: /harness.html?mode=seasonend ---
+const seasonEndMode = params.get('mode') === 'seasonend';
+if (seasonEndMode) {
+    ReactDOM.createRoot(document.getElementById('root')).render(
+        <SeasonEndNotice onDismiss={() => console.log('[harness] Got it')} />,
     );
 }
 
@@ -794,7 +804,7 @@ if (ogMode) {
     );
 }
 
-if (!identMode && !sessionMode && !insuranceMode && !drainSheetMode && !lobbyMode && !tourneyMode && !ogMode) {
+if (!identMode && !sessionMode && !seasonEndMode && !insuranceMode && !drainSheetMode && !lobbyMode && !tourneyMode && !ogMode) {
 document.body.classList.add('game-active');
 
 ReactDOM.createRoot(document.getElementById('root')).render(<HarnessApp />);
